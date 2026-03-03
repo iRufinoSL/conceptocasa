@@ -1,4 +1,4 @@
-import { Leaf } from 'lucide-react';
+import { Home } from 'lucide-react';
 import { UserMenu } from './UserMenu';
 import { NotificationsDropdown } from './NotificationsDropdown';
 
@@ -9,11 +9,11 @@ export function Header() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="gradient-primary p-2 rounded-lg">
-              <Leaf className="h-6 w-6 text-primary-foreground" />
+              <Home className="h-6 w-6 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-foreground">Brain Concepto <span className="text-primary">To.Lo.Sa.</span></h1>
-              <p className="text-sm text-muted-foreground">Tu casa cuida de ti</p>
+              <h1 className="text-xl font-bold text-foreground">Concepto <span className="text-primary font-display italic">To.Lo.Sa.</span></h1>
+              <p className="text-sm text-muted-foreground">Tu hogar cuida de ti</p>
             </div>
           </div>
           <div className="flex items-center gap-2">

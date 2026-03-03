@@ -16,7 +16,6 @@ import {
   Menu, 
   X, 
   ChevronDown, 
-  Leaf,
   Wind,
   Thermometer,
   Droplets,
@@ -27,12 +26,17 @@ import {
   Loader2,
   Paperclip,
   File,
-  Home
+  Home,
+  Lock,
+  Sparkles,
+  Users,
+  Eye
 } from "lucide-react";
 import heroPassivhaus from "@/assets/hero-passivhaus.jpg";
 import healthyInterior from "@/assets/healthy-home-interior.jpg";
 
-// Helper to format file size
+const PROTOTYPE_PASSWORD = "tolosa2025";
+
 const formatFileSize = (bytes: number): string => {
   if (bytes === 0) return '0 Bytes';
   const k = 1024;
@@ -103,6 +107,27 @@ const Landing = () => {
     subject: "",
     message: ""
   });
+
+  // Password gate
+  const [isUnlocked, setIsUnlocked] = useState(false);
+  const [passwordInput, setPasswordInput] = useState("");
+  const [passwordError, setPasswordError] = useState(false);
+
+  useEffect(() => {
+    const unlocked = sessionStorage.getItem("tolosa_prototype_unlocked");
+    if (unlocked === "true") setIsUnlocked(true);
+  }, []);
+
+  const handlePasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (passwordInput === PROTOTYPE_PASSWORD) {
+      setIsUnlocked(true);
+      sessionStorage.setItem("tolosa_prototype_unlocked", "true");
+      setPasswordError(false);
+    } else {
+      setPasswordError(true);
+    }
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -201,6 +226,54 @@ const Landing = () => {
     })
   };
 
+  // Password Gate Screen
+  if (!isUnlocked) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5 }}
+          className="w-full max-w-md"
+        >
+          <Card className="p-8 text-center space-y-6 border-border/50 shadow-xl">
+            <div className="w-16 h-16 mx-auto rounded-2xl gradient-primary flex items-center justify-center">
+              <Lock className="w-8 h-8 text-primary-foreground" />
+            </div>
+            <div className="space-y-2">
+              <h1 className="text-2xl font-display font-bold text-foreground">
+                Concepto <span className="text-primary italic">To.Lo.Sa.</span>
+              </h1>
+              <p className="text-sm text-muted-foreground">
+                Prototipo en desarrollo · Acceso restringido
+              </p>
+            </div>
+            <form onSubmit={handlePasswordSubmit} className="space-y-4">
+              <div>
+                <Input
+                  type="password"
+                  placeholder="Introduce la contraseña"
+                  value={passwordInput}
+                  onChange={(e) => { setPasswordInput(e.target.value); setPasswordError(false); }}
+                  className={passwordError ? "border-destructive" : ""}
+                />
+                {passwordError && (
+                  <p className="text-sm text-destructive mt-1">Contraseña incorrecta</p>
+                )}
+              </div>
+              <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
+                Acceder al prototipo
+              </Button>
+            </form>
+            <p className="text-xs text-muted-foreground">
+              Si necesitas acceso, contacta con nosotros.
+            </p>
+          </Card>
+        </motion.div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* Navigation */}
@@ -209,11 +282,11 @@ const Landing = () => {
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-2">
               <div className="w-9 h-9 gradient-primary rounded-xl flex items-center justify-center">
-                <Leaf className="w-5 h-5 text-primary-foreground" />
+                <Home className="w-5 h-5 text-primary-foreground" />
               </div>
               <span className="text-lg font-bold">
                 <span className="text-foreground">Concepto</span>
-                <span className="text-primary font-playfair italic"> To.Lo.Sa.</span>
+                <span className="text-primary font-display italic"> To.Lo.Sa.</span>
               </span>
             </div>
 
@@ -221,18 +294,16 @@ const Landing = () => {
               <button onClick={() => scrollToSection('inicio')} className="text-sm text-muted-foreground hover:text-primary transition-colors">Inicio</button>
               <button onClick={() => scrollToSection('filosofia')} className="text-sm text-muted-foreground hover:text-primary transition-colors">Filosofía</button>
               <button onClick={() => scrollToSection('pilares')} className="text-sm text-muted-foreground hover:text-primary transition-colors">Salud y Hogar</button>
+              <button onClick={() => scrollToSection('compromiso')} className="text-sm text-muted-foreground hover:text-primary transition-colors">Tu Proyecto</button>
               <button onClick={() => scrollToSection('proceso')} className="text-sm text-muted-foreground hover:text-primary transition-colors">Proceso</button>
-              <Link to="/soluciones" className="text-sm text-muted-foreground hover:text-primary transition-colors">Soluciones</Link>
               <button onClick={() => scrollToSection('contacto')} className="text-sm text-muted-foreground hover:text-primary transition-colors">Contacto</button>
             </div>
 
             <div className="hidden lg:flex items-center gap-4">
-              <a href="mailto:organiza@concepto.casa" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors">
-                <Mail className="w-4 h-4" />
-                organiza@concepto.casa
-              </a>
               <Link to="/auth">
-                <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">Acceso</Button>
+                <Button variant="outline" className="border-primary/30 text-primary hover:bg-primary/10">
+                  Acceso clientes
+                </Button>
               </Link>
             </div>
 
@@ -247,10 +318,10 @@ const Landing = () => {
                 <button onClick={() => scrollToSection('inicio')} className="text-left text-sm text-muted-foreground hover:text-primary">Inicio</button>
                 <button onClick={() => scrollToSection('filosofia')} className="text-left text-sm text-muted-foreground hover:text-primary">Filosofía</button>
                 <button onClick={() => scrollToSection('pilares')} className="text-left text-sm text-muted-foreground hover:text-primary">Salud y Hogar</button>
+                <button onClick={() => scrollToSection('compromiso')} className="text-left text-sm text-muted-foreground hover:text-primary">Tu Proyecto</button>
                 <button onClick={() => scrollToSection('proceso')} className="text-left text-sm text-muted-foreground hover:text-primary">Proceso</button>
-                <Link to="/soluciones" className="text-left text-sm text-muted-foreground hover:text-primary">Soluciones</Link>
                 <button onClick={() => scrollToSection('contacto')} className="text-left text-sm text-muted-foreground hover:text-primary">Contacto</button>
-                <Link to="/auth"><Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">Acceso</Button></Link>
+                <Link to="/auth"><Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">Acceso clientes</Button></Link>
               </div>
             </div>
           )}
@@ -261,7 +332,7 @@ const Landing = () => {
       <section id="inicio" className="relative min-h-screen flex items-center overflow-hidden pt-16">
         <div className="absolute inset-0">
           <img src={heroPassivhaus} alt="Casa Passivhaus rodeada de naturaleza" className="w-full h-full object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-r from-background/80 via-background/50 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-r from-foreground/75 via-foreground/50 to-foreground/20" />
         </div>
 
         <div className="relative z-10 container mx-auto px-4">
@@ -270,9 +341,9 @@ const Landing = () => {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-primary/15 text-primary rounded-full text-sm font-medium border border-primary/20"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-background/20 backdrop-blur-sm text-background rounded-full text-sm font-medium border border-background/30"
             >
-              <Leaf className="w-4 h-4" />
+              <Sparkles className="w-4 h-4" />
               Casas Pasivas · Casas Activas · Passivhaus
             </motion.span>
 
@@ -280,21 +351,21 @@ const Landing = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4, duration: 0.7 }}
-              className="text-4xl md:text-6xl lg:text-7xl font-bold text-foreground leading-[1.1]"
+              className="text-4xl md:text-6xl lg:text-7xl font-bold text-background leading-[1.1] text-overlay-dark"
             >
-              Tu casa{" "}
-              <span className="font-playfair italic text-primary">cuida de ti</span>
+              Tu hogar{" "}
+              <span className="font-display italic text-accent-foreground">cuida de ti</span>
             </motion.h1>
 
             <motion.p
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.6 }}
-              className="text-lg md:text-xl text-muted-foreground leading-relaxed"
+              className="text-lg md:text-xl text-background/90 leading-relaxed text-overlay-dark"
             >
-              Construimos viviendas unifamiliares que protegen tu salud, respiran aire puro 
-              y apenas consumen energía. El hogar que tu familia merece, con los estándares 
-              más exigentes del mundo.
+              Construimos la casa con la que siempre soñaste. Un hogar que protege tu salud, 
+              respira aire puro y envuelve a tu familia en confort. Porque mereces vivir en un 
+              lugar que haga realidad tu ilusión.
             </motion.p>
 
             <motion.div
@@ -308,13 +379,13 @@ const Landing = () => {
                 className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 gap-2"
                 onClick={() => scrollToSection('contacto')}
               >
-                Quiero saber más
+                Hablemos de tu sueño
                 <ArrowRight className="w-4 h-4" />
               </Button>
               <Button 
                 size="lg" 
                 variant="outline" 
-                className="border-primary/30 text-primary hover:bg-primary/10"
+                className="border-background/40 text-background hover:bg-background/10 backdrop-blur-sm"
                 onClick={() => scrollToSection('filosofia')}
               >
                 Descubre nuestra filosofía
@@ -324,7 +395,7 @@ const Landing = () => {
         </div>
 
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce">
-          <ChevronDown className="w-8 h-8 text-primary/50" />
+          <ChevronDown className="w-8 h-8 text-background/50" />
         </div>
       </section>
 
@@ -342,19 +413,17 @@ const Landing = () => {
               <span className="text-sm text-primary font-semibold uppercase tracking-widest">Nuestra filosofía</span>
               <h2 className="text-3xl md:text-5xl font-bold text-foreground leading-tight">
                 No construimos casas.{" "}
-                <span className="font-playfair italic text-primary">Construimos bienestar.</span>
+                <span className="font-display italic text-primary">Cumplimos sueños.</span>
               </h2>
               <p className="text-muted-foreground text-lg leading-relaxed">
-                Cada persona sueña con un hogar donde su familia viva sana, cómoda y segura. 
-                Nosotros hacemos ese sueño tangible con la ciencia de la construcción pasiva: 
-                viviendas que mantienen la temperatura ideal sin calderas ni aire acondicionado, 
-                con aire limpio filtrado las 24 horas y sin una sola gota de humedad no deseada.
+                Sabemos que una casa no es solo un edificio. Es el lugar donde tu familia crece, 
+                descansa y vive. Por eso ponemos toda nuestra experiencia y conocimiento al servicio 
+                de tu ilusión: crear un hogar donde cada detalle esté pensado para tu bienestar.
               </p>
               <p className="text-muted-foreground text-lg leading-relaxed">
-                El estándar <strong className="text-foreground">Passivhaus</strong> no es una moda: 
-                es el resultado de décadas de investigación en eficiencia energética y salud 
-                habitacional. Y nosotros lo aplicamos con la ilusión de quien sabe que está 
-                construyendo el futuro de una familia.
+                El estándar <strong className="text-foreground">Passivhaus</strong> nos permite garantizar 
+                lo que otros solo prometen: eficiencia real, salud medible y un confort que se siente 
+                desde el primer día. Décadas de experiencia avalan nuestro compromiso.
               </p>
               <div className="flex items-center gap-6 pt-4">
                 <div className="text-center">
@@ -415,7 +484,7 @@ const Landing = () => {
             <span className="text-sm text-primary font-semibold uppercase tracking-widest">Salud y hogar</span>
             <h2 className="text-3xl md:text-5xl font-bold text-foreground mt-3">
               Los 6 pilares de tu{" "}
-              <span className="font-playfair italic text-primary">hogar saludable</span>
+              <span className="font-display italic text-primary">hogar saludable</span>
             </h2>
             <p className="text-muted-foreground mt-4 max-w-2xl mx-auto text-lg">
               Cada decisión constructiva está pensada para que tu casa no solo sea eficiente, 
@@ -454,8 +523,89 @@ const Landing = () => {
         </div>
       </section>
 
+      {/* YOUR PROJECT - Two worlds section */}
+      <section id="compromiso" className="py-24 bg-background">
+        <div className="container mx-auto px-4">
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true }}
+            variants={fadeUp}
+            className="text-center mb-16"
+          >
+            <span className="text-sm text-primary font-semibold uppercase tracking-widest">Tu proyecto, tu participación</span>
+            <h2 className="text-3xl md:text-5xl font-bold text-foreground mt-3">
+              Más que un cliente,{" "}
+              <span className="font-display italic text-primary">eres protagonista</span>
+            </h2>
+            <p className="text-muted-foreground mt-4 max-w-2xl mx-auto text-lg">
+              Tu casa se construye contigo. No solo pones la ilusión y la inversión: 
+              participas activamente en cada decisión de diseño, materiales y acabados.
+            </p>
+          </motion.div>
+
+          <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+            {/* Public side */}
+            <motion.div
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true }}
+              variants={fadeUp}
+              custom={0}
+            >
+              <Card className="p-8 h-full border-primary/20 hover:shadow-lg transition-all">
+                <div className="space-y-5">
+                  <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                    <Eye className="w-6 h-6 text-primary" />
+                  </div>
+                  <h3 className="text-xl font-bold text-foreground">Conocimiento abierto</h3>
+                  <p className="text-muted-foreground leading-relaxed">
+                    Compartimos todo lo que sabemos: materiales, técnicas, estándares, costes reales. 
+                    Queremos que entiendas por qué cada decisión importa. La transparencia es nuestra 
+                    forma de generar confianza.
+                  </p>
+                  <ul className="space-y-2 text-sm text-muted-foreground">
+                    <li className="flex items-center gap-2"><Sparkles className="w-4 h-4 text-primary" /> Ilusión y visión de futuro</li>
+                    <li className="flex items-center gap-2"><Sparkles className="w-4 h-4 text-primary" /> Experiencia demostrada</li>
+                    <li className="flex items-center gap-2"><Sparkles className="w-4 h-4 text-primary" /> Conocimiento sin reservas</li>
+                  </ul>
+                </div>
+              </Card>
+            </motion.div>
+
+            {/* Private side */}
+            <motion.div
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true }}
+              variants={fadeUp}
+              custom={1}
+            >
+              <Card className="p-8 h-full border-accent/20 hover:shadow-lg transition-all">
+                <div className="space-y-5">
+                  <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center">
+                    <Users className="w-6 h-6 text-accent" />
+                  </div>
+                  <h3 className="text-xl font-bold text-foreground">Tu espacio privado</h3>
+                  <p className="text-muted-foreground leading-relaxed">
+                    Cada proyecto es único y confidencial. En tu área personal tendrás acceso 
+                    exclusivo a presupuestos detallados, evolución de obra, documentación y 
+                    herramientas de diseño participativo.
+                  </p>
+                  <ul className="space-y-2 text-sm text-muted-foreground">
+                    <li className="flex items-center gap-2"><Lock className="w-4 h-4 text-accent" /> Presupuesto personalizado</li>
+                    <li className="flex items-center gap-2"><Lock className="w-4 h-4 text-accent" /> Seguimiento en tiempo real</li>
+                    <li className="flex items-center gap-2"><Lock className="w-4 h-4 text-accent" /> Participa en cada decisión</li>
+                  </ul>
+                </div>
+              </Card>
+            </motion.div>
+          </div>
+        </div>
+      </section>
+
       {/* Process Section */}
-      <section id="proceso" className="py-24 bg-background">
+      <section id="proceso" className="py-24 gradient-warm">
         <div className="container mx-auto px-4">
           <motion.div
             initial="hidden"
@@ -467,7 +617,7 @@ const Landing = () => {
             <span className="text-sm text-primary font-semibold uppercase tracking-widest">Nuestro proceso</span>
             <h2 className="text-3xl md:text-5xl font-bold text-foreground mt-3">
               De tu sueño a{" "}
-              <span className="font-playfair italic text-primary">tu hogar</span>
+              <span className="font-display italic text-primary">tu hogar</span>
             </h2>
           </motion.div>
 
@@ -475,7 +625,7 @@ const Landing = () => {
             {[
               { step: "01", title: "Escuchamos", desc: "Entendemos tu estilo de vida, tu familia y tus necesidades para diseñar un hogar a tu medida." },
               { step: "02", title: "Diseñamos", desc: "Proyecto arquitectónico con simulación energética Passivhaus. Sabrás exactamente cómo será tu casa." },
-              { step: "03", title: "Construimos", desc: "Construcción industrializada con control de calidad en cada fase. Sin sorpresas, sin retrasos." },
+              { step: "03", title: "Construimos", desc: "Construcción con control de calidad en cada fase. Participas en las decisiones, sin sorpresas." },
               { step: "04", title: "Certificamos", desc: "Test de hermeticidad Blower Door y certificación oficial. Tu casa cumple lo que prometemos." }
             ].map((item, i) => (
               <motion.div
@@ -487,7 +637,7 @@ const Landing = () => {
                 custom={i}
                 className="text-center space-y-4"
               >
-                <div className="text-5xl font-bold text-primary/20 font-playfair">{item.step}</div>
+                <div className="text-5xl font-bold text-primary/20 font-display">{item.step}</div>
                 <h3 className="text-xl font-semibold text-foreground">{item.title}</h3>
                 <p className="text-sm text-muted-foreground leading-relaxed">{item.desc}</p>
               </motion.div>
@@ -507,10 +657,10 @@ const Landing = () => {
             className="space-y-6"
           >
             <h2 className="text-3xl md:text-4xl font-bold text-primary-foreground">
-              ¿Preparado para vivir en una casa que cuida de ti?
+              ¿Preparado para hacer realidad tu sueño?
             </h2>
             <p className="text-primary-foreground/80 max-w-xl mx-auto text-lg">
-              Cuéntanos tu proyecto. Sin compromiso, con toda la ilusión.
+              Cuéntanos tu proyecto. Sin compromiso, con toda la ilusión y la experiencia que merecéis.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button 
@@ -553,11 +703,11 @@ const Landing = () => {
               <span className="text-sm text-primary font-semibold uppercase tracking-widest">Contacto</span>
               <h2 className="text-3xl md:text-4xl font-bold text-foreground">
                 Hablemos de tu{" "}
-                <span className="font-playfair italic text-primary">proyecto</span>
+                <span className="font-display italic text-primary">ilusión</span>
               </h2>
               <p className="text-muted-foreground text-lg">
                 Cada casa que construimos empieza con una conversación. Cuéntanos tu sueño 
-                y te ayudaremos a convertirlo en un hogar saludable y eficiente.
+                y te ayudaremos a convertirlo en un hogar saludable, eficiente y hecho solo para ti.
               </p>
 
               <div className="space-y-4 pt-4">
@@ -591,9 +741,7 @@ const Landing = () => {
             >
               <Card className="p-8 border-border/50">
                 <form onSubmit={handleSubmit} className="space-y-5">
-                  {/* Honeypot */}
                   <div style={{ display: 'none' }}><input {...honeypotProps} /></div>
-
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div>
                       <label className="text-sm font-medium text-foreground mb-1.5 block">Nombre</label>
@@ -619,7 +767,6 @@ const Landing = () => {
                     <Textarea name="message" value={formData.message} onChange={handleInputChange} placeholder="Cuéntanos tu sueño..." rows={4} required />
                   </div>
 
-                  {/* Attachments */}
                   <div>
                     <input ref={fileInputRef} type="file" multiple onChange={handleFileSelect} className="hidden" accept="image/*,.pdf,.doc,.docx" />
                     <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} className="gap-2">
@@ -656,23 +803,22 @@ const Landing = () => {
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 gradient-primary rounded-lg flex items-center justify-center">
-                <Leaf className="w-4 h-4 text-primary-foreground" />
+                <Home className="w-4 h-4 text-primary-foreground" />
               </div>
               <span className="font-bold text-foreground">
-                Brain Concepto <span className="text-primary">To.Lo.Sa.</span>
+                Concepto <span className="text-primary">To.Lo.Sa.</span>
               </span>
             </div>
             <p className="text-sm text-muted-foreground text-center">
-              © {new Date().getFullYear()} Brain Concepto To.Lo.Sa. — Viviendas que cuidan de ti.
+              © {new Date().getFullYear()} Concepto To.Lo.Sa. — Viviendas que cuidan de ti.
             </p>
             <Link to="/auth" className="text-sm text-primary hover:text-primary/80 transition-colors">
-              Acceso profesional →
+              Acceso clientes →
             </Link>
           </div>
         </div>
       </footer>
 
-      {/* Housing Profile Modal */}
       <HousingProfileForm open={showHousingForm} onOpenChange={setShowHousingForm} />
     </div>
   );

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&family=Nunito+Sans:opsz,wght@6..12,300;6..12,400;6..12,500;6..12,600;6..12,700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,85 +6,85 @@
 
 @layer base {
   :root {
-    --background: 30 25% 96%;
-    --foreground: 25 30% 12%;
+    --background: 30 30% 97%;
+    --foreground: 20 25% 15%;
 
-    --card: 30 20% 99%;
-    --card-foreground: 25 30% 12%;
+    --card: 30 25% 99%;
+    --card-foreground: 20 25% 15%;
 
-    --popover: 30 20% 99%;
-    --popover-foreground: 25 30% 12%;
+    --popover: 30 25% 99%;
+    --popover-foreground: 20 25% 15%;
 
-    --primary: 152 45% 38%;
+    --primary: 18 55% 58%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 30 20% 93%;
-    --secondary-foreground: 25 30% 12%;
+    --secondary: 30 25% 93%;
+    --secondary-foreground: 20 25% 15%;
 
-    --muted: 30 15% 93%;
-    --muted-foreground: 25 10% 45%;
+    --muted: 28 18% 92%;
+    --muted-foreground: 20 12% 48%;
 
-    --accent: 25 80% 52%;
+    --accent: 340 40% 65%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 30 15% 88%;
-    --input: 30 15% 88%;
-    --ring: 152 45% 38%;
+    --border: 28 18% 87%;
+    --input: 28 18% 87%;
+    --ring: 18 55% 58%;
 
     --radius: 0.75rem;
 
-    --success: 142 76% 36%;
+    --success: 142 50% 45%;
     --success-foreground: 0 0% 100%;
 
-    --warning: 38 92% 50%;
+    --warning: 38 80% 55%;
     --warning-foreground: 0 0% 100%;
 
-    --sidebar-background: 30 20% 97%;
-    --sidebar-foreground: 25 30% 20%;
-    --sidebar-primary: 152 45% 38%;
+    --sidebar-background: 30 25% 97%;
+    --sidebar-foreground: 20 25% 20%;
+    --sidebar-primary: 18 55% 58%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 30 20% 93%;
-    --sidebar-accent-foreground: 25 30% 12%;
-    --sidebar-border: 30 15% 88%;
-    --sidebar-ring: 152 45% 38%;
+    --sidebar-accent: 30 25% 93%;
+    --sidebar-accent-foreground: 20 25% 15%;
+    --sidebar-border: 28 18% 87%;
+    --sidebar-ring: 18 55% 58%;
   }
 
   .dark {
-    --background: 25 20% 8%;
+    --background: 20 18% 8%;
     --foreground: 30 20% 95%;
 
-    --card: 25 20% 12%;
+    --card: 20 18% 12%;
     --card-foreground: 30 20% 95%;
 
-    --popover: 25 20% 12%;
+    --popover: 20 18% 12%;
     --popover-foreground: 30 20% 95%;
 
-    --primary: 152 45% 45%;
+    --primary: 18 55% 55%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 25 15% 18%;
+    --secondary: 20 15% 18%;
     --secondary-foreground: 30 20% 95%;
 
-    --muted: 25 15% 18%;
+    --muted: 20 15% 18%;
     --muted-foreground: 30 10% 60%;
 
-    --accent: 25 80% 52%;
+    --accent: 340 40% 55%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 62% 30%;
     --destructive-foreground: 30 20% 95%;
 
-    --border: 25 15% 18%;
-    --input: 25 15% 18%;
-    --ring: 152 45% 45%;
+    --border: 20 15% 18%;
+    --input: 20 15% 18%;
+    --ring: 18 55% 55%;
 
-    --success: 142 76% 36%;
+    --success: 142 50% 40%;
     --success-foreground: 0 0% 100%;
 
-    --warning: 38 92% 50%;
+    --warning: 38 80% 50%;
     --warning-foreground: 0 0% 100%;
   }
 }
@@ -95,11 +95,16 @@
   }
 
   body {
-    @apply bg-background text-foreground font-sans antialiased;
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Nunito Sans', sans-serif;
   }
 
   html {
-    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-family: 'Nunito Sans', sans-serif;
+  }
+
+  .font-display {
+    font-family: 'Cormorant Garamond', serif;
   }
 }
 
@@ -109,15 +114,19 @@
   }
 
   .gradient-accent {
-    background: linear-gradient(135deg, hsl(25 80% 52%) 0%, hsl(38 75% 50%) 100%);
+    background: linear-gradient(135deg, hsl(340 40% 65%) 0%, hsl(18 55% 58%) 100%);
   }
 
   .gradient-primary {
-    background: linear-gradient(135deg, hsl(152 45% 30%) 0%, hsl(152 45% 42%) 100%);
+    background: linear-gradient(135deg, hsl(18 55% 50%) 0%, hsl(18 55% 62%) 100%);
   }
 
   .gradient-warm {
-    background: linear-gradient(135deg, hsl(30 25% 96%) 0%, hsl(30 30% 90%) 100%);
+    background: linear-gradient(135deg, hsl(30 30% 96%) 0%, hsl(28 25% 92%) 100%);
+  }
+
+  .text-overlay-dark {
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.3);
   }
 }
 
@@ -137,8 +146,7 @@
     print-color-adjust: exact !important;
   }
   
-  /* Hide non-printable elements */
-  .print\\:hidden,
+  .print\:hidden,
   [data-radix-dialog-overlay],
   [data-radix-scroll-area-viewport] > div > div:not(.print-content),
   header,
@@ -147,7 +155,6 @@
     display: none !important;
   }
   
-  /* Make dialog content fill the page */
   [data-radix-dialog-content] {
     position: static !important;
     transform: none !important;
@@ -169,25 +176,21 @@
     margin: 0 !important;
   }
   
-  /* Cover page styles - first page includes cover and index */
   .print-cover {
     page-break-inside: avoid;
     position: relative;
   }
   
-  /* Index section - stays on first page with cover */
   .print-index {
     page-break-inside: avoid;
     page-break-after: always;
   }
   
-  /* Section page breaks */
   .print-section {
     page-break-before: always;
     page-break-inside: auto;
   }
   
-  /* Prevent breaks inside tables */
   table {
     page-break-inside: auto;
   }
@@ -197,7 +200,6 @@
     page-break-after: auto;
   }
   
-  /* Make sure ScrollArea doesn't interfere */
   [data-radix-scroll-area-viewport] {
     overflow: visible !important;
     height: auto !important;
@@ -225,7 +227,6 @@
   color: hsl(var(--primary));
 }
 
-/* Custom marker animation */
 .custom-marker {
   animation: marker-bounce 0.3s ease-out;
 }

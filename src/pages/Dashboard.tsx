@@ -34,6 +34,15 @@ interface AppCard {
 
 const apps: AppCard[] = [
   {
+    id: 'brain',
+    title: 'Brain',
+    description: 'Navegación visual tipo mapa mental',
+    icon: Brain,
+    route: '/brain',
+    available: true,
+    adminOnly: false,
+  },
+  {
     id: 'tolosa',
     title: 'TO.LO.SA.systems 2.0',
     description: 'Brainstorming y planificación inteligente',

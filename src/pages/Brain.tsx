@@ -25,6 +25,8 @@ export default function Brain() {
   const [panelNode, setPanelNode] = useState<BrainNode | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [newNodeName, setNewNodeName] = useState('');
+  const [addTargetParentId, setAddTargetParentId] = useState<string | null>(null);
+  const [addDialogTitle, setAddDialogTitle] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const hasCheckedLastRoute = useRef(false);
@@ -104,11 +106,28 @@ export default function Brain() {
   }, []);
 
   const handleAddNode = async () => {
-    if (!newNodeName.trim() || !activeNodeId) return;
-    await addNode(activeNodeId, newNodeName.trim());
+    if (!newNodeName.trim() || !addTargetParentId) return;
+    await addNode(addTargetParentId, newNodeName.trim());
     setNewNodeName('');
     setShowAddDialog(false);
+    setAddTargetParentId(null);
+    setAddDialogTitle('');
     toast.success('Nodo creado');
+  };
+
+  const handleAddSibling = (referenceNode: BrainNode) => {
+    // Sibling = same parent as the reference node
+    if (referenceNode.parent_id) {
+      setAddTargetParentId(referenceNode.parent_id);
+      setAddDialogTitle(`Nuevo hermano de "${referenceNode.name}"`);
+      setShowAddDialog(true);
+    }
+  };
+
+  const handleAddChild = (parentNode: BrainNode) => {
+    setAddTargetParentId(parentNode.id);
+    setAddDialogTitle(`Nuevo hijo de "${parentNode.name}"`);
+    setShowAddDialog(true);
   };
 
   const filteredNodes = searchTerm
@@ -161,7 +180,11 @@ export default function Brain() {
           <Button variant="ghost" size="icon" onClick={() => setShowSearch(!showSearch)}>
             <Search className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="icon" onClick={() => setShowAddDialog(true)} title="Añadir nota">
+          <Button variant="ghost" size="icon" onClick={() => {
+            setAddTargetParentId(activeNodeId);
+            setAddDialogTitle(`Añadir nota a "${activeNode?.name}"`);
+            setShowAddDialog(true);
+          }} title="Añadir nota">
             <Plus className="h-4 w-4" />
           </Button>
           <Button
@@ -224,6 +247,8 @@ export default function Brain() {
             navigateTo(nodeId);
           }}
           onOpenPanel={handleOpenPanel}
+          onAddSibling={handleAddSibling}
+          onAddChild={handleAddChild}
         />
       </main>
 
@@ -246,7 +271,7 @@ export default function Brain() {
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Añadir nota a "{activeNode?.name}"</DialogTitle>
+            <DialogTitle>{addDialogTitle || `Añadir nota a "${activeNode?.name}"`}</DialogTitle>
           </DialogHeader>
           <div className="flex gap-2">
             <Input

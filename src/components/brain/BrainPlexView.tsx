@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BrainNode } from '@/hooks/useBrainNodes';
 import { BrainNodeCard } from './BrainNodeCard';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, ArrowRight, ArrowDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 const BRAIN_EXPANDED_KEY = 'brain_last_expanded_child';
 
@@ -14,6 +15,8 @@ interface BrainPlexViewProps {
   allNodes: BrainNode[];
   onNavigate: (nodeId: string) => void;
   onOpenPanel: (node: BrainNode) => void;
+  onAddSibling?: (referenceNode: BrainNode) => void;
+  onAddChild?: (parentNode: BrainNode) => void;
 }
 
 export function BrainPlexView({
@@ -24,6 +27,8 @@ export function BrainPlexView({
   allNodes,
   onNavigate,
   onOpenPanel,
+  onAddSibling,
+  onAddChild,
 }: BrainPlexViewProps) {
   const [expandedChildId, setExpandedChildId] = useState<string | null>(null);
 
@@ -285,6 +290,7 @@ export function BrainPlexView({
                             {child.grandchildren.map((gc, gi) => (
                               <motion.div
                                 key={gc.id}
+                                className="relative group/gc"
                                 initial={{ scale: 0.8, opacity: 0 }}
                                 animate={{ scale: 1, opacity: 1 }}
                                 transition={{ delay: gi * 0.03 }}
@@ -295,6 +301,28 @@ export function BrainPlexView({
                                   onClick={() => onNavigate(gc.id)}
                                   onDoubleClick={() => onOpenPanel(gc)}
                                 />
+                                {(onAddSibling || onAddChild) && (
+                                  <div className="absolute -right-1 top-1/2 -translate-y-1/2 translate-x-full flex gap-0.5 opacity-0 group-hover/gc:opacity-100 transition-opacity">
+                                    {onAddSibling && (
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); onAddSibling(gc); }}
+                                        className="p-0.5 rounded bg-primary/10 hover:bg-primary/20 text-primary transition-colors"
+                                        title="Nuevo hermano"
+                                      >
+                                        <ArrowRight className="h-3 w-3" />
+                                      </button>
+                                    )}
+                                    {onAddChild && (
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); onAddChild(gc); }}
+                                        className="p-0.5 rounded bg-accent/20 hover:bg-accent/30 text-accent-foreground transition-colors"
+                                        title="Nuevo hijo"
+                                      >
+                                        <ArrowDown className="h-3 w-3" />
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
                               </motion.div>
                             ))}
                           </div>
@@ -316,6 +344,7 @@ export function BrainPlexView({
             {children.map((child, i) => (
               <motion.div
                 key={`child-${child.id}`}
+                className="relative group"
                 initial={{ y: 50, opacity: 0, scale: 0.7 }}
                 animate={{ y: 0, opacity: 1, scale: 1 }}
                 exit={{ y: 50, opacity: 0, scale: 0.7 }}
@@ -327,6 +356,29 @@ export function BrainPlexView({
                   onClick={() => onNavigate(child.id)}
                   onDoubleClick={() => onOpenPanel(child)}
                 />
+                {/* Action arrows: sibling (right) and child (down) */}
+                {(onAddSibling || onAddChild) && (
+                  <div className="absolute -right-1 top-1/2 -translate-y-1/2 translate-x-full flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {onAddSibling && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onAddSibling(child); }}
+                        className="p-1 rounded-md bg-primary/10 hover:bg-primary/20 text-primary transition-colors"
+                        title="Nuevo hermano"
+                      >
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    {onAddChild && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onAddChild(child); }}
+                        className="p-1 rounded-md bg-accent/20 hover:bg-accent/30 text-accent-foreground transition-colors"
+                        title="Nuevo hijo"
+                      >
+                        <ArrowDown className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                )}
               </motion.div>
             ))}
           </AnimatePresence>

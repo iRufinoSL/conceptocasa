@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useBrainNodes, BrainNode } from '@/hooks/useBrainNodes';
 import { useAuth } from '@/hooks/useAuth';
@@ -11,10 +11,11 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function Brain() {
   const navigate = useNavigate();
-  const { isAdmin } = useAuth();
+  const { isAdmin, isCliente, isColaborador, user, userPresupuestos } = useAuth();
   const {
     nodes, loading, activeNodeId,
     getActiveNode, getParent, getChildren, getSiblings,
@@ -26,11 +27,76 @@ export default function Brain() {
   const [newNodeName, setNewNodeName] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [showSearch, setShowSearch] = useState(false);
+  const hasCheckedLastRoute = useRef(false);
+
+  // Auto-redirect to last worked budget on initial load
+  useEffect(() => {
+    if (hasCheckedLastRoute.current || loading || !user) return;
+    hasCheckedLastRoute.current = true;
+
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from('profiles')
+          .select('last_route')
+          .eq('id', user.id)
+          .single();
+
+        if (data?.last_route && data.last_route !== '/brain') {
+          // If last route was a budget, navigate directly there
+          if (data.last_route.startsWith('/presupuestos/')) {
+            navigate(data.last_route, { replace: true });
+          }
+        }
+      } catch {
+        // Silent fail - stay on Brain
+      }
+    })();
+  }, [loading, user, navigate]);
+
+  // For non-admin users: filter nodes to only show their assigned projects/budgets
+  const visibleNodes = (() => {
+    if (isAdmin()) return nodes;
+    
+    // Client/Collaborator: they can see root, their projects, and their budgets
+    const assignedBudgetIds = new Set(userPresupuestos.map(up => up.presupuesto_id));
+    const assignedProjectIds = new Set(
+      userPresupuestos
+        .filter(up => up.presupuesto?.project_id)
+        .map(up => up.presupuesto!.project_id!)
+    );
+
+    // Include node if:
+    // 1. It's the root node
+    // 2. It's a structural node (module, category)
+    // 3. It's a budget node the user has access to
+    // 4. It's a child of an accessible budget
+    // 5. It's the Proyectos or Presupuestos module
+    return nodes.filter(n => {
+      // Root
+      if (!n.parent_id) return true;
+      // Module nodes that clients can see
+      if (n.node_type === 'module' && (n.target_url === '/proyectos' || n.target_url === '/presupuestos')) return true;
+      // Budget category nodes (Activos, En Ejecución, Archivados)
+      if (['Activos', 'En Ejecución', 'Archivados'].includes(n.name)) return true;
+      // Budget nodes the user has access to
+      if (n.target_params?.budgetId && assignedBudgetIds.has(n.target_params.budgetId as string)) return true;
+      // Sub-nodes of accessible budgets
+      const findBudgetAncestor = (nodeId: string): boolean => {
+        const node = nodes.find(nd => nd.id === nodeId);
+        if (!node) return false;
+        if (node.target_params?.budgetId && assignedBudgetIds.has(node.target_params.budgetId as string)) return true;
+        if (node.parent_id) return findBudgetAncestor(node.parent_id);
+        return false;
+      };
+      return findBudgetAncestor(n.id);
+    });
+  })();
 
   const activeNode = getActiveNode();
   const parent = activeNode ? getParent(activeNode.id) : null;
-  const children = activeNode ? getChildren(activeNode.id) : [];
-  const siblings = activeNode ? getSiblings(activeNode.id) : [];
+  const children = activeNode ? getChildren(activeNode.id).filter(c => visibleNodes.some(v => v.id === c.id)) : [];
+  const siblings = activeNode ? getSiblings(activeNode.id).filter(s => visibleNodes.some(v => v.id === s.id)) : [];
   const breadcrumbs = getBreadcrumbs();
 
   const handleOpenPanel = useCallback((node: BrainNode) => {
@@ -46,7 +112,7 @@ export default function Brain() {
   };
 
   const filteredNodes = searchTerm
-    ? nodes.filter(n => n.name.toLowerCase().includes(searchTerm.toLowerCase()))
+    ? visibleNodes.filter(n => n.name.toLowerCase().includes(searchTerm.toLowerCase()))
     : [];
 
   if (loading) {
@@ -65,7 +131,7 @@ export default function Brain() {
       {/* Top Bar */}
       <header className="border-b border-border bg-card/80 backdrop-blur-sm px-4 py-2 flex items-center justify-between z-30 shrink-0">
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')}>
+          <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div className="flex items-center gap-2">

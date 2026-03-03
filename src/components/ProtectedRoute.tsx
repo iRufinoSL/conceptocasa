@@ -104,12 +104,12 @@ export function ProtectedRoute({ children, requireAdmin = false, appName }: Prot
 
   // Check admin requirement
   if (requireAdmin && !isAdmin()) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/brain" replace />;
   }
 
   // Check app-specific access (for non-admins)
   if (appName && !isAdmin() && !hasAppAccess(appName)) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/brain" replace />;
   }
 
   return <>{children}</>;

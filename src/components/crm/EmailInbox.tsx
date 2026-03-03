@@ -64,6 +64,7 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
+  const [isSyncing, setIsSyncing] = useState(false);
   const [directionFilter, setDirectionFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [budgetFilter, setBudgetFilter] = useState<string>('all');
@@ -1207,6 +1208,36 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
             >
               <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
               Refrescar
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={async () => {
+                setIsSyncing(true);
+                try {
+                  const { data, error } = await supabase.functions.invoke('sync-emails', {
+                    body: { since: '2026-02-01T00:00:00Z' }
+                  });
+                  if (error) {
+                    toast({ title: 'Error', description: 'Error al sincronizar emails', variant: 'destructive' });
+                  } else {
+                    toast({ 
+                      title: 'Sincronización completada', 
+                      description: `Enviados: ${data.sent_synced} nuevos (${data.sent_skipped} existentes). Recibidos: ${data.received_synced} nuevos (${data.received_skipped} existentes).${data.errors?.length ? ` Errores: ${data.errors.length}` : ''}` 
+                    });
+                    refetch();
+                  }
+                } catch (e) {
+                  toast({ title: 'Error', description: 'Error al sincronizar emails', variant: 'destructive' });
+                } finally {
+                  setIsSyncing(false);
+                }
+              }}
+              disabled={isSyncing}
+              className="gap-2"
+            >
+              <Download className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+              {isSyncing ? 'Sincronizando...' : 'Sincronizar Resend'}
             </Button>
             <Button 
               variant={showDeleted ? 'default' : 'outline'}

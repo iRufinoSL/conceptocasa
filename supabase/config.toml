@@ -74,3 +74,6 @@ verify_jwt = false
 
 [functions.auto-backup]
 verify_jwt = false
+
+[functions.sync-emails]
+verify_jwt = false

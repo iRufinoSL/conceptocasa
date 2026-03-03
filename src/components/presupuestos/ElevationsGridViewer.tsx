@@ -1250,6 +1250,9 @@ export function ElevationsGridViewer({
                 onManualElevationsChange((manualElevations || []).filter(e => e.id !== me.id));
                 toast.success('Alzado manual eliminado');
               }}
+              onEdit={onManualElevationsChange ? (updated) => {
+                onManualElevationsChange((manualElevations || []).map(e => e.id === updated.id ? updated : e));
+              } : undefined}
             />
           ))}
           {onManualElevationsChange && (
@@ -1550,28 +1553,47 @@ export function ElevationsGridViewer({
 }
 
 /** Manual elevation polygon card — renders arbitrary N-vertex polygon */
-function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, onDelete }: {
+function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, onDelete, onEdit }: {
   elevation: ManualElevation;
   allCorners: CustomCorner[];
   plan: FloorPlanData;
   cellSizeM: number;
   onDelete: () => void;
+  onEdit?: (updated: ManualElevation) => void;
 }) {
   const blockHMm = plan.blockHeightMm || 250;
   const blockHM = blockHMm / 1000;
   const blockWM = (plan.blockLengthMm || 625) / 1000;
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState(elevation.name);
+  const [editVertices, setEditVertices] = useState<string[]>(elevation.vertexLabels);
 
-  // Resolve vertex coordinates from labels
+  // Resolve vertex coordinates from labels — using real metric distances
   const vertices = useMemo(() => {
     return elevation.vertexLabels.map(label => {
       const corner = allCorners.find(c => c.label === label);
       if (!corner) return null;
-      const x = (corner.col - 1) * cellSizeM;
-      const y = (corner.row - 1) * cellSizeM;
-      const z = (corner.z ?? 0) * blockHM;
-      return { label, x, y, z };
-    }).filter(Boolean) as Array<{ label: string; x: number; y: number; z: number }>;
+      // Convert grid coordinates to meters
+      const xM = (corner.col - 1) * cellSizeM;
+      const yM = (corner.row - 1) * cellSizeM;
+      const zM = (corner.z ?? 0) * blockHM;
+      return { label, x: xM, y: yM, z: zM, col: corner.col, row: corner.row, zBlocks: corner.z ?? 0 };
+    }).filter(Boolean) as Array<{ label: string; x: number; y: number; z: number; col: number; row: number; zBlocks: number }>;
   }, [elevation.vertexLabels, allCorners, cellSizeM, blockHM]);
+
+  // Preview vertices for editing mode
+  const editVerticesResolved = useMemo(() => {
+    if (!isEditing) return [];
+    return editVertices.map(label => {
+      const corner = allCorners.find(c => c.label === label);
+      if (!corner) return null;
+      const xM = (corner.col - 1) * cellSizeM;
+      const yM = (corner.row - 1) * cellSizeM;
+      const zM = (corner.z ?? 0) * blockHM;
+      return { label, x: xM, y: yM, z: zM };
+    }).filter(Boolean) as Array<{ label: string; x: number; y: number; z: number }>;
+  }, [isEditing, editVertices, allCorners, cellSizeM, blockHM]);
 
   if (vertices.length < 3) {
     return (
@@ -1587,171 +1609,334 @@ function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, on
   }
 
   // Project polygon onto 2D plane for rendering.
-  // Use the "widest" 2D projection: measure spread along X, Y, Z axes
-  // For a vertical wall (same X or same Y), project onto the varying horizontal axis + Z.
-  const xSpread = Math.max(...vertices.map(v => v.x)) - Math.min(...vertices.map(v => v.x));
-  const ySpread = Math.max(...vertices.map(v => v.y)) - Math.min(...vertices.map(v => v.y));
-  const zSpread = Math.max(...vertices.map(v => v.z)) - Math.min(...vertices.map(v => v.z));
-
-  // Choose horizontal axis: X if xSpread >= ySpread, else Y
-  const useXAxis = xSpread >= ySpread;
-  const hSpread = useXAxis ? xSpread : ySpread;
-  const hMin = useXAxis ? Math.min(...vertices.map(v => v.x)) : Math.min(...vertices.map(v => v.y));
-  const zMin = Math.min(...vertices.map(v => v.z));
-
-  // 2D projection: horizontal (h) and vertical (z)
-  const projected = vertices.map(v => ({
-    label: v.label,
-    h: (useXAxis ? v.x : v.y) - hMin,
-    z: v.z - zMin,
+  // For an elevation (vertical surface), we need to find the best 2D projection plane.
+  // The polygon is defined in 3D (X, Y, Z) — we project onto the plane of greatest visual spread.
+  
+  // Compute the plane normal using Newell's method for robustness
+  let nx = 0, ny = 0, nz = 0;
+  for (let i = 0; i < vertices.length; i++) {
+    const cur = vertices[i];
+    const next = vertices[(i + 1) % vertices.length];
+    nx += (cur.y - next.y) * (cur.z + next.z);
+    ny += (cur.z - next.z) * (cur.x + next.x);
+    nz += (cur.x - next.x) * (cur.y + next.y);
+  }
+  const nLen = Math.sqrt(nx * nx + ny * ny + nz * nz);
+  
+  // Determine the dominant normal component to choose projection plane
+  const absNx = Math.abs(nx), absNy = Math.abs(ny), absNz = Math.abs(nz);
+  
+  // Project onto the plane perpendicular to the dominant normal axis
+  // This gives us the least-distorted 2D view of the polygon
+  let projected: Array<{ label: string; u: number; v: number }>;
+  let axisLabel: string;
+  
+  if (absNz >= absNx && absNz >= absNy) {
+    // Normal is mostly vertical → polygon is mostly horizontal (floor/ceiling)
+    // Project onto XY plane
+    projected = vertices.map(vtx => ({ label: vtx.label, u: vtx.x, v: vtx.y }));
+    axisLabel = 'planta (XY)';
+  } else if (absNx >= absNy) {
+    // Normal is mostly along X → polygon is mostly in YZ plane (side wall)
+    projected = vertices.map(vtx => ({ label: vtx.label, u: vtx.y, v: vtx.z }));
+    axisLabel = 'lateral (YZ)';
+  } else {
+    // Normal is mostly along Y → polygon is mostly in XZ plane (front/back wall)
+    projected = vertices.map(vtx => ({ label: vtx.label, u: vtx.x, v: vtx.z }));
+    axisLabel = 'frontal (XZ)';
+  }
+  
+  // Normalize projected coordinates to start from 0
+  const uMin = Math.min(...projected.map(p => p.u));
+  const vMin = Math.min(...projected.map(p => p.v));
+  const uMax = Math.max(...projected.map(p => p.u));
+  const vMax = Math.max(...projected.map(p => p.v));
+  const uSpread = uMax - uMin;
+  const vSpread = vMax - vMin;
+  
+  const normalizedProj = projected.map(p => ({
+    label: p.label,
+    u: p.u - uMin,
+    v: p.v - vMin,
   }));
 
-  // SVG dimensions
-  const padding = 40;
-  const maxSvgW = 500;
-  const scaleH = hSpread > 0 ? Math.min((maxSvgW - padding * 2) / hSpread, 80) : 80;
-  const scaleV = zSpread > 0 ? Math.min((maxSvgW - padding * 2) / zSpread, 80) : 80;
-  const scale = Math.min(scaleH, scaleV);
-
-  const svgW = hSpread * scale + padding * 2;
-  const svgH = zSpread * scale + padding * 2 + 20;
-  const rx = padding;
-  const ry = padding / 2;
-
-  // Build SVG polygon points (flip Z so Z+ goes up)
-  const points = projected.map(p => `${rx + p.h * scale},${ry + (zSpread - p.z) * scale}`).join(' ');
-
-  // Calculate polygon area using shoelace formula on projected coordinates
-  let area = 0;
-  for (let i = 0; i < projected.length; i++) {
-    const j = (i + 1) % projected.length;
-    area += projected[i].h * projected[j].z;
-    area -= projected[j].h * projected[i].z;
+  // Calculate TRUE 3D polygon area using cross product (not 2D projection)
+  // For a planar polygon in 3D, area = 0.5 * |sum of cross products|
+  let crossX = 0, crossY = 0, crossZ = 0;
+  const v0 = vertices[0];
+  for (let i = 1; i < vertices.length - 1; i++) {
+    const v1 = vertices[i];
+    const v2 = vertices[i + 1];
+    // Vectors from v0 to v1 and v0 to v2
+    const ax = v1.x - v0.x, ay = v1.y - v0.y, az = v1.z - v0.z;
+    const bx = v2.x - v0.x, by = v2.y - v0.y, bz = v2.z - v0.z;
+    crossX += ay * bz - az * by;
+    crossY += az * bx - ax * bz;
+    crossZ += ax * by - ay * bx;
   }
-  area = Math.abs(area) / 2;
+  const area3D = 0.5 * Math.sqrt(crossX * crossX + crossY * crossY + crossZ * crossZ);
+
+  // Edge lengths in 3D
+  const edges = vertices.map((v1, i) => {
+    const v2 = vertices[(i + 1) % vertices.length];
+    const dist = Math.sqrt((v2.x - v1.x) ** 2 + (v2.y - v1.y) ** 2 + (v2.z - v1.z) ** 2);
+    return { from: v1.label, to: v2.label, distM: dist, distMm: Math.round(dist * 1000) };
+  });
+
+  const renderSvg = (maxWidth: number, maxHeight: number) => {
+    // SVG dimensions
+    const padding = 50;
+    const availW = maxWidth - padding * 2;
+    const availH = maxHeight - padding * 2;
+    const scaleU = uSpread > 0 ? availW / uSpread : 80;
+    const scaleV = vSpread > 0 ? availH / vSpread : 80;
+    const scale = Math.min(scaleU, scaleV);
+
+    const svgW = uSpread * scale + padding * 2;
+    const svgH = vSpread * scale + padding * 2;
+
+    // Build SVG polygon points (flip V so Z+ / Y+ goes up visually)
+    const flipV = absNz >= absNx && absNz >= absNy; // horizontal polygon: don't flip
+    const svgPoints = normalizedProj.map(p => {
+      const px = padding + p.u * scale;
+      const py = flipV ? (padding + p.v * scale) : (padding + (vSpread - p.v) * scale);
+      return { px, py, label: p.label };
+    });
+    const pointsStr = svgPoints.map(p => `${p.px},${p.py}`).join(' ');
+
+    return (
+      <svg width="100%" viewBox={`0 0 ${svgW} ${svgH}`} className="mx-auto" style={{ maxHeight }}>
+        {/* Ground line (if vertical polygon) */}
+        {!flipV && (
+          <line x1={padding - 10} y1={padding + vSpread * scale} x2={padding + uSpread * scale + 10} y2={padding + vSpread * scale}
+            stroke="hsl(var(--muted-foreground))" strokeWidth={1.5} opacity={0.4} strokeDasharray="4,2" />
+        )}
+
+        {/* Polygon fill */}
+        <polygon points={pointsStr} fill="hsl(var(--muted) / 0.6)" stroke="hsl(var(--primary))" strokeWidth={2} />
+
+        {/* Block pattern inside polygon */}
+        {plan.scaleMode === 'bloque' && (() => {
+          const bwPx = blockWM * scale;
+          const bhPx = blockHM * scale;
+          if (bwPx < 3 || bhPx < 2) return null;
+          const clipId = `clip-me-${elevation.id}`;
+          return (
+            <g>
+              <defs>
+                <clipPath id={clipId}>
+                  <polygon points={pointsStr} />
+                </clipPath>
+              </defs>
+              <g clipPath={`url(#${clipId})`} opacity={0.35}>
+                {/* Horizontal block lines */}
+                {Array.from({ length: Math.ceil(vSpread / blockHM) + 1 }, (_, r) => {
+                  const lineY = flipV ? (padding + r * bhPx) : (padding + vSpread * scale - r * bhPx);
+                  return <line key={`h-${r}`} x1={padding} y1={lineY} x2={padding + uSpread * scale} y2={lineY}
+                    stroke="hsl(var(--primary))" strokeWidth={0.5} />;
+                })}
+                {/* Vertical block lines (alternating offset) */}
+                {Array.from({ length: Math.ceil(vSpread / blockHM) + 1 }, (_, r) => {
+                  const yTop = flipV ? (padding + r * bhPx) : (padding + vSpread * scale - (r + 1) * bhPx);
+                  const yBot = flipV ? (padding + (r + 1) * bhPx) : (padding + vSpread * scale - r * bhPx);
+                  const offset = r % 2 === 0 ? 0 : bwPx / 2;
+                  const cols = Math.ceil(uSpread / blockWM) + 2;
+                  return Array.from({ length: cols }, (_, c) => {
+                    const lineX = padding + offset + c * bwPx;
+                    if (lineX <= padding || lineX >= padding + uSpread * scale) return null;
+                    return <line key={`v-${r}-${c}`} x1={lineX} y1={yTop} x2={lineX} y2={yBot}
+                      stroke="hsl(var(--muted-foreground))" strokeWidth={0.3} />;
+                  });
+                })}
+              </g>
+            </g>
+          );
+        })()}
+
+        {/* Vertex labels */}
+        {svgPoints.map((p, i) => {
+          const isTop = p.py < svgH / 2;
+          return (
+            <g key={i}>
+              <circle cx={p.px} cy={p.py} r={4} fill="hsl(var(--primary))" />
+              <text x={p.px} y={isTop ? p.py - 10 : p.py + 16} textAnchor="middle"
+                fontSize={11} fontWeight={800} fill="hsl(var(--foreground))">
+                {p.label}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Edge length labels */}
+        {svgPoints.map((p, i) => {
+          const j = (i + 1) % svgPoints.length;
+          const p2 = svgPoints[j];
+          const mx = (p.px + p2.px) / 2;
+          const my = (p.py + p2.py) / 2;
+          // Offset label perpendicular to edge
+          const dx = p2.px - p.px;
+          const dy = p2.py - p.py;
+          const len = Math.sqrt(dx * dx + dy * dy);
+          const offsetX = len > 0 ? (-dy / len) * 14 : 0;
+          const offsetY = len > 0 ? (dx / len) * 14 : -10;
+          return (
+            <text key={`edge-${i}`} x={mx + offsetX} y={my + offsetY} textAnchor="middle"
+              fontSize={9} fill="hsl(var(--muted-foreground))" fontWeight={600}>
+              {edges[i].distMm.toLocaleString()} mm
+            </text>
+          );
+        })}
+      </svg>
+    );
+  };
+
+  const handleSaveEdit = () => {
+    if (!onEdit || editVertices.length < 3 || !editName.trim()) return;
+    onEdit({ ...elevation, name: editName.trim(), vertexLabels: editVertices });
+    setIsEditing(false);
+    toast.success(`Alzado "${editName.trim()}" actualizado`);
+  };
 
   return (
-    <Card>
-      <CardHeader className="p-3 pb-1">
-        <CardTitle className="text-xs flex items-center gap-2">
-          <Badge variant="secondary" className="text-[9px]">Polígono {vertices.length}v</Badge>
-          {elevation.name}
-          <span className="text-[10px] text-muted-foreground font-normal ml-1">
-            ({elevation.vertexLabels.join(' → ')})
-          </span>
-          <Badge variant="outline" className="text-[9px] ml-auto">{area.toFixed(2)} m²</Badge>
-          <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={onDelete}><Trash2 className="h-3 w-3 text-destructive" /></Button>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="p-2">
-        <svg width="100%" viewBox={`0 0 ${svgW} ${svgH}`} className="mx-auto" style={{ maxHeight: '200px' }}>
-          {/* Ground line */}
-          <line x1={rx - 5} y1={ry + zSpread * scale} x2={rx + hSpread * scale + 5} y2={ry + zSpread * scale}
-            stroke="hsl(var(--muted-foreground))" strokeWidth={1.5} opacity={0.5} />
+    <>
+      <Card>
+        <CardHeader className="p-3 pb-1">
+          <CardTitle className="text-xs flex items-center gap-2">
+            <Badge variant="secondary" className="text-[9px]">Polígono {vertices.length}v</Badge>
+            {elevation.name}
+            <span className="text-[10px] text-muted-foreground font-normal ml-1">
+              ({elevation.vertexLabels.join(' → ')})
+            </span>
+            <Badge variant="outline" className="text-[9px] ml-auto">{area3D.toFixed(2)} m²</Badge>
+            {onEdit && (
+              <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={() => {
+                setEditName(elevation.name);
+                setEditVertices([...elevation.vertexLabels]);
+                setIsEditing(true);
+              }} title="Editar alzado"><Pencil className="h-3 w-3" /></Button>
+            )}
+            <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={() => setIsFullscreen(true)} title="Pantalla completa"><Maximize2 className="h-3 w-3" /></Button>
+            <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={onDelete}><Trash2 className="h-3 w-3 text-destructive" /></Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-2">
+          {renderSvg(500, 250)}
+          {/* Edge details */}
+          <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-muted-foreground">
+            {edges.map((e, i) => (
+              <span key={i} className="bg-muted px-1.5 py-0.5 rounded">
+                {e.from}→{e.to}: <strong>{e.distMm.toLocaleString()} mm</strong>
+              </span>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
-          {/* Polygon fill */}
-          <polygon points={points} fill="hsl(30, 30%, 92%)" stroke="hsl(222, 47%, 30%)" strokeWidth={1.5} />
-
-          {/* Block pattern inside polygon */}
-          {plan.scaleMode === 'bloque' && (() => {
-            const bwPx = blockWM * scale;
-            const bhPx = blockHM * scale;
-            if (bwPx < 3 || bhPx < 2) return null;
-            const clipId = `clip-${elevation.id}`;
-            return (
-              <g>
-                <defs>
-                  <clipPath id={clipId}>
-                    <polygon points={points} />
-                  </clipPath>
-                </defs>
-                <g clipPath={`url(#${clipId})`}>
-                  {/* Horizontal lines (Z axis) */}
-                  {Array.from({ length: Math.ceil(zSpread / blockHM) }, (_, r) => {
-                    const lineY = ry + zSpread * scale - (r + 1) * bhPx;
-                    if (lineY < ry) return null;
-                    return <line key={`h-${r}`} x1={rx} y1={lineY} x2={rx + hSpread * scale} y2={lineY}
-                      stroke="rgba(41,128,185,0.85)" strokeWidth={1} />;
-                  })}
-                  {/* Vertical lines (alternating offset) */}
-                  {Array.from({ length: Math.ceil(zSpread / blockHM) }, (_, r) => {
-                    const yTop = Math.max(ry, ry + zSpread * scale - (r + 1) * bhPx);
-                    const yBot = ry + zSpread * scale - r * bhPx;
-                    const offset = r % 2 === 0 ? 0 : bwPx / 2;
-                    const cols = Math.ceil(hSpread / blockWM) + 1;
-                    return Array.from({ length: cols }, (_, c) => {
-                      const lineX = rx + offset + c * bwPx;
-                      if (lineX <= rx || lineX >= rx + hSpread * scale) return null;
-                      return <line key={`v-${r}-${c}`} x1={lineX} y1={yTop} x2={lineX} y2={yBot}
-                        stroke="rgba(192,57,43,0.70)" strokeWidth={0.8} />;
-                    });
-                  })}
-                </g>
-              </g>
-            );
-          })()}
-
-          {/* Vertex labels */}
-          {projected.map((p, i) => {
-            const px = rx + p.h * scale;
-            const py = ry + (zSpread - p.z) * scale;
-            const isTop = p.z >= zSpread * 0.5;
-            return (
-              <g key={i}>
-                <circle cx={px} cy={py} r={3} fill="hsl(var(--primary))" />
-                <text x={px} y={isTop ? py - 8 : py + 14} textAnchor="middle"
-                  fontSize={9} fontWeight={700} fill="hsl(var(--foreground))">
-                  {p.label}
-                </text>
-              </g>
-            );
-          })}
-
-          {/* Edge length labels */}
-          {projected.map((p, i) => {
-            const j = (i + 1) % projected.length;
-            const p2 = projected[j];
-            const v1 = vertices[i];
-            const v2 = vertices[j];
-            // 3D distance
-            const dist3d = Math.sqrt(
-              (v2.x - v1.x) ** 2 + (v2.y - v1.y) ** 2 + (v2.z - v1.z) ** 2
-            );
-            const mx = rx + ((p.h + p2.h) / 2) * scale;
-            const my = ry + ((zSpread - p.z + zSpread - p2.z) / 2) * scale;
-            return (
-              <text key={`edge-${i}`} x={mx} y={my - 4} textAnchor="middle"
-                fontSize={8} fill="hsl(var(--muted-foreground))" fontWeight={500}>
-                {(dist3d * 1000).toFixed(0)} mm
-              </text>
-            );
-          })}
-        </svg>
-        {/* Vertex coordinates table */}
-        <div className="mt-2 overflow-x-auto">
-          <table className="w-full text-[10px]">
-            <thead>
-              <tr className="border-b border-border/50">
-                <th className="text-left px-1 py-0.5 text-muted-foreground">Vértice</th>
-                <th className="text-right px-1 py-0.5 text-muted-foreground">X</th>
-                <th className="text-right px-1 py-0.5 text-muted-foreground">Y</th>
-                <th className="text-right px-1 py-0.5 text-muted-foreground">Z</th>
-              </tr>
-            </thead>
-            <tbody>
-              {vertices.map(v => (
-                <tr key={v.label} className="border-b border-border/20">
-                  <td className="px-1 py-0.5 font-semibold">{v.label}</td>
-                  <td className="text-right px-1 py-0.5">{(v.x / cellSizeM).toFixed(0)}</td>
-                  <td className="text-right px-1 py-0.5">{(v.y / cellSizeM).toFixed(0)}</td>
-                  <td className="text-right px-1 py-0.5">{(v.z / blockHM).toFixed(0)}</td>
-                </tr>
+      {/* Fullscreen dialog */}
+      <Dialog open={isFullscreen} onOpenChange={setIsFullscreen}>
+        <DialogContent className="max-w-[95vw] w-[95vw] max-h-[92vh] h-[92vh] flex flex-col overflow-hidden print:!max-w-none print:!w-full print:!h-auto" onInteractOutside={e => e.preventDefault()}>
+          <DialogHeader className="shrink-0">
+            <DialogTitle className="text-sm flex items-center gap-2">
+              <Badge variant="secondary" className="text-xs">Polígono {vertices.length}v</Badge>
+              {elevation.name}
+              <span className="text-xs text-muted-foreground font-normal">
+                ({elevation.vertexLabels.join(' → ')}) — {area3D.toFixed(2)} m²
+              </span>
+              <Button variant="outline" size="sm" className="h-7 text-xs ml-auto print:hidden" onClick={() => window.print()}>
+                <Printer className="h-3 w-3 mr-1" /> Imprimir
+              </Button>
+            </DialogTitle>
+            <DialogDescription className="sr-only">Vista completa del alzado manual {elevation.name}</DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto flex flex-col items-center justify-center">
+            {renderSvg(1400, 700)}
+            <div className="mt-4 flex flex-wrap gap-3 text-xs text-muted-foreground justify-center">
+              {edges.map((e, i) => (
+                <span key={i} className="bg-muted px-2 py-1 rounded">
+                  {e.from} → {e.to}: <strong>{e.distMm.toLocaleString()} mm</strong>
+                </span>
               ))}
-            </tbody>
-          </table>
-        </div>
-      </CardContent>
-    </Card>
+              <span className="bg-primary/10 text-primary px-2 py-1 rounded font-semibold">
+                Superficie: {area3D.toFixed(2)} m²
+              </span>
+            </div>
+            {/* Vertex table */}
+            <table className="mt-4 text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="px-3 py-1 text-left text-muted-foreground">Vértice</th>
+                  <th className="px-3 py-1 text-right text-muted-foreground">Col (X)</th>
+                  <th className="px-3 py-1 text-right text-muted-foreground">Fila (Y)</th>
+                  <th className="px-3 py-1 text-right text-muted-foreground">Z (bloques)</th>
+                  <th className="px-3 py-1 text-right text-muted-foreground">X (mm)</th>
+                  <th className="px-3 py-1 text-right text-muted-foreground">Y (mm)</th>
+                  <th className="px-3 py-1 text-right text-muted-foreground">Z (mm)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {vertices.map(v => (
+                  <tr key={v.label} className="border-b border-border/30">
+                    <td className="px-3 py-1 font-bold">{v.label}</td>
+                    <td className="px-3 py-1 text-right">{v.col}</td>
+                    <td className="px-3 py-1 text-right">{v.row}</td>
+                    <td className="px-3 py-1 text-right">{v.zBlocks}</td>
+                    <td className="px-3 py-1 text-right font-mono">{Math.round(v.x * 1000)}</td>
+                    <td className="px-3 py-1 text-right font-mono">{Math.round(v.y * 1000)}</td>
+                    <td className="px-3 py-1 text-right font-mono">{Math.round(v.z * 1000)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit dialog */}
+      {isEditing && (
+        <Dialog open={isEditing} onOpenChange={setIsEditing}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-sm">Editar alzado manual</DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground">Modifica el nombre o los vértices del polígono.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div>
+                <Label className="text-xs">Nombre</Label>
+                <Input value={editName} onChange={e => setEditName(e.target.value)} className="h-8 text-sm" />
+              </div>
+              <div>
+                <Label className="text-xs">Vértices del polígono (en orden)</Label>
+                <div className="flex flex-wrap gap-1 mt-1 mb-2">
+                  {editVertices.map((v, i) => (
+                    <Badge key={i} variant="secondary" className="text-xs gap-1 cursor-pointer" onClick={() => setEditVertices(prev => prev.filter((_, j) => j !== i))}>
+                      {v} <span className="text-destructive">×</span>
+                    </Badge>
+                  ))}
+                  {editVertices.length === 0 && <span className="text-xs text-muted-foreground italic">Sin vértices</span>}
+                </div>
+                <div className="text-xs text-muted-foreground mb-1">Pulsa en una coordenada para añadirla:</div>
+                <div className="flex flex-wrap gap-1 max-h-40 overflow-y-auto border rounded p-2">
+                  {allCorners
+                    .filter(c => !editVertices.includes(c.label))
+                    .map(c => (
+                      <Button key={c.label} variant="outline" size="sm" className="h-6 text-[10px] px-2"
+                        onClick={() => setEditVertices(prev => [...prev, c.label])}>
+                        {c.label} {c.z !== undefined ? `(z=${c.z})` : ''}
+                      </Button>
+                    ))}
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" size="sm" onClick={() => setIsEditing(false)}>Cancelar</Button>
+                <Button size="sm" disabled={editVertices.length < 3 || !editName.trim()} onClick={handleSaveEdit}>
+                  Guardar cambios
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+    </>
   );
 }
 

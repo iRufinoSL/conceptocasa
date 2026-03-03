@@ -229,6 +229,7 @@ export function BrainPlexView({
             {childrenWithGrandchildren.map((child, i) => {
               const isExpanded = expandedChildId === child.id;
               const count = child.grandchildren.length;
+              const hasGrandchildren = count > 0;
               return (
                 <motion.div
                   key={`child-group-${child.id}`}
@@ -237,9 +238,16 @@ export function BrainPlexView({
                   animate={{ y: 0, opacity: 1 }}
                   transition={{ delay: i * 0.06 }}
                 >
-                  {/* Category header */}
+                  {/* Category header - navigate if no grandchildren, toggle if has */}
                   <button
-                    onClick={() => toggleExpand(child.id)}
+                    onClick={() => {
+                      if (hasGrandchildren) {
+                        toggleExpand(child.id);
+                      } else {
+                        onNavigate(child.id);
+                      }
+                    }}
+                    onDoubleClick={() => onOpenPanel(child)}
                     className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-card/80 backdrop-blur-sm hover:border-primary/40 transition-all group"
                   >
                     <div
@@ -249,46 +257,51 @@ export function BrainPlexView({
                     <span className="font-medium text-sm text-foreground flex-1 text-left">
                       {child.name}
                     </span>
-                    <span className="text-xs text-muted-foreground">{count}</span>
-                    {isExpanded
-                      ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                      : <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                    }
+                    {hasGrandchildren ? (
+                      <>
+                        <span className="text-xs text-muted-foreground">{count}</span>
+                        {isExpanded
+                          ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                          : <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        }
+                      </>
+                    ) : (
+                      <ChevronRight className="h-4 w-4 text-muted-foreground opacity-50" />
+                    )}
                   </button>
 
                   {/* Expanded grandchildren */}
-                  <AnimatePresence>
-                    {isExpanded && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.25 }}
-                        className="overflow-hidden"
-                      >
-                        <div className="flex flex-wrap gap-2 py-2 pl-5">
-                          {child.grandchildren.map((gc, gi) => (
-                            <motion.div
-                              key={gc.id}
-                              initial={{ scale: 0.8, opacity: 0 }}
-                              animate={{ scale: 1, opacity: 1 }}
-                              transition={{ delay: gi * 0.03 }}
-                            >
-                              <BrainNodeCard
-                                node={gc}
-                                size="xs"
-                                onClick={() => onNavigate(gc.id)}
-                                onDoubleClick={() => onOpenPanel(gc)}
-                              />
-                            </motion.div>
-                          ))}
-                          {child.grandchildren.length === 0 && (
-                            <p className="text-xs text-muted-foreground italic py-1">Sin elementos</p>
-                          )}
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+                  {hasGrandchildren && (
+                    <AnimatePresence>
+                      {isExpanded && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.25 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="flex flex-wrap gap-2 py-2 pl-5">
+                            {child.grandchildren.map((gc, gi) => (
+                              <motion.div
+                                key={gc.id}
+                                initial={{ scale: 0.8, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                transition={{ delay: gi * 0.03 }}
+                              >
+                                <BrainNodeCard
+                                  node={gc}
+                                  size="xs"
+                                  onClick={() => onNavigate(gc.id)}
+                                  onDoubleClick={() => onOpenPanel(gc)}
+                                />
+                              </motion.div>
+                            ))}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  )}
                 </motion.div>
               );
             })}

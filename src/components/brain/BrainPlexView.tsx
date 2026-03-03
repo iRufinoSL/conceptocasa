@@ -31,28 +31,38 @@ export function BrainPlexView({
     <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
       {/* SVG lines connecting nodes */}
       <svg className="absolute inset-0 w-full h-full pointer-events-none z-0" style={{ overflow: 'visible' }}>
+        <defs>
+          <linearGradient id="lineGradientUp" x1="0" y1="1" x2="0" y2="0">
+            <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0.6" />
+            <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity="0.15" />
+          </linearGradient>
+          <linearGradient id="lineGradientDown" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0.6" />
+            <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity="0.15" />
+          </linearGradient>
+        </defs>
         {/* Parent line */}
         {parent && (
           <motion.line
             initial={{ pathLength: 0, opacity: 0 }}
-            animate={{ pathLength: 1, opacity: 0.3 }}
-            transition={{ duration: 0.5 }}
+            animate={{ pathLength: 1, opacity: 1 }}
+            transition={{ duration: 0.6 }}
             x1="50%" y1="50%" x2="50%" y2="15%"
-            stroke="hsl(var(--border))" strokeWidth="2" strokeDasharray="6 4"
+            stroke="url(#lineGradientUp)" strokeWidth="2.5"
           />
         )}
         {/* Children lines */}
-        {children.map((_, i) => {
+        {children.map((child, i) => {
           const count = children.length;
           const xPercent = count === 1 ? 50 : 20 + (60 * i / (count - 1));
           return (
             <motion.line
               key={`child-line-${i}`}
               initial={{ pathLength: 0, opacity: 0 }}
-              animate={{ pathLength: 1, opacity: 0.3 }}
+              animate={{ pathLength: 1, opacity: 1 }}
               transition={{ duration: 0.5, delay: i * 0.05 }}
               x1="50%" y1="50%" x2={`${xPercent}%`} y2="85%"
-              stroke="hsl(var(--border))" strokeWidth="2" strokeDasharray="6 4"
+              stroke="url(#lineGradientDown)" strokeWidth="2"
             />
           );
         })}
@@ -60,20 +70,20 @@ export function BrainPlexView({
         {leftSiblings.map((_, i) => (
           <motion.line
             key={`left-line-${i}`}
-            initial={{ opacity: 0 }} animate={{ opacity: 0.2 }}
+            initial={{ opacity: 0 }} animate={{ opacity: 0.35 }}
             transition={{ duration: 0.4, delay: i * 0.05 }}
             x1="50%" y1="50%" x2="8%" y2={`${35 + i * 12}%`}
-            stroke="hsl(var(--border))" strokeWidth="1.5" strokeDasharray="4 4"
+            stroke="hsl(var(--muted-foreground))" strokeWidth="1.5" strokeDasharray="6 4"
           />
         ))}
         {/* Right sibling lines */}
         {rightSiblings.map((_, i) => (
           <motion.line
             key={`right-line-${i}`}
-            initial={{ opacity: 0 }} animate={{ opacity: 0.2 }}
+            initial={{ opacity: 0 }} animate={{ opacity: 0.35 }}
             transition={{ duration: 0.4, delay: i * 0.05 }}
             x1="50%" y1="50%" x2="92%" y2={`${35 + i * 12}%`}
-            stroke="hsl(var(--border))" strokeWidth="1.5" strokeDasharray="4 4"
+            stroke="hsl(var(--muted-foreground))" strokeWidth="1.5" strokeDasharray="6 4"
           />
         ))}
       </svg>

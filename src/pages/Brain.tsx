@@ -211,7 +211,18 @@ export default function Brain() {
           children={children}
           siblings={siblings}
           allNodes={nodes}
-          onNavigate={navigateTo}
+          onNavigate={(nodeId) => {
+            const targetNode = nodes.find(n => n.id === nodeId);
+            if (targetNode) {
+              // If this node is a leaf (no children) with a target_url, navigate to that route
+              const nodeChildren = nodes.filter(n => n.parent_id === nodeId);
+              if (nodeChildren.length === 0 && targetNode.target_url) {
+                navigate(targetNode.target_url);
+                return;
+              }
+            }
+            navigateTo(nodeId);
+          }}
           onOpenPanel={handleOpenPanel}
         />
       </main>

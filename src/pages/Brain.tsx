@@ -144,6 +144,7 @@ export default function Brain() {
           parent={parent}
           children={children}
           siblings={siblings}
+          allNodes={nodes}
           onNavigate={navigateTo}
           onOpenPanel={handleOpenPanel}
         />

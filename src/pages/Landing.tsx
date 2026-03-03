@@ -296,7 +296,7 @@ const Landing = () => {
               transition={{ delay: 0.6 }}
               className="text-lg md:text-xl text-background/90 leading-relaxed text-overlay-dark"
             >
-               Diseñamos y construimos viviendas unifamiliares con estándar Passivhaus: 
+               Diseñamos y construimos viviendas unifamiliares con estándar de Casa Pasiva: 
                ventilación mecánica con recuperación de calor, envolvente térmica continua 
                y demanda energética inferior a 15 kWh/m²·año.
             </motion.p>

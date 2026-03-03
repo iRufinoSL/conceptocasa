@@ -8,7 +8,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { format, differenceInDays, addDays, parseISO, eachWeekOfInterval, eachDayOfInterval } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { ChevronDown, ChevronRight, Calendar, ZoomIn, ZoomOut, ArrowLeft, Clock, CheckCircle2, Maximize2, Minimize2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Calendar, ZoomIn, ZoomOut, ArrowLeft, Clock, CheckCircle2, Maximize2, Minimize2, Link2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -37,6 +37,7 @@ interface BudgetActivity {
   duration_days: number | null;
   actual_start_date: string | null;
   actual_end_date: string | null;
+  depends_on_activity_id: string | null;
 }
 
 interface HierarchicalGanttViewProps {
@@ -100,7 +101,7 @@ export function HierarchicalGanttView({
             .order('code', { ascending: true }),
           supabase
             .from('budget_activities')
-            .select('id, name, code, phase_id, start_date, end_date, duration_days, actual_start_date, actual_end_date')
+            .select('id, name, code, phase_id, start_date, end_date, duration_days, actual_start_date, actual_end_date, depends_on_activity_id')
             .eq('budget_id', budgetId)
             .order('code', { ascending: true })
         ]);
@@ -457,6 +458,55 @@ export function HierarchicalGanttView({
     );
   }, [phaseChildren, expandedPhases, getPhaseColorIndex, getBarStyle, activities]);
 
+  // Render dependency arrow between activities
+  const renderActivityDependencyArrow = useCallback((
+    activity: BudgetActivity,
+    dependsOn: BudgetActivity,
+    rowIndex: number,
+    depRowIndex: number
+  ) => {
+    const depEnd = dependsOn.actual_end_date || dependsOn.end_date;
+    const actStart = activity.actual_start_date || activity.start_date;
+    if (!depEnd || !actStart) return null;
+
+    const depEndDate = parseISO(depEnd);
+    const actStartDate = parseISO(actStart);
+    const dayWidth = zoomLevel === 'weeks' ? unitWidth / 7 : unitWidth;
+    const depEndX = differenceInDays(depEndDate, timelineStart) * dayWidth;
+    const actStartX = differenceInDays(actStartDate, timelineStart) * dayWidth;
+    const arrowWidth = Math.max(actStartX - depEndX, 4);
+    const rowDiff = rowIndex - depRowIndex;
+    const rowHeight = 48; // h-12
+
+    if (rowDiff === 0) return null;
+
+    return (
+      <svg
+        key={`dep-${activity.id}`}
+        className="absolute pointer-events-none z-10"
+        style={{
+          left: `${depEndX}px`,
+          top: `${depRowIndex * rowHeight + 24}px`,
+          width: `${arrowWidth + 12}px`,
+          height: `${rowDiff * rowHeight}px`,
+          overflow: 'visible'
+        }}
+      >
+        <path
+          d={`M 0,0 L ${arrowWidth / 2},0 L ${arrowWidth / 2},${rowDiff * rowHeight} L ${arrowWidth},${rowDiff * rowHeight}`}
+          stroke="hsl(var(--primary))"
+          strokeWidth="1.5"
+          strokeDasharray="4,2"
+          fill="none"
+        />
+        <polygon
+          points={`${arrowWidth},${rowDiff * rowHeight - 4} ${arrowWidth + 8},${rowDiff * rowHeight} ${arrowWidth},${rowDiff * rowHeight + 4}`}
+          fill="hsl(var(--primary))"
+        />
+      </svg>
+    );
+  }, [timelineStart, zoomLevel, unitWidth]);
+
   // Render activity row
   const renderActivityRow = useCallback((activity: BudgetActivity, colorIdx: number) => {
     const plannedBarStyle = getBarStyle(activity.start_date, activity.end_date, activity.duration_days);
@@ -474,6 +524,9 @@ export function HierarchicalGanttView({
           <span className="text-sm font-medium truncate flex-1">
             {activity.code}.-{activity.name}
           </span>
+          {activity.depends_on_activity_id && (
+            <Link2 className="h-3.5 w-3.5 text-primary shrink-0" />
+          )}
           {hasActualDates && (
             <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
           )}
@@ -671,9 +724,18 @@ export function HierarchicalGanttView({
                 )
               ) : (
                 selectedPhaseActivities.length > 0 ? (
-                  selectedPhaseActivities.map(activity => 
-                    renderActivityRow(activity, getPhaseColorIndex(selectedPhase!))
-                  )
+                  <div className="relative">
+                    {selectedPhaseActivities.map((activity, idx) => 
+                      renderActivityRow(activity, getPhaseColorIndex(selectedPhase!))
+                    )}
+                    {/* Dependency arrows overlay */}
+                    {selectedPhaseActivities.map((activity, idx) => {
+                      if (!activity.depends_on_activity_id) return null;
+                      const depIdx = selectedPhaseActivities.findIndex(a => a.id === activity.depends_on_activity_id);
+                      if (depIdx < 0) return null;
+                      return renderActivityDependencyArrow(activity, selectedPhaseActivities[depIdx], idx, depIdx);
+                    })}
+                  </div>
                 ) : (
                   <div className="py-8 text-center text-muted-foreground">
                     Esta fase no tiene actividades

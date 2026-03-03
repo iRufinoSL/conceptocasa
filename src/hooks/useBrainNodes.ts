@@ -104,13 +104,9 @@ export function useBrainNodes() {
     const existingChildren = currentNodes.filter(n => n.parent_id === budgetNode.id);
     const existingNames = new Set(existingChildren.map(n => n.name));
 
-    // Check if primary sublevels already exist
-    const hasPrimary = BUDGET_PRIMARY_SUBLEVELS.every(s => existingNames.has(s.name));
-    if (hasPrimary) return false;
-
     let didChange = false;
 
-    // Create primary sublevels
+    // Create missing primary sublevels
     const missingPrimary = BUDGET_PRIMARY_SUBLEVELS.filter(s => !existingNames.has(s.name));
     if (missingPrimary.length > 0) {
       const { data: primaryData, error } = await supabase
@@ -130,8 +126,7 @@ export function useBrainNodes() {
 
       if (!error && primaryData) {
         didChange = true;
-
-        // Create DÓNDE? sub-items
+        // Create DÓNDE? sub-items for newly created DÓNDE node
         const dondeNode = primaryData.find((n: any) => n.name === 'DÓNDE?');
         if (dondeNode) {
           const { error: dondeErr } = await supabase
@@ -152,6 +147,32 @@ export function useBrainNodes() {
         }
       } else if (error) {
         console.error('Error creating budget sublevels:', error);
+      }
+    }
+
+    // Ensure DÓNDE? sub-items are complete (e.g. Alzados added later)
+    const dondeNode = existingChildren.find(n => n.name === 'DÓNDE?');
+    if (dondeNode) {
+      const dondeChildren = currentNodes.filter(n => n.parent_id === dondeNode.id);
+      const dondeChildNames = new Set(dondeChildren.map(n => n.name));
+      const missingDonde = DONDE_SUBLEVELS.filter(s => !dondeChildNames.has(s.name));
+      if (missingDonde.length > 0) {
+        const { error: dondeErr } = await supabase
+          .from('brain_nodes')
+          .insert(missingDonde.map(s => ({
+            user_id: user.id,
+            parent_id: dondeNode.id,
+            name: s.name,
+            description: s.description,
+            icon: s.icon,
+            node_type: 'module' as const,
+            target_url: `/presupuestos/${budgetId}`,
+            target_params: { budgetId, tab: s.tab },
+            color: s.color,
+            order_index: s.order,
+          })));
+        if (!dondeErr) didChange = true;
+        else console.error('Error creating missing DÓNDE sublevels:', dondeErr);
       }
     }
 

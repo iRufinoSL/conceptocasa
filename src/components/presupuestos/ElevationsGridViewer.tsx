@@ -1000,10 +1000,10 @@ export function ElevationsGridViewer({
             <Box className="h-3 w-3 mr-1" /> Por grupo ({elevationGroups.length})
           </Button>
         )}
-        {allCompositeWalls.length > 0 && (
+        {(allCompositeWalls.length > 0 || (manualElevations && manualElevations.length > 0) || (customCorners && customCorners.length > 0)) && (
           <Button variant={viewMode === 'composite' ? 'default' : 'outline'} size="sm" className="text-xs h-7"
             onClick={() => setViewMode('composite')}>
-            <MapIcon className="h-3 w-3 mr-1" /> Alzados de coordenadas ({allCompositeWalls.length})
+            <MapIcon className="h-3 w-3 mr-1" /> Alzados de coordenadas ({allCompositeWalls.length + (manualElevations || []).length})
           </Button>
         )}
         {perFloorComposites.length >= 2 && (

@@ -317,6 +317,107 @@ export type Database = {
         }
         Relationships: []
       }
+      brain_node_links: {
+        Row: {
+          created_at: string
+          from_node_id: string
+          id: string
+          link_type: string
+          to_node_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          from_node_id: string
+          id?: string
+          link_type?: string
+          to_node_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          from_node_id?: string
+          id?: string
+          link_type?: string
+          to_node_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brain_node_links_from_node_id_fkey"
+            columns: ["from_node_id"]
+            isOneToOne: false
+            referencedRelation: "brain_nodes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "brain_node_links_to_node_id_fkey"
+            columns: ["to_node_id"]
+            isOneToOne: false
+            referencedRelation: "brain_nodes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      brain_nodes: {
+        Row: {
+          color: string | null
+          created_at: string
+          description: string | null
+          icon: string | null
+          id: string
+          is_pinned: boolean
+          name: string
+          node_type: string
+          order_index: number
+          parent_id: string | null
+          target_params: Json | null
+          target_url: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_pinned?: boolean
+          name: string
+          node_type?: string
+          order_index?: number
+          parent_id?: string | null
+          target_params?: Json | null
+          target_url?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_pinned?: boolean
+          name?: string
+          node_type?: string
+          order_index?: number
+          parent_id?: string | null
+          target_params?: Json | null
+          target_url?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brain_nodes_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "brain_nodes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       budget_activities: {
         Row: {
           actual_end_date: string | null

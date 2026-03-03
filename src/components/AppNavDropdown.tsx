@@ -21,6 +21,7 @@ import {
   ChevronDown,
   Wallet,
   LogOut,
+  Brain,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -34,6 +35,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { title: 'Panel de control', path: '/dashboard', icon: LayoutDashboard, appName: 'dashboard' },
+  { title: 'Brain', path: '/brain', icon: Brain, appName: 'dashboard' },
   { title: 'Proyectos', path: '/proyectos', icon: Building2, appName: 'presupuestos' },
   { title: 'Presupuestos', path: '/presupuestos', icon: Calculator, appName: 'presupuestos' },
   { title: 'CRM', path: '/crm', icon: Users, appName: 'crm' },

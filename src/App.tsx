@@ -27,6 +27,7 @@ import SmsRedirect from "./pages/SmsRedirect";
 import NotFound from "./pages/NotFound";
 import FloorPlanPopout from "./pages/FloorPlanPopout";
 import Soluciones from "./pages/Soluciones";
+import Brain from "./pages/Brain";
 
 const queryClient = new QueryClient();
 
@@ -55,6 +56,7 @@ const App = () => {
             
             {/* Protected routes - require authentication */}
             <Route path="/dashboard" element={<ProtectedRoute appName="dashboard"><Dashboard /></ProtectedRoute>} />
+            <Route path="/brain" element={<ProtectedRoute appName="dashboard"><Brain /></ProtectedRoute>} />
             <Route path="/presupuestos" element={<ProtectedRoute appName="presupuestos"><Presupuestos /></ProtectedRoute>} />
             <Route path="/presupuestos/:id" element={<ProtectedRoute appName="presupuestos"><PresupuestoDashboard /></ProtectedRoute>} />
             <Route path="/proyectos" element={<ProtectedRoute appName="presupuestos"><Proyectos /></ProtectedRoute>} />

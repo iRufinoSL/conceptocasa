@@ -20,9 +20,11 @@ interface ElevationPdfExportProps {
   size?: 'sm' | 'default';
   /** Custom button className */
   className?: string;
+  /** Additional area/location info for the header */
+  areaInfo?: string;
 }
 
-export function ElevationPdfExport({ title, subtitle, containerRef, size = 'sm', className }: ElevationPdfExportProps) {
+export function ElevationPdfExport({ title, subtitle, containerRef, size = 'sm', className, areaInfo }: ElevationPdfExportProps) {
   const [open, setOpen] = useState(false);
   const [orientation, setOrientation] = useState<'landscape' | 'portrait'>('landscape');
   const [scalePct, setScalePct] = useState(100);
@@ -166,14 +168,24 @@ export function ElevationPdfExport({ title, subtitle, containerRef, size = 'sm',
       doc.setFontSize(11);
       doc.setFont('helvetica', 'bold');
       doc.text(title, MARGIN, MARGIN + 6);
+      let headerY = MARGIN + 6;
+      if (areaInfo) {
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        headerY += 4;
+        doc.text(`Presupuesto: ${areaInfo}`, MARGIN, headerY);
+      }
       if (subtitle) {
         doc.setFontSize(8);
         doc.setFont('helvetica', 'normal');
-        doc.text(subtitle, MARGIN, MARGIN + 10);
+        headerY += 3.5;
+        doc.text(subtitle, MARGIN, headerY);
       }
       doc.setFontSize(8);
       doc.setFont('helvetica', 'normal');
       doc.text(`Escala: ${scalePct}%`, A4_W - MARGIN, MARGIN + 6, { align: 'right' });
+      const dateStr = new Date().toLocaleDateString('es-ES', { year: 'numeric', month: '2-digit', day: '2-digit' });
+      doc.text(dateStr, A4_W - MARGIN, MARGIN + 10, { align: 'right' });
 
       // Separator
       doc.setDrawColor(180, 180, 180);

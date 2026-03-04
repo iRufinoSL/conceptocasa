@@ -4869,27 +4869,138 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
   const getBlockDims = (isExt: boolean) => getBlockDimensions(plan, isExt);
 
   const renderTotalSvg = (fsScale?: number) => {
-    const padding = 60;
+    const padding = 80;
     const maxW = fsScale ? window.innerWidth * 0.9 : 600;
-    const scale = fsScale || Math.min((maxW - padding * 2) / totalWidth, 80);
-    const svgW = totalWidth * scale + padding * 2 + 40;
-    const svgH = totalHeight * scale + padding * 2 + 50;
+
+    // Compute full building grid bounds
+    const csm = cellSizeM || (plan.blockLengthMm / 1000) || 0.625;
+    const blockHM = (plan.blockHeightMm || 250) / 1000;
+    const isHorizontalX = side === 'top' || side === 'bottom';
+
+    // Find max grid extents from rooms
+    let maxGridCol = 0, maxGridRow = 0, maxGridZ = 0;
+    rooms.forEach(r => {
+      if (r.posX != null && r.posY != null) {
+        maxGridCol = Math.max(maxGridCol, Math.round((r.posX + r.width) / csm));
+        maxGridRow = Math.max(maxGridRow, Math.round((r.posY + r.length) / csm));
+      }
+    });
+    // Max Z from floors + heights
+    if (floors && floorBaseZMap) {
+      const sortedFl = [...floors].sort((a, b) => a.orderIndex - b.orderIndex);
+      sortedFl.forEach(f => {
+        const baseZ = floorBaseZMap.get(f.id) ?? 0;
+        const floorRooms = rooms.filter(r => r.floorId === f.id);
+        const maxH = Math.max(...floorRooms.map(r => r.height ?? plan.defaultHeight), plan.defaultHeight);
+        maxGridZ = Math.max(maxGridZ, baseZ + Math.round(maxH * 1000 / (plan.blockHeightMm || 250)));
+      });
+    }
+    if (maxGridZ === 0) maxGridZ = Math.round(totalHeight / blockHM);
+
+    const gridH = isHorizontalX ? maxGridCol : maxGridRow; // horizontal grid units
+    const gridV = maxGridZ; // vertical grid units (Z)
+    const gridWidthM = gridH * csm;
+    const gridHeightM = gridV * blockHM;
+
+    // Use the larger of elevation size vs grid size
+    const effectiveWidth = Math.max(totalWidth, gridWidthM);
+    const effectiveHeight = Math.max(totalHeight, gridHeightM);
+
+    const scale = fsScale || Math.min((maxW - padding * 2) / effectiveWidth, 80);
+    const svgW = effectiveWidth * scale + padding * 2 + 40;
+    const svgH = effectiveHeight * scale + padding * 2 + 60;
     const rx = padding;
-    const baseY = padding / 2 + totalHeight * scale + 10;
+    const baseY = padding / 2 + effectiveHeight * scale + 10;
+
+    // Grid step in pixels
+    const gridStepH = csm * scale;
+    const gridStepV = blockHM * scale;
+    const axisLabel = isHorizontalX ? 'X' : 'Y';
 
     // Compute slope ratio for roof lines
     const halfBuildingWidth = totalWidth / 2;
     const ridgePeakH = getEffectiveRidgeHeight(plan, halfBuildingWidth);
+
+    // Build grid corner coordinates for header
+    const gridCornerCoords = (() => {
+      if (side === 'top') return { bl: `(0,0,0)`, br: `(${maxGridCol},0,0)`, tr: `(${maxGridCol},0,${gridV})`, tl: `(0,0,${gridV})` };
+      if (side === 'right') return { bl: `(${maxGridCol},0,0)`, br: `(${maxGridCol},${maxGridRow},0)`, tr: `(${maxGridCol},${maxGridRow},${gridV})`, tl: `(${maxGridCol},0,${gridV})` };
+      if (side === 'bottom') return { bl: `(0,${maxGridRow},0)`, br: `(${maxGridCol},${maxGridRow},0)`, tr: `(${maxGridCol},${maxGridRow},${gridV})`, tl: `(0,${maxGridRow},${gridV})` };
+      return { bl: `(0,${maxGridRow},0)`, br: `(0,0,0)`, tr: `(0,0,${gridV})`, tl: `(0,${maxGridRow},${gridV})` };
+    })();
 
     return (
       <svg
         width="100%"
         viewBox={`0 0 ${svgW} ${svgH}`}
         className="mx-auto"
-        style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', maxHeight: fsScale ? '85vh' : '280px' }}
+        style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', maxHeight: fsScale ? '85vh' : '350px' }}
       >
+        {/* Background grid */}
+        <g opacity={0.6}>
+          {/* Grid border */}
+          <rect x={rx} y={baseY - gridV * gridStepV} width={gridH * gridStepH} height={gridV * gridStepV}
+            fill="none" stroke="hsl(220, 30%, 75%)" strokeWidth={1} />
+
+          {/* Horizontal grid lines (Z levels) */}
+          {Array.from({ length: gridV + 1 }, (_, z) => {
+            const y = baseY - z * gridStepV;
+            return (
+              <g key={`gz-${z}`}>
+                <line x1={rx} y1={y} x2={rx + gridH * gridStepH} y2={y}
+                  stroke={z === 0 ? 'hsl(220, 30%, 65%)' : 'hsl(220, 20%, 88%)'} strokeWidth={z === 0 ? 1 : 0.4} />
+                <text x={rx - 5} y={y + 3} textAnchor="end"
+                  fontSize={fsScale ? 9 : 6} fill="hsl(220, 30%, 50%)" fontWeight={z % 5 === 0 ? 700 : 400}>
+                  Z{z}
+                </text>
+              </g>
+            );
+          })}
+
+          {/* Vertical grid lines (X or Y) */}
+          {Array.from({ length: gridH + 1 }, (_, h) => {
+            const x = rx + h * gridStepH;
+            return (
+              <g key={`gh-${h}`}>
+                <line x1={x} y1={baseY} x2={x} y2={baseY - gridV * gridStepV}
+                  stroke={h === 0 || h === gridH ? 'hsl(220, 30%, 65%)' : 'hsl(220, 20%, 88%)'} strokeWidth={h === 0 || h === gridH ? 1 : 0.4} />
+                <text x={x} y={baseY + (fsScale ? 14 : 10)} textAnchor="middle"
+                  fontSize={fsScale ? 9 : 6} fill="hsl(220, 30%, 50%)" fontWeight={h % 5 === 0 ? 700 : 400}>
+                  {axisLabel}{h}
+                </text>
+              </g>
+            );
+          })}
+
+          {/* Grid corner coordinate labels */}
+          {(() => {
+            const fs = fsScale ? 8 : 5.5;
+            const topGridY = baseY - gridV * gridStepV;
+            const rightGridX = rx + gridH * gridStepH;
+            return (
+              <g>
+                <text x={rx} y={baseY + (fsScale ? 26 : 19)} textAnchor="start" fontSize={fs} fill="hsl(220, 40%, 40%)" fontWeight={600}>{gridCornerCoords.bl}</text>
+                <text x={rightGridX} y={baseY + (fsScale ? 26 : 19)} textAnchor="end" fontSize={fs} fill="hsl(220, 40%, 40%)" fontWeight={600}>{gridCornerCoords.br}</text>
+                <text x={rightGridX} y={topGridY - (fsScale ? 5 : 3)} textAnchor="end" fontSize={fs} fill="hsl(220, 40%, 40%)" fontWeight={600}>{gridCornerCoords.tr}</text>
+                <text x={rx} y={topGridY - (fsScale ? 5 : 3)} textAnchor="start" fontSize={fs} fill="hsl(220, 40%, 40%)" fontWeight={600}>{gridCornerCoords.tl}</text>
+              </g>
+            );
+          })()}
+
+          {/* Axis titles */}
+          <text x={rx + gridH * gridStepH / 2} y={baseY + (fsScale ? 38 : 28)} textAnchor="middle"
+            fontSize={fsScale ? 11 : 7} fill="hsl(220, 40%, 35%)" fontWeight={800}>
+            {isHorizontalX ? 'Eje X' : 'Eje Y'} — {Math.round(gridWidthM * 1000)}mm ({gridH} bloques × 625mm)
+          </text>
+          <text x={rx - (fsScale ? 25 : 18)} y={baseY - gridV * gridStepV / 2} textAnchor="middle"
+            fontSize={fsScale ? 11 : 7} fill="hsl(220, 40%, 35%)" fontWeight={800}
+            transform={`rotate(-90, ${rx - (fsScale ? 25 : 18)}, ${baseY - gridV * gridStepV / 2})`}>
+            Eje Z — {Math.round(gridHeightM * 1000)}mm ({gridV} bloques × 250mm)
+          </text>
+        </g>
+
         {/* Ground line */}
-        <line x1={rx - 5} y1={baseY} x2={rx + totalWidth * scale + 5} y2={baseY}
+        <line x1={rx - 5} y1={baseY} x2={rx + effectiveWidth * scale + 5} y2={baseY}
           stroke="hsl(25, 60%, 40%)" strokeWidth={2} />
 
         {/* Render layers bottom to top */}
@@ -5376,6 +5487,16 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
               <Badge variant="default" className="text-[9px] h-4">{TOTAL_SIDE_NAMES[side]}</Badge>
               <Badge variant="outline" className="text-[9px] h-4">{Math.round(totalWidth * 1000)} × {Math.round(totalHeight * 1000)} mm</Badge>
               <Badge variant="secondary" className="text-[9px] h-4">{layers.length} niveles</Badge>
+              <Badge variant="outline" className="text-[9px] h-4 font-mono bg-accent/20">
+                Cuadrícula {(() => {
+                  const csm2 = cellSizeM || (plan.blockLengthMm / 1000) || 0.625;
+                  const isHX = side === 'top' || side === 'bottom';
+                  let mxC = 0, mxR = 0, mxZ = 0;
+                  rooms.forEach(r => { if (r.posX != null && r.posY != null) { mxC = Math.max(mxC, Math.round((r.posX + r.width) / csm2)); mxR = Math.max(mxR, Math.round((r.posY + r.length) / csm2)); } });
+                  if (floors && floorBaseZMap) { floors.forEach(f => { const bz = floorBaseZMap.get(f.id) ?? 0; const fRooms = rooms.filter(r2 => r2.floorId === f.id); const mH = Math.max(...fRooms.map(r2 => r2.height ?? plan.defaultHeight), plan.defaultHeight); mxZ = Math.max(mxZ, bz + Math.round(mH * 1000 / (plan.blockHeightMm || 250))); }); }
+                  return `${isHX ? 'X' : 'Y'}0-${isHX ? mxC : mxR} × Z0-${mxZ}`;
+                })()}
+              </Badge>
               {cornerLabels.bottomLeft && (() => {
                 const csm = cellSizeM || (plan.blockLengthMm / 1000) || 0.625;
                 const blockHMm2 = plan.blockHeightMm || 250;

@@ -5140,6 +5140,10 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
   // Coordinate creation mode
   const [totalCoordMode, setTotalCoordMode] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+  // Coordinate connection mode: connect coords to form polygon edges
+  const [connectMode, setConnectMode] = useState(false);
+  const [connectFrom, setConnectFrom] = useState<string | null>(null);
+  const [coordEdges, setCoordEdges] = useState<Array<{ from: string; to: string }>>([]);
   const isGableSide = side === 'right' || side === 'left';
 
   // Calculate total width (max across all layers) and per-layer heights
@@ -6018,34 +6022,160 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
           </g>
         )}
 
-        {/* Existing coordinate markers on the grid */}
+        {/* Existing coordinate markers on the grid — show ALL coords on this face */}
         {fsScale && customCorners && customCorners.length > 0 && (() => {
           const markers: React.ReactElement[] = [];
-          customCorners.forEach((cc, ci) => {
-            // Convert corner XYZ to grid position on this face
-            const cX = cc.col - 1; // 0-based
+          // Helper to get grid position for a corner on this face
+          const getGridPos = (cc: CustomCorner): { hPos: number; vPos: number } | null => {
+            const cX = cc.col - 1;
             const cY = cc.row - 1;
             const cZ = cc.z ?? 0;
             let hPos: number | null = null;
-            let vPos = cZ;
-            if (side === 'top' && cY === 0) hPos = cX;
-            else if (side === 'bottom' && cY === maxGridRow) hPos = cX;
-            else if (side === 'right' && cX === maxGridCol) hPos = cY;
-            else if (side === 'left' && cX === 0) hPos = cY;
-            if (hPos == null) return;
-            if (hPos < 0 || hPos > gridH || vPos < 0 || vPos > gridV) return;
-            const mx = rx + hPos * gridStepH;
-            const my = baseY - vPos * gridStepV;
+            const vPos = cZ;
+            // Accept coords assigned to this side OR coords on the boundary
+            if (cc.side === side) {
+              if (side === 'top' || side === 'bottom') hPos = cX;
+              else hPos = cY;
+            } else {
+              // Also show boundary coords without explicit side
+              if (side === 'top' && cY === 0) hPos = cX;
+              else if (side === 'bottom' && cY === maxGridRow) hPos = cX;
+              else if (side === 'right' && cX === maxGridCol) hPos = cY;
+              else if (side === 'left' && cX === 0) hPos = cY;
+            }
+            if (hPos == null) return null;
+            if (hPos < 0 || hPos > gridH || vPos < 0 || vPos > gridV) return null;
+            return { hPos, vPos };
+          };
+
+          // Collect face coords for edge rendering
+          const faceCoords: Array<{ label: string; mx: number; my: number; cc: CustomCorner }> = [];
+          customCorners.forEach((cc, ci) => {
+            const pos = getGridPos(cc);
+            if (!pos) return;
+            const mx = rx + pos.hPos * gridStepH;
+            const my = baseY - pos.vPos * gridStepV;
+            faceCoords.push({ label: cc.label, mx, my, cc });
+            const isConnectTarget = connectMode && connectFrom && connectFrom !== cc.label;
             markers.push(
-              <g key={`coord-marker-${ci}`}>
-                <circle cx={mx} cy={my} r={5} fill="hsl(var(--primary))" stroke="white" strokeWidth={1.5} />
-                <text x={mx + 7} y={my - 4} fontSize={9} fill="hsl(var(--primary))" fontWeight={800}>{cc.label}</text>
-                <text x={mx + 7} y={my + 6} fontSize={7} fill="hsl(222,47%,45%)" fontWeight={600} fontFamily="monospace">
-                  ({cX},{cY},{cZ})
+              <g key={`coord-marker-${ci}`}
+                style={{ cursor: connectMode ? 'pointer' : 'default' }}
+                onClick={connectMode ? (e) => {
+                  e.stopPropagation();
+                  if (!connectFrom) {
+                    setConnectFrom(cc.label);
+                  } else if (connectFrom !== cc.label) {
+                    // Add edge
+                    const exists = coordEdges.some(ed =>
+                      (ed.from === connectFrom && ed.to === cc.label) ||
+                      (ed.from === cc.label && ed.to === connectFrom)
+                    );
+                    if (!exists) {
+                      setCoordEdges(prev => [...prev, { from: connectFrom!, to: cc.label }]);
+                    }
+                    setConnectFrom(null);
+                  }
+                } : undefined}
+              >
+                <circle cx={mx} cy={my} r={6} fill={connectFrom === cc.label ? 'hsl(120, 70%, 40%)' : 'hsl(var(--primary))'} stroke="white" strokeWidth={2} />
+                <rect x={mx + 8} y={my - 12} width={Math.max(cc.label.length * 7 + 4, 20)} height={14} rx={3}
+                  fill="white" fillOpacity={0.9} stroke="hsl(var(--primary))" strokeWidth={0.5} />
+                <text x={mx + 10} y={my - 2} fontSize={10} fill="hsl(var(--primary))" fontWeight={800}>{cc.label}</text>
+                <text x={mx + 10} y={my + 10} fontSize={7} fill="hsl(222,47%,45%)" fontWeight={600} fontFamily="monospace">
+                  ({cc.col - 1},{cc.row - 1},{cc.z ?? 0})
                 </text>
               </g>
             );
           });
+
+          // Render edges (connected coordinate lines) with measurements
+          coordEdges.forEach((edge, ei) => {
+            const from = faceCoords.find(fc => fc.label === edge.from);
+            const to = faceCoords.find(fc => fc.label === edge.to);
+            if (!from || !to) return;
+            const dx = ((to.cc.col - from.cc.col)) * csm;
+            const dz = ((to.cc.z ?? 0) - (from.cc.z ?? 0)) * blockHM;
+            const distMm = Math.round(Math.sqrt(dx * dx + dz * dz) * 1000);
+            const midX = (from.mx + to.mx) / 2;
+            const midY = (from.my + to.my) / 2;
+            markers.push(
+              <g key={`edge-${ei}`}>
+                <line x1={from.mx} y1={from.my} x2={to.mx} y2={to.my}
+                  stroke="hsl(280, 70%, 50%)" strokeWidth={2} strokeDasharray="6 3" />
+                <rect x={midX - 30} y={midY - 10} width={60} height={20} rx={4}
+                  fill="hsl(280, 70%, 50%)" />
+                <text x={midX} y={midY + 4} textAnchor="middle" fontSize={10} fontWeight="bold" fill="white">
+                  {distMm} mm
+                </text>
+              </g>
+            );
+          });
+
+          // If we have a closed polygon (3+ coords all connected), show area
+          if (faceCoords.length >= 3 && coordEdges.length >= 3) {
+            // Check if edges form a cycle visiting all face coords
+            const adjMap = new Map<string, string[]>();
+            coordEdges.forEach(e => {
+              if (!adjMap.has(e.from)) adjMap.set(e.from, []);
+              if (!adjMap.has(e.to)) adjMap.set(e.to, []);
+              adjMap.get(e.from)!.push(e.to);
+              adjMap.get(e.to)!.push(e.from);
+            });
+            // Simple cycle detection: if all connected coords have degree 2
+            const connectedLabels = Array.from(adjMap.keys());
+            const allDeg2 = connectedLabels.length >= 3 && connectedLabels.every(l => (adjMap.get(l)?.length ?? 0) === 2);
+            if (allDeg2) {
+              // Walk the cycle to get ordered vertices
+              const visited = new Set<string>();
+              const ordered: string[] = [];
+              let current = connectedLabels[0];
+              let prev = '';
+              while (!visited.has(current)) {
+                visited.add(current);
+                ordered.push(current);
+                const neighbors = adjMap.get(current) || [];
+                const next = neighbors.find(n => n !== prev) || neighbors[0];
+                prev = current;
+                current = next;
+              }
+              // Compute area (shoelace) and perimeter
+              let area = 0, perim = 0;
+              const orderedCoords = ordered.map(l => faceCoords.find(fc => fc.label === l)).filter(Boolean) as typeof faceCoords;
+              for (let i = 0; i < orderedCoords.length; i++) {
+                const c1 = orderedCoords[i];
+                const c2 = orderedCoords[(i + 1) % orderedCoords.length];
+                const u1 = (c1.cc.col - 1) * csm;
+                const v1 = (c1.cc.z ?? 0) * blockHM;
+                const u2 = (c2.cc.col - 1) * csm;
+                const v2 = (c2.cc.z ?? 0) * blockHM;
+                area += u1 * v2 - u2 * v1;
+                perim += Math.sqrt((u2 - u1) ** 2 + (v2 - v1) ** 2);
+              }
+              area = Math.abs(area) / 2;
+              // Draw polygon fill
+              const polyPoints = orderedCoords.map(fc => `${fc.mx},${fc.my}`).join(' ');
+              markers.unshift(
+                <polygon key="coord-polygon-fill" points={polyPoints}
+                  fill="hsl(280, 70%, 50%)" fillOpacity={0.08} stroke="hsl(280, 70%, 50%)" strokeWidth={1} />
+              );
+              // Area/perimeter label at centroid
+              const cx = orderedCoords.reduce((s, fc) => s + fc.mx, 0) / orderedCoords.length;
+              const cy = orderedCoords.reduce((s, fc) => s + fc.my, 0) / orderedCoords.length;
+              markers.push(
+                <g key="coord-polygon-label">
+                  <rect x={cx - 55} y={cy - 14} width={110} height={28} rx={6}
+                    fill="hsl(280, 40%, 20%)" fillOpacity={0.9} />
+                  <text x={cx} y={cy - 2} textAnchor="middle" fontSize={10} fill="white" fontWeight={700}>
+                    {area.toFixed(2)} m²
+                  </text>
+                  <text x={cx} y={cy + 10} textAnchor="middle" fontSize={8} fill="hsl(280, 60%, 80%)" fontWeight={600}>
+                    Perímetro: {Math.round(perim * 1000)} mm
+                  </text>
+                </g>
+              );
+            }
+          }
+
           return markers;
         })()}
       </svg>
@@ -6134,12 +6264,12 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
               <Badge variant="outline" className="text-xs print:hidden">{Math.round(totalWidth * 1000)} × {Math.round(totalHeight * 1000)} mm</Badge>
               <Badge variant="secondary" className="text-xs print:hidden">{layers.length} niveles</Badge>
               {/* Tools */}
-              <div className="flex items-center gap-1 ml-4 print:hidden">
+              <div className="flex items-center gap-1 ml-4 print:hidden flex-wrap">
                 <Button
                   variant={totalRulerMode ? 'default' : 'outline'}
                   size="sm"
                   className="h-7 text-xs gap-1"
-                  onClick={() => { setTotalRulerMode(!totalRulerMode); setTotalCoordMode(false); setTotalRulerDraw(null); }}
+                  onClick={() => { setTotalRulerMode(!totalRulerMode); setTotalCoordMode(false); setConnectMode(false); setTotalRulerDraw(null); }}
                   title="Regla — medir distancias"
                 >
                   <Ruler className="h-3 w-3" /> Regla
@@ -6148,10 +6278,19 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
                   variant={totalCoordMode ? 'default' : 'outline'}
                   size="sm"
                   className="h-7 text-xs gap-1"
-                  onClick={() => { setTotalCoordMode(!totalCoordMode); setTotalRulerMode(false); setTotalRulerDraw(null); }}
+                  onClick={() => { setTotalCoordMode(!totalCoordMode); setTotalRulerMode(false); setConnectMode(false); setTotalRulerDraw(null); }}
                   title="Crear coordenadas en la cuadrícula"
                 >
                   <Plus className="h-3 w-3" /> Coord
+                </Button>
+                <Button
+                  variant={connectMode ? 'default' : 'outline'}
+                  size="sm"
+                  className="h-7 text-xs gap-1"
+                  onClick={() => { setConnectMode(!connectMode); setConnectFrom(null); setTotalCoordMode(false); setTotalRulerMode(false); setTotalRulerDraw(null); }}
+                  title="Conectar coordenadas — clic en dos puntos para unirlos"
+                >
+                  <Merge className="h-3 w-3" /> Conectar
                 </Button>
                 {totalRulerLines.length > 0 && (
                   <Button
@@ -6164,6 +6303,38 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
                     <Trash2 className="h-3 w-3" /> Borrar medidas
                   </Button>
                 )}
+                {coordEdges.length > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs gap-1 text-destructive"
+                    onClick={() => { setCoordEdges([]); setConnectFrom(null); }}
+                    title="Borrar todas las conexiones"
+                  >
+                    <Unlink className="h-3 w-3" /> Borrar conexiones
+                  </Button>
+                )}
+                {onCustomCornersChange && customCorners && (() => {
+                  const faceCoordCount = customCorners.filter(c => c.side === side).length;
+                  return faceCoordCount > 0 ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs gap-1 text-destructive"
+                      onClick={() => {
+                        if (!confirm(`¿Borrar las ${faceCoordCount} coordenadas de este alzado?`)) return;
+                        const cleaned = customCorners.filter(c => c.side !== side);
+                        onCustomCornersChange(cleaned);
+                        setCoordEdges([]);
+                        setConnectFrom(null);
+                        toast.success(`${faceCoordCount} coordenadas borradas`);
+                      }}
+                      title={`Borrar ${faceCoordCount} coordenadas de este alzado`}
+                    >
+                      <Trash2 className="h-3 w-3" /> Borrar coords ({faceCoordCount})
+                    </Button>
+                  ) : null;
+                })()}
               </div>
               <Button variant="destructive" size="sm" className="h-7 text-xs ml-auto" onClick={() => setFullscreen(false)}>
                 ✕ Cerrar
@@ -6171,6 +6342,22 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
             </DialogTitle>
             <DialogDescription className="sr-only">Vista a pantalla completa del alzado total</DialogDescription>
           </DialogHeader>
+          {/* Connect mode status bar */}
+          {connectMode && (
+            <div className="shrink-0 flex items-center gap-2 border-b border-border/50 pb-2 print:hidden">
+              <span className="text-xs text-primary font-medium">
+                {connectFrom
+                  ? `Conectar desde ${connectFrom} — haz clic en otra coordenada para crear la conexión`
+                  : 'Modo conexión activo — haz clic en una coordenada para empezar'}
+              </span>
+              {connectFrom && (
+                <Button variant="ghost" size="sm" className="h-6 text-[10px]"
+                  onClick={() => setConnectFrom(null)}>
+                  Cancelar
+                </Button>
+              )}
+            </div>
+          )}
           <div className="flex-1 overflow-auto flex items-center justify-center min-h-0">
             {renderTotalSvg(Math.min(
               (window.innerHeight * 0.8) / totalHeight,

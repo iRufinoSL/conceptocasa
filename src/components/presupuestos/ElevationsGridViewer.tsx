@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Plus, Trash2, Box, Layers, ArrowUpDown, Maximize2, Merge, Unlink, Map as MapIcon, Printer, FileDown, Ruler, Check, Pencil } from 'lucide-react';
+import { Plus, Trash2, Box, Layers, ArrowUpDown, Maximize2, Merge, Unlink, Map as MapIcon, Printer, FileDown, Ruler, Check, Pencil, Save } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -1662,6 +1662,23 @@ export function ElevationsGridViewer({
               cellSizeM={cellSizeM}
               customCorners={customCorners}
               onCustomCornersChange={onCustomCornersChange}
+              onSaveElevation={onManualElevationsChange && customCorners ? (name, side, edges, polyName) => {
+                // Collect all coord labels used in edges for this face
+                const labels = new Set<string>();
+                edges.forEach(e => { labels.add(e.from); labels.add(e.to); });
+                if (labels.size < 2) return;
+                // Sort labels CCW for polygon
+                const csm2 = cellSizeM || 0.625;
+                const bhm2 = (plan.blockHeightMm || 250) / 1000;
+                const sortedLabels = sortVerticesCCW(Array.from(labels), customCorners!, csm2, bhm2);
+                const newElev: ManualElevation = {
+                  id: crypto.randomUUID(),
+                  name: name || `Alzado ${side}`,
+                  vertexLabels: sortedLabels,
+                  showBlocks: true,
+                };
+                onManualElevationsChange([...(manualElevations || []), newElev]);
+              } : undefined}
             />
           ))}
 
@@ -1688,6 +1705,21 @@ export function ElevationsGridViewer({
                     cellSizeM={cellSizeM}
                     customCorners={customCorners}
                     onCustomCornersChange={onCustomCornersChange}
+                    onSaveElevation={onManualElevationsChange && customCorners ? (name, side, edges) => {
+                      const labels = new Set<string>();
+                      edges.forEach(e => { labels.add(e.from); labels.add(e.to); });
+                      if (labels.size < 2) return;
+                      const csm2 = cellSizeM || 0.625;
+                      const bhm2 = (plan.blockHeightMm || 250) / 1000;
+                      const sortedLabels = sortVerticesCCW(Array.from(labels), customCorners!, csm2, bhm2);
+                      const newElev: ManualElevation = {
+                        id: crypto.randomUUID(),
+                        name: name || `Sección`,
+                        vertexLabels: sortedLabels,
+                        showBlocks: true,
+                      };
+                      onManualElevationsChange([...(manualElevations || []), newElev]);
+                    } : undefined}
                   />
                 </div>
               ))}
@@ -5119,7 +5151,7 @@ const TOTAL_SIDE_COLORS: Record<string, { fill: string; stroke: string }> = {
   left: { fill: 'hsl(200, 20%, 90%)', stroke: 'hsl(222, 47%, 30%)' },
 };
 
-function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floorBaseZMap, floors, cellSizeM, customCorners, onCustomCornersChange }: {
+function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floorBaseZMap, floors, cellSizeM, customCorners, onCustomCornersChange, onSaveElevation }: {
   side: 'top' | 'right' | 'bottom' | 'left';
   label: string;
   layers: Array<{ floorName: string; composites: CompositeWall[]; isGable: boolean }>;
@@ -5131,6 +5163,7 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
   cellSizeM?: number;
   customCorners?: CustomCorner[];
   onCustomCornersChange?: (corners: CustomCorner[]) => void;
+  onSaveElevation?: (name: string, side: string, coordEdges: Array<{ from: string; to: string }>, polygonName?: string) => void;
 }) {
   // Ruler tool state
   const [totalRulerMode, setTotalRulerMode] = useState(false);
@@ -5144,6 +5177,10 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
   const [connectMode, setConnectMode] = useState(false);
   const [connectFrom, setConnectFrom] = useState<string | null>(null);
   const [coordEdges, setCoordEdges] = useState<Array<{ from: string; to: string }>>([]);
+  // Polygon naming
+  const [polygonNames, setPolygonNames] = useState<Record<string, string>>({});
+  const [editingPolygonSide, setEditingPolygonSide] = useState<string | null>(null);
+  const [editingPolygonName, setEditingPolygonName] = useState('');
   const isGableSide = side === 'right' || side === 'left';
 
   // Calculate total width (max across all layers) and per-layer heights
@@ -5310,8 +5347,8 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
                 <line x1={rx} y1={y} x2={rx + gridH * gridStepH} y2={y}
                   stroke={isBorder ? 'rgba(41,128,185,0.65)' : isMajor ? 'rgba(41,128,185,0.40)' : 'rgba(41,128,185,0.30)'}
                   strokeWidth={isBorder ? 2 : isMajor ? 1.2 : 1.0} />
-                <text x={rx - 5} y={y + 3} textAnchor="end"
-                  fontSize={fsScale ? 10 : 7} fill="#2980b9" fontWeight={isMajor ? 700 : 500}>
+                <text x={rx - 5} y={y + 4} textAnchor="end"
+                  fontSize={fsScale ? 16 : 9} fill="#2980b9" fontWeight={isMajor ? 900 : 700}>
                   Z{z}
                 </text>
               </g>
@@ -5330,8 +5367,8 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
                 <line x1={x} y1={baseY} x2={x} y2={baseY - gridV * gridStepV}
                   stroke={`${lineColor}${isBorder ? '0.65)' : isMajor ? '0.40)' : '0.30)'}`}
                   strokeWidth={isBorder ? 2 : isMajor ? 1.2 : 1.0} />
-                <text x={x} y={baseY + (fsScale ? 14 : 10)} textAnchor="middle"
-                  fontSize={fsScale ? 10 : 7} fill={textColor} fontWeight={isMajor ? 700 : 500}>
+                <text x={x} y={baseY + (fsScale ? 18 : 12)} textAnchor="middle"
+                  fontSize={fsScale ? 16 : 9} fill={textColor} fontWeight={isMajor ? 900 : 700}>
                   {axisLabel}{h}
                 </text>
               </g>
@@ -5340,27 +5377,27 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
 
           {/* Grid corner coordinate labels */}
           {(() => {
-            const fs = fsScale ? 8 : 5.5;
+            const fs = fsScale ? 13 : 7;
             const topGridY = baseY - gridV * gridStepV;
             const rightGridX = rx + gridH * gridStepH;
             return (
               <g>
-                <text x={rx} y={baseY + (fsScale ? 26 : 19)} textAnchor="start" fontSize={fs} fill="hsl(220, 40%, 40%)" fontWeight={600}>{gridCornerCoords.bl}</text>
-                <text x={rightGridX} y={baseY + (fsScale ? 26 : 19)} textAnchor="end" fontSize={fs} fill="hsl(220, 40%, 40%)" fontWeight={600}>{gridCornerCoords.br}</text>
-                <text x={rightGridX} y={topGridY - (fsScale ? 5 : 3)} textAnchor="end" fontSize={fs} fill="hsl(220, 40%, 40%)" fontWeight={600}>{gridCornerCoords.tr}</text>
-                <text x={rx} y={topGridY - (fsScale ? 5 : 3)} textAnchor="start" fontSize={fs} fill="hsl(220, 40%, 40%)" fontWeight={600}>{gridCornerCoords.tl}</text>
+                <text x={rx} y={baseY + (fsScale ? 32 : 22)} textAnchor="start" fontSize={fs} fill="hsl(220, 40%, 30%)" fontWeight={800}>{gridCornerCoords.bl}</text>
+                <text x={rightGridX} y={baseY + (fsScale ? 32 : 22)} textAnchor="end" fontSize={fs} fill="hsl(220, 40%, 30%)" fontWeight={800}>{gridCornerCoords.br}</text>
+                <text x={rightGridX} y={topGridY - (fsScale ? 6 : 3)} textAnchor="end" fontSize={fs} fill="hsl(220, 40%, 30%)" fontWeight={800}>{gridCornerCoords.tr}</text>
+                <text x={rx} y={topGridY - (fsScale ? 6 : 3)} textAnchor="start" fontSize={fs} fill="hsl(220, 40%, 30%)" fontWeight={800}>{gridCornerCoords.tl}</text>
               </g>
             );
           })()}
 
           {/* Axis titles */}
-          <text x={rx + gridH * gridStepH / 2} y={baseY + (fsScale ? 38 : 28)} textAnchor="middle"
-            fontSize={fsScale ? 11 : 7} fill={isHorizontalX ? '#c0392b' : '#27ae60'} fontWeight={800}>
+          <text x={rx + gridH * gridStepH / 2} y={baseY + (fsScale ? 50 : 30)} textAnchor="middle"
+            fontSize={fsScale ? 16 : 9} fill={isHorizontalX ? '#c0392b' : '#27ae60'} fontWeight={900}>
             {isHorizontalX ? 'Eje X' : 'Eje Y'} — {Math.round(gridWidthM * 1000)}mm ({gridH} bloques × 625mm)
           </text>
-          <text x={rx - (fsScale ? 25 : 18)} y={baseY - gridV * gridStepV / 2} textAnchor="middle"
-            fontSize={fsScale ? 11 : 7} fill="#2980b9" fontWeight={800}
-            transform={`rotate(-90, ${rx - (fsScale ? 25 : 18)}, ${baseY - gridV * gridStepV / 2})`}>
+          <text x={rx - (fsScale ? 35 : 20)} y={baseY - gridV * gridStepV / 2} textAnchor="middle"
+            fontSize={fsScale ? 16 : 9} fill="#2980b9" fontWeight={900}
+            transform={`rotate(-90, ${rx - (fsScale ? 35 : 20)}, ${baseY - gridV * gridStepV / 2})`}>
             Eje Z — {Math.round(gridHeightM * 1000)}mm ({gridV} bloques × 250mm)
           </text>
 
@@ -6077,13 +6114,13 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
                   }
                 } : undefined}
               >
-                <circle cx={mx} cy={my} r={10} fill={connectFrom === cc.label ? 'hsl(120, 70%, 40%)' : 'hsl(0, 80%, 50%)'} stroke="white" strokeWidth={3} />
-                <rect x={mx + 13} y={my - 18} width={Math.max(cc.label.length * 11 + 8, 36)} height={22} rx={4}
-                  fill="hsl(0, 80%, 50%)" fillOpacity={0.95} stroke="white" strokeWidth={1.5} />
-                <text x={mx + 17} y={my - 2} fontSize={15} fill="white" fontWeight={900} fontFamily="Arial, sans-serif">{cc.label}</text>
-                <rect x={mx + 13} y={my + 6} width={Math.max((`(${cc.col - 1},${cc.row - 1},${cc.z ?? 0})`).length * 8 + 6, 50)} height={18} rx={3}
-                  fill="hsl(220, 50%, 25%)" fillOpacity={0.9} stroke="white" strokeWidth={1} />
-                <text x={mx + 16} y={my + 19} fontSize={11} fill="white" fontWeight={800} fontFamily="monospace">
+                <circle cx={mx} cy={my} r={14} fill={connectFrom === cc.label ? 'hsl(120, 70%, 40%)' : 'hsl(0, 80%, 50%)'} stroke="white" strokeWidth={4} />
+                <rect x={mx + 18} y={my - 24} width={Math.max(cc.label.length * 14 + 12, 48)} height={30} rx={5}
+                  fill="hsl(0, 80%, 50%)" fillOpacity={0.95} stroke="white" strokeWidth={2} />
+                <text x={mx + 24} y={my - 2} fontSize={20} fill="white" fontWeight={900} fontFamily="Arial, sans-serif">{cc.label}</text>
+                <rect x={mx + 18} y={my + 8} width={Math.max((`(${cc.col - 1},${cc.row - 1},${cc.z ?? 0})`).length * 10 + 10, 70)} height={24} rx={4}
+                  fill="hsl(220, 50%, 25%)" fillOpacity={0.9} stroke="white" strokeWidth={1.5} />
+                <text x={mx + 22} y={my + 25} fontSize={15} fill="white" fontWeight={800} fontFamily="monospace">
                   ({cc.col - 1},{cc.row - 1},{cc.z ?? 0})
                 </text>
               </g>
@@ -6103,10 +6140,10 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
             markers.push(
               <g key={`edge-${ei}`}>
                 <line x1={from.mx} y1={from.my} x2={to.mx} y2={to.my}
-                  stroke="hsl(280, 70%, 50%)" strokeWidth={2} strokeDasharray="6 3" />
-                <rect x={midX - 30} y={midY - 10} width={60} height={20} rx={4}
+                  stroke="hsl(280, 70%, 50%)" strokeWidth={3} strokeDasharray="8 4" />
+                <rect x={midX - 45} y={midY - 14} width={90} height={28} rx={5}
                   fill="hsl(280, 70%, 50%)" />
-                <text x={midX} y={midY + 4} textAnchor="middle" fontSize={10} fontWeight="bold" fill="white">
+                <text x={midX} y={midY + 5} textAnchor="middle" fontSize={16} fontWeight="900" fill="white">
                   {distMm} mm
                 </text>
               </g>
@@ -6158,19 +6195,26 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
               const polyPoints = orderedCoords.map(fc => `${fc.mx},${fc.my}`).join(' ');
               markers.unshift(
                 <polygon key="coord-polygon-fill" points={polyPoints}
-                  fill="hsl(280, 70%, 50%)" fillOpacity={0.08} stroke="hsl(280, 70%, 50%)" strokeWidth={1} />
+                  fill="hsl(280, 70%, 50%)" fillOpacity={0.12} stroke="hsl(280, 70%, 50%)" strokeWidth={2} />
               );
-              // Area/perimeter label at centroid
+              // Area/perimeter label at centroid — double-click to edit name
               const cx = orderedCoords.reduce((s, fc) => s + fc.mx, 0) / orderedCoords.length;
               const cy = orderedCoords.reduce((s, fc) => s + fc.my, 0) / orderedCoords.length;
+              const polygonName = polygonNames[side] || '';
               markers.push(
-                <g key="coord-polygon-label">
-                  <rect x={cx - 55} y={cy - 14} width={110} height={28} rx={6}
-                    fill="hsl(280, 40%, 20%)" fillOpacity={0.9} />
-                  <text x={cx} y={cy - 2} textAnchor="middle" fontSize={10} fill="white" fontWeight={700}>
+                <g key="coord-polygon-label" style={{ cursor: 'pointer' }}
+                  onDoubleClick={(e) => { e.stopPropagation(); setEditingPolygonSide(side); setEditingPolygonName(polygonNames[side] || ''); }}>
+                  <rect x={cx - 80} y={cy - 22} width={160} height={polygonName ? 54 : 44} rx={8}
+                    fill="hsl(280, 40%, 20%)" fillOpacity={0.92} stroke="white" strokeWidth={1} />
+                  {polygonName && (
+                    <text x={cx} y={cy - 8} textAnchor="middle" fontSize={14} fill="hsl(50, 90%, 70%)" fontWeight={900}>
+                      {polygonName}
+                    </text>
+                  )}
+                  <text x={cx} y={cy + (polygonName ? 8 : 0)} textAnchor="middle" fontSize={18} fill="white" fontWeight={900}>
                     {area.toFixed(2)} m²
                   </text>
-                  <text x={cx} y={cy + 10} textAnchor="middle" fontSize={8} fill="hsl(280, 60%, 80%)" fontWeight={600}>
+                  <text x={cx} y={cy + (polygonName ? 24 : 16)} textAnchor="middle" fontSize={13} fill="hsl(280, 60%, 85%)" fontWeight={700}>
                     Perímetro: {Math.round(perim * 1000)} mm
                   </text>
                 </g>
@@ -6337,6 +6381,22 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
                     </Button>
                   ) : null;
                 })()}
+                {onSaveElevation && coordEdges.length >= 2 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs gap-1"
+                    onClick={() => {
+                      const name = prompt('Nombre para este alzado guardado:', polygonNames[side] || `Alzado ${label}`);
+                      if (!name) return;
+                      onSaveElevation(name, side, coordEdges, polygonNames[side]);
+                      toast.success(`Alzado "${name}" guardado`);
+                    }}
+                    title="Guardar este alzado con coordenadas y conexiones"
+                  >
+                    <Save className="h-3 w-3" /> Guardar alzado
+                  </Button>
+                )}
               </div>
               <Button variant="destructive" size="sm" className="h-7 text-xs ml-auto" onClick={() => setFullscreen(false)}>
                 ✕ Cerrar
@@ -6358,6 +6418,37 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
                   Cancelar
                 </Button>
               )}
+            </div>
+          )}
+          {/* Polygon name edit bar */}
+          {editingPolygonSide && (
+            <div className="shrink-0 flex items-center gap-2 border-b border-border/50 pb-2 print:hidden">
+              <span className="text-xs font-bold text-foreground">Nombre de la figura:</span>
+              <Input
+                autoFocus
+                className="h-7 w-48 text-xs"
+                value={editingPolygonName}
+                onChange={e => setEditingPolygonName(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    setPolygonNames(prev => ({ ...prev, [editingPolygonSide!]: editingPolygonName }));
+                    setEditingPolygonSide(null);
+                    toast.success('Nombre asignado');
+                  }
+                  if (e.key === 'Escape') setEditingPolygonSide(null);
+                }}
+                placeholder="Ej: Fachada principal"
+              />
+              <Button size="sm" className="h-7 text-xs" onClick={() => {
+                setPolygonNames(prev => ({ ...prev, [editingPolygonSide!]: editingPolygonName }));
+                setEditingPolygonSide(null);
+                toast.success('Nombre asignado');
+              }}>
+                <Check className="h-3 w-3 mr-1" /> Guardar nombre
+              </Button>
+              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setEditingPolygonSide(null)}>
+                Cancelar
+              </Button>
             </div>
           )}
           <div className="flex-1 overflow-auto flex items-center justify-center min-h-0">

@@ -1770,6 +1770,12 @@ function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, ro
   const [editName, setEditName] = useState(elevation.name);
   const [editVertices, setEditVertices] = useState<string[]>(elevation.vertexLabels);
   const [gridScaleMode, setGridScaleMode] = useState<'bloques' | 'mm'>('bloques');
+  // New coordinate creation state
+  const [showNewCoord, setShowNewCoord] = useState(false);
+  const [newCoordLabel, setNewCoordLabel] = useState('');
+  const [newCoordCol, setNewCoordCol] = useState('');
+  const [newCoordRow, setNewCoordRow] = useState('');
+  const [newCoordZ, setNewCoordZ] = useState('');
 
   // Resolve vertex coordinates from labels — applying auto-Z slope when flagged
   const vertices = useMemo(() => {
@@ -1905,6 +1911,49 @@ function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, ro
       return { from: v1.label, to: v2.label, distM: dist, distMm: Math.round(dist * 1000) };
     });
 
+  // All pairwise (diagonal) distances — non-adjacent vertex pairs only
+  const diagonals: Array<{ from: string; to: string; distMm: number; fromIdx: number; toIdx: number }> = [];
+  if (vertices.length >= 4) {
+    for (let i = 0; i < vertices.length; i++) {
+      for (let j = i + 2; j < vertices.length; j++) {
+        if (i === 0 && j === vertices.length - 1) continue;
+        const v1 = vertices[i], v2 = vertices[j];
+        const dist = Math.sqrt((v2.x - v1.x) ** 2 + (v2.y - v1.y) ** 2 + (v2.z - v1.z) ** 2);
+        diagonals.push({ from: v1.label, to: v2.label, distMm: Math.round(dist * 1000), fromIdx: i, toIdx: j });
+      }
+    }
+  }
+
+  // Per-edge wall type detection: check if each edge matches an invisible wall
+  const edgeWallTypes: Array<'blocks' | 'empty'> = edges.map(edge => {
+    if (!rooms || rooms.length === 0 || isLine) return 'blocks';
+    const c1 = allCorners.find(c => c.label === edge.from);
+    const c2 = allCorners.find(c => c.label === edge.to);
+    if (!c1 || !c2) return 'blocks';
+    const sameRow = c1.row === c2.row;
+    const sameCol = c1.col === c2.col;
+    if (!sameRow && !sameCol) return 'blocks';
+    for (const room of rooms) {
+      for (const wall of room.walls) {
+        const isHoriz = wall.wallIndex === 1 || wall.wallIndex === 3;
+        if (sameRow && isHoriz) {
+          const wallY = wall.wallIndex === 1 ? room.posY : room.posY + room.length;
+          const edgeY = (c1.row - 1) * cellSizeM;
+          if (Math.abs(wallY - edgeY) < cellSizeM * 0.5) {
+            if (isInvisibleType(wall.wallType as string)) return 'empty';
+          }
+        } else if (sameCol && !isHoriz) {
+          const wallX = wall.wallIndex === 4 ? room.posX : room.posX + room.width;
+          const edgeX = (c1.col - 1) * cellSizeM;
+          if (Math.abs(wallX - edgeX) < cellSizeM * 0.5) {
+            if (isInvisibleType(wall.wallType as string)) return 'empty';
+          }
+        }
+      }
+    }
+    return 'blocks';
+  });
+
   const renderSvg = (maxWidth: number, maxHeight: number) => {
     // SVG dimensions
     const padding = 50;
@@ -2017,12 +2066,23 @@ function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, ro
           <polygon points={pointsStr} fill="hsl(var(--muted) / 0.6)" stroke="hsl(var(--primary))" strokeWidth={2} />
         )}
 
-        {/* Block pattern inside polygon */}
+        {/* Block pattern inside polygon — masked per-edge by wall type */}
         {!isLine && showBlocks && plan.scaleMode === 'bloque' && (() => {
           const bwPx = blockWM * scale;
           const bhPx = blockHM * scale;
           if (bwPx < 3 || bhPx < 2) return null;
+          
+          // Check if ALL edges are blocks → use full polygon clip
+          const allBlocks = edgeWallTypes.every(t => t === 'blocks');
+          // Check if ANY edge has blocks
+          const hasAnyBlocks = edgeWallTypes.some(t => t === 'blocks');
+          if (!hasAnyBlocks) return null;
+
           const clipId = `clip-me-${elevation.id}`;
+          
+          // If all edges are blocks, use the full polygon as clip
+          // If mixed, create a clip path that excludes "empty" edge regions
+          // We approximate by using the full polygon clip but then masking out empty regions
           return (
             <g>
               <defs>
@@ -2051,9 +2111,41 @@ function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, ro
                   });
                 })}
               </g>
+              {/* White-out empty (invisible wall) edge regions */}
+              {!allBlocks && edgeWallTypes.map((type, i) => {
+                if (type !== 'empty') return null;
+                const j = (i + 1) % svgPoints.length;
+                const p1 = svgPoints[i], p2 = svgPoints[j];
+                // Create a narrow polygon strip along this edge to mask block pattern
+                const dx = p2.px - p1.px, dy = p2.py - p1.py;
+                const len = Math.sqrt(dx * dx + dy * dy);
+                if (len < 1) return null;
+                const nx = -dy / len, ny = dx / len;
+                const inset = 20; // pixels inward from edge
+                const pts = [
+                  `${p1.px},${p1.py}`,
+                  `${p2.px},${p2.py}`,
+                  `${p2.px + nx * inset},${p2.py + ny * inset}`,
+                  `${p1.px + nx * inset},${p1.py + ny * inset}`,
+                ].join(' ');
+                return (
+                  <polygon key={`mask-${i}`} points={pts} fill="hsl(var(--card))" clipPath={`url(#${clipId})`} opacity={0.95} />
+                );
+              })}
             </g>
           );
         })()}
+
+        {/* Empty edge indicators (invisible walls) — dashed outline with label */}
+        {!isLine && edgeWallTypes.map((type, i) => {
+          if (type !== 'empty') return null;
+          const j = (i + 1) % svgPoints.length;
+          const p1 = svgPoints[i], p2 = svgPoints[j];
+          return (
+            <line key={`empty-edge-${i}`} x1={p1.px} y1={p1.py} x2={p2.px} y2={p2.py}
+              stroke="hsl(var(--muted-foreground))" strokeWidth={1.5} strokeDasharray="6,3" opacity={0.5} />
+          );
+        })}
 
         {/* Vertex labels */}
         {svgPoints.map((p, i) => {
@@ -2075,7 +2167,6 @@ function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, ro
           const p2 = svgPoints[j];
           const mx = (p.px + p2.px) / 2;
           const my = (p.py + p2.py) / 2;
-          // Offset label perpendicular to edge
           const dx = p2.px - p.px;
           const dy = p2.py - p.py;
           const len = Math.sqrt(dx * dx + dy * dy);
@@ -2086,6 +2177,25 @@ function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, ro
               fontSize={9} fill="hsl(var(--muted-foreground))" fontWeight={600}>
               {edges[i].distMm.toLocaleString()} mm
             </text>
+          );
+        })}
+
+        {/* Diagonal distance lines (non-adjacent vertex pairs) */}
+        {diagonals.map((d, i) => {
+          const p1 = svgPoints[d.fromIdx];
+          const p2 = svgPoints[d.toIdx];
+          if (!p1 || !p2) return null;
+          const mx = (p1.px + p2.px) / 2;
+          const my = (p1.py + p2.py) / 2;
+          return (
+            <g key={`diag-${i}`}>
+              <line x1={p1.px} y1={p1.py} x2={p2.px} y2={p2.py}
+                stroke="hsl(var(--primary) / 0.3)" strokeWidth={0.8} strokeDasharray="4,3" />
+              <text x={mx} y={my - 4} textAnchor="middle"
+                fontSize={7} fill="hsl(var(--primary))" fontWeight={500} opacity={0.7}>
+                {d.distMm.toLocaleString()} mm
+              </text>
+            </g>
           );
         })}
       </svg>
@@ -2155,11 +2265,22 @@ function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, ro
           {/* Edge details */}
           <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-muted-foreground">
             {edges.map((e, i) => (
-              <span key={i} className="bg-muted px-1.5 py-0.5 rounded">
+              <span key={i} className={cn("px-1.5 py-0.5 rounded", edgeWallTypes[i] === 'empty' ? "bg-muted/50 border border-dashed border-muted-foreground/30" : "bg-muted")}>
                 {e.from}→{e.to}: <strong>{e.distMm.toLocaleString()} mm</strong>
+                {edgeWallTypes[i] === 'empty' && <span className="text-muted-foreground/50 ml-1">(vacío)</span>}
               </span>
             ))}
           </div>
+          {/* Diagonal distances */}
+          {diagonals.length > 0 && (
+            <div className="mt-1 flex flex-wrap gap-2 text-[10px] text-primary/70">
+              {diagonals.map((d, i) => (
+                <span key={i} className="bg-primary/5 border border-primary/20 px-1.5 py-0.5 rounded border-dashed">
+                  {d.from}↔{d.to}: <strong>{d.distMm.toLocaleString()} mm</strong>
+                </span>
+              ))}
+            </div>
+          )}
           {/* Compact editable coordinates with auto-Z toggle */}
           {onCustomCornersChange && (
             <div className="mt-2 space-y-1">
@@ -2295,6 +2416,59 @@ function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, ro
                       </Button>
                     ))}
                 </div>
+                {/* Create new coordinate */}
+                {onCustomCornersChange && (
+                  <div className="mt-2">
+                    {!showNewCoord ? (
+                      <Button variant="outline" size="sm" className="h-6 text-[10px] w-full" onClick={() => setShowNewCoord(true)}>
+                        <Plus className="h-3 w-3 mr-1" /> Crear nueva coordenada
+                      </Button>
+                    ) : (
+                      <div className="border rounded p-2 space-y-2 bg-muted/30">
+                        <p className="text-[10px] font-semibold text-muted-foreground">Nueva coordenada</p>
+                        <div className="grid grid-cols-4 gap-1.5">
+                          <div>
+                            <Label className="text-[9px]">Etiqueta</Label>
+                            <Input value={newCoordLabel} onChange={e => setNewCoordLabel(e.target.value)} className="h-6 text-[10px] px-1.5" placeholder="Ej: 2E" />
+                          </div>
+                          <div>
+                            <Label className="text-[9px]">Col (X)</Label>
+                            <Input value={newCoordCol} onChange={e => setNewCoordCol(e.target.value)} className="h-6 text-[10px] px-1.5" placeholder="1" />
+                          </div>
+                          <div>
+                            <Label className="text-[9px]">Fila (Y)</Label>
+                            <Input value={newCoordRow} onChange={e => setNewCoordRow(e.target.value)} className="h-6 text-[10px] px-1.5" placeholder="1" />
+                          </div>
+                          <div>
+                            <Label className="text-[9px]">Z (bloq)</Label>
+                            <Input value={newCoordZ} onChange={e => setNewCoordZ(e.target.value)} className="h-6 text-[10px] px-1.5" placeholder="0" />
+                          </div>
+                        </div>
+                        <div className="flex gap-1 justify-end">
+                          <Button variant="ghost" size="sm" className="h-5 text-[9px] px-2" onClick={() => setShowNewCoord(false)}>Cancelar</Button>
+                          <Button size="sm" className="h-5 text-[9px] px-2" disabled={!newCoordLabel.trim() || !newCoordCol || !newCoordRow}
+                            onClick={() => {
+                              const col = parseInt(newCoordCol);
+                              const row = parseInt(newCoordRow);
+                              const z = parseInt(newCoordZ) || 0;
+                              if (isNaN(col) || isNaN(row)) return;
+                              const label = newCoordLabel.trim();
+                              if (allCorners.some(c => c.label === label)) {
+                                toast.error(`Ya existe una coordenada con la etiqueta "${label}"`);
+                                return;
+                              }
+                              const newCorner: CustomCorner = { label, col, row, z, side: 'top' as const, isMain: false };
+                              onCustomCornersChange([...allCorners, newCorner]);
+                              setEditVertices(prev => [...prev, label]);
+                              setShowNewCoord(false);
+                              setNewCoordLabel(''); setNewCoordCol(''); setNewCoordRow(''); setNewCoordZ('');
+                              toast.success(`Coordenada ${label} creada y añadida al alzado`);
+                            }}>Crear y añadir</Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="flex justify-end gap-2">
                 <Button variant="outline" size="sm" onClick={() => setIsEditing(false)}>Cancelar</Button>

@@ -12,7 +12,7 @@ export function Header() {
               <Home className="h-6 w-6 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-foreground">Concepto <span className="text-primary font-display italic">To.Lo.Sa.</span></h1>
+              <h1 className="text-xl font-bold text-foreground">Concepto.Casa <span className="text-primary font-display italic">To.Lo.Sa.systems</span></h1>
               <p className="text-sm text-muted-foreground">Tu hogar cuida de ti</p>
             </div>
           </div>

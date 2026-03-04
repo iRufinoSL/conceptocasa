@@ -13,6 +13,8 @@ export interface CustomCorner {
   side: 'top' | 'right' | 'bottom' | 'left';
   isMain?: boolean;
   isEave?: boolean;
+  /** When true, Z is auto-calculated by interpolating XY on the roof slope */
+  autoZSlope?: boolean;
   mainPosition?: 'TL' | 'TR' | 'BR' | 'BL';
   floorId?: string;
 }

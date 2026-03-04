@@ -13,7 +13,7 @@ import { Plus, Trash2, Box, Layers, ArrowUpDown, Maximize2, Merge, Unlink, Map a
 import jsPDF from 'jspdf';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { OPENING_PRESETS, WALL_LABELS, WALL_SIDE_LETTERS, computeWallSegments, autoClassifyWalls, generateExternalWallNames, isExteriorType, isInvisibleType, computeBuildingOutline, computeCompositeWalls, computeCompositeWallsFromCorners, calcBajoCubiertaWallHeight, getBlockDimensions, getEffectiveRidgeHeight, calculateRoom } from '@/lib/floor-plan-calculations';
+import { OPENING_PRESETS, WALL_LABELS, WALL_SIDE_LETTERS, computeWallSegments, autoClassifyWalls, generateExternalWallNames, isExteriorType, isInvisibleType, computeBuildingOutline, computeCompositeWalls, computeCompositeWallsFromCorners, calcBajoCubiertaWallHeight, getBlockDimensions, getEffectiveRidgeHeight, calculateRoom, interpolateZFromSlope } from '@/lib/floor-plan-calculations';
 import type { RoomData, WallData, OpeningData, FloorPlanData, WallSegment, FloorLevel, WallType, BlockGroupData, OutlineVertex, CompositeWall } from '@/lib/floor-plan-calculations';
 import type { CustomCorner, ManualElevation } from '@/hooks/useFloorPlan';
 import { parseCoord, formatCoord } from './FloorPlanGridView';
@@ -1238,6 +1238,7 @@ export function ElevationsGridViewer({
                             allCorners={customCorners || []}
                             plan={plan}
                             cellSizeM={cellSizeM}
+                            rooms={rooms}
                             onCustomCornersChange={onCustomCornersChange}
                             onDelete={() => {
                               if (!onManualElevationsChange) return;
@@ -1282,6 +1283,7 @@ export function ElevationsGridViewer({
               allCorners={customCorners || []}
               plan={plan}
               cellSizeM={cellSizeM}
+              rooms={rooms}
               onCustomCornersChange={onCustomCornersChange}
               onDelete={() => {
                 if (!onManualElevationsChange) return;
@@ -1714,11 +1716,12 @@ function EditableVertexBadge({ vertex, allCorners, onCustomCornersChange }: {
 }
 
 /** Manual elevation polygon card — renders arbitrary N-vertex polygon */
-function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, onDelete, onEdit, onCustomCornersChange }: {
+function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, rooms, onDelete, onEdit, onCustomCornersChange }: {
   elevation: ManualElevation;
   allCorners: CustomCorner[];
   plan: FloorPlanData;
   cellSizeM: number;
+  rooms?: RoomData[];
   onDelete: () => void;
   onEdit?: (updated: ManualElevation) => void;
   onCustomCornersChange?: (corners: CustomCorner[]) => void;
@@ -1730,19 +1733,25 @@ function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, on
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(elevation.name);
   const [editVertices, setEditVertices] = useState<string[]>(elevation.vertexLabels);
+  const [gridScaleMode, setGridScaleMode] = useState<'bloques' | 'mm'>('bloques');
 
-  // Resolve vertex coordinates from labels — using real metric distances
+  // Resolve vertex coordinates from labels — applying auto-Z slope when flagged
   const vertices = useMemo(() => {
     return elevation.vertexLabels.map(label => {
       const corner = allCorners.find(c => c.label === label);
       if (!corner) return null;
-      // Convert grid coordinates to meters
+      // Auto-calculate Z from roof slope if flagged
+      let effectiveZ = corner.z ?? 0;
+      if (corner.autoZSlope && rooms && rooms.length > 0) {
+        const autoZ = interpolateZFromSlope(corner.col, corner.row, plan, rooms, 0);
+        if (autoZ !== undefined) effectiveZ = autoZ;
+      }
       const xM = (corner.col - 1) * cellSizeM;
       const yM = (corner.row - 1) * cellSizeM;
-      const zM = (corner.z ?? 0) * blockHM;
-      return { label, x: xM, y: yM, z: zM, col: corner.col, row: corner.row, zBlocks: corner.z ?? 0 };
-    }).filter(Boolean) as Array<{ label: string; x: number; y: number; z: number; col: number; row: number; zBlocks: number }>;
-  }, [elevation.vertexLabels, allCorners, cellSizeM, blockHM]);
+      const zM = effectiveZ * blockHM;
+      return { label, x: xM, y: yM, z: zM, col: corner.col, row: corner.row, zBlocks: effectiveZ, autoZSlope: !!corner.autoZSlope };
+    }).filter(Boolean) as Array<{ label: string; x: number; y: number; z: number; col: number; row: number; zBlocks: number; autoZSlope: boolean }>;
+  }, [elevation.vertexLabels, allCorners, cellSizeM, blockHM, rooms, plan]);
 
   // Preview vertices for editing mode
   const editVerticesResolved = useMemo(() => {
@@ -1866,8 +1875,80 @@ function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, on
     });
     const pointsStr = svgPoints.map(p => `${p.px},${p.py}`).join(' ');
 
+    // Grid interval for rulers
+    const gridIntervalU = gridScaleMode === 'bloques' ? blockWM : (uSpread <= 2 ? 0.1 : uSpread <= 5 ? 0.25 : 0.5);
+    const gridIntervalV = gridScaleMode === 'bloques' ? blockHM : (vSpread <= 2 ? 0.1 : vSpread <= 5 ? 0.25 : 0.5);
+    const gridIntervalUPx = gridIntervalU * scale;
+    const gridIntervalVPx = gridIntervalV * scale;
+    const showGrid = !flipV && gridIntervalUPx >= 6 && gridIntervalVPx >= 4; // Only for vertical elevations with sufficient pixel space
+
     return (
       <svg width="100%" viewBox={`0 0 ${svgW} ${svgH}`} className="mx-auto" style={{ maxHeight }}>
+        {/* Graduated XZ grid for vertical elevations */}
+        {showGrid && (
+          <g opacity={0.25}>
+            {/* Horizontal grid lines (Z axis) */}
+            {Array.from({ length: Math.floor(vSpread / gridIntervalV) + 1 }, (_, i) => {
+              const vVal = i * gridIntervalV;
+              const lineY = padding + (vSpread - vVal) * scale;
+              return <line key={`gv-${i}`} x1={padding} y1={lineY} x2={padding + uSpread * scale} y2={lineY}
+                stroke="hsl(var(--primary))" strokeWidth={0.4} />;
+            })}
+            {/* Vertical grid lines (X/horizontal axis) */}
+            {Array.from({ length: Math.floor(uSpread / gridIntervalU) + 1 }, (_, i) => {
+              const uVal = i * gridIntervalU;
+              const lineX = padding + uVal * scale;
+              return <line key={`gu-${i}`} x1={lineX} y1={padding} x2={lineX} y2={padding + vSpread * scale}
+                stroke="hsl(var(--muted-foreground))" strokeWidth={0.3} />;
+            })}
+          </g>
+        )}
+
+        {/* Axis rulers (labels along edges) */}
+        {showGrid && (
+          <g>
+            {/* Horizontal axis labels (bottom) */}
+            {Array.from({ length: Math.floor(uSpread / gridIntervalU) + 1 }, (_, i) => {
+              const uVal = i * gridIntervalU;
+              const lineX = padding + uVal * scale;
+              const label = gridScaleMode === 'bloques'
+                ? `${Math.round(uVal / blockWM)}`
+                : `${Math.round(uVal * 1000)}`;
+              return (
+                <text key={`ru-${i}`} x={lineX} y={padding + vSpread * scale + 12}
+                  textAnchor="middle" fontSize={7} fill="hsl(var(--muted-foreground))" fontWeight={500}>
+                  {label}
+                </text>
+              );
+            })}
+            {/* Axis label */}
+            <text x={padding + uSpread * scale / 2} y={padding + vSpread * scale + 22}
+              textAnchor="middle" fontSize={7} fill="hsl(var(--muted-foreground))" fontWeight={600}>
+              {gridScaleMode === 'bloques' ? 'Bloques (625mm)' : 'mm'}
+            </text>
+            {/* Vertical axis labels (left) */}
+            {Array.from({ length: Math.floor(vSpread / gridIntervalV) + 1 }, (_, i) => {
+              const vVal = i * gridIntervalV;
+              const lineY = padding + (vSpread - vVal) * scale;
+              const label = gridScaleMode === 'bloques'
+                ? `${Math.round(vVal / blockHM)}`
+                : `${Math.round(vVal * 1000)}`;
+              return (
+                <text key={`rv-${i}`} x={padding - 5} y={lineY + 3}
+                  textAnchor="end" fontSize={7} fill="hsl(var(--muted-foreground))" fontWeight={500}>
+                  {label}
+                </text>
+              );
+            })}
+            {/* Vertical axis label */}
+            <text x={padding - 20} y={padding + vSpread * scale / 2}
+              textAnchor="middle" fontSize={7} fill="hsl(var(--muted-foreground))" fontWeight={600}
+              transform={`rotate(-90, ${padding - 20}, ${padding + vSpread * scale / 2})`}>
+              {gridScaleMode === 'bloques' ? 'Bloques (250mm)' : 'mm'}
+            </text>
+          </g>
+        )}
+
         {/* Ground line (if vertical polygon) */}
         {!flipV && (
           <line x1={padding - 10} y1={padding + vSpread * scale} x2={padding + uSpread * scale + 10} y2={padding + vSpread * scale}
@@ -1980,6 +2061,18 @@ function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, on
             <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={() => setIsFullscreen(true)} title="Pantalla completa"><Maximize2 className="h-3 w-3" /></Button>
             <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={onDelete}><Trash2 className="h-3 w-3 text-destructive" /></Button>
           </CardTitle>
+          {/* Grid scale toggle */}
+          <div className="flex items-center gap-1 mt-1">
+            <Button variant={gridScaleMode === 'bloques' ? 'default' : 'outline'} size="sm" className="h-5 text-[9px] px-2"
+              onClick={() => setGridScaleMode('bloques')}>Bloques</Button>
+            <Button variant={gridScaleMode === 'mm' ? 'default' : 'outline'} size="sm" className="h-5 text-[9px] px-2"
+              onClick={() => setGridScaleMode('mm')}>mm</Button>
+            {plan.roofType === 'dos_aguas' && rooms && rooms.length > 0 && onCustomCornersChange && (
+              <span className="text-[9px] text-muted-foreground ml-2">
+                <Ruler className="h-3 w-3 inline mr-0.5" />Auto Z faldón disponible
+              </span>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="p-2">
           {renderSvg(500, 250)}
@@ -1991,19 +2084,44 @@ function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, on
               </span>
             ))}
           </div>
-          {/* Compact editable coordinates */}
+          {/* Compact editable coordinates with auto-Z toggle */}
           {onCustomCornersChange && (
             <div className="mt-2 space-y-1">
               <span className="text-[10px] text-muted-foreground font-semibold">Coordenadas (click para editar):</span>
               <div className="flex flex-wrap gap-1">
-                {vertices.map(v => (
-                  <EditableVertexBadge
-                    key={v.label}
-                    vertex={v}
-                    allCorners={allCorners}
-                    onCustomCornersChange={onCustomCornersChange}
-                  />
-                ))}
+                {vertices.map(v => {
+                  const corner = allCorners.find(c => c.label === v.label);
+                  const canAutoZ = plan.roofType === 'dos_aguas' && rooms && rooms.length > 0;
+                  return (
+                    <span key={v.label} className="inline-flex items-center gap-0.5">
+                      <EditableVertexBadge
+                        vertex={v}
+                        allCorners={allCorners}
+                        onCustomCornersChange={onCustomCornersChange}
+                      />
+                      {canAutoZ && corner && (
+                        <button
+                          className={cn(
+                            "text-[8px] px-1 py-0.5 rounded border transition-colors",
+                            v.autoZSlope
+                              ? "bg-primary text-primary-foreground border-primary"
+                              : "bg-muted text-muted-foreground border-border hover:border-primary/50"
+                          )}
+                          title={v.autoZSlope ? `Z auto por faldón: ${v.zBlocks.toFixed(2)} bloques` : "Activar Z automática por faldón"}
+                          onClick={() => {
+                            const updated = allCorners.map(c =>
+                              c.label === v.label ? { ...c, autoZSlope: !c.autoZSlope } : c
+                            );
+                            onCustomCornersChange(updated);
+                            toast.success(corner.autoZSlope ? `${v.label}: Z manual` : `${v.label}: Z auto por faldón`);
+                          }}
+                        >
+                          ⛰
+                        </button>
+                      )}
+                    </span>
+                  );
+                })}
               </div>
             </div>
           )}

@@ -1033,6 +1033,7 @@ export function ElevationsGridViewer({
   }, [perFloorComposites]);
 
   const [gridFullscreen, setGridFullscreen] = useState(false);
+  const [gridPrintScale, setGridPrintScale] = useState(100);
 
   return (
     <div className="space-y-4">
@@ -1493,13 +1494,27 @@ export function ElevationsGridViewer({
             <DialogTitle className="text-sm flex items-center gap-2">
               {budgetName && <span className="font-bold print:text-lg">{budgetName} —</span>}
               Alzados — Pantalla completa
-              <Button variant="outline" size="sm" className="h-7 text-xs ml-auto print:hidden" onClick={() => window.print()}>
-                <Printer className="h-3 w-3 mr-1" /> Imprimir
-              </Button>
+              <div className="flex items-center gap-1.5 ml-auto print:hidden">
+                <span className="text-[10px] text-muted-foreground">Escala:</span>
+                {[100, 125, 150, 175, 200].map(v => (
+                  <Button key={v} variant={gridPrintScale === v ? 'default' : 'outline'} size="sm"
+                    className="h-5 text-[10px] px-1.5 min-w-[38px]" onClick={() => setGridPrintScale(v)}>
+                    {v}%
+                  </Button>
+                ))}
+                <Input type="number" min={50} max={400} value={gridPrintScale}
+                  onChange={e => setGridPrintScale(Math.max(50, Math.min(400, Number(e.target.value) || 100)))}
+                  className="w-16 h-5 text-[10px] text-center px-1" />
+                <Button variant="outline" size="sm" className="h-5 text-[10px] px-2" onClick={() => window.print()}>
+                  <Printer className="h-3 w-3 mr-1" /> Imprimir
+                </Button>
+              </div>
             </DialogTitle>
             <DialogDescription className="sr-only">Vista completa de todos los alzados</DialogDescription>
           </DialogHeader>
           <div className="flex-1 overflow-auto">
+            <style>{`@media print { .elevation-grid-print-scale { transform: scale(${gridPrintScale / 100}); transform-origin: top left; } }`}</style>
+            <div className="elevation-grid-print-scale">
             {floorGroups.map(({ floorId, floorName, roomGroups: floorRoomGroups }) => {
               const hasFloorHeader = floorName !== '';
               const content = (
@@ -1555,6 +1570,7 @@ export function ElevationsGridViewer({
               }
               return <div key={floorId}>{content}</div>;
             })}
+            </div>
           </div>
         </DialogContent>
       </Dialog>
@@ -1773,6 +1789,7 @@ function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, ro
   const blockHM = blockHMm / 1000;
   const blockWM = (plan.blockLengthMm || 625) / 1000;
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [elevPrintScale, setElevPrintScale] = useState(100);
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(elevation.name);
   const [editVertices, setEditVertices] = useState<string[]>(elevation.vertexLabels);
@@ -2372,13 +2389,26 @@ function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, ro
               <span className="text-xs text-muted-foreground font-normal">
                 ({elevation.vertexLabels.join(' → ')}) — {isLine ? `${edges[0].distMm.toLocaleString()} mm` : `${area3D.toFixed(2)} m²`}
               </span>
-              <Button variant="outline" size="sm" className="h-7 text-xs ml-auto print:hidden" onClick={() => window.print()}>
-                <Printer className="h-3 w-3 mr-1" /> Imprimir
-              </Button>
+              <div className="flex items-center gap-1.5 ml-auto print:hidden">
+                <span className="text-[10px] text-muted-foreground">Escala:</span>
+                {[100, 125, 150, 175, 200].map(v => (
+                  <Button key={v} variant={elevPrintScale === v ? 'default' : 'outline'} size="sm"
+                    className="h-5 text-[10px] px-1.5 min-w-[38px]" onClick={() => setElevPrintScale(v)}>
+                    {v}%
+                  </Button>
+                ))}
+                <Input type="number" min={50} max={400} value={elevPrintScale}
+                  onChange={e => setElevPrintScale(Math.max(50, Math.min(400, Number(e.target.value) || 100)))}
+                  className="w-16 h-5 text-[10px] text-center px-1" />
+                <Button variant="outline" size="sm" className="h-5 text-[10px] px-2" onClick={() => window.print()}>
+                  <Printer className="h-3 w-3 mr-1" /> Imprimir
+                </Button>
+              </div>
             </DialogTitle>
             <DialogDescription className="sr-only">Vista completa del alzado manual {elevation.name}</DialogDescription>
           </DialogHeader>
-          <div className="flex-1 overflow-auto flex flex-col items-center justify-center">
+          <style>{`@media print { .elevation-single-print-scale { transform: scale(${elevPrintScale / 100}); transform-origin: top left; } }`}</style>
+          <div className="flex-1 overflow-auto flex flex-col items-center justify-center elevation-single-print-scale">
             {renderSvg(1400, 700)}
             <div className="mt-4 flex flex-wrap gap-3 text-xs text-muted-foreground justify-center">
               {edges.map((e, i) => (

@@ -1079,99 +1079,79 @@ export function ElevationsGridViewer({
   }>>([]);
 
   // Generate cross-section elevation from a cut at X=n or Y=n
+  // Both axes now properly stack all floor levels, mirroring viviendaElevations
   const generateCrossSection = useCallback((axis: 'X' | 'Y', value: number) => {
     const csm = cellSizeM || (plan.blockLengthMm / 1000) || 0.625;
     const cutPos = value * csm; // Convert grid units to meters
-    
-    if (axis === 'Y') {
-      // Longitudinal cut at Y=value → shows XZ plane (Cara Superior/Inferior type view)
-      // Find rooms that span this Y coordinate
-      const crossRooms = rooms.filter(r => {
-        if (r.posX == null || r.posY == null) return false;
-        return r.posY <= cutPos + 0.01 && r.posY + r.length >= cutPos - 0.01;
-      });
-      if (crossRooms.length === 0) {
-        toast.error(`No hay espacios en Y=${value}`);
-        return;
-      }
-      // Build composite sections from these rooms
-      const sortedByX = [...crossRooms].sort((a, b) => a.posX! - b.posX!);
-      const sections: CompositeWall['sections'] = [];
-      let offset = 0;
-      sortedByX.forEach(room => {
-        const wallIdx = cutPos <= room.posY! + room.length! / 2 ? 1 : 3; // top or bottom wall
-        const wall = room.walls.find(w => w.wallIndex === wallIdx) || room.walls[0];
-        const roomH = room.height ?? plan.defaultHeight;
-        const sLen = room.width;
-        sections.push({
-          roomId: room.id, roomName: room.name, wallIndex: wallIdx,
-          wallId: wall?.id || '', length: sLen, height: roomH,
-          wall: wall || room.walls[0], openings: wall?.openings || [], startOffset: offset,
-          isGable: false, effectiveWallType: wall?.wallType,
-        });
-        offset += sLen;
-      });
-      const totalLen = offset;
-      const maxH = Math.max(...sections.map(s => s.height), 0);
-      
-      const layers = perFloorComposites.map(({ floorName, composites }) => {
-        const floorSections = sections.filter(s => {
-          const room = rooms.find(r => r.id === s.roomId);
-          const floorRoomIds = composites.flatMap(c => c.sections.map(cs => cs.roomId));
-          return floorRoomIds.includes(s.roomId);
-        });
-        if (floorSections.length === 0) return null;
-        const cw: CompositeWall = {
-          id: `cross-Y${value}`,
-          label: `Corte Y${value}`,
-          startCorner: { x: sortedByX[0].posX!, y: cutPos, label: `Y${value}` },
-          endCorner: { x: sortedByX[sortedByX.length - 1].posX! + sortedByX[sortedByX.length - 1].width, y: cutPos, label: `Y${value}e` },
-          side: 'top',
-          totalLength: totalLen,
-          sections: floorSections,
-          isExterior: false,
-          objectSummary: { doors: 0, windows: 0, openingDetails: [] },
-        };
-        return { floorName, composites: [cw], isGable: false };
-      }).filter(Boolean) as Array<{ floorName: string; composites: CompositeWall[]; isGable: boolean }>;
 
-      if (layers.length > 0) {
-        setCrossSectionElevations(prev => [...prev, {
-          side: 'top',
-          label: `Corte longitudinal en Y=${value}`,
-          layers,
-        }]);
-        toast.success(`Corte longitudinal generado en Y=${value}`);
-      }
-    } else {
-      // Transversal cut at X=value → shows YZ plane (Cara Izquierda/Derecha type view)
-      const crossRooms = rooms.filter(r => {
-        if (r.posX == null || r.posY == null) return false;
-        return r.posX! <= cutPos + 0.01 && r.posX! + r.width >= cutPos - 0.01;
+    // Determine the side type for the resulting elevation
+    // Y cut → XZ plane → like top/bottom face
+    // X cut → YZ plane → like left/right face
+    const resultSide: ElevationSide = axis === 'Y' ? 'top' : 'left';
+
+    // For each floor, find rooms that intersect the cut line, build sections, create a layer
+    const sortedFloors = floors && floors.length > 1
+      ? [...floors].sort((a, b) => a.orderIndex - b.orderIndex)
+      : null;
+
+    const floorGroups: Array<{ floorId: string; floorName: string; floorRooms: RoomData[] }> = [];
+    if (sortedFloors) {
+      sortedFloors.forEach(f => {
+        floorGroups.push({ floorId: f.id, floorName: f.name, floorRooms: rooms.filter(r => r.floorId === f.id) });
       });
-      if (crossRooms.length === 0) {
-        toast.error(`No hay espacios en X=${value}`);
-        return;
-      }
-      const sortedByY = [...crossRooms].sort((a, b) => a.posY! - b.posY!);
+    } else {
+      floorGroups.push({ floorId: 'all', floorName: '', floorRooms: rooms });
+    }
+
+    const layers: Array<{ floorName: string; composites: CompositeWall[]; isGable: boolean }> = [];
+
+    floorGroups.forEach(({ floorName, floorRooms }) => {
+      // Filter rooms that intersect the cut line
+      const crossRooms = floorRooms.filter(r => {
+        if (r.posX == null || r.posY == null) return false;
+        if (axis === 'Y') {
+          // Cut at fixed Y → room must span that Y
+          return r.posY! <= cutPos + 0.01 && r.posY! + r.length >= cutPos - 0.01;
+        } else {
+          // Cut at fixed X → room must span that X
+          return r.posX! <= cutPos + 0.01 && r.posX! + r.width >= cutPos - 0.01;
+        }
+      });
+
+      if (crossRooms.length === 0) return;
+
+      // Sort rooms along the horizontal axis of the cut
+      const sorted = axis === 'Y'
+        ? [...crossRooms].sort((a, b) => a.posX! - b.posX!)
+        : [...crossRooms].sort((a, b) => a.posY! - b.posY!);
+
       const sections: CompositeWall['sections'] = [];
       let offset = 0;
-      // Check for gable
-      const hasBajoCub = sortedByY.some(r => (r.height === 0 || r.height === undefined || r.height === null) && plan.roofType === 'dos_aguas');
-      
-      sortedByY.forEach(room => {
-        const wallIdx = cutPos <= room.posX! + room.width / 2 ? 4 : 2; // left or right wall
+      let hasGable = false;
+
+      sorted.forEach(room => {
+        // Pick appropriate wall index
+        let wallIdx: number;
+        if (axis === 'Y') {
+          wallIdx = cutPos <= room.posY! + room.length / 2 ? 1 : 3; // top or bottom wall
+        } else {
+          wallIdx = cutPos <= room.posX! + room.width / 2 ? 4 : 2; // left or right wall
+        }
         const wall = room.walls.find(w => w.wallIndex === wallIdx) || room.walls[0];
         let roomH = room.height ?? plan.defaultHeight;
-        const isBajoCub = room.height === 0 && plan.roofType === 'dos_aguas';
-        const isGableWall = isBajoCub && (wallIdx === 2 || wallIdx === 4);
+
+        // Bajo cubierta / gable handling
+        const isBajoCub = (room.height === 0 || room.height === undefined || room.height === null) && plan.roofType === 'dos_aguas';
+        const isGableWall = isBajoCub && (axis === 'X') && (wallIdx === 2 || wallIdx === 4);
         if (isGableWall) {
           roomH = getGablePeakHeight(plan, rooms);
+          hasGable = true;
         } else if (isBajoCub) {
           const autoH = calcBajoCubiertaWallHeight(room, wallIdx, plan, rooms);
           roomH = autoH ?? 0;
         }
-        const sLen = room.length;
+
+        const sLen = axis === 'Y' ? room.width : room.length;
         sections.push({
           roomId: room.id, roomName: room.name, wallIndex: wallIdx,
           wallId: wall?.id || '', length: sLen, height: roomH,
@@ -1181,32 +1161,46 @@ export function ElevationsGridViewer({
         });
         offset += sLen;
       });
-      const totalLen = offset;
-      
-      const layers = [{
-        floorName: '',
-        composites: [{
-          id: `cross-X${value}`,
-          label: `Corte X${value}`,
-          startCorner: { x: cutPos, y: sortedByY[0].posY!, label: `X${value}` },
-          endCorner: { x: cutPos, y: sortedByY[sortedByY.length - 1].posY! + sortedByY[sortedByY.length - 1].length, label: `X${value}e` },
-          side: 'left' as const,
-          totalLength: totalLen,
-          sections,
-          isExterior: false,
-          objectSummary: { doors: 0, windows: 0, openingDetails: [] },
-        }],
-        isGable: hasBajoCub,
-      }];
 
-      setCrossSectionElevations(prev => [...prev, {
-        side: 'left',
-        label: `Corte transversal en X=${value}`,
-        layers,
-      }]);
-      toast.success(`Corte transversal generado en X=${value}`);
+      const totalLen = offset;
+      const startRoom = sorted[0];
+      const endRoom = sorted[sorted.length - 1];
+
+      let startCorner: { x: number; y: number; label: string };
+      let endCorner: { x: number; y: number; label: string };
+      if (axis === 'Y') {
+        startCorner = { x: startRoom.posX!, y: cutPos, label: `X0 Y${value}` };
+        endCorner = { x: endRoom.posX! + endRoom.width, y: cutPos, label: `X${Math.round((endRoom.posX! + endRoom.width) / csm)} Y${value}` };
+      } else {
+        startCorner = { x: cutPos, y: startRoom.posY!, label: `X${value} Y0` };
+        endCorner = { x: cutPos, y: endRoom.posY! + endRoom.length, label: `X${value} Y${Math.round((endRoom.posY! + endRoom.length) / csm)}` };
+      }
+
+      const cw: CompositeWall = {
+        id: `cross-${axis}${value}-${floorName || 'all'}`,
+        label: `Corte ${axis}${value}`,
+        startCorner,
+        endCorner,
+        side: resultSide,
+        totalLength: totalLen,
+        sections,
+        isExterior: false,
+        objectSummary: { doors: 0, windows: 0, openingDetails: [] },
+      };
+
+      layers.push({ floorName, composites: [cw], isGable: hasGable });
+    });
+
+    if (layers.length > 0) {
+      const label = axis === 'Y'
+        ? `Corte longitudinal en Y=${value}`
+        : `Corte transversal en X=${value}`;
+      setCrossSectionElevations(prev => [...prev, { side: resultSide, label, layers }]);
+      toast.success(`${label} generado`);
+    } else {
+      toast.error(`No hay espacios en ${axis}=${value}`);
     }
-  }, [rooms, plan, cellSizeM, perFloorComposites]);
+  }, [rooms, plan, cellSizeM, floors]);
 
   // Vivienda coordinate polygons: draw figures between coordinates  
   const viviendaCoordPolygons = useMemo(() => {

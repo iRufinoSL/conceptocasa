@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Plus, Trash2, Box, Layers, ArrowUpDown, Maximize2, Merge, Unlink, Map as MapIcon, Printer, FileDown, Ruler, Check, Pencil, Save } from 'lucide-react';
+import { ElevationPdfExport } from './ElevationPdfExport';
 import jsPDF from 'jspdf';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -1239,6 +1240,7 @@ export function ElevationsGridViewer({
 
   const [gridFullscreen, setGridFullscreen] = useState(false);
   const [gridPrintScale, setGridPrintScale] = useState(100);
+  const gridFsContentRef = useRef<HTMLDivElement>(null);
 
   return (
     <div className="space-y-4">
@@ -1874,14 +1876,17 @@ export function ElevationsGridViewer({
                 <Input type="number" min={50} max={400} value={gridPrintScale}
                   onChange={e => setGridPrintScale(Math.max(50, Math.min(400, Number(e.target.value) || 100)))}
                   className="w-16 h-5 text-[10px] text-center px-1" />
-                <Button variant="outline" size="sm" className="h-5 text-[10px] px-2" onClick={() => window.print()}>
-                  <Printer className="h-3 w-3 mr-1" /> Imprimir
-                </Button>
+                <ElevationPdfExport
+                  title={`${budgetName || 'Presupuesto'} — Alzados`}
+                  subtitle={`Escala visual: ${gridPrintScale}%`}
+                  containerRef={gridFsContentRef}
+                  className="h-5 text-[10px] px-2 gap-1"
+                />
               </div>
             </DialogTitle>
             <DialogDescription className="sr-only">Vista completa de todos los alzados</DialogDescription>
           </DialogHeader>
-          <div className="flex-1 overflow-auto">
+          <div className="flex-1 overflow-auto" ref={gridFsContentRef}>
             <div style={gridPrintScale !== 100 ? { transform: `scale(${gridPrintScale / 100})`, transformOrigin: 'top left', width: `${10000 / gridPrintScale}%` } : undefined}>
             {floorGroups.map(({ floorId, floorName, roomGroups: floorRoomGroups }) => {
               const hasFloorHeader = floorName !== '';
@@ -2159,6 +2164,7 @@ function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, ro
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [elevPrintScale, setElevPrintScale] = useState(100);
   const [isEditing, setIsEditing] = useState(false);
+  const manualFsContentRef = useRef<HTMLDivElement>(null);
   const [editName, setEditName] = useState(elevation.name);
   const [editVertices, setEditVertices] = useState<string[]>(elevation.vertexLabels);
   const [gridScaleMode, setGridScaleMode] = useState<'bloques' | 'mm'>('bloques');
@@ -2768,14 +2774,17 @@ function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, ro
                 <Input type="number" min={50} max={400} value={elevPrintScale}
                   onChange={e => setElevPrintScale(Math.max(50, Math.min(400, Number(e.target.value) || 100)))}
                   className="w-16 h-5 text-[10px] text-center px-1" />
-                <Button variant="outline" size="sm" className="h-5 text-[10px] px-2" onClick={() => window.print()}>
-                  <Printer className="h-3 w-3 mr-1" /> Imprimir
-                </Button>
+                <ElevationPdfExport
+                  title={elevation.name}
+                  subtitle={isLine ? `Línea: ${edges[0].distMm.toLocaleString()} mm` : `Superficie: ${area3D.toFixed(2)} m² · ${vertices.length} vértices`}
+                  containerRef={manualFsContentRef}
+                  className="h-5 text-[10px] px-2 gap-1"
+                />
               </div>
             </DialogTitle>
             <DialogDescription className="sr-only">Vista completa del alzado manual {elevation.name}</DialogDescription>
           </DialogHeader>
-          <div className="flex-1 overflow-auto flex flex-col items-center justify-center" style={elevPrintScale !== 100 ? { transform: `scale(${elevPrintScale / 100})`, transformOrigin: 'top left', width: `${10000 / elevPrintScale}%` } : undefined}>
+          <div ref={manualFsContentRef} className="flex-1 overflow-auto flex flex-col items-center justify-center" style={elevPrintScale !== 100 ? { transform: `scale(${elevPrintScale / 100})`, transformOrigin: 'top left', width: `${10000 / elevPrintScale}%` } : undefined}>
             {renderSvg(1400, 700)}
             <div className="mt-4 flex flex-wrap gap-3 text-xs text-muted-foreground justify-center">
               {edges.map((e, i) => (
@@ -5173,6 +5182,7 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
   // Coordinate creation mode
   const [totalCoordMode, setTotalCoordMode] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+  const totalFsContentRef = useRef<HTMLDivElement>(null);
   // Coordinate connection mode: connect coords to form polygon edges
   const [connectMode, setConnectMode] = useState(false);
   const [connectFrom, setConnectFrom] = useState<string | null>(null);
@@ -6394,9 +6404,14 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
                     }}
                     title="Guardar este alzado con coordenadas y conexiones"
                   >
-                    <Save className="h-3 w-3" /> Guardar alzado
+                  <Save className="h-3 w-3" /> Guardar alzado
                   </Button>
                 )}
+                <ElevationPdfExport
+                  title={`${budgetName || 'Presupuesto'} — ${label}`}
+                  subtitle={`${TOTAL_SIDE_NAMES[side]} · ${Math.round(totalWidth * 1000)} × ${Math.round(totalHeight * 1000)} mm`}
+                  containerRef={totalFsContentRef}
+                />
               </div>
               <Button variant="destructive" size="sm" className="h-7 text-xs ml-auto" onClick={() => setFullscreen(false)}>
                 ✕ Cerrar
@@ -6451,7 +6466,7 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
               </Button>
             </div>
           )}
-          <div className="flex-1 overflow-auto flex items-center justify-center min-h-0">
+          <div ref={totalFsContentRef} className="flex-1 overflow-auto flex items-center justify-center min-h-0">
             {renderTotalSvg(Math.min(
               (window.innerHeight * 0.8) / totalHeight,
               (window.innerWidth * 0.9) / totalWidth

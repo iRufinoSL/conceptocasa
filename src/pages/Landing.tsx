@@ -277,7 +277,7 @@ const Landing = () => {
               className="inline-flex items-center gap-2 px-4 py-2 bg-background/20 backdrop-blur-sm text-background rounded-full text-sm font-medium border border-background/30"
             >
               <Sparkles className="w-4 h-4" />
-              Construcciones Biohabitables · Casas Activas · Construcciones Industrializadas
+              Casas Pasivas · Casas Activas · Construcción Biohabitable · Construcción Industrializada
             </motion.span>
 
             <motion.h1

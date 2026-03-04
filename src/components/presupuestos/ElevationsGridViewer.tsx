@@ -1079,15 +1079,19 @@ export function ElevationsGridViewer({
   }>>([]);
 
   // Generate cross-section elevation from a cut at X=n or Y=n
-  // Both axes now properly stack all floor levels, mirroring viviendaElevations
+  // Uses absolute horizontal positioning (no concatenation) to avoid mixing disconnected spaces
   const generateCrossSection = useCallback((axis: 'X' | 'Y', value: number) => {
     const csm = cellSizeM || (plan.blockLengthMm / 1000) || 0.625;
     const cutPos = value * csm; // Convert grid units to meters
+    const tolerance = Math.max(csm * 0.02, 0.01);
 
     // Determine the side type for the resulting elevation
     // Y cut → XZ plane → like top/bottom face
     // X cut → YZ plane → like left/right face
     const resultSide: ElevationSide = axis === 'Y' ? 'top' : 'left';
+
+    // Full horizontal span of the section should match full grid extent
+    const defaultSpan = Math.max(0, axis === 'Y' ? (plan.width || 0) : (plan.length || 0));
 
     // For each floor, find rooms that intersect the cut line, build sections, create a layer
     const sortedFloors = floors && floors.length > 1
@@ -1111,32 +1115,31 @@ export function ElevationsGridViewer({
         if (r.posX == null || r.posY == null) return false;
         if (axis === 'Y') {
           // Cut at fixed Y → room must span that Y
-          return r.posY! <= cutPos + 0.01 && r.posY! + r.length >= cutPos - 0.01;
-        } else {
-          // Cut at fixed X → room must span that X
-          return r.posX! <= cutPos + 0.01 && r.posX! + r.width >= cutPos - 0.01;
+          return r.posY <= cutPos + tolerance && r.posY + r.length >= cutPos - tolerance;
         }
+        // Cut at fixed X → room must span that X
+        return r.posX <= cutPos + tolerance && r.posX + r.width >= cutPos - tolerance;
       });
 
       if (crossRooms.length === 0) return;
 
-      // Sort rooms along the horizontal axis of the cut
-      const sorted = axis === 'Y'
-        ? [...crossRooms].sort((a, b) => a.posX! - b.posX!)
-        : [...crossRooms].sort((a, b) => a.posY! - b.posY!);
+      // Sort rooms by absolute horizontal coordinate in the section plane
+      const sorted = [...crossRooms].sort((a, b) =>
+        axis === 'Y' ? (a.posX ?? 0) - (b.posX ?? 0) : (a.posY ?? 0) - (b.posY ?? 0)
+      );
 
       const sections: CompositeWall['sections'] = [];
-      let offset = 0;
       let hasGable = false;
 
       sorted.forEach(room => {
-        // Pick appropriate wall index
+        // Pick orientation wall index to resolve roof slope behavior
         let wallIdx: number;
         if (axis === 'Y') {
           wallIdx = cutPos <= room.posY! + room.length / 2 ? 1 : 3; // top or bottom wall
         } else {
           wallIdx = cutPos <= room.posX! + room.width / 2 ? 4 : 2; // left or right wall
         }
+
         const wall = room.walls.find(w => w.wallIndex === wallIdx) || room.walls[0];
         let roomH = room.height ?? plan.defaultHeight;
 
@@ -1151,29 +1154,42 @@ export function ElevationsGridViewer({
           roomH = autoH ?? 0;
         }
 
-        const sLen = axis === 'Y' ? room.width : room.length;
+        const startOffset = axis === 'Y' ? Math.max(0, room.posX ?? 0) : Math.max(0, room.posY ?? 0);
+        const sLen = Math.max(0, axis === 'Y' ? room.width : room.length);
+        if (sLen <= 0) return;
+
         sections.push({
-          roomId: room.id, roomName: room.name, wallIndex: wallIdx,
-          wallId: wall?.id || '', length: sLen, height: roomH,
-          wall: wall || room.walls[0], openings: wall?.openings || [], startOffset: offset,
-          isGable: isGableWall, effectiveWallType: wall?.wallType,
+          roomId: room.id,
+          roomName: room.name,
+          wallIndex: wallIdx,
+          wallId: wall?.id || '',
+          length: sLen,
+          height: roomH,
+          wall: wall || room.walls[0],
+          openings: [], // A section cut is not a façade wall; avoid unrelated openings
+          startOffset,
+          isGable: isGableWall,
+          effectiveWallType: 'corte',
           gablePeakHeight: isGableWall ? roomH : undefined,
         });
-        offset += sLen;
       });
 
-      const totalLen = offset;
-      const startRoom = sorted[0];
-      const endRoom = sorted[sorted.length - 1];
+      if (sections.length === 0) return;
+
+      sections.sort((a, b) => a.startOffset - b.startOffset);
+
+      const inferredSpan = Math.max(...sections.map(s => s.startOffset + s.length), 0);
+      const totalLen = Math.max(defaultSpan, inferredSpan);
+      const gridEnd = Math.round(totalLen / csm);
 
       let startCorner: { x: number; y: number; label: string };
       let endCorner: { x: number; y: number; label: string };
       if (axis === 'Y') {
-        startCorner = { x: startRoom.posX!, y: cutPos, label: `X0 Y${value}` };
-        endCorner = { x: endRoom.posX! + endRoom.width, y: cutPos, label: `X${Math.round((endRoom.posX! + endRoom.width) / csm)} Y${value}` };
+        startCorner = { x: 0, y: cutPos, label: `X0 Y${value}` };
+        endCorner = { x: totalLen, y: cutPos, label: `X${gridEnd} Y${value}` };
       } else {
-        startCorner = { x: cutPos, y: startRoom.posY!, label: `X${value} Y0` };
-        endCorner = { x: cutPos, y: endRoom.posY! + endRoom.length, label: `X${value} Y${Math.round((endRoom.posY! + endRoom.length) / csm)}` };
+        startCorner = { x: cutPos, y: 0, label: `X${value} Y0` };
+        endCorner = { x: cutPos, y: totalLen, label: `X${value} Y${gridEnd}` };
       }
 
       const cw: CompositeWall = {
@@ -5320,6 +5336,15 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
   const [lupaPrecisionLabel, setLupaPrecisionLabel] = useState('');
   const isGableSide = side === 'right' || side === 'left';
 
+  const crossSectionCut = useMemo(() => {
+    const m = label.match(/Corte\s+(?:longitudinal|transversal)\s+en\s+([XY])=([\-\d.]+)/i);
+    if (!m) return null;
+    const axis = m[1].toUpperCase() === 'Y' ? 'Y' : 'X';
+    const value = Number(m[2]);
+    if (Number.isNaN(value)) return null;
+    return { axis, value } as { axis: 'X' | 'Y'; value: number };
+  }, [label]);
+
   // Calculate total width (max across all layers) and per-layer heights
   const layerDetails = useMemo(() => {
     return layers.map((layer, layerIdx) => {
@@ -5417,7 +5442,8 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
         maxGridZ = Math.max(maxGridZ, baseZ + Math.round(maxH * 1000 / (plan.blockHeightMm || 250)));
       });
     }
-    if (maxGridZ === 0) maxGridZ = Math.round(totalHeight / blockHM);
+    // Ensure grid can always contain the rendered section geometry (including roof profiles)
+    maxGridZ = Math.max(maxGridZ, Math.round(totalHeight / blockHM));
 
     const gridH = isHorizontalX ? maxGridCol : maxGridRow; // horizontal grid units
     const gridV = maxGridZ; // vertical grid units (Z)
@@ -5546,6 +5572,17 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
             
             rooms.forEach((r, ri) => {
               if (r.posX == null || r.posY == null) return;
+
+              // For generated cross-sections, only project rooms that intersect the exact cut line
+              if (crossSectionCut) {
+                const cutPosM = crossSectionCut.value * csm;
+                const cutTol = Math.max(csm * 0.02, 0.01);
+                const intersectsCut = crossSectionCut.axis === 'Y'
+                  ? (r.posY <= cutPosM + cutTol && r.posY + r.length >= cutPosM - cutTol)
+                  : (r.posX <= cutPosM + cutTol && r.posX + r.width >= cutPosM - cutTol);
+                if (!intersectsCut) return;
+              }
+
               const rColStart = Math.round(r.posX / csm);
               const rColEnd = Math.round((r.posX + r.width) / csm);
               const rRowStart = Math.round(r.posY / csm);

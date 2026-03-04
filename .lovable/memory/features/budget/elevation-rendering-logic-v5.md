@@ -16,8 +16,11 @@ Updated: now
 - Tipo `ManualElevation` en `useFloorPlan.ts`: id, name, vertexLabels[], floorId?.
 - Componente `ManualElevationPolygonCard` proyecta los vértices 3D a 2D eligiendo el eje horizontal de mayor dispersión.
 
-## Coordenadas editables
-- En vista ampliada (fullscreen), las coordenadas se gestionan igual que en Cuadrícula: edición cómoda de nombre y valores XYZ por cada vértice.
+## Coordenadas editables en alzados manuales
+- **En tarjeta (card)**: badges clicables con Popover que permiten editar X(col), Y(fila), Z(bloques) de cada vértice.
+- **En fullscreen**: tabla de vértices con filas clicables → campos inline de edición (col, row, z).
+- Ambos usan `onCustomCornersChange` para persistir cambios en `custom_corners`.
+- Componentes: `EditableVertexRow` (tabla fullscreen), `EditableVertexBadge` (card compacto con Popover).
 
 ## Sistema de Capas (igual que Planos)
 - Toda capa es la representación de un volumen, pero definida sólo por su profundidad/grosor.

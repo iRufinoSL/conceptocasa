@@ -86,7 +86,8 @@ function formatXYZ(x: number, y: number, z: number): string {
 
 /**
  * Sort vertex labels in counter-clockwise (CCW) order for a vertical elevation polygon.
- * Origin = bottom-left vertex (lowest V, then lowest U as tiebreaker).
+ * Uses centroid-based angles (robust for collinear vertices), then rotates
+ * the sequence so the bottom-left vertex comes first.
  * CCW = left→right (bottom), then right→up→left (top).
  */
 function sortVerticesCCW(labels: string[], corners: CustomCorner[], cellSizeM: number, blockHM: number): string[] {
@@ -99,23 +100,29 @@ function sortVerticesCCW(labels: string[], corners: CustomCorner[], cellSizeM: n
     return { label, u, v };
   }).filter(Boolean) as Array<{ label: string; u: number; v: number }>;
   if (resolved.length <= 2) return labels;
-  // Find bottom-left vertex (min V, then min U)
-  const origin = resolved.reduce((best, p) =>
-    p.v < best.v || (p.v === best.v && p.u < best.u) ? p : best
-  );
-  // Sort by angle from bottom-left origin — CCW = increasing atan2
+  // Compute centroid
+  const cu = resolved.reduce((s, p) => s + p.u, 0) / resolved.length;
+  const cv = resolved.reduce((s, p) => s + p.v, 0) / resolved.length;
+  // Sort by angle from centroid — CCW = increasing atan2
   const sorted = [...resolved].sort((a, b) => {
-    const aa = Math.atan2(a.v - origin.v, a.u - origin.u);
-    const ab = Math.atan2(b.v - origin.v, b.u - origin.u);
+    const aa = Math.atan2(a.v - cv, a.u - cu);
+    const ab = Math.atan2(b.v - cv, b.u - cu);
     if (Math.abs(aa - ab) < 1e-9) {
-      // Same angle: closer point first
-      const da = (a.u - origin.u) ** 2 + (a.v - origin.v) ** 2;
-      const db = (b.u - origin.u) ** 2 + (b.v - origin.v) ** 2;
+      const da = (a.u - cu) ** 2 + (a.v - cv) ** 2;
+      const db = (b.u - cu) ** 2 + (b.v - cv) ** 2;
       return da - db;
     }
     return aa - ab;
   });
-  return sorted.map(s => s.label);
+  // Rotate so bottom-left vertex is first (min V, then min U as tiebreaker)
+  let blIdx = 0;
+  for (let i = 1; i < sorted.length; i++) {
+    const best = sorted[blIdx];
+    const cur = sorted[i];
+    if (cur.v < best.v || (cur.v === best.v && cur.u < best.u)) blIdx = i;
+  }
+  const rotated = [...sorted.slice(blIdx), ...sorted.slice(0, blIdx)];
+  return rotated.map(s => s.label);
 }
 
 /** Build a level-prefixed corner label: baseZ=0 → level 1, baseZ=10 → level 2, etc. */
@@ -1871,18 +1878,37 @@ function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, ro
     axisLabel = 'frontal (XZ)';
   }
   
-  // Normalize projected coordinates to start from 0
+  // Polygon bounding box in projected space
   const uMin = Math.min(...projected.map(p => p.u));
   const vMin = Math.min(...projected.map(p => p.v));
   const uMax = Math.max(...projected.map(p => p.u));
   const vMax = Math.max(...projected.map(p => p.v));
   const uSpread = uMax - uMin;
   const vSpread = vMax - vMin;
-  
+
+  // Use ABSOLUTE coordinates for the grid (full building cross-section)
+  // The grid spans from 0 to the building's max extent on each axis
+  // so the polygon appears at its real position within the section
+  const allCornersUV = allCorners.map(c => {
+    if (absNz >= absNx && absNz >= absNy) {
+      return { u: (c.col - 1) * cellSizeM, v: (c.row - 1) * cellSizeM };
+    } else if (absNx >= absNy) {
+      return { u: (c.row - 1) * cellSizeM, v: (c.z ?? 0) * blockHM };
+    } else {
+      return { u: (c.col - 1) * cellSizeM, v: (c.z ?? 0) * blockHM };
+    }
+  });
+  // Grid bounds: from 0 to max of all corners (full section)
+  const gridUMax = Math.max(uMax, ...allCornersUV.map(p => p.u));
+  const gridVMax = Math.max(vMax, ...allCornersUV.map(p => p.v));
+  const gridUSpread = gridUMax;
+  const gridVSpread = gridVMax;
+
+  // Projected points use absolute coordinates (NOT normalized to 0)
   const normalizedProj = projected.map(p => ({
     label: p.label,
-    u: p.u - uMin,
-    v: p.v - vMin,
+    u: p.u,
+    v: p.v,
   }));
 
   // Calculate area (0 for lines) or TRUE 3D polygon area using cross product
@@ -1955,53 +1981,64 @@ function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, ro
   });
 
   const renderSvg = (maxWidth: number, maxHeight: number) => {
-    // SVG dimensions
+    // SVG dimensions — use full grid spread so polygon shows at absolute position
     const padding = 50;
+    const drawU = gridUSpread > 0 ? gridUSpread : (uSpread > 0 ? uSpread : 1);
+    const drawV = gridVSpread > 0 ? gridVSpread : (vSpread > 0 ? vSpread : 1);
     const availW = maxWidth - padding * 2;
     const availH = maxHeight - padding * 2;
-    const scaleU = uSpread > 0 ? availW / uSpread : 80;
-    const scaleV = vSpread > 0 ? availH / vSpread : 80;
+    const scaleU = availW / drawU;
+    const scaleV = availH / drawV;
     const scale = Math.min(scaleU, scaleV);
 
     // For a line, ensure minimum visual height
-    const effectiveSvgW = isLine ? Math.max(uSpread * scale, 100) + padding * 2 : uSpread * scale + padding * 2;
-    const effectiveSvgH = isLine ? padding * 2 + 40 : vSpread * scale + padding * 2;
+    const effectiveSvgW = isLine ? Math.max(drawU * scale, 100) + padding * 2 : drawU * scale + padding * 2;
+    const effectiveSvgH = isLine ? padding * 2 + 40 : drawV * scale + padding * 2;
     const svgW = effectiveSvgW;
     const svgH = effectiveSvgH;
 
     // Build SVG polygon points (flip V so Z+ / Y+ goes up visually)
+    // Points use absolute u/v coordinates
     const flipV = absNz >= absNx && absNz >= absNy; // horizontal polygon: don't flip
     const svgPoints = normalizedProj.map(p => {
       const px = padding + p.u * scale;
-      const py = isLine ? padding + 20 : (flipV ? (padding + p.v * scale) : (padding + (vSpread - p.v) * scale));
+      const py = isLine ? padding + 20 : (flipV ? (padding + p.v * scale) : (padding + (drawV - p.v) * scale));
       return { px, py, label: p.label };
     });
     const pointsStr = svgPoints.map(p => `${p.px},${p.py}`).join(' ');
 
-    // Grid interval for rulers
-    const gridIntervalU = gridScaleMode === 'bloques' ? blockWM : (uSpread <= 2 ? 0.1 : uSpread <= 5 ? 0.25 : 0.5);
-    const gridIntervalV = gridScaleMode === 'bloques' ? blockHM : (vSpread <= 2 ? 0.1 : vSpread <= 5 ? 0.25 : 0.5);
+    // Grid interval for rulers — use full section spread
+    const gridIntervalU = gridScaleMode === 'bloques' ? blockWM : (drawU <= 2 ? 0.1 : drawU <= 5 ? 0.25 : 0.5);
+    const gridIntervalV = gridScaleMode === 'bloques' ? blockHM : (drawV <= 2 ? 0.1 : drawV <= 5 ? 0.25 : 0.5);
     const gridIntervalUPx = gridIntervalU * scale;
     const gridIntervalVPx = gridIntervalV * scale;
     const showGrid = !flipV && !isLine && gridIntervalUPx >= 6 && gridIntervalVPx >= 4;
 
     return (
       <svg width="100%" viewBox={`0 0 ${svgW} ${svgH}`} className="mx-auto" style={{ maxHeight }}>
+        {/* Full section grid background */}
+        {showGrid && (
+          <g>
+            {/* Section border */}
+            <rect x={padding} y={padding} width={drawU * scale} height={drawV * scale}
+              fill="none" stroke="hsl(var(--border))" strokeWidth={0.8} strokeDasharray="6,3" opacity={0.5} />
+          </g>
+        )}
         {/* Graduated XZ grid for vertical elevations */}
         {showGrid && (
           <g opacity={0.25}>
             {/* Horizontal grid lines (Z axis) */}
-            {Array.from({ length: Math.floor(vSpread / gridIntervalV) + 1 }, (_, i) => {
+            {Array.from({ length: Math.floor(drawV / gridIntervalV) + 1 }, (_, i) => {
               const vVal = i * gridIntervalV;
-              const lineY = padding + (vSpread - vVal) * scale;
-              return <line key={`gv-${i}`} x1={padding} y1={lineY} x2={padding + uSpread * scale} y2={lineY}
+              const lineY = padding + (drawV - vVal) * scale;
+              return <line key={`gv-${i}`} x1={padding} y1={lineY} x2={padding + drawU * scale} y2={lineY}
                 stroke="hsl(var(--primary))" strokeWidth={0.4} />;
             })}
             {/* Vertical grid lines (X/horizontal axis) */}
-            {Array.from({ length: Math.floor(uSpread / gridIntervalU) + 1 }, (_, i) => {
+            {Array.from({ length: Math.floor(drawU / gridIntervalU) + 1 }, (_, i) => {
               const uVal = i * gridIntervalU;
               const lineX = padding + uVal * scale;
-              return <line key={`gu-${i}`} x1={lineX} y1={padding} x2={lineX} y2={padding + vSpread * scale}
+              return <line key={`gu-${i}`} x1={lineX} y1={padding} x2={lineX} y2={padding + drawV * scale}
                 stroke="hsl(var(--muted-foreground))" strokeWidth={0.3} />;
             })}
           </g>
@@ -2011,30 +2048,30 @@ function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, ro
         {showGrid && (
           <g>
             {/* Horizontal axis labels (bottom) */}
-            {Array.from({ length: Math.floor(uSpread / gridIntervalU) + 1 }, (_, i) => {
+            {Array.from({ length: Math.floor(drawU / gridIntervalU) + 1 }, (_, i) => {
               const uVal = i * gridIntervalU;
               const lineX = padding + uVal * scale;
               const label = gridScaleMode === 'bloques'
-                ? `${Math.round(uVal / blockWM)}`
+                ? `X${Math.round(uVal / blockWM)}`
                 : `${Math.round(uVal * 1000)}`;
               return (
-                <text key={`ru-${i}`} x={lineX} y={padding + vSpread * scale + 12}
+                <text key={`ru-${i}`} x={lineX} y={padding + drawV * scale + 12}
                   textAnchor="middle" fontSize={7} fill="hsl(var(--muted-foreground))" fontWeight={500}>
                   {label}
                 </text>
               );
             })}
             {/* Axis label */}
-            <text x={padding + uSpread * scale / 2} y={padding + vSpread * scale + 22}
+            <text x={padding + drawU * scale / 2} y={padding + drawV * scale + 22}
               textAnchor="middle" fontSize={7} fill="hsl(var(--muted-foreground))" fontWeight={600}>
-              {gridScaleMode === 'bloques' ? 'Bloques (625mm)' : 'mm'}
+              {gridScaleMode === 'bloques' ? 'X — Bloques (625mm)' : 'X — mm'}
             </text>
             {/* Vertical axis labels (left) */}
-            {Array.from({ length: Math.floor(vSpread / gridIntervalV) + 1 }, (_, i) => {
+            {Array.from({ length: Math.floor(drawV / gridIntervalV) + 1 }, (_, i) => {
               const vVal = i * gridIntervalV;
-              const lineY = padding + (vSpread - vVal) * scale;
+              const lineY = padding + (drawV - vVal) * scale;
               const label = gridScaleMode === 'bloques'
-                ? `${Math.round(vVal / blockHM)}`
+                ? `Z${Math.round(vVal / blockHM)}`
                 : `${Math.round(vVal * 1000)}`;
               return (
                 <text key={`rv-${i}`} x={padding - 5} y={lineY + 3}
@@ -2044,17 +2081,17 @@ function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, ro
               );
             })}
             {/* Vertical axis label */}
-            <text x={padding - 20} y={padding + vSpread * scale / 2}
+            <text x={padding - 20} y={padding + drawV * scale / 2}
               textAnchor="middle" fontSize={7} fill="hsl(var(--muted-foreground))" fontWeight={600}
-              transform={`rotate(-90, ${padding - 20}, ${padding + vSpread * scale / 2})`}>
-              {gridScaleMode === 'bloques' ? 'Bloques (250mm)' : 'mm'}
+              transform={`rotate(-90, ${padding - 20}, ${padding + drawV * scale / 2})`}>
+              {gridScaleMode === 'bloques' ? 'Z — Bloques (250mm)' : 'Z — mm'}
             </text>
           </g>
         )}
 
         {/* Ground line (if vertical polygon) */}
         {!flipV && (
-          <line x1={padding - 10} y1={padding + vSpread * scale} x2={padding + uSpread * scale + 10} y2={padding + vSpread * scale}
+          <line x1={padding - 10} y1={padding + drawV * scale} x2={padding + drawU * scale + 10} y2={padding + drawV * scale}
             stroke="hsl(var(--muted-foreground))" strokeWidth={1.5} opacity={0.4} strokeDasharray="4,2" />
         )}
 
@@ -2092,20 +2129,20 @@ function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, ro
               </defs>
               <g clipPath={`url(#${clipId})`} opacity={0.35}>
                 {/* Horizontal block lines */}
-                {Array.from({ length: Math.ceil(vSpread / blockHM) + 1 }, (_, r) => {
-                  const lineY = flipV ? (padding + r * bhPx) : (padding + vSpread * scale - r * bhPx);
-                  return <line key={`h-${r}`} x1={padding} y1={lineY} x2={padding + uSpread * scale} y2={lineY}
+                {Array.from({ length: Math.ceil(drawV / blockHM) + 1 }, (_, r) => {
+                  const lineY = flipV ? (padding + r * bhPx) : (padding + drawV * scale - r * bhPx);
+                  return <line key={`h-${r}`} x1={padding} y1={lineY} x2={padding + drawU * scale} y2={lineY}
                     stroke="hsl(var(--primary))" strokeWidth={0.5} />;
                 })}
                 {/* Vertical block lines (alternating offset) */}
-                {Array.from({ length: Math.ceil(vSpread / blockHM) + 1 }, (_, r) => {
-                  const yTop = flipV ? (padding + r * bhPx) : (padding + vSpread * scale - (r + 1) * bhPx);
-                  const yBot = flipV ? (padding + (r + 1) * bhPx) : (padding + vSpread * scale - r * bhPx);
+                {Array.from({ length: Math.ceil(drawV / blockHM) + 1 }, (_, r) => {
+                  const yTop = flipV ? (padding + r * bhPx) : (padding + drawV * scale - (r + 1) * bhPx);
+                  const yBot = flipV ? (padding + (r + 1) * bhPx) : (padding + drawV * scale - r * bhPx);
                   const offset = r % 2 === 0 ? 0 : bwPx / 2;
-                  const cols = Math.ceil(uSpread / blockWM) + 2;
+                  const cols = Math.ceil(drawU / blockWM) + 2;
                   return Array.from({ length: cols }, (_, c) => {
                     const lineX = padding + offset + c * bwPx;
-                    if (lineX <= padding || lineX >= padding + uSpread * scale) return null;
+                    if (lineX <= padding || lineX >= padding + drawU * scale) return null;
                     return <line key={`v-${r}-${c}`} x1={lineX} y1={yTop} x2={lineX} y2={yBot}
                       stroke="hsl(var(--muted-foreground))" strokeWidth={0.3} />;
                   });

@@ -1021,7 +1021,17 @@ export function ElevationsGridViewer({
           return !(hasNumSuffix(cw.startCorner.label) && hasNumSuffix(cw.endCorner.label));
         });
         if (sideComposites.length > 0) {
-          const isGable = sideComposites.some(cw => cw.sections.some(s => s.isGable));
+          // For left/right (gable sides), also check if the building has dos_aguas roof
+          // and bajo cubierta rooms — these should show gable triangles
+          let isGable = sideComposites.some(cw => cw.sections.some(s => s.isGable));
+          if (!isGable && (side === 'left' || side === 'right') && plan.roofType === 'dos_aguas') {
+            // Check if ANY room in this composite is bajo cubierta
+            const hasBajoCub = sideComposites.some(cw => cw.sections.some(s => {
+              const room = rooms.find(r => r.id === s.roomId);
+              return room && (room.height === 0 || room.height === undefined || room.height === null) && room.hasRoof;
+            }));
+            if (hasBajoCub) isGable = true;
+          }
           layers.push({ floorName, composites: sideComposites, isGable });
         }
       });
@@ -1030,7 +1040,202 @@ export function ElevationsGridViewer({
       }
     });
     return result;
-  }, [perFloorComposites]);
+  }, [perFloorComposites, plan.roofType, rooms]);
+
+  // Cross-section state for Nivel Vivienda
+  const [crossSectionAxis, setCrossSectionAxis] = useState<'X' | 'Y' | null>(null);
+  const [crossSectionValue, setCrossSectionValue] = useState<number>(0);
+  const [crossSectionElevations, setCrossSectionElevations] = useState<Array<{
+    side: 'top' | 'right' | 'bottom' | 'left';
+    label: string;
+    layers: Array<{ floorName: string; composites: CompositeWall[]; isGable: boolean }>;
+  }>>([]);
+
+  // Generate cross-section elevation from a cut at X=n or Y=n
+  const generateCrossSection = useCallback((axis: 'X' | 'Y', value: number) => {
+    const csm = cellSizeM || (plan.blockLengthMm / 1000) || 0.625;
+    const cutPos = value * csm; // Convert grid units to meters
+    
+    if (axis === 'Y') {
+      // Longitudinal cut at Y=value → shows XZ plane (Cara Superior/Inferior type view)
+      // Find rooms that span this Y coordinate
+      const crossRooms = rooms.filter(r => {
+        if (r.posX == null || r.posY == null) return false;
+        return r.posY <= cutPos + 0.01 && r.posY + r.length >= cutPos - 0.01;
+      });
+      if (crossRooms.length === 0) {
+        toast.error(`No hay espacios en Y=${value}`);
+        return;
+      }
+      // Build composite sections from these rooms
+      const sortedByX = [...crossRooms].sort((a, b) => a.posX! - b.posX!);
+      const sections: CompositeWall['sections'] = [];
+      let offset = 0;
+      sortedByX.forEach(room => {
+        const wallIdx = cutPos <= room.posY! + room.length! / 2 ? 1 : 3; // top or bottom wall
+        const wall = room.walls.find(w => w.wallIndex === wallIdx) || room.walls[0];
+        const roomH = room.height ?? plan.defaultHeight;
+        const sLen = room.width;
+        sections.push({
+          roomId: room.id, roomName: room.name, wallIndex: wallIdx,
+          wallId: wall?.id || '', length: sLen, height: roomH,
+          wall: wall || room.walls[0], openings: wall?.openings || [], startOffset: offset,
+          isGable: false, effectiveWallType: wall?.wallType,
+        });
+        offset += sLen;
+      });
+      const totalLen = offset;
+      const maxH = Math.max(...sections.map(s => s.height), 0);
+      
+      const layers = perFloorComposites.map(({ floorName, composites }) => {
+        const floorSections = sections.filter(s => {
+          const room = rooms.find(r => r.id === s.roomId);
+          const floorRoomIds = composites.flatMap(c => c.sections.map(cs => cs.roomId));
+          return floorRoomIds.includes(s.roomId);
+        });
+        if (floorSections.length === 0) return null;
+        const cw: CompositeWall = {
+          id: `cross-Y${value}`,
+          label: `Corte Y${value}`,
+          startCorner: { x: sortedByX[0].posX!, y: cutPos, label: `Y${value}` },
+          endCorner: { x: sortedByX[sortedByX.length - 1].posX! + sortedByX[sortedByX.length - 1].width, y: cutPos, label: `Y${value}e` },
+          side: 'top',
+          totalLength: totalLen,
+          sections: floorSections,
+          isExterior: false,
+          objectSummary: { doors: 0, windows: 0, openingDetails: [] },
+        };
+        return { floorName, composites: [cw], isGable: false };
+      }).filter(Boolean) as Array<{ floorName: string; composites: CompositeWall[]; isGable: boolean }>;
+
+      if (layers.length > 0) {
+        setCrossSectionElevations(prev => [...prev, {
+          side: 'top',
+          label: `Corte longitudinal en Y=${value}`,
+          layers,
+        }]);
+        toast.success(`Corte longitudinal generado en Y=${value}`);
+      }
+    } else {
+      // Transversal cut at X=value → shows YZ plane (Cara Izquierda/Derecha type view)
+      const crossRooms = rooms.filter(r => {
+        if (r.posX == null || r.posY == null) return false;
+        return r.posX! <= cutPos + 0.01 && r.posX! + r.width >= cutPos - 0.01;
+      });
+      if (crossRooms.length === 0) {
+        toast.error(`No hay espacios en X=${value}`);
+        return;
+      }
+      const sortedByY = [...crossRooms].sort((a, b) => a.posY! - b.posY!);
+      const sections: CompositeWall['sections'] = [];
+      let offset = 0;
+      // Check for gable
+      const hasBajoCub = sortedByY.some(r => (r.height === 0 || r.height === undefined || r.height === null) && plan.roofType === 'dos_aguas');
+      
+      sortedByY.forEach(room => {
+        const wallIdx = cutPos <= room.posX! + room.width / 2 ? 4 : 2; // left or right wall
+        const wall = room.walls.find(w => w.wallIndex === wallIdx) || room.walls[0];
+        let roomH = room.height ?? plan.defaultHeight;
+        const isBajoCub = room.height === 0 && plan.roofType === 'dos_aguas';
+        const isGableWall = isBajoCub && (wallIdx === 2 || wallIdx === 4);
+        if (isGableWall) {
+          roomH = getGablePeakHeight(plan, rooms);
+        } else if (isBajoCub) {
+          const autoH = calcBajoCubiertaWallHeight(room, wallIdx, plan, rooms);
+          roomH = autoH ?? 0;
+        }
+        const sLen = room.length;
+        sections.push({
+          roomId: room.id, roomName: room.name, wallIndex: wallIdx,
+          wallId: wall?.id || '', length: sLen, height: roomH,
+          wall: wall || room.walls[0], openings: wall?.openings || [], startOffset: offset,
+          isGable: isGableWall, effectiveWallType: wall?.wallType,
+          gablePeakHeight: isGableWall ? roomH : undefined,
+        });
+        offset += sLen;
+      });
+      const totalLen = offset;
+      
+      const layers = [{
+        floorName: '',
+        composites: [{
+          id: `cross-X${value}`,
+          label: `Corte X${value}`,
+          startCorner: { x: cutPos, y: sortedByY[0].posY!, label: `X${value}` },
+          endCorner: { x: cutPos, y: sortedByY[sortedByY.length - 1].posY! + sortedByY[sortedByY.length - 1].length, label: `X${value}e` },
+          side: 'left' as const,
+          totalLength: totalLen,
+          sections,
+          isExterior: false,
+          objectSummary: { doors: 0, windows: 0, openingDetails: [] },
+        }],
+        isGable: hasBajoCub,
+      }];
+
+      setCrossSectionElevations(prev => [...prev, {
+        side: 'left',
+        label: `Corte transversal en X=${value}`,
+        layers,
+      }]);
+      toast.success(`Corte transversal generado en X=${value}`);
+    }
+  }, [rooms, plan, cellSizeM, perFloorComposites]);
+
+  // Vivienda coordinate polygons: draw figures between coordinates  
+  const viviendaCoordPolygons = useMemo(() => {
+    if (!customCorners || customCorners.length < 3) return [];
+    // Find groups of coordinates that form closed polygons on elevation faces
+    // For now, collect coordinates per elevation side that share the same face
+    const polygons: Array<{
+      side: string;
+      corners: CustomCorner[];
+      area: number;
+      perimeter: number;
+    }> = [];
+    
+    // Group elevation coordinates by side
+    const bySide = new Map<string, CustomCorner[]>();
+    customCorners.forEach(cc => {
+      if (cc.side && ['top', 'right', 'bottom', 'left'].includes(cc.side)) {
+        if (!bySide.has(cc.side)) bySide.set(cc.side, []);
+        bySide.get(cc.side)!.push(cc);
+      }
+    });
+    
+    bySide.forEach((corners, side) => {
+      if (corners.length < 3) return;
+      const csm2 = cellSizeM || 0.625;
+      const blockHM2 = (plan.blockHeightMm || 250) / 1000;
+      // Sort CCW and compute area using shoelace formula
+      const sorted = sortVerticesCCW(
+        corners.map(c => c.label),
+        corners,
+        csm2,
+        blockHM2
+      );
+      const sortedCorners = sorted.map(l => corners.find(c => c.label === l)!).filter(Boolean);
+      if (sortedCorners.length < 3) return;
+      
+      // Compute area and perimeter
+      let area = 0;
+      let perimeter = 0;
+      for (let i = 0; i < sortedCorners.length; i++) {
+        const c1 = sortedCorners[i];
+        const c2 = sortedCorners[(i + 1) % sortedCorners.length];
+        const u1 = (c1.col - 1) * csm2;
+        const v1 = (c1.z ?? 0) * blockHM2;
+        const u2 = (c2.col - 1) * csm2;
+        const v2 = (c2.z ?? 0) * blockHM2;
+        area += u1 * v2 - u2 * v1;
+        perimeter += Math.sqrt((u2 - u1) ** 2 + (v2 - v1) ** 2);
+      }
+      area = Math.abs(area) / 2;
+      
+      polygons.push({ side, corners: sortedCorners, area, perimeter });
+    });
+    
+    return polygons;
+  }, [customCorners, cellSizeM, plan.blockHeightMm]);
 
   const [gridFullscreen, setGridFullscreen] = useState(false);
   const [gridPrintScale, setGridPrintScale] = useState(100);
@@ -1369,6 +1574,80 @@ export function ElevationsGridViewer({
       {/* Nivel Vivienda — whole-building facades (all floors, including single-floor) */}
       {viewMode === 'vivienda' && viviendaElevations.length > 0 && (
         <div className="space-y-4">
+          {/* Cross-section generator toolbar */}
+          <div className="border border-border rounded-lg p-3 bg-muted/20 space-y-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-bold text-foreground">Cortes de sección:</span>
+              <Button
+                variant={crossSectionAxis === 'X' ? 'default' : 'outline'}
+                size="sm" className="h-7 text-xs gap-1"
+                onClick={() => setCrossSectionAxis(crossSectionAxis === 'X' ? null : 'X')}
+              >
+                Corte transversal (X)
+              </Button>
+              <Button
+                variant={crossSectionAxis === 'Y' ? 'default' : 'outline'}
+                size="sm" className="h-7 text-xs gap-1"
+                onClick={() => setCrossSectionAxis(crossSectionAxis === 'Y' ? null : 'Y')}
+              >
+                Corte longitudinal (Y)
+              </Button>
+              {crossSectionAxis && (
+                <>
+                  <Label className="text-xs ml-2">{crossSectionAxis}=</Label>
+                  <Input
+                    type="number" min={0}
+                    value={crossSectionValue}
+                    onChange={e => setCrossSectionValue(Number(e.target.value) || 0)}
+                    className="w-16 h-7 text-xs"
+                  />
+                  <Button size="sm" className="h-7 text-xs" onClick={() => generateCrossSection(crossSectionAxis, crossSectionValue)}>
+                    <Plus className="h-3 w-3 mr-1" /> Generar alzado
+                  </Button>
+                </>
+              )}
+              {crossSectionElevations.length > 0 && (
+                <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive ml-auto"
+                  onClick={() => setCrossSectionElevations([])}>
+                  <Trash2 className="h-3 w-3 mr-1" /> Limpiar cortes ({crossSectionElevations.length})
+                </Button>
+              )}
+            </div>
+            {crossSectionAxis && (
+              <p className="text-[10px] text-muted-foreground">
+                {crossSectionAxis === 'X'
+                  ? 'Un corte transversal en X genera un alzado lateral (Cara Izquierda/Derecha) mostrando la sección del edificio.'
+                  : 'Un corte longitudinal en Y genera un alzado frontal (Cara Superior/Inferior) mostrando la sección del edificio.'}
+              </p>
+            )}
+          </div>
+
+          {/* Coordinate management toolbar */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-bold text-foreground">Coordenadas:</span>
+            <Badge variant="outline" className="text-[9px] h-4">
+              {(customCorners || []).filter(c => c.side && ['top','right','bottom','left'].includes(c.side)).length} en alzados
+            </Badge>
+            {onCustomCornersChange && customCorners && customCorners.length > 0 && (
+              <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive gap-1"
+                onClick={() => {
+                  if (!confirm('¿Limpiar TODAS las coordenadas de alzados? Las coordenadas de planos se mantendrán.')) return;
+                  const cleaned = customCorners.filter(c => !c.side || !['top','right','bottom','left'].includes(c.side));
+                  onCustomCornersChange(cleaned);
+                  setCrossSectionElevations([]);
+                  toast.success('Coordenadas de alzados limpiadas');
+                }}>
+                <Trash2 className="h-3 w-3" /> Limpiar coordenadas de alzados
+              </Button>
+            )}
+            {viviendaCoordPolygons.length > 0 && (
+              <Badge variant="secondary" className="text-[9px] h-4 ml-2">
+                {viviendaCoordPolygons.length} figuras geométricas
+              </Badge>
+            )}
+          </div>
+
+          {/* Standard 4 faces */}
           {viviendaElevations.map(te => (
             <TotalElevationCard
               key={`viv-${te.side}`}
@@ -1385,6 +1664,64 @@ export function ElevationsGridViewer({
               onCustomCornersChange={onCustomCornersChange}
             />
           ))}
+
+          {/* Cross-section generated elevations */}
+          {crossSectionElevations.length > 0 && (
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold text-foreground border-b border-border/50 pb-1">Secciones generadas</h4>
+              {crossSectionElevations.map((cse, idx) => (
+                <div key={`cross-${idx}`} className="relative">
+                  <Button variant="ghost" size="sm"
+                    className="absolute top-1 right-1 z-10 h-5 w-5 p-0 text-destructive"
+                    onClick={() => setCrossSectionElevations(prev => prev.filter((_, i) => i !== idx))}>
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                  <TotalElevationCard
+                    side={cse.side}
+                    label={cse.label}
+                    layers={cse.layers}
+                    plan={plan}
+                    rooms={rooms}
+                    budgetName={budgetName}
+                    floorBaseZMap={floorBaseZMap}
+                    floors={floors}
+                    cellSizeM={cellSizeM}
+                    customCorners={customCorners}
+                    onCustomCornersChange={onCustomCornersChange}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Coordinate polygons summary */}
+          {viviendaCoordPolygons.length > 0 && (
+            <div className="border border-border rounded-lg p-3 bg-accent/10 space-y-2">
+              <h4 className="text-xs font-bold text-foreground">Figuras geométricas entre coordenadas</h4>
+              {viviendaCoordPolygons.map((poly, pi) => {
+                const SIDE_NAMES: Record<string, string> = { top: 'Superior', right: 'Derecha', bottom: 'Inferior', left: 'Izquierda' };
+                return (
+                  <div key={pi} className="flex items-center gap-2 text-[10px] border border-border/30 rounded p-1.5">
+                    <Badge variant="outline" className="text-[8px] h-4">{SIDE_NAMES[poly.side] || poly.side}</Badge>
+                    <span className="font-mono font-bold">{poly.corners.map(c => c.label).join(' → ')} → {poly.corners[0]?.label}</span>
+                    <span className="text-muted-foreground">Área: {poly.area.toFixed(2)} m²</span>
+                    <span className="text-muted-foreground">Perímetro: {Math.round(poly.perimeter * 1000)} mm</span>
+                    {poly.corners.map((c, ci) => {
+                      const c2 = poly.corners[(ci + 1) % poly.corners.length];
+                      const csm3 = cellSizeM || 0.625;
+                      const bhm3 = (plan.blockHeightMm || 250) / 1000;
+                      const d = Math.sqrt(((c2.col - c.col) * csm3) ** 2 + (((c2.z ?? 0) - (c.z ?? 0)) * bhm3) ** 2);
+                      return (
+                        <span key={ci} className="text-muted-foreground text-[8px]">
+                          {c.label}→{c2.label}: {Math.round(d * 1000)}mm
+                        </span>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 

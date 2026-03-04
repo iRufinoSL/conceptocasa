@@ -46,7 +46,7 @@ const BUDGET_CATEGORY_NAMES = BUDGET_CATEGORIES.map(c => c.name);
 const BUDGET_PRIMARY_SUBLEVELS = [
   { name: 'QUÉ?', icon: 'ClipboardList', color: '#3B82F6', tab: 'actividades', order: 0 },
   { name: 'CÓMO?', icon: 'FileText', color: '#8B5CF6', tab: 'recursos', order: 1 },
-  { name: 'DÓNDE?', icon: 'MapPin', color: '#10B981', tab: 'areas-trabajo', order: 2 },
+  { name: 'DÓNDE?', icon: 'MapPin', color: '#10B981', tab: 'donde', order: 2 },
   { name: 'CUÁNDO?', icon: 'Calendar', color: '#EC4899', tab: 'fases', order: 3 },
   { name: 'CUÁNTO?', icon: 'Euro', color: '#F59E0B', tab: 'cuanto-cuesta', order: 4 },
   { name: 'QUIÉN?', icon: 'Users', color: '#6366F1', tab: 'contactos', order: 5 },
@@ -66,9 +66,9 @@ const BUDGET_SECONDARY_SUBLEVELS = [
 
 // Sub-items under DÓNDE?
 const DONDE_SUBLEVELS = [
-  { name: 'Volúmenes', icon: 'Home', color: '#10B981', tab: 'espacios', order: 0, description: 'Espacios con coordenadas XYZ' },
-  { name: 'Planos', icon: 'PenTool', color: '#14B8A6', tab: 'plano', order: 1, description: 'Cuadrículas por nivel' },
-  { name: 'Alzados', icon: 'Layers', color: '#0EA5E9', tab: 'alzados', order: 2, description: 'Vistas de alzados por fachada' },
+  { name: 'Planos', icon: 'PenTool', color: '#14B8A6', tab: 'plano', order: 0, description: 'Cuadrículas por nivel' },
+  { name: 'Áreas de trabajo', icon: 'MapPin', color: '#10B981', tab: 'areas-trabajo', order: 1, description: 'Zonas de trabajo' },
+  { name: 'Espacios', icon: 'Home', color: '#22C55E', tab: 'espacios', order: 2, description: 'Espacios con coordenadas XYZ' },
 ];
 
 const extractBudgetIdFromNode = (node: BrainNode): string | null => {

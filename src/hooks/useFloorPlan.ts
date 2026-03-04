@@ -27,6 +27,8 @@ export interface ManualElevation {
   vertexLabels: string[];
   /** Optional floor ID if scoped to a specific level */
   floorId?: string;
+  /** Whether to render block pattern inside the polygon (default true) */
+  showBlocks?: boolean;
 }
 
 interface DbFloorPlan {

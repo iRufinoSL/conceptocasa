@@ -5316,6 +5316,14 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
   const [polygonNames, setPolygonNames] = useState<Record<string, string>>({});
   const [editingPolygonSide, setEditingPolygonSide] = useState<string | null>(null);
   const [editingPolygonName, setEditingPolygonName] = useState('');
+  // Individual coord/edge selection
+  const [selectedCoordLabel, setSelectedCoordLabel] = useState<string | null>(null);
+  const [editingCoordLabel, setEditingCoordLabel] = useState('');
+  const [editingCoordXYZ, setEditingCoordXYZ] = useState('');
+  // Magnifier (lupa) mode
+  const [lupaMode, setLupaMode] = useState(false);
+  const [lupaPos, setLupaPos] = useState<{ svgX: number; svgY: number; screenX: number; screenY: number } | null>(null);
+  const [lupaPrecisionLabel, setLupaPrecisionLabel] = useState('');
   const isGableSide = side === 'right' || side === 'left';
 
   // Calculate total width (max across all layers) and per-layer heights
@@ -6125,10 +6133,84 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
           <circle cx={totalRulerDraw.x1} cy={totalRulerDraw.y1} r={5} fill="hsl(var(--primary))" opacity={0.7} />
         )}
 
-        {/* Coordinate click targets — grid intersections */}
+        {/* Coordinate click targets — grid intersections + lupa free positioning */}
         {(totalCoordMode || totalRulerMode) && fsScale && (
           <g>
-            {Array.from({ length: (gridH + 1) * (gridV + 1) }, (_, i) => {
+            {/* When lupa is active: allow free-click anywhere on SVG for sub-grid precision */}
+            {lupaMode && (
+              <rect
+                x={rx} y={baseY - gridV * gridStepV}
+                width={gridH * gridStepH} height={gridV * gridStepV}
+                fill="transparent"
+                style={{ cursor: 'crosshair' }}
+                onMouseMove={e => {
+                  const svgEl = (e.target as SVGRectElement).ownerSVGElement;
+                  if (!svgEl) return;
+                  const rect = svgEl.getBoundingClientRect();
+                  const vb = svgEl.viewBox.baseVal;
+                  const scX = vb.width / rect.width;
+                  const scY = vb.height / rect.height;
+                  const svgX = (e.clientX - rect.left) * scX;
+                  const svgY = (e.clientY - rect.top) * scY;
+                  // Calculate fractional grid position
+                  const hFrac = (svgX - rx) / gridStepH;
+                  const vFrac = (baseY - svgY) / gridStepV;
+                  const hRounded = Math.round(hFrac * 10) / 10;
+                  const vRounded = Math.round(vFrac * 10) / 10;
+                  setLupaPos({ svgX, svgY, screenX: e.clientX, screenY: e.clientY });
+                  setLupaPrecisionLabel(`${isHorizontalX ? 'X' : 'Y'}=${hRounded.toFixed(1)}, Z=${vRounded.toFixed(1)}`);
+                }}
+                onMouseLeave={() => { setLupaPos(null); setLupaPrecisionLabel(''); }}
+                onClick={e => {
+                  e.stopPropagation();
+                  const svgEl = (e.target as SVGRectElement).ownerSVGElement;
+                  if (!svgEl) return;
+                  const rect = svgEl.getBoundingClientRect();
+                  const vb = svgEl.viewBox.baseVal;
+                  const scX = vb.width / rect.width;
+                  const scY = vb.height / rect.height;
+                  const svgX = (e.clientX - rect.left) * scX;
+                  const svgY = (e.clientY - rect.top) * scY;
+                  const hFrac = (svgX - rx) / gridStepH;
+                  const vFrac = (baseY - svgY) / gridStepV;
+                  const hRounded = Math.round(hFrac * 10) / 10;
+                  const vRounded = Math.round(vFrac * 10) / 10;
+                  const snappedSvgX = rx + hRounded * gridStepH;
+                  const snappedSvgY = baseY - vRounded * gridStepV;
+                  if (totalRulerMode) {
+                    if (totalRulerDraw) {
+                      const dx = (snappedSvgX - totalRulerDraw.x1) / gridStepH * csm * 1000;
+                      const dy = (totalRulerDraw.y1 - snappedSvgY) / gridStepV * blockHM * 1000;
+                      const dist = Math.round(Math.sqrt(dx * dx + dy * dy));
+                      setTotalRulerLines(prev => [...prev, { x1: totalRulerDraw.x1, y1: totalRulerDraw.y1, x2: snappedSvgX, y2: snappedSvgY, distMm: dist }]);
+                      setTotalRulerDraw(null);
+                    } else {
+                      setTotalRulerDraw({ x1: snappedSvgX, y1: snappedSvgY });
+                    }
+                  } else if (totalCoordMode && onCustomCornersChange && customCorners) {
+                    let coordX: number, coordY: number, coordZ: number;
+                    if (side === 'top') { coordX = hRounded; coordY = 0; coordZ = vRounded; }
+                    else if (side === 'right') { coordX = maxGridCol; coordY = hRounded; coordZ = vRounded; }
+                    else if (side === 'bottom') { coordX = hRounded; coordY = maxGridRow; coordZ = vRounded; }
+                    else { coordX = 0; coordY = hRounded; coordZ = vRounded; }
+                    const existingCount = customCorners.filter(c => c.label.startsWith('E')).length;
+                    const newLabel = `E${existingCount + 1}`;
+                    const newCorner: CustomCorner = {
+                      label: newLabel,
+                      col: coordX + 1,
+                      row: coordY + 1,
+                      z: coordZ,
+                      side: side,
+                      isMain: false,
+                    };
+                    onCustomCornersChange([...customCorners, newCorner]);
+                    toast.success(`Coordenada ${newLabel} (precisión lupa): (${coordX},${coordY},${coordZ})`);
+                  }
+                }}
+              />
+            )}
+            {/* Standard grid intersection targets (when lupa off) */}
+            {!lupaMode && Array.from({ length: (gridH + 1) * (gridV + 1) }, (_, i) => {
               const col = i % (gridH + 1);
               const row = Math.floor(i / (gridH + 1));
               const cx = rx + col * gridStepH;
@@ -6140,7 +6222,7 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
                   cx={cx} cy={cy} r={hitR}
                   fill="transparent"
                   stroke="transparent"
-                  style={{ cursor: totalCoordMode ? 'crosshair' : 'crosshair' }}
+                  style={{ cursor: 'crosshair' }}
                   onMouseEnter={e => {
                     (e.target as SVGCircleElement).setAttribute('fill', 'hsla(var(--primary), 0.2)');
                     (e.target as SVGCircleElement).setAttribute('stroke', 'hsl(var(--primary))');
@@ -6154,7 +6236,6 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
                     e.stopPropagation();
                     if (totalRulerMode) {
                       if (totalRulerDraw) {
-                        // Complete ruler line
                         const dx = (cx - totalRulerDraw.x1) / gridStepH * csm * 1000;
                         const dy = (totalRulerDraw.y1 - cy) / gridStepV * blockHM * 1000;
                         const dist = Math.round(Math.sqrt(dx * dx + dy * dy));
@@ -6164,16 +6245,13 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
                         setTotalRulerDraw({ x1: cx, y1: cy });
                       }
                     } else if (totalCoordMode && onCustomCornersChange && customCorners) {
-                      // Create coordinate at this grid intersection
                       const hVal = col;
                       const zVal = row;
-                      // Determine XYZ based on side
                       let coordX: number, coordY: number, coordZ: number;
                       if (side === 'top') { coordX = hVal; coordY = 0; coordZ = zVal; }
                       else if (side === 'right') { coordX = maxGridCol; coordY = hVal; coordZ = zVal; }
                       else if (side === 'bottom') { coordX = hVal; coordY = maxGridRow; coordZ = zVal; }
                       else { coordX = 0; coordY = hVal; coordZ = zVal; }
-                      // Auto-name
                       const existingCount = customCorners.filter(c => c.label.startsWith('E')).length;
                       const newLabel = `E${existingCount + 1}`;
                       const newCorner: CustomCorner = {
@@ -6191,6 +6269,16 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
                 />
               );
             })}
+            {/* Lupa crosshair and position indicator */}
+            {lupaMode && lupaPos && (
+              <g pointerEvents="none">
+                <circle cx={lupaPos.svgX} cy={lupaPos.svgY} r={30} fill="none" stroke="hsl(280, 70%, 50%)" strokeWidth={2} strokeDasharray="4 2" />
+                <line x1={lupaPos.svgX - 20} y1={lupaPos.svgY} x2={lupaPos.svgX + 20} y2={lupaPos.svgY} stroke="hsl(280, 70%, 50%)" strokeWidth={0.8} />
+                <line x1={lupaPos.svgX} y1={lupaPos.svgY - 20} x2={lupaPos.svgX} y2={lupaPos.svgY + 20} stroke="hsl(280, 70%, 50%)" strokeWidth={0.8} />
+                <rect x={lupaPos.svgX + 16} y={lupaPos.svgY - 28} width={Math.max(lupaPrecisionLabel.length * 9, 80)} height={22} rx={4} fill="hsl(280, 50%, 25%)" fillOpacity={0.95} />
+                <text x={lupaPos.svgX + 22} y={lupaPos.svgY - 12} fontSize={13} fill="white" fontWeight={800} fontFamily="monospace">{lupaPrecisionLabel}</text>
+              </g>
+            )}
           </g>
         )}
 
@@ -6229,35 +6317,64 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
             const my = baseY - pos.vPos * gridStepV;
             faceCoords.push({ label: cc.label, mx, my, cc });
             const isConnectTarget = connectMode && connectFrom && connectFrom !== cc.label;
+            const isSelected = selectedCoordLabel === cc.label;
             markers.push(
               <g key={`coord-marker-${ci}`}
-                style={{ cursor: connectMode ? 'pointer' : 'default' }}
-                onClick={connectMode ? (e) => {
+                style={{ cursor: 'pointer' }}
+                onClick={(e) => {
                   e.stopPropagation();
-                  if (!connectFrom) {
-                    setConnectFrom(cc.label);
-                  } else if (connectFrom !== cc.label) {
-                    // Add edge
-                    const exists = coordEdges.some(ed =>
-                      (ed.from === connectFrom && ed.to === cc.label) ||
-                      (ed.from === cc.label && ed.to === connectFrom)
-                    );
-                    if (!exists) {
-                      setCoordEdges(prev => [...prev, { from: connectFrom!, to: cc.label }]);
+                  if (connectMode) {
+                    if (!connectFrom) {
+                      setConnectFrom(cc.label);
+                    } else if (connectFrom !== cc.label) {
+                      const exists = coordEdges.some(ed =>
+                        (ed.from === connectFrom && ed.to === cc.label) ||
+                        (ed.from === cc.label && ed.to === connectFrom)
+                      );
+                      if (!exists) {
+                        setCoordEdges(prev => [...prev, { from: connectFrom!, to: cc.label }]);
+                      }
+                      setConnectFrom(null);
                     }
-                    setConnectFrom(null);
+                  } else {
+                    // Toggle selection for edit/delete
+                    if (isSelected) {
+                      setSelectedCoordLabel(null);
+                    } else {
+                      setSelectedCoordLabel(cc.label);
+                      setEditingCoordLabel(cc.label);
+                      setEditingCoordXYZ(`${cc.col - 1},${cc.row - 1},${cc.z ?? 0}`);
+                    }
                   }
-                } : undefined}
+                }}
               >
-                <circle cx={mx} cy={my} r={14} fill={connectFrom === cc.label ? 'hsl(120, 70%, 40%)' : 'hsl(0, 80%, 50%)'} stroke="white" strokeWidth={4} />
+                <circle cx={mx} cy={my} r={isSelected ? 18 : 14}
+                  fill={connectFrom === cc.label ? 'hsl(120, 70%, 40%)' : isSelected ? 'hsl(45, 90%, 50%)' : 'hsl(0, 80%, 50%)'}
+                  stroke="white" strokeWidth={isSelected ? 5 : 4} />
                 <rect x={mx + 18} y={my - 24} width={Math.max(cc.label.length * 14 + 12, 48)} height={30} rx={5}
-                  fill="hsl(0, 80%, 50%)" fillOpacity={0.95} stroke="white" strokeWidth={2} />
-                <text x={mx + 24} y={my - 2} fontSize={20} fill="white" fontWeight={900} fontFamily="Arial, sans-serif">{cc.label}</text>
+                  fill={isSelected ? 'hsl(45, 90%, 50%)' : 'hsl(0, 80%, 50%)'} fillOpacity={0.95} stroke="white" strokeWidth={2} />
+                <text x={mx + 24} y={my - 2} fontSize={20} fill={isSelected ? 'hsl(0, 0%, 10%)' : 'white'} fontWeight={900} fontFamily="Arial, sans-serif">{cc.label}</text>
                 <rect x={mx + 18} y={my + 8} width={Math.max((`(${cc.col - 1},${cc.row - 1},${cc.z ?? 0})`).length * 10 + 10, 70)} height={24} rx={4}
                   fill="hsl(220, 50%, 25%)" fillOpacity={0.9} stroke="white" strokeWidth={1.5} />
                 <text x={mx + 22} y={my + 25} fontSize={15} fill="white" fontWeight={800} fontFamily="monospace">
                   ({cc.col - 1},{cc.row - 1},{cc.z ?? 0})
                 </text>
+                {/* Delete button on selected coord */}
+                {isSelected && !cc.isMain && (
+                  <g onClick={(e2) => {
+                    e2.stopPropagation();
+                    if (onCustomCornersChange && customCorners) {
+                      // Also remove edges referencing this coord
+                      setCoordEdges(prev => prev.filter(ed => ed.from !== cc.label && ed.to !== cc.label));
+                      onCustomCornersChange(customCorners.filter(c => c.label !== cc.label));
+                      setSelectedCoordLabel(null);
+                      toast.success(`Coordenada ${cc.label} eliminada`);
+                    }
+                  }} style={{ cursor: 'pointer' }}>
+                    <circle cx={mx - 12} cy={my - 14} r={12} fill="hsl(0, 70%, 50%)" stroke="white" strokeWidth={2} />
+                    <text x={mx - 12} y={my - 10} textAnchor="middle" fontSize={14} fill="white" fontWeight={900}>✕</text>
+                  </g>
+                )}
               </g>
             );
           });
@@ -6297,14 +6414,36 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
             const distMm = Math.round(Math.hypot(toH - fromH, toZ - fromZ) * 1000);
             const midX = (from.mx + to.mx) / 2;
             const midY = (from.my + to.my) / 2;
+            const isRealEdge = !edge.autoClosed;
             markers.push(
-              <g key={`edge-${ei}`}>
+              <g key={`edge-${ei}`} style={{ cursor: isRealEdge ? 'pointer' : 'default' }}>
+                {/* Wider invisible hit area for click */}
+                {isRealEdge && (
+                  <line x1={from.mx} y1={from.my} x2={to.mx} y2={to.my}
+                    stroke="transparent" strokeWidth={16}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      // Find and remove this edge
+                      setCoordEdges(prev => prev.filter(ed =>
+                        !((ed.from === edge.from && ed.to === edge.to) || (ed.from === edge.to && ed.to === edge.from))
+                      ));
+                      toast.success(`Conexión ${edge.from}–${edge.to} eliminada`);
+                    }}
+                  />
+                )}
                 <line x1={from.mx} y1={from.my} x2={to.mx} y2={to.my}
-                  stroke="hsl(280, 70%, 50%)" strokeWidth={edge.autoClosed ? 2 : 3} strokeDasharray={edge.autoClosed ? '6 3' : '8 4'} opacity={edge.autoClosed ? 0.8 : 1} />
-                <rect x={midX - 45} y={midY - 14} width={90} height={28} rx={5}
-                  fill="hsl(280, 70%, 50%)" opacity={edge.autoClosed ? 0.9 : 1} />
-                <text x={midX} y={midY + 5} textAnchor="middle" fontSize={16} fontWeight="900" fill="white">
-                  {distMm} mm
+                  stroke="hsl(280, 70%, 50%)" strokeWidth={edge.autoClosed ? 2 : 3} strokeDasharray={edge.autoClosed ? '6 3' : '8 4'} opacity={edge.autoClosed ? 0.8 : 1} pointerEvents="none" />
+                <rect x={midX - 45} y={midY - 14} width={isRealEdge ? 120 : 90} height={28} rx={5}
+                  fill="hsl(280, 70%, 50%)" opacity={edge.autoClosed ? 0.9 : 1} style={{ cursor: isRealEdge ? 'pointer' : 'default' }}
+                  onClick={isRealEdge ? (e) => {
+                    e.stopPropagation();
+                    setCoordEdges(prev => prev.filter(ed =>
+                      !((ed.from === edge.from && ed.to === edge.to) || (ed.from === edge.to && ed.to === edge.from))
+                    ));
+                    toast.success(`Conexión ${edge.from}–${edge.to} eliminada`);
+                  } : undefined} />
+                <text x={midX} y={midY + 5} textAnchor="middle" fontSize={16} fontWeight="900" fill="white" pointerEvents="none">
+                  {distMm} mm{isRealEdge ? ' ✕' : ''}
                 </text>
               </g>
             );
@@ -6477,7 +6616,7 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
                   variant={totalRulerMode ? 'default' : 'outline'}
                   size="sm"
                   className="h-7 text-xs gap-1"
-                  onClick={() => { setTotalRulerMode(!totalRulerMode); setTotalCoordMode(false); setConnectMode(false); setTotalRulerDraw(null); }}
+                  onClick={() => { setTotalRulerMode(!totalRulerMode); setTotalCoordMode(false); setConnectMode(false); setTotalRulerDraw(null); setSelectedCoordLabel(null); }}
                   title="Regla — medir distancias"
                 >
                   <Ruler className="h-3 w-3" /> Regla
@@ -6486,7 +6625,7 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
                   variant={totalCoordMode ? 'default' : 'outline'}
                   size="sm"
                   className="h-7 text-xs gap-1"
-                  onClick={() => { setTotalCoordMode(!totalCoordMode); setTotalRulerMode(false); setConnectMode(false); setTotalRulerDraw(null); }}
+                  onClick={() => { setTotalCoordMode(!totalCoordMode); setTotalRulerMode(false); setConnectMode(false); setTotalRulerDraw(null); setSelectedCoordLabel(null); }}
                   title="Crear coordenadas en la cuadrícula"
                 >
                   <Plus className="h-3 w-3" /> Coord
@@ -6495,11 +6634,22 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
                   variant={connectMode ? 'default' : 'outline'}
                   size="sm"
                   className="h-7 text-xs gap-1"
-                  onClick={() => { setConnectMode(!connectMode); setConnectFrom(null); setTotalCoordMode(false); setTotalRulerMode(false); setTotalRulerDraw(null); }}
+                  onClick={() => { setConnectMode(!connectMode); setConnectFrom(null); setTotalCoordMode(false); setTotalRulerMode(false); setTotalRulerDraw(null); setSelectedCoordLabel(null); }}
                   title="Conectar coordenadas — clic en dos puntos para unirlos"
                 >
                   <Merge className="h-3 w-3" /> Conectar
                 </Button>
+                {(totalCoordMode || totalRulerMode) && (
+                  <Button
+                    variant={lupaMode ? 'default' : 'outline'}
+                    size="sm"
+                    className="h-7 text-xs gap-1"
+                    onClick={() => { setLupaMode(!lupaMode); setLupaPos(null); }}
+                    title="Lupa — permite posicionar con precisión sub-bloque (1/10 bloque)"
+                  >
+                    🔍 Lupa
+                  </Button>
+                )}
                 {totalRulerLines.length > 0 && (
                   <Button
                     variant="ghost"
@@ -6512,15 +6662,9 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
                   </Button>
                 )}
                 {coordEdges.length > 0 && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 text-xs gap-1 text-destructive"
-                    onClick={() => { setCoordEdges([]); setConnectFrom(null); }}
-                    title="Borrar todas las conexiones"
-                  >
-                    <Unlink className="h-3 w-3" /> Borrar conexiones
-                  </Button>
+                  <span className="text-[10px] text-muted-foreground ml-1">
+                    {coordEdges.length} conex. · clic en línea para borrar una
+                  </span>
                 )}
                 {onCustomCornersChange && customCorners && (() => {
                   const faceCoordCount = customCorners.filter(c => c.side === side).length;
@@ -6535,6 +6679,7 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
                         onCustomCornersChange(cleaned);
                         setCoordEdges([]);
                         setConnectFrom(null);
+                        setSelectedCoordLabel(null);
                         toast.success(`${faceCoordCount} coordenadas borradas`);
                       }}
                       title={`Borrar ${faceCoordCount} coordenadas de este alzado`}
@@ -6563,6 +6708,7 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
                   title={`${budgetName || 'Presupuesto'} — ${label}`}
                   subtitle={`${TOTAL_SIDE_NAMES[side]} · ${Math.round(totalWidth * 1000)} × ${Math.round(totalHeight * 1000)} mm`}
                   containerRef={totalFsContentRef}
+                  areaInfo={budgetName}
                 />
               </div>
               <Button variant="destructive" size="sm" className="h-7 text-xs ml-auto" onClick={() => setFullscreen(false)}>
@@ -6586,7 +6732,95 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
                 </Button>
               )}
             </div>
-          )}
+           )}
+          {/* Selected coord edit/delete bar */}
+          {selectedCoordLabel && !connectMode && customCorners && onCustomCornersChange && (() => {
+            const cc = customCorners.find(c => c.label === selectedCoordLabel);
+            if (!cc) return null;
+            return (
+              <div className="shrink-0 flex items-center gap-2 border-b border-border/50 pb-2 print:hidden flex-wrap">
+                <span className="text-xs font-bold text-foreground">Coordenada seleccionada:</span>
+                <Input
+                  className="h-7 w-20 text-xs"
+                  value={editingCoordLabel}
+                  onChange={e => setEditingCoordLabel(e.target.value)}
+                  placeholder="ID"
+                  onKeyDown={e => { if (e.key === 'Enter') {
+                    const parsed = parseCoord(editingCoordXYZ.trim());
+                    if (parsed) {
+                      const updated = customCorners.map(c => c.label === selectedCoordLabel
+                        ? { ...c, label: editingCoordLabel.trim() || c.label, col: parsed.col, row: parsed.row, z: parsed.z ?? c.z ?? 0 }
+                        : c);
+                      // Update edge references if label changed
+                      if (editingCoordLabel.trim() && editingCoordLabel.trim() !== selectedCoordLabel) {
+                        setCoordEdges(prev => prev.map(ed => ({
+                          from: ed.from === selectedCoordLabel ? editingCoordLabel.trim() : ed.from,
+                          to: ed.to === selectedCoordLabel ? editingCoordLabel.trim() : ed.to,
+                        })));
+                      }
+                      onCustomCornersChange(updated);
+                      setSelectedCoordLabel(editingCoordLabel.trim() || selectedCoordLabel);
+                      toast.success('Coordenada actualizada');
+                    }
+                  }; if (e.key === 'Escape') setSelectedCoordLabel(null); }}
+                />
+                <Input
+                  className="h-7 w-32 text-xs font-mono"
+                  value={editingCoordXYZ}
+                  onChange={e => setEditingCoordXYZ(e.target.value)}
+                  placeholder="X,Y,Z"
+                  onKeyDown={e => { if (e.key === 'Enter') {
+                    const parsed = parseCoord(editingCoordXYZ.trim());
+                    if (parsed) {
+                      const updated = customCorners.map(c => c.label === selectedCoordLabel
+                        ? { ...c, label: editingCoordLabel.trim() || c.label, col: parsed.col, row: parsed.row, z: parsed.z ?? c.z ?? 0 }
+                        : c);
+                      if (editingCoordLabel.trim() && editingCoordLabel.trim() !== selectedCoordLabel) {
+                        setCoordEdges(prev => prev.map(ed => ({
+                          from: ed.from === selectedCoordLabel ? editingCoordLabel.trim() : ed.from,
+                          to: ed.to === selectedCoordLabel ? editingCoordLabel.trim() : ed.to,
+                        })));
+                      }
+                      onCustomCornersChange(updated);
+                      setSelectedCoordLabel(editingCoordLabel.trim() || selectedCoordLabel);
+                      toast.success('Coordenada actualizada');
+                    }
+                  }; if (e.key === 'Escape') setSelectedCoordLabel(null); }}
+                />
+                <Button size="sm" className="h-7 text-xs" onClick={() => {
+                  const parsed = parseCoord(editingCoordXYZ.trim());
+                  if (!parsed) { toast.error('Formato inválido. Use X,Y,Z'); return; }
+                  const updated = customCorners.map(c => c.label === selectedCoordLabel
+                    ? { ...c, label: editingCoordLabel.trim() || c.label, col: parsed.col, row: parsed.row, z: parsed.z ?? c.z ?? 0 }
+                    : c);
+                  if (editingCoordLabel.trim() && editingCoordLabel.trim() !== selectedCoordLabel) {
+                    setCoordEdges(prev => prev.map(ed => ({
+                      from: ed.from === selectedCoordLabel ? editingCoordLabel.trim() : ed.from,
+                      to: ed.to === selectedCoordLabel ? editingCoordLabel.trim() : ed.to,
+                    })));
+                  }
+                  onCustomCornersChange(updated);
+                  setSelectedCoordLabel(editingCoordLabel.trim() || selectedCoordLabel);
+                  toast.success('Coordenada actualizada');
+                }}>
+                  <Check className="h-3 w-3 mr-1" /> Guardar
+                </Button>
+                {!cc.isMain && (
+                  <Button variant="destructive" size="sm" className="h-7 text-xs" onClick={() => {
+                    setCoordEdges(prev => prev.filter(ed => ed.from !== selectedCoordLabel && ed.to !== selectedCoordLabel));
+                    onCustomCornersChange(customCorners.filter(c => c.label !== selectedCoordLabel));
+                    setSelectedCoordLabel(null);
+                    toast.success(`Coordenada ${selectedCoordLabel} eliminada`);
+                  }}>
+                    <Trash2 className="h-3 w-3 mr-1" /> Eliminar coord
+                  </Button>
+                )}
+                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setSelectedCoordLabel(null)}>
+                  Deseleccionar
+                </Button>
+              </div>
+            );
+          })()}
           {/* Polygon name edit bar */}
           {editingPolygonSide && (
             <div className="shrink-0 flex items-center gap-2 border-b border-border/50 pb-2 print:hidden">

@@ -34,7 +34,7 @@ import {
 } from "lucide-react";
 import heroPassivhaus from "@/assets/hero-passivhaus.jpg";
 import healthyInterior from "@/assets/healthy-home-interior.jpg";
-
+import HousesCarousel from "@/components/landing/HousesCarousel";
 
 
 const formatFileSize = (bytes: number): string => {
@@ -331,6 +331,9 @@ const Landing = () => {
           <ChevronDown className="w-8 h-8 text-background/50" />
         </div>
       </section>
+
+      {/* Houses Carousel */}
+      <HousesCarousel />
 
       {/* Philosophy Section */}
       <section id="filosofia" className="py-24 bg-background">

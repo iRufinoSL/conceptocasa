@@ -1513,8 +1513,7 @@ export function ElevationsGridViewer({
             <DialogDescription className="sr-only">Vista completa de todos los alzados</DialogDescription>
           </DialogHeader>
           <div className="flex-1 overflow-auto">
-            <style>{`@media print { .elevation-grid-print-scale { transform: scale(${gridPrintScale / 100}); transform-origin: top left; } }`}</style>
-            <div className="elevation-grid-print-scale">
+            <div style={gridPrintScale !== 100 ? { transform: `scale(${gridPrintScale / 100})`, transformOrigin: 'top left', width: `${10000 / gridPrintScale}%` } : undefined}>
             {floorGroups.map(({ floorId, floorName, roomGroups: floorRoomGroups }) => {
               const hasFloorHeader = floorName !== '';
               const content = (
@@ -2407,8 +2406,7 @@ function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, ro
             </DialogTitle>
             <DialogDescription className="sr-only">Vista completa del alzado manual {elevation.name}</DialogDescription>
           </DialogHeader>
-          <style>{`@media print { .elevation-single-print-scale { transform: scale(${elevPrintScale / 100}); transform-origin: top left; } }`}</style>
-          <div className="flex-1 overflow-auto flex flex-col items-center justify-center elevation-single-print-scale">
+          <div className="flex-1 overflow-auto flex flex-col items-center justify-center" style={elevPrintScale !== 100 ? { transform: `scale(${elevPrintScale / 100})`, transformOrigin: 'top left', width: `${10000 / elevPrintScale}%` } : undefined}>
             {renderSvg(1400, 700)}
             <div className="mt-4 flex flex-wrap gap-3 text-xs text-muted-foreground justify-center">
               {edges.map((e, i) => (

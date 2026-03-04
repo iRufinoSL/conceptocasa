@@ -86,27 +86,33 @@ function formatXYZ(x: number, y: number, z: number): string {
 
 /**
  * Sort vertex labels in counter-clockwise (CCW) order for a vertical elevation polygon.
- * CCW = left→right (bottom), then right→up→left (top) — anti-clockwise.
- * Uses the centroid angle method on the projected 2D plane (U horizontal, V vertical).
+ * Origin = bottom-left vertex (lowest V, then lowest U as tiebreaker).
+ * CCW = left→right (bottom), then right→up→left (top).
  */
 function sortVerticesCCW(labels: string[], corners: CustomCorner[], cellSizeM: number, blockHM: number): string[] {
   if (labels.length <= 2) return labels;
   const resolved = labels.map(label => {
     const c = corners.find(cc => cc.label === label);
     if (!c) return null;
-    // Project: U = horizontal spread (use col for X, row for Y — pick the axis with more spread)
     const u = (c.col - 1) * cellSizeM;
     const v = (c.z ?? 0) * blockHM;
     return { label, u, v };
   }).filter(Boolean) as Array<{ label: string; u: number; v: number }>;
   if (resolved.length <= 2) return labels;
-  // Centroid
-  const cu = resolved.reduce((s, p) => s + p.u, 0) / resolved.length;
-  const cv = resolved.reduce((s, p) => s + p.v, 0) / resolved.length;
-  // Sort by angle from centroid — CCW means increasing angle (atan2)
+  // Find bottom-left vertex (min V, then min U)
+  const origin = resolved.reduce((best, p) =>
+    p.v < best.v || (p.v === best.v && p.u < best.u) ? p : best
+  );
+  // Sort by angle from bottom-left origin — CCW = increasing atan2
   const sorted = [...resolved].sort((a, b) => {
-    const aa = Math.atan2(a.v - cv, a.u - cu);
-    const ab = Math.atan2(b.v - cv, b.u - cu);
+    const aa = Math.atan2(a.v - origin.v, a.u - origin.u);
+    const ab = Math.atan2(b.v - origin.v, b.u - origin.u);
+    if (Math.abs(aa - ab) < 1e-9) {
+      // Same angle: closer point first
+      const da = (a.u - origin.u) ** 2 + (a.v - origin.v) ** 2;
+      const db = (b.u - origin.u) ** 2 + (b.v - origin.v) ** 2;
+      return da - db;
+    }
     return aa - ab;
   });
   return sorted.map(s => s.label);

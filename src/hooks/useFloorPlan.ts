@@ -29,6 +29,11 @@ export interface ManualElevation {
   floorId?: string;
   /** Whether to render block pattern inside the polygon (default true) */
   showBlocks?: boolean;
+  /** Metadata for saved elevations from Nivel Vivienda */
+  sourceType?: 'manual' | 'face' | 'cross_section';
+  sourceSide?: 'top' | 'right' | 'bottom' | 'left';
+  sourceAxis?: 'X' | 'Y';
+  sourceValue?: number;
 }
 
 interface DbFloorPlan {

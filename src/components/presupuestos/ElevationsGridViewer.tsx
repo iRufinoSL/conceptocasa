@@ -84,6 +84,34 @@ function formatXYZ(x: number, y: number, z: number): string {
   return `(${Math.round(x)},${Math.round(y)},${Math.round(z)})`;
 }
 
+/**
+ * Sort vertex labels in counter-clockwise (CCW) order for a vertical elevation polygon.
+ * CCW = left→right (bottom), then right→up→left (top) — anti-clockwise.
+ * Uses the centroid angle method on the projected 2D plane (U horizontal, V vertical).
+ */
+function sortVerticesCCW(labels: string[], corners: CustomCorner[], cellSizeM: number, blockHM: number): string[] {
+  if (labels.length <= 2) return labels;
+  const resolved = labels.map(label => {
+    const c = corners.find(cc => cc.label === label);
+    if (!c) return null;
+    // Project: U = horizontal spread (use col for X, row for Y — pick the axis with more spread)
+    const u = (c.col - 1) * cellSizeM;
+    const v = (c.z ?? 0) * blockHM;
+    return { label, u, v };
+  }).filter(Boolean) as Array<{ label: string; u: number; v: number }>;
+  if (resolved.length <= 2) return labels;
+  // Centroid
+  const cu = resolved.reduce((s, p) => s + p.u, 0) / resolved.length;
+  const cv = resolved.reduce((s, p) => s + p.v, 0) / resolved.length;
+  // Sort by angle from centroid — CCW means increasing angle (atan2)
+  const sorted = [...resolved].sort((a, b) => {
+    const aa = Math.atan2(a.v - cv, a.u - cu);
+    const ab = Math.atan2(b.v - cv, b.u - cu);
+    return aa - ab;
+  });
+  return sorted.map(s => s.label);
+}
+
 /** Build a level-prefixed corner label: baseZ=0 → level 1, baseZ=10 → level 2, etc. */
 function levelCornerLabel(cornerLetter: string, baseZ: number): string {
   const level = baseZ + 1;
@@ -1554,7 +1582,7 @@ export function ElevationsGridViewer({
                 ))}
                 {manualElevVertices.length === 0 && <span className="text-xs text-muted-foreground italic">Sin vértices seleccionados</span>}
               </div>
-              <div className="text-xs text-muted-foreground mb-1">Pulsa en una coordenada para añadirla:</div>
+              <div className="text-xs text-muted-foreground mb-1">Pulsa en una coordenada para añadirla (se ordenarán automáticamente en sentido antihorario):</div>
               <div className="flex flex-wrap gap-1 max-h-40 overflow-y-auto border rounded p-2">
                 {(customCorners || [])
                   .filter(c => !manualElevVertices.includes(c.label))
@@ -1572,10 +1600,12 @@ export function ElevationsGridViewer({
               <Button variant="outline" size="sm" onClick={() => setShowManualElevDialog(false)}>Cancelar</Button>
               <Button size="sm" disabled={manualElevVertices.length < 2 || !manualElevName.trim()} onClick={() => {
                 if (!onManualElevationsChange) return;
+                const blockHM = (plan.blockHeightMm || 250) / 1000;
+                const sortedVertices = sortVerticesCCW(manualElevVertices, customCorners || [], cellSizeM, blockHM);
                 const newElev: ManualElevation = {
                   id: `me-${Date.now()}`,
                   name: manualElevName.trim(),
-                  vertexLabels: manualElevVertices,
+                  vertexLabels: sortedVertices,
                   floorId: manualElevFloorId && manualElevFloorId !== 'all' ? manualElevFloorId : undefined,
                 };
                 onManualElevationsChange([...(manualElevations || []), newElev]);
@@ -2058,7 +2088,8 @@ function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, ro
 
   const handleSaveEdit = () => {
     if (!onEdit || editVertices.length < 2 || !editName.trim()) return;
-    onEdit({ ...elevation, name: editName.trim(), vertexLabels: editVertices });
+    const sortedVerts = sortVerticesCCW(editVertices, allCorners, cellSizeM, blockHM);
+    onEdit({ ...elevation, name: editName.trim(), vertexLabels: sortedVerts });
     setIsEditing(false);
     toast.success(`Alzado "${editName.trim()}" actualizado`);
   };
@@ -2247,7 +2278,7 @@ function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, ro
                   ))}
                   {editVertices.length === 0 && <span className="text-xs text-muted-foreground italic">Sin vértices</span>}
                 </div>
-                <div className="text-xs text-muted-foreground mb-1">Pulsa en una coordenada para añadirla:</div>
+                <div className="text-xs text-muted-foreground mb-1">Pulsa en una coordenada para añadirla (se ordenarán en sentido antihorario):</div>
                 <div className="flex flex-wrap gap-1 max-h-40 overflow-y-auto border rounded p-2">
                   {allCorners
                     .filter(c => !editVertices.includes(c.label))

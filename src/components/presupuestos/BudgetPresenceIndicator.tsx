@@ -23,7 +23,7 @@ const TAB_LABELS: Record<string, string> = {
   'actividades': 'QUÉ?',
   'recursos': 'CÓMO?',
   'fases': 'CUÁNDO?',
-  'areas-trabajo': 'DÓNDE?',
+  'donde': 'DÓNDE?',
   'contactos': 'QUIÉN?',
 };
 

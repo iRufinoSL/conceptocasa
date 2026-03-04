@@ -9,14 +9,15 @@ The "Presupuestos" node has three sub-category nodes: 'Activos', 'En Ejecución'
 ### Primary Sub-levels (6 key questions):
 1. **QUÉ?** → actividades tab
 2. **CÓMO?** → recursos tab
-3. **DÓNDE?** → areas-trabajo tab (has own sub-items)
+3. **DÓNDE?** → donde tab (unified with 3 collapsible sub-sections)
 4. **CUÁNDO?** → fases tab
 5. **CUÁNTO?** → cuanto-cuesta tab
 6. **QUIÉN?** → contactos tab
 
-### DÓNDE? Sub-items:
-1. **Volúmenes** → espacios tab (Espacios con coordenadas XYZ)
-2. **Planos** → plano tab (Cuadrículas por nivel)
+### DÓNDE? Sub-items (3 collapsible sections, all collapsed by default):
+1. **Planos** → Cuadrículas por nivel
+2. **Áreas de trabajo** → Zonas de trabajo
+3. **Espacios** → Espacios con coordenadas XYZ
 
 ### Secondary Menu ('Más...'):
 Urbanismo, Ante-proyecto, Mediciones, Documentos, Agenda, Comunicaciones, Administración, Resumen

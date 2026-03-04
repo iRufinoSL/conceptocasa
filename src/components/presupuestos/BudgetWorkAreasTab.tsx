@@ -764,7 +764,7 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
                   // Dispatch custom event to open activity edit dialog in BudgetActivitiesTab
                   // Include returnTab to navigate back to DÓNDE? after saving
                   window.dispatchEvent(new CustomEvent('edit-activity', { 
-                    detail: { id: activityId, returnTab: 'areas-trabajo' }
+                    detail: { id: activityId, returnTab: 'donde' }
                   }));
                 }}
                 onEditResource={(resourceId) => {

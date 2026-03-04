@@ -30,12 +30,11 @@ import { CloneBudgetDialog } from '@/components/presupuestos/CloneBudgetDialog';
 import { BudgetTimelineView } from '@/components/presupuestos/BudgetTimelineView';
 import { HierarchicalGanttView } from '@/components/presupuestos/HierarchicalGanttView';
 import { recalculateAllBudgetResources } from '@/lib/budget-utils';
-import { BudgetWorkAreasTab } from '@/components/presupuestos/BudgetWorkAreasTab';
 import { BudgetDocumentsTab } from '@/components/presupuestos/BudgetDocumentsTab';
 import { BudgetAgendaTab } from '@/components/presupuestos/BudgetAgendaTab';
 import { BudgetCommunicationsTab } from '@/components/presupuestos/BudgetCommunicationsTab';
 import { BudgetPresenceIndicator } from '@/components/presupuestos/BudgetPresenceIndicator';
-import { FloorPlanTab } from '@/components/presupuestos/FloorPlanTab';
+import { BudgetDondeTab } from '@/components/presupuestos/BudgetDondeTab';
 import { toast } from 'sonner';
 import { BudgetAdministracionTab } from '@/components/presupuestos/BudgetAdministracionTab';
 import { TolosaBrainstormView } from '@/components/presupuestos/TolosaBrainstormView';
@@ -478,7 +477,7 @@ export default function PresupuestoDashboard() {
                 </TabsTrigger>
               )}
               {isTabVisible('zonas') && (
-                <TabsTrigger value="areas-trabajo" className="flex items-center gap-1.5 text-xs px-3 py-2 font-semibold">
+                <TabsTrigger value="donde" className="flex items-center gap-1.5 text-xs px-3 py-2 font-semibold">
                   <MapPin className="h-4 w-4" />
                   <span>DÓNDE?</span>
                 </TabsTrigger>
@@ -511,16 +510,6 @@ export default function PresupuestoDashboard() {
                   <span>Mediciones</span>
                 </TabsTrigger>
               )}
-              {isTabVisible('espacios') && (
-                <TabsTrigger value="espacios" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
-                  <Home className="h-3.5 w-3.5" />
-                  <span>Espacios</span>
-                </TabsTrigger>
-              )}
-              <TabsTrigger value="plano" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
-                <PenTool className="h-3.5 w-3.5" />
-                <span>Plano</span>
-              </TabsTrigger>
               {isTabVisible('documentos') && (
                 <TabsTrigger value="documentos" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
                   <FolderOpen className="h-3.5 w-3.5" />
@@ -747,21 +736,14 @@ export default function PresupuestoDashboard() {
             <BudgetContactsManager budgetId={presupuesto.id} isAdmin={isAdmin} />
           </TabsContent>
 
-          <TabsContent value="areas-trabajo" className="mt-6">
-            <BudgetWorkAreasTab budgetId={presupuesto.id} isAdmin={isAdmin} />
+          <TabsContent value="donde" className="mt-6">
+            <BudgetDondeTab budgetId={presupuesto.id} budgetName={presupuesto.nombre} isAdmin={isAdmin} />
           </TabsContent>
 
           <TabsContent value="mediciones" className="mt-6">
             <BudgetMeasurementsTab budgetId={presupuesto.id} isAdmin={isAdmin} />
           </TabsContent>
 
-          <TabsContent value="espacios" className="mt-6">
-            <BudgetSpacesTab budgetId={presupuesto.id} isAdmin={isAdmin} />
-          </TabsContent>
-
-          <TabsContent value="plano" className="mt-6">
-            <FloorPlanTab budgetId={presupuesto.id} budgetName={presupuesto.nombre} isAdmin={isAdmin} />
-          </TabsContent>
 
           <TabsContent value="documentos" className="mt-6">
             <BudgetDocumentsTab 

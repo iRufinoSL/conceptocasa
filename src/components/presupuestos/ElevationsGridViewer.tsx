@@ -4936,36 +4936,54 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
         className="mx-auto"
         style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', maxHeight: fsScale ? '85vh' : '350px' }}
       >
-        {/* Background grid */}
-        <g opacity={0.6}>
-          {/* Grid border */}
-          <rect x={rx} y={baseY - gridV * gridStepV} width={gridH * gridStepH} height={gridV * gridStepV}
-            fill="none" stroke="hsl(220, 30%, 75%)" strokeWidth={1} />
+        {/* Background grid — matching floor plan style */}
+        <g>
+          {/* Alternating cell fills */}
+          {Array.from({ length: gridH * gridV }, (_, i) => {
+            const col = i % gridH;
+            const row = Math.floor(i / gridH);
+            const isOdd = (col + row) % 2 === 1;
+            if (!isOdd) return null;
+            return (
+              <rect key={`gcf-${i}`}
+                x={rx + col * gridStepH} y={baseY - (row + 1) * gridStepV}
+                width={gridStepH} height={gridStepV}
+                fill="rgba(0,0,0,0.03)" />
+            );
+          })}
 
-          {/* Horizontal grid lines (Z levels) */}
+          {/* Horizontal grid lines (Z levels) — blue like Z axis */}
           {Array.from({ length: gridV + 1 }, (_, z) => {
             const y = baseY - z * gridStepV;
+            const isBorder = z === 0 || z === gridV;
+            const isMajor = z % 5 === 0;
             return (
               <g key={`gz-${z}`}>
                 <line x1={rx} y1={y} x2={rx + gridH * gridStepH} y2={y}
-                  stroke={z === 0 ? 'hsl(220, 30%, 65%)' : 'hsl(220, 20%, 88%)'} strokeWidth={z === 0 ? 1 : 0.4} />
+                  stroke={isBorder ? 'rgba(41,128,185,0.60)' : 'rgba(41,128,185,0.30)'}
+                  strokeWidth={isBorder ? 1.5 : isMajor ? 0.8 : 0.5} />
                 <text x={rx - 5} y={y + 3} textAnchor="end"
-                  fontSize={fsScale ? 9 : 6} fill="hsl(220, 30%, 50%)" fontWeight={z % 5 === 0 ? 700 : 400}>
+                  fontSize={fsScale ? 9 : 6} fill="#2980b9" fontWeight={isMajor ? 700 : 400}>
                   Z{z}
                 </text>
               </g>
             );
           })}
 
-          {/* Vertical grid lines (X or Y) */}
+          {/* Vertical grid lines (X red or Y green) */}
           {Array.from({ length: gridH + 1 }, (_, h) => {
             const x = rx + h * gridStepH;
+            const isBorder = h === 0 || h === gridH;
+            const isMajor = h % 5 === 0;
+            const lineColor = isHorizontalX ? 'rgba(192,57,43,' : 'rgba(39,174,96,';
+            const textColor = isHorizontalX ? '#c0392b' : '#27ae60';
             return (
               <g key={`gh-${h}`}>
                 <line x1={x} y1={baseY} x2={x} y2={baseY - gridV * gridStepV}
-                  stroke={h === 0 || h === gridH ? 'hsl(220, 30%, 65%)' : 'hsl(220, 20%, 88%)'} strokeWidth={h === 0 || h === gridH ? 1 : 0.4} />
+                  stroke={`${lineColor}${isBorder ? '0.60)' : '0.30)'}`}
+                  strokeWidth={isBorder ? 1.5 : isMajor ? 0.8 : 0.5} />
                 <text x={x} y={baseY + (fsScale ? 14 : 10)} textAnchor="middle"
-                  fontSize={fsScale ? 9 : 6} fill="hsl(220, 30%, 50%)" fontWeight={h % 5 === 0 ? 700 : 400}>
+                  fontSize={fsScale ? 9 : 6} fill={textColor} fontWeight={isMajor ? 700 : 400}>
                   {axisLabel}{h}
                 </text>
               </g>
@@ -4989,14 +5007,99 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
 
           {/* Axis titles */}
           <text x={rx + gridH * gridStepH / 2} y={baseY + (fsScale ? 38 : 28)} textAnchor="middle"
-            fontSize={fsScale ? 11 : 7} fill="hsl(220, 40%, 35%)" fontWeight={800}>
+            fontSize={fsScale ? 11 : 7} fill={isHorizontalX ? '#c0392b' : '#27ae60'} fontWeight={800}>
             {isHorizontalX ? 'Eje X' : 'Eje Y'} — {Math.round(gridWidthM * 1000)}mm ({gridH} bloques × 625mm)
           </text>
           <text x={rx - (fsScale ? 25 : 18)} y={baseY - gridV * gridStepV / 2} textAnchor="middle"
-            fontSize={fsScale ? 11 : 7} fill="hsl(220, 40%, 35%)" fontWeight={800}
+            fontSize={fsScale ? 11 : 7} fill="#2980b9" fontWeight={800}
             transform={`rotate(-90, ${rx - (fsScale ? 25 : 18)}, ${baseY - gridV * gridStepV / 2})`}>
             Eje Z — {Math.round(gridHeightM * 1000)}mm ({gridV} bloques × 250mm)
           </text>
+
+          {/* Room/Space rectangles projected onto the elevation */}
+          {(() => {
+            const roomRects: React.ReactElement[] = [];
+            // Group rooms by floor to calculate base Z per floor
+            const sortedFls = floors ? [...floors].sort((a, b) => a.orderIndex - b.orderIndex) : [];
+            
+            rooms.forEach((r, ri) => {
+              if (r.posX == null || r.posY == null) return;
+              const rColStart = Math.round(r.posX / csm);
+              const rColEnd = Math.round((r.posX + r.width) / csm);
+              const rRowStart = Math.round(r.posY / csm);
+              const rRowEnd = Math.round((r.posY + r.length) / csm);
+              const roomH = r.height ?? plan.defaultHeight;
+              const roomHBlocks = Math.round(roomH / blockHM);
+              
+              // Find base Z for this room's floor
+              let roomBaseZ = 0;
+              if (r.floorId && floorBaseZMap) {
+                roomBaseZ = floorBaseZMap.get(r.floorId) ?? 0;
+              }
+              
+              // Project onto elevation based on side
+              let hStart: number, hEnd: number;
+              if (isHorizontalX) {
+                // Top/Bottom: project X axis
+                hStart = rColStart;
+                hEnd = rColEnd;
+              } else {
+                // Left/Right: project Y axis
+                hStart = rRowStart;
+                hEnd = rRowEnd;
+              }
+              
+              // Check if this room is on the viewed side
+              let isOnSide = false;
+              if (side === 'top') isOnSide = true; // Y=0 face, all rooms project
+              else if (side === 'bottom') isOnSide = true;
+              else if (side === 'left') isOnSide = true;
+              else if (side === 'right') isOnSide = true;
+              
+              if (!isOnSide) return;
+              
+              const rectX = rx + hStart * gridStepH;
+              const rectW = (hEnd - hStart) * gridStepH;
+              const rectTopY = baseY - (roomBaseZ + roomHBlocks) * gridStepV;
+              const rectH = roomHBlocks * gridStepV;
+              
+              // Space color based on room name
+              const n = (r.name || '').toLowerCase();
+              let spaceStroke = 'hsl(270, 50%, 60%)';
+              let spaceFill = 'hsla(270, 50%, 60%, 0.05)';
+              if (n.includes('salón') || n.includes('salon')) { spaceStroke = 'hsl(40, 80%, 50%)'; spaceFill = 'hsla(40, 80%, 50%, 0.05)'; }
+              else if (n.includes('hab')) { spaceStroke = 'hsl(210, 60%, 55%)'; spaceFill = 'hsla(210, 60%, 55%, 0.05)'; }
+              else if (n.includes('baño') || n.includes('bano')) { spaceStroke = 'hsl(190, 60%, 50%)'; spaceFill = 'hsla(190, 60%, 50%, 0.05)'; }
+              else if (n.includes('porche')) { spaceStroke = 'hsl(140, 50%, 45%)'; spaceFill = 'hsla(140, 50%, 45%, 0.05)'; }
+              else if (n.includes('cocina')) { spaceStroke = 'hsl(25, 80%, 50%)'; spaceFill = 'hsla(25, 80%, 50%, 0.05)'; }
+              else if (n.includes('pasillo') || n.includes('corredor')) { spaceStroke = 'hsl(0, 0%, 50%)'; spaceFill = 'hsla(0, 0%, 50%, 0.05)'; }
+              
+              // Skip rooms that are completely outside the grid
+              if (hEnd <= 0 || hStart >= gridH) return;
+              if (roomBaseZ + roomHBlocks <= 0) return;
+              
+              roomRects.push(
+                <g key={`room-rect-${ri}`}>
+                  <rect x={rectX} y={rectTopY} width={rectW} height={rectH}
+                    fill={spaceFill} stroke={spaceStroke} strokeWidth={1.2} strokeDasharray="4 2" rx={1} opacity={0.8} />
+                  {rectW > 30 && rectH > 12 && (
+                    <text x={rectX + rectW / 2} y={rectTopY + rectH / 2 + 3} textAnchor="middle"
+                      fontSize={fsScale ? 9 : 6} fill={spaceStroke} fontWeight={600} opacity={0.7}>
+                      {r.name}
+                    </text>
+                  )}
+                  {/* Coordinate badge */}
+                  {rectW > 20 && (
+                    <text x={rectX + 2} y={rectTopY + (fsScale ? 9 : 7)} textAnchor="start"
+                      fontSize={fsScale ? 7 : 5} fill={spaceStroke} fontWeight={500} opacity={0.6} fontFamily="monospace">
+                      {formatCoord(rColStart + 1, rRowStart + 1, undefined, roomBaseZ)}
+                    </text>
+                  )}
+                </g>
+              );
+            });
+            return roomRects;
+          })()}
         </g>
 
         {/* Ground line */}

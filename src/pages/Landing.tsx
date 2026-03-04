@@ -218,8 +218,8 @@ const Landing = () => {
                 <Home className="w-5 h-5 text-primary-foreground" />
               </div>
               <span className="text-lg font-bold">
-                <span className="text-foreground">Concepto</span>
-                <span className="text-primary font-display italic"> To.Lo.Sa.</span>
+                <span className="text-foreground">Concepto.Casa</span>
+                <span className="text-primary font-display italic"> To.Lo.Sa.systems</span>
               </span>
             </div>
 
@@ -277,7 +277,7 @@ const Landing = () => {
               className="inline-flex items-center gap-2 px-4 py-2 bg-background/20 backdrop-blur-sm text-background rounded-full text-sm font-medium border border-background/30"
             >
               <Sparkles className="w-4 h-4" />
-              Casas Pasivas · Casas Activas · Casa Pasiva
+              Construcciones Biohabitables · Casas Activas · Construcciones Industrializadas
             </motion.span>
 
             <motion.h1
@@ -741,11 +741,11 @@ const Landing = () => {
                 <Home className="w-4 h-4 text-primary-foreground" />
               </div>
               <span className="font-bold text-foreground">
-                Concepto <span className="text-primary">To.Lo.Sa.</span>
+                Concepto.Casa <span className="text-primary">To.Lo.Sa.systems</span>
               </span>
             </div>
             <p className="text-sm text-muted-foreground text-center">
-              © {new Date().getFullYear()} Concepto To.Lo.Sa. — Viviendas que cuidan de ti.
+              © {new Date().getFullYear()} Concepto.Casa To.Lo.Sa.systems — Viviendas que cuidan de ti.
             </p>
             <Link to="/auth" className="text-sm text-primary hover:text-primary/80 transition-colors cursor-pointer">
               Acceso →

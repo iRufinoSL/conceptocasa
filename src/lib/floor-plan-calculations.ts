@@ -3402,14 +3402,15 @@ export function computeCompositeWalls(
 
 /**
  * Interpolate Z (in block-height units) for a given XY grid position based on the roof slope.
- * Supports dos_aguas roof type. Returns undefined if the position is outside the roof footprint
+ * Supports dos_aguas roof type. The ridge runs along the LONGER building dimension.
+ * Returns undefined if the position is outside the roof footprint
  * or if the roof type is not supported.
  *
  * @param col - Grid column (1-based, X axis)
  * @param row - Grid row (1-based, Y axis)
  * @param plan - The floor plan data with roof configuration
  * @param allRooms - All rooms in the plan (to compute building envelope)
- * @param baseZ - The base Z (in block units) of the level where the roof starts (e.g. top of last structural floor)
+ * @param baseZ - The base Z (in block units) of the level where the roof starts
  * @returns Z in block-height units, or undefined if not computable
  */
 export function interpolateZFromSlope(
@@ -3424,31 +3425,49 @@ export function interpolateZFromSlope(
   const cellSizeM = plan.scaleMode === 'bloque' ? plan.blockLengthMm / 1000 : 1;
   const blockHM = (plan.blockHeightMm || 250) / 1000;
 
-  // X position in meters (grid col is 1-based, so col=1 → x=0)
   const xM = (col - 1) * cellSizeM;
+  const yM = (row - 1) * cellSizeM;
 
   // Compute building bounding box
   const placed = allRooms.filter(r => r.posX != null && r.posY != null);
   if (placed.length === 0) return undefined;
 
-  let bbMinX = Infinity, bbMaxX = -Infinity;
+  let bbMinX = Infinity, bbMaxX = -Infinity, bbMinY = Infinity, bbMaxY = -Infinity;
   placed.forEach(r => {
     bbMinX = Math.min(bbMinX, r.posX);
     bbMaxX = Math.max(bbMaxX, r.posX + r.width);
+    bbMinY = Math.min(bbMinY, r.posY);
+    bbMaxY = Math.max(bbMaxY, r.posY + r.length);
   });
-  if (!isFinite(bbMinX)) return undefined;
+  if (!isFinite(bbMinX) || !isFinite(bbMinY)) return undefined;
 
-  const buildingWidth = bbMaxX - bbMinX;
-  const ridgeX = bbMinX + buildingWidth / 2;
-  const halfWidth = buildingWidth / 2 + plan.externalWallThickness;
-  const slopeRatio = getEffectiveSlopeRatio(plan, halfWidth);
-  const riseM = getEffectiveRidgeHeight(plan, halfWidth);
+  const spanX = bbMaxX - bbMinX;
+  const spanY = bbMaxY - bbMinY;
 
-  // Height at this X position (meters from eave level)
-  const heightAtX = Math.max(0, riseM - Math.abs(xM - ridgeX) * slopeRatio);
+  // Ridge runs along the LONGER dimension; slope descends along the SHORTER dimension
+  let distFromRidge: number;
+  let halfSpan: number;
+
+  if (spanX >= spanY) {
+    // Building wider in X → ridge runs along X, slope along Y
+    const ridgeY = bbMinY + spanY / 2;
+    halfSpan = spanY / 2 + plan.externalWallThickness;
+    distFromRidge = Math.abs(yM - ridgeY);
+  } else {
+    // Building wider in Y → ridge runs along Y, slope along X
+    const ridgeX = bbMinX + spanX / 2;
+    halfSpan = spanX / 2 + plan.externalWallThickness;
+    distFromRidge = Math.abs(xM - ridgeX);
+  }
+
+  const slopeRatio = getEffectiveSlopeRatio(plan, halfSpan);
+  const riseM = getEffectiveRidgeHeight(plan, halfSpan);
+
+  // Height at this position (meters from eave level)
+  const heightAtPos = Math.max(0, riseM - distFromRidge * slopeRatio);
 
   // Convert height in meters to block units and add base Z
-  const zBlocks = baseZ + heightAtX / blockHM;
+  const zBlocks = baseZ + heightAtPos / blockHM;
 
-  return Math.round(zBlocks * 100) / 100; // 2 decimal precision
+  return Math.round(zBlocks * 100) / 100;
 }

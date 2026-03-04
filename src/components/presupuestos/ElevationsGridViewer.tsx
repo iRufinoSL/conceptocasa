@@ -6077,11 +6077,13 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
                   }
                 } : undefined}
               >
-                <circle cx={mx} cy={my} r={6} fill={connectFrom === cc.label ? 'hsl(120, 70%, 40%)' : 'hsl(var(--primary))'} stroke="white" strokeWidth={2} />
-                <rect x={mx + 8} y={my - 12} width={Math.max(cc.label.length * 7 + 4, 20)} height={14} rx={3}
-                  fill="white" fillOpacity={0.9} stroke="hsl(var(--primary))" strokeWidth={0.5} />
-                <text x={mx + 10} y={my - 2} fontSize={10} fill="hsl(var(--primary))" fontWeight={800}>{cc.label}</text>
-                <text x={mx + 10} y={my + 10} fontSize={7} fill="hsl(222,47%,45%)" fontWeight={600} fontFamily="monospace">
+                <circle cx={mx} cy={my} r={10} fill={connectFrom === cc.label ? 'hsl(120, 70%, 40%)' : 'hsl(0, 80%, 50%)'} stroke="white" strokeWidth={3} />
+                <rect x={mx + 13} y={my - 18} width={Math.max(cc.label.length * 11 + 8, 36)} height={22} rx={4}
+                  fill="hsl(0, 80%, 50%)" fillOpacity={0.95} stroke="white" strokeWidth={1.5} />
+                <text x={mx + 17} y={my - 2} fontSize={15} fill="white" fontWeight={900} fontFamily="Arial, sans-serif">{cc.label}</text>
+                <rect x={mx + 13} y={my + 6} width={Math.max((`(${cc.col - 1},${cc.row - 1},${cc.z ?? 0})`).length * 8 + 6, 50)} height={18} rx={3}
+                  fill="hsl(220, 50%, 25%)" fillOpacity={0.9} stroke="white" strokeWidth={1} />
+                <text x={mx + 16} y={my + 19} fontSize={11} fill="white" fontWeight={800} fontFamily="monospace">
                   ({cc.col - 1},{cc.row - 1},{cc.z ?? 0})
                 </text>
               </g>

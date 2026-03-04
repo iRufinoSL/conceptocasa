@@ -1570,7 +1570,7 @@ export function ElevationsGridViewer({
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" size="sm" onClick={() => setShowManualElevDialog(false)}>Cancelar</Button>
-              <Button size="sm" disabled={manualElevVertices.length < 3 || !manualElevName.trim()} onClick={() => {
+              <Button size="sm" disabled={manualElevVertices.length < 2 || !manualElevName.trim()} onClick={() => {
                 if (!onManualElevationsChange) return;
                 const newElev: ManualElevation = {
                   id: `me-${Date.now()}`,
@@ -1766,7 +1766,9 @@ function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, ro
     }).filter(Boolean) as Array<{ label: string; x: number; y: number; z: number }>;
   }, [isEditing, editVertices, allCorners, cellSizeM, blockHM]);
 
-  if (vertices.length < 3) {
+  const showBlocks = elevation.showBlocks !== false;
+
+  if (vertices.length < 2) {
     return (
       <Card className="border-dashed border-destructive/50">
         <CardHeader className="p-3">
@@ -1779,18 +1781,33 @@ function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, ro
     );
   }
 
+  // Special case: exactly 2 vertices → render as a line (edge of roof slope, etc.)
+  const isLine = vertices.length === 2;
+
   // Project polygon onto 2D plane for rendering.
+  // For a line (2 vertices), we still project and calculate length.
   // For an elevation (vertical surface), we need to find the best 2D projection plane.
   // The polygon is defined in 3D (X, Y, Z) — we project onto the plane of greatest visual spread.
   
   // Compute the plane normal using Newell's method for robustness
   let nx = 0, ny = 0, nz = 0;
-  for (let i = 0; i < vertices.length; i++) {
-    const cur = vertices[i];
-    const next = vertices[(i + 1) % vertices.length];
-    nx += (cur.y - next.y) * (cur.z + next.z);
-    ny += (cur.z - next.z) * (cur.x + next.x);
-    nz += (cur.x - next.x) * (cur.y + next.y);
+  if (isLine) {
+    // For a line, derive a "virtual" normal from the direction vector
+    const dx = vertices[1].x - vertices[0].x;
+    const dy = vertices[1].y - vertices[0].y;
+    const dz = vertices[1].z - vertices[0].z;
+    // Use the two largest components to pick the projection plane
+    nx = Math.abs(dy) + Math.abs(dz);
+    ny = Math.abs(dx) + Math.abs(dz);
+    nz = Math.abs(dx) + Math.abs(dy);
+  } else {
+    for (let i = 0; i < vertices.length; i++) {
+      const cur = vertices[i];
+      const next = vertices[(i + 1) % vertices.length];
+      nx += (cur.y - next.y) * (cur.z + next.z);
+      ny += (cur.z - next.z) * (cur.x + next.x);
+      nz += (cur.x - next.x) * (cur.y + next.y);
+    }
   }
   const nLen = Math.sqrt(nx * nx + ny * ny + nz * nz);
   
@@ -1798,21 +1815,16 @@ function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, ro
   const absNx = Math.abs(nx), absNy = Math.abs(ny), absNz = Math.abs(nz);
   
   // Project onto the plane perpendicular to the dominant normal axis
-  // This gives us the least-distorted 2D view of the polygon
   let projected: Array<{ label: string; u: number; v: number }>;
   let axisLabel: string;
   
   if (absNz >= absNx && absNz >= absNy) {
-    // Normal is mostly vertical → polygon is mostly horizontal (floor/ceiling)
-    // Project onto XY plane
     projected = vertices.map(vtx => ({ label: vtx.label, u: vtx.x, v: vtx.y }));
     axisLabel = 'planta (XY)';
   } else if (absNx >= absNy) {
-    // Normal is mostly along X → polygon is mostly in YZ plane (side wall)
     projected = vertices.map(vtx => ({ label: vtx.label, u: vtx.y, v: vtx.z }));
     axisLabel = 'lateral (YZ)';
   } else {
-    // Normal is mostly along Y → polygon is mostly in XZ plane (front/back wall)
     projected = vertices.map(vtx => ({ label: vtx.label, u: vtx.x, v: vtx.z }));
     axisLabel = 'frontal (XZ)';
   }
@@ -1831,28 +1843,31 @@ function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, ro
     v: p.v - vMin,
   }));
 
-  // Calculate TRUE 3D polygon area using cross product (not 2D projection)
-  // For a planar polygon in 3D, area = 0.5 * |sum of cross products|
-  let crossX = 0, crossY = 0, crossZ = 0;
-  const v0 = vertices[0];
-  for (let i = 1; i < vertices.length - 1; i++) {
-    const v1 = vertices[i];
-    const v2 = vertices[i + 1];
-    // Vectors from v0 to v1 and v0 to v2
-    const ax = v1.x - v0.x, ay = v1.y - v0.y, az = v1.z - v0.z;
-    const bx = v2.x - v0.x, by = v2.y - v0.y, bz = v2.z - v0.z;
-    crossX += ay * bz - az * by;
-    crossY += az * bx - ax * bz;
-    crossZ += ax * by - ay * bx;
+  // Calculate area (0 for lines) or TRUE 3D polygon area using cross product
+  let area3D = 0;
+  if (!isLine) {
+    let crossX = 0, crossY = 0, crossZ = 0;
+    const v0 = vertices[0];
+    for (let i = 1; i < vertices.length - 1; i++) {
+      const v1 = vertices[i];
+      const v2 = vertices[i + 1];
+      const ax = v1.x - v0.x, ay = v1.y - v0.y, az = v1.z - v0.z;
+      const bx = v2.x - v0.x, by = v2.y - v0.y, bz = v2.z - v0.z;
+      crossX += ay * bz - az * by;
+      crossY += az * bx - ax * bz;
+      crossZ += ax * by - ay * bx;
+    }
+    area3D = 0.5 * Math.sqrt(crossX * crossX + crossY * crossY + crossZ * crossZ);
   }
-  const area3D = 0.5 * Math.sqrt(crossX * crossX + crossY * crossY + crossZ * crossZ);
 
-  // Edge lengths in 3D
-  const edges = vertices.map((v1, i) => {
-    const v2 = vertices[(i + 1) % vertices.length];
-    const dist = Math.sqrt((v2.x - v1.x) ** 2 + (v2.y - v1.y) ** 2 + (v2.z - v1.z) ** 2);
-    return { from: v1.label, to: v2.label, distM: dist, distMm: Math.round(dist * 1000) };
-  });
+  // Edge lengths in 3D (for lines, just one edge, no closing edge)
+  const edges = isLine
+    ? [{ from: vertices[0].label, to: vertices[1].label, distM: Math.sqrt((vertices[1].x - vertices[0].x) ** 2 + (vertices[1].y - vertices[0].y) ** 2 + (vertices[1].z - vertices[0].z) ** 2), distMm: Math.round(Math.sqrt((vertices[1].x - vertices[0].x) ** 2 + (vertices[1].y - vertices[0].y) ** 2 + (vertices[1].z - vertices[0].z) ** 2) * 1000) }]
+    : vertices.map((v1, i) => {
+      const v2 = vertices[(i + 1) % vertices.length];
+      const dist = Math.sqrt((v2.x - v1.x) ** 2 + (v2.y - v1.y) ** 2 + (v2.z - v1.z) ** 2);
+      return { from: v1.label, to: v2.label, distM: dist, distMm: Math.round(dist * 1000) };
+    });
 
   const renderSvg = (maxWidth: number, maxHeight: number) => {
     // SVG dimensions
@@ -1863,14 +1878,17 @@ function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, ro
     const scaleV = vSpread > 0 ? availH / vSpread : 80;
     const scale = Math.min(scaleU, scaleV);
 
-    const svgW = uSpread * scale + padding * 2;
-    const svgH = vSpread * scale + padding * 2;
+    // For a line, ensure minimum visual height
+    const effectiveSvgW = isLine ? Math.max(uSpread * scale, 100) + padding * 2 : uSpread * scale + padding * 2;
+    const effectiveSvgH = isLine ? padding * 2 + 40 : vSpread * scale + padding * 2;
+    const svgW = effectiveSvgW;
+    const svgH = effectiveSvgH;
 
     // Build SVG polygon points (flip V so Z+ / Y+ goes up visually)
     const flipV = absNz >= absNx && absNz >= absNy; // horizontal polygon: don't flip
     const svgPoints = normalizedProj.map(p => {
       const px = padding + p.u * scale;
-      const py = flipV ? (padding + p.v * scale) : (padding + (vSpread - p.v) * scale);
+      const py = isLine ? padding + 20 : (flipV ? (padding + p.v * scale) : (padding + (vSpread - p.v) * scale));
       return { px, py, label: p.label };
     });
     const pointsStr = svgPoints.map(p => `${p.px},${p.py}`).join(' ');
@@ -1880,7 +1898,7 @@ function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, ro
     const gridIntervalV = gridScaleMode === 'bloques' ? blockHM : (vSpread <= 2 ? 0.1 : vSpread <= 5 ? 0.25 : 0.5);
     const gridIntervalUPx = gridIntervalU * scale;
     const gridIntervalVPx = gridIntervalV * scale;
-    const showGrid = !flipV && gridIntervalUPx >= 6 && gridIntervalVPx >= 4; // Only for vertical elevations with sufficient pixel space
+    const showGrid = !flipV && !isLine && gridIntervalUPx >= 6 && gridIntervalVPx >= 4;
 
     return (
       <svg width="100%" viewBox={`0 0 ${svgW} ${svgH}`} className="mx-auto" style={{ maxHeight }}>
@@ -1955,11 +1973,16 @@ function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, ro
             stroke="hsl(var(--muted-foreground))" strokeWidth={1.5} opacity={0.4} strokeDasharray="4,2" />
         )}
 
-        {/* Polygon fill */}
-        <polygon points={pointsStr} fill="hsl(var(--muted) / 0.6)" stroke="hsl(var(--primary))" strokeWidth={2} />
+        {/* Polygon fill or line */}
+        {isLine ? (
+          <line x1={svgPoints[0].px} y1={svgPoints[0].py} x2={svgPoints[1].px} y2={svgPoints[1].py}
+            stroke="hsl(var(--primary))" strokeWidth={2.5} />
+        ) : (
+          <polygon points={pointsStr} fill="hsl(var(--muted) / 0.6)" stroke="hsl(var(--primary))" strokeWidth={2} />
+        )}
 
         {/* Block pattern inside polygon */}
-        {plan.scaleMode === 'bloque' && (() => {
+        {!isLine && showBlocks && plan.scaleMode === 'bloque' && (() => {
           const bwPx = blockWM * scale;
           const bhPx = blockHM * scale;
           if (bwPx < 3 || bhPx < 2) return null;
@@ -2034,7 +2057,7 @@ function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, ro
   };
 
   const handleSaveEdit = () => {
-    if (!onEdit || editVertices.length < 3 || !editName.trim()) return;
+    if (!onEdit || editVertices.length < 2 || !editName.trim()) return;
     onEdit({ ...elevation, name: editName.trim(), vertexLabels: editVertices });
     setIsEditing(false);
     toast.success(`Alzado "${editName.trim()}" actualizado`);
@@ -2045,12 +2068,13 @@ function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, ro
       <Card>
         <CardHeader className="p-3 pb-1">
           <CardTitle className="text-xs flex items-center gap-2">
-            <Badge variant="secondary" className="text-[9px]">Polígono {vertices.length}v</Badge>
+            <Badge variant="secondary" className="text-[9px]">{isLine ? 'Línea 2v' : `Polígono ${vertices.length}v`}</Badge>
             {elevation.name}
             <span className="text-[10px] text-muted-foreground font-normal ml-1">
               ({elevation.vertexLabels.join(' → ')})
             </span>
-            <Badge variant="outline" className="text-[9px] ml-auto">{area3D.toFixed(2)} m²</Badge>
+            {!isLine && <Badge variant="outline" className="text-[9px] ml-auto">{area3D.toFixed(2)} m²</Badge>}
+            {isLine && <Badge variant="outline" className="text-[9px] ml-auto">{edges[0].distMm.toLocaleString()} mm</Badge>}
             {onEdit && (
               <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={() => {
                 setEditName(elevation.name);
@@ -2061,12 +2085,27 @@ function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, ro
             <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={() => setIsFullscreen(true)} title="Pantalla completa"><Maximize2 className="h-3 w-3" /></Button>
             <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={onDelete}><Trash2 className="h-3 w-3 text-destructive" /></Button>
           </CardTitle>
-          {/* Grid scale toggle */}
-          <div className="flex items-center gap-1 mt-1">
-            <Button variant={gridScaleMode === 'bloques' ? 'default' : 'outline'} size="sm" className="h-5 text-[9px] px-2"
-              onClick={() => setGridScaleMode('bloques')}>Bloques</Button>
-            <Button variant={gridScaleMode === 'mm' ? 'default' : 'outline'} size="sm" className="h-5 text-[9px] px-2"
-              onClick={() => setGridScaleMode('mm')}>mm</Button>
+          {/* Grid scale toggle + showBlocks toggle */}
+          <div className="flex items-center gap-1 mt-1 flex-wrap">
+            {!isLine && (
+              <>
+                <Button variant={gridScaleMode === 'bloques' ? 'default' : 'outline'} size="sm" className="h-5 text-[9px] px-2"
+                  onClick={() => setGridScaleMode('bloques')}>Bloques</Button>
+                <Button variant={gridScaleMode === 'mm' ? 'default' : 'outline'} size="sm" className="h-5 text-[9px] px-2"
+                  onClick={() => setGridScaleMode('mm')}>mm</Button>
+                {onEdit && (
+                  <Button
+                    variant={showBlocks ? 'default' : 'outline'}
+                    size="sm"
+                    className="h-5 text-[9px] px-2"
+                    onClick={() => onEdit({ ...elevation, showBlocks: !showBlocks })}
+                    title={showBlocks ? 'Ocultar bloques' : 'Mostrar bloques'}
+                  >
+                    <Box className="h-3 w-3 mr-0.5" />{showBlocks ? 'Con bloques' : 'Sin bloques'}
+                  </Button>
+                )}
+              </>
+            )}
             {plan.roofType === 'dos_aguas' && rooms && rooms.length > 0 && onCustomCornersChange && (
               <span className="text-[9px] text-muted-foreground ml-2">
                 <Ruler className="h-3 w-3 inline mr-0.5" />Auto Z faldón disponible
@@ -2133,10 +2172,10 @@ function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, ro
         <DialogContent className="max-w-[95vw] w-[95vw] max-h-[92vh] h-[92vh] flex flex-col overflow-hidden print:!max-w-none print:!w-full print:!h-auto" onInteractOutside={e => e.preventDefault()}>
           <DialogHeader className="shrink-0">
             <DialogTitle className="text-sm flex items-center gap-2">
-              <Badge variant="secondary" className="text-xs">Polígono {vertices.length}v</Badge>
+              <Badge variant="secondary" className="text-xs">{isLine ? 'Línea 2v' : `Polígono ${vertices.length}v`}</Badge>
               {elevation.name}
               <span className="text-xs text-muted-foreground font-normal">
-                ({elevation.vertexLabels.join(' → ')}) — {area3D.toFixed(2)} m²
+                ({elevation.vertexLabels.join(' → ')}) — {isLine ? `${edges[0].distMm.toLocaleString()} mm` : `${area3D.toFixed(2)} m²`}
               </span>
               <Button variant="outline" size="sm" className="h-7 text-xs ml-auto print:hidden" onClick={() => window.print()}>
                 <Printer className="h-3 w-3 mr-1" /> Imprimir
@@ -2222,7 +2261,7 @@ function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, ro
               </div>
               <div className="flex justify-end gap-2">
                 <Button variant="outline" size="sm" onClick={() => setIsEditing(false)}>Cancelar</Button>
-                <Button size="sm" disabled={editVertices.length < 3 || !editName.trim()} onClick={handleSaveEdit}>
+                <Button size="sm" disabled={editVertices.length < 2 || !editName.trim()} onClick={handleSaveEdit}>
                   Guardar cambios
                 </Button>
               </div>

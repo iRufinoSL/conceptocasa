@@ -83,7 +83,7 @@ const pillars = [
   },
   {
     icon: Shield,
-    title: "Certificación Passivhaus",
+    title: "Certificación Casa Pasiva",
     description: "El estándar más exigente del mundo en construcción sostenible. Verificado, medido y certificado.",
     stat: "A+++",
     statLabel: "calificación energética"
@@ -264,7 +264,7 @@ const Landing = () => {
       {/* Hero Section */}
       <section id="inicio" className="relative min-h-screen flex items-center overflow-hidden pt-16">
         <div className="absolute inset-0">
-          <img src={heroPassivhaus} alt="Casa Passivhaus rodeada de naturaleza" className="w-full h-full object-cover" />
+          <img src={heroPassivhaus} alt="Casa pasiva rodeada de naturaleza" className="w-full h-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-r from-foreground/75 via-foreground/50 to-foreground/20" />
         </div>
 
@@ -277,7 +277,7 @@ const Landing = () => {
               className="inline-flex items-center gap-2 px-4 py-2 bg-background/20 backdrop-blur-sm text-background rounded-full text-sm font-medium border border-background/30"
             >
               <Sparkles className="w-4 h-4" />
-              Casas Pasivas · Casas Activas · Passivhaus
+              Casas Pasivas · Casas Activas · Casa Pasiva
             </motion.span>
 
             <motion.h1
@@ -355,7 +355,7 @@ const Landing = () => {
                 manteniendo la temperatura estable.
               </p>
               <p className="text-muted-foreground text-lg leading-relaxed">
-                El estándar <strong className="text-foreground">Passivhaus</strong> no es una etiqueta comercial: 
+                El estándar <strong className="text-foreground">Casa Pasiva</strong> no es una etiqueta comercial: 
                 es un protocolo de diseño y construcción verificado con ensayos Blower Door (n50 ≤ 0,6 h⁻¹), 
                 termografía infrarroja y monitorización energética real. Más de 15 años de experiencia 
                 respaldan cada proyecto.
@@ -559,9 +559,9 @@ const Landing = () => {
           <div className="grid md:grid-cols-4 gap-8">
             {[
               { step: "01", title: "Análisis", desc: "Estudio del terreno, orientación solar, normativa urbanística y programa de necesidades del cliente." },
-              { step: "02", title: "Diseño PHPP", desc: "Modelado energético con PHPP (Passive House Planning Package). Simulación de demanda, ganancias solares y ventilación." },
+              { step: "02", title: "Diseño PHPP", desc: "Modelado energético con PHPP (Paquete de Planificación de Casa Pasiva). Simulación de demanda, ganancias solares y ventilación." },
               { step: "03", title: "Ejecución", desc: "Construcción con control de estanqueidad, continuidad de aislamiento y supervisión técnica en cada fase." },
-              { step: "04", title: "Certificación", desc: "Ensayo Blower Door, termografía y trámite de certificación Passivhaus ante el PHI (Passive House Institute)." }
+              { step: "04", title: "Certificación", desc: "Ensayo Blower Door, termografía y trámite de certificación de Casa Pasiva ante el PHI (Instituto de Casa Pasiva)." }
             ].map((item, i) => (
               <motion.div
                 key={item.step}

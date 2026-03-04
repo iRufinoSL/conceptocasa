@@ -4795,6 +4795,13 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
   customCorners?: CustomCorner[];
   onCustomCornersChange?: (corners: CustomCorner[]) => void;
 }) {
+  // Ruler tool state
+  const [totalRulerMode, setTotalRulerMode] = useState(false);
+  const [totalRulerLines, setTotalRulerLines] = useState<Array<{ x1: number; y1: number; x2: number; y2: number; distMm: number }>>([]);
+  const [totalRulerDraw, setTotalRulerDraw] = useState<{ x1: number; y1: number } | null>(null);
+  const totalRulerSvgRef = useRef<SVGSVGElement | null>(null);
+  // Coordinate creation mode
+  const [totalCoordMode, setTotalCoordMode] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const isGableSide = side === 'right' || side === 'left';
 
@@ -4960,10 +4967,10 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
             return (
               <g key={`gz-${z}`}>
                 <line x1={rx} y1={y} x2={rx + gridH * gridStepH} y2={y}
-                  stroke={isBorder ? 'rgba(41,128,185,0.60)' : 'rgba(41,128,185,0.30)'}
-                  strokeWidth={isBorder ? 1.5 : isMajor ? 0.8 : 0.5} />
+                  stroke={isBorder ? 'rgba(41,128,185,0.65)' : isMajor ? 'rgba(41,128,185,0.40)' : 'rgba(41,128,185,0.30)'}
+                  strokeWidth={isBorder ? 2 : isMajor ? 1.2 : 1.0} />
                 <text x={rx - 5} y={y + 3} textAnchor="end"
-                  fontSize={fsScale ? 9 : 6} fill="#2980b9" fontWeight={isMajor ? 700 : 400}>
+                  fontSize={fsScale ? 10 : 7} fill="#2980b9" fontWeight={isMajor ? 700 : 500}>
                   Z{z}
                 </text>
               </g>
@@ -4980,10 +4987,10 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
             return (
               <g key={`gh-${h}`}>
                 <line x1={x} y1={baseY} x2={x} y2={baseY - gridV * gridStepV}
-                  stroke={`${lineColor}${isBorder ? '0.60)' : '0.30)'}`}
-                  strokeWidth={isBorder ? 1.5 : isMajor ? 0.8 : 0.5} />
+                  stroke={`${lineColor}${isBorder ? '0.65)' : isMajor ? '0.40)' : '0.30)'}`}
+                  strokeWidth={isBorder ? 2 : isMajor ? 1.2 : 1.0} />
                 <text x={x} y={baseY + (fsScale ? 14 : 10)} textAnchor="middle"
-                  fontSize={fsScale ? 9 : 6} fill={textColor} fontWeight={isMajor ? 700 : 400}>
+                  fontSize={fsScale ? 10 : 7} fill={textColor} fontWeight={isMajor ? 700 : 500}>
                   {axisLabel}{h}
                 </text>
               </g>
@@ -5083,17 +5090,26 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
                   <rect x={rectX} y={rectTopY} width={rectW} height={rectH}
                     fill={spaceFill} stroke={spaceStroke} strokeWidth={1.2} strokeDasharray="4 2" rx={1} opacity={0.8} />
                   {rectW > 30 && rectH > 12 && (
-                    <text x={rectX + rectW / 2} y={rectTopY + rectH / 2 + 3} textAnchor="middle"
-                      fontSize={fsScale ? 9 : 6} fill={spaceStroke} fontWeight={600} opacity={0.7}>
-                      {r.name}
-                    </text>
+                    <g>
+                      <rect x={rectX + rectW / 2 - (r.name.length * (fsScale ? 3.2 : 2.2))} y={rectTopY + rectH / 2 - (fsScale ? 7 : 5)}
+                        width={r.name.length * (fsScale ? 6.4 : 4.4)} height={fsScale ? 16 : 12} rx={2}
+                        fill="white" fillOpacity={0.85} stroke={spaceStroke} strokeWidth={0.5} />
+                      <text x={rectX + rectW / 2} y={rectTopY + rectH / 2 + (fsScale ? 4 : 3)} textAnchor="middle"
+                        fontSize={fsScale ? 12 : 9} fill={spaceStroke} fontWeight={700} opacity={1}>
+                        {r.name}
+                      </text>
+                    </g>
                   )}
                   {/* Coordinate badge */}
                   {rectW > 20 && (
-                    <text x={rectX + 2} y={rectTopY + (fsScale ? 9 : 7)} textAnchor="start"
-                      fontSize={fsScale ? 7 : 5} fill={spaceStroke} fontWeight={500} opacity={0.6} fontFamily="monospace">
-                      {formatCoord(rColStart + 1, rRowStart + 1, undefined, roomBaseZ)}
-                    </text>
+                    <g>
+                      <rect x={rectX + 1} y={rectTopY + 1} width={fsScale ? 60 : 40} height={fsScale ? 11 : 8} rx={1}
+                        fill="white" fillOpacity={0.8} />
+                      <text x={rectX + 3} y={rectTopY + (fsScale ? 10 : 7)} textAnchor="start"
+                        fontSize={fsScale ? 8 : 6} fill={spaceStroke} fontWeight={600} opacity={0.9} fontFamily="monospace">
+                        {formatCoord(rColStart + 1, rRowStart + 1, undefined, roomBaseZ)}
+                      </text>
+                    </g>
                   )}
                 </g>
               );
@@ -5572,6 +5588,129 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
           });
           return elems;
         })()}
+
+        {/* Ruler measurement lines overlay */}
+        {totalRulerLines.map((rl, i) => {
+          const midX = (rl.x1 + rl.x2) / 2;
+          const midY = (rl.y1 + rl.y2) / 2;
+          return (
+            <g key={`ruler-line-${i}`}>
+              <line x1={rl.x1} y1={rl.y1} x2={rl.x2} y2={rl.y2}
+                stroke="hsl(var(--primary))" strokeWidth={2} strokeDasharray="6 3" />
+              <circle cx={rl.x1} cy={rl.y1} r={4} fill="hsl(var(--primary))" />
+              <circle cx={rl.x2} cy={rl.y2} r={4} fill="hsl(var(--primary))" />
+              <rect x={midX - 30} y={midY - 10} width={60} height={20} rx={4} fill="hsl(var(--primary))" />
+              <text x={midX} y={midY + 4} textAnchor="middle" fontSize={10} fontWeight="bold" fill="white">
+                {rl.distMm} mm
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Active ruler draw line */}
+        {totalRulerDraw && (
+          <circle cx={totalRulerDraw.x1} cy={totalRulerDraw.y1} r={5} fill="hsl(var(--primary))" opacity={0.7} />
+        )}
+
+        {/* Coordinate click targets — grid intersections */}
+        {(totalCoordMode || totalRulerMode) && fsScale && (
+          <g>
+            {Array.from({ length: (gridH + 1) * (gridV + 1) }, (_, i) => {
+              const col = i % (gridH + 1);
+              const row = Math.floor(i / (gridH + 1));
+              const cx = rx + col * gridStepH;
+              const cy = baseY - row * gridStepV;
+              const hitR = Math.max(6, Math.min(gridStepH, gridStepV) * 0.3);
+              return (
+                <circle
+                  key={`hit-${col}-${row}`}
+                  cx={cx} cy={cy} r={hitR}
+                  fill="transparent"
+                  stroke="transparent"
+                  style={{ cursor: totalCoordMode ? 'crosshair' : 'crosshair' }}
+                  onMouseEnter={e => {
+                    (e.target as SVGCircleElement).setAttribute('fill', 'hsla(var(--primary), 0.2)');
+                    (e.target as SVGCircleElement).setAttribute('stroke', 'hsl(var(--primary))');
+                    (e.target as SVGCircleElement).setAttribute('stroke-width', '1.5');
+                  }}
+                  onMouseLeave={e => {
+                    (e.target as SVGCircleElement).setAttribute('fill', 'transparent');
+                    (e.target as SVGCircleElement).setAttribute('stroke', 'transparent');
+                  }}
+                  onClick={e => {
+                    e.stopPropagation();
+                    if (totalRulerMode) {
+                      if (totalRulerDraw) {
+                        // Complete ruler line
+                        const dx = (cx - totalRulerDraw.x1) / gridStepH * csm * 1000;
+                        const dy = (totalRulerDraw.y1 - cy) / gridStepV * blockHM * 1000;
+                        const dist = Math.round(Math.sqrt(dx * dx + dy * dy));
+                        setTotalRulerLines(prev => [...prev, { x1: totalRulerDraw.x1, y1: totalRulerDraw.y1, x2: cx, y2: cy, distMm: dist }]);
+                        setTotalRulerDraw(null);
+                      } else {
+                        setTotalRulerDraw({ x1: cx, y1: cy });
+                      }
+                    } else if (totalCoordMode && onCustomCornersChange && customCorners) {
+                      // Create coordinate at this grid intersection
+                      const hVal = col;
+                      const zVal = row;
+                      // Determine XYZ based on side
+                      let coordX: number, coordY: number, coordZ: number;
+                      if (side === 'top') { coordX = hVal; coordY = 0; coordZ = zVal; }
+                      else if (side === 'right') { coordX = maxGridCol; coordY = hVal; coordZ = zVal; }
+                      else if (side === 'bottom') { coordX = hVal; coordY = maxGridRow; coordZ = zVal; }
+                      else { coordX = 0; coordY = hVal; coordZ = zVal; }
+                      // Auto-name
+                      const existingCount = customCorners.filter(c => c.label.startsWith('E')).length;
+                      const newLabel = `E${existingCount + 1}`;
+                      const newCorner: CustomCorner = {
+                        label: newLabel,
+                        col: coordX + 1,
+                        row: coordY + 1,
+                        z: coordZ,
+                        side: side,
+                        isMain: false,
+                      };
+                      onCustomCornersChange([...customCorners, newCorner]);
+                      toast.success(`Coordenada ${newLabel} creada: (${coordX},${coordY},${coordZ})`);
+                    }
+                  }}
+                />
+              );
+            })}
+          </g>
+        )}
+
+        {/* Existing coordinate markers on the grid */}
+        {fsScale && customCorners && customCorners.length > 0 && (() => {
+          const markers: React.ReactElement[] = [];
+          customCorners.forEach((cc, ci) => {
+            // Convert corner XYZ to grid position on this face
+            const cX = cc.col - 1; // 0-based
+            const cY = cc.row - 1;
+            const cZ = cc.z ?? 0;
+            let hPos: number | null = null;
+            let vPos = cZ;
+            if (side === 'top' && cY === 0) hPos = cX;
+            else if (side === 'bottom' && cY === maxGridRow) hPos = cX;
+            else if (side === 'right' && cX === maxGridCol) hPos = cY;
+            else if (side === 'left' && cX === 0) hPos = cY;
+            if (hPos == null) return;
+            if (hPos < 0 || hPos > gridH || vPos < 0 || vPos > gridV) return;
+            const mx = rx + hPos * gridStepH;
+            const my = baseY - vPos * gridStepV;
+            markers.push(
+              <g key={`coord-marker-${ci}`}>
+                <circle cx={mx} cy={my} r={5} fill="hsl(var(--primary))" stroke="white" strokeWidth={1.5} />
+                <text x={mx + 7} y={my - 4} fontSize={9} fill="hsl(var(--primary))" fontWeight={800}>{cc.label}</text>
+                <text x={mx + 7} y={my + 6} fontSize={7} fill="hsl(222,47%,45%)" fontWeight={600} fontFamily="monospace">
+                  ({cX},{cY},{cZ})
+                </text>
+              </g>
+            );
+          });
+          return markers;
+        })()}
       </svg>
     );
   };
@@ -5657,6 +5796,38 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
               <Badge variant="default" className="text-xs print:hidden">{TOTAL_SIDE_NAMES[side]}</Badge>
               <Badge variant="outline" className="text-xs print:hidden">{Math.round(totalWidth * 1000)} × {Math.round(totalHeight * 1000)} mm</Badge>
               <Badge variant="secondary" className="text-xs print:hidden">{layers.length} niveles</Badge>
+              {/* Tools */}
+              <div className="flex items-center gap-1 ml-4 print:hidden">
+                <Button
+                  variant={totalRulerMode ? 'default' : 'outline'}
+                  size="sm"
+                  className="h-7 text-xs gap-1"
+                  onClick={() => { setTotalRulerMode(!totalRulerMode); setTotalCoordMode(false); setTotalRulerDraw(null); }}
+                  title="Regla — medir distancias"
+                >
+                  <Ruler className="h-3 w-3" /> Regla
+                </Button>
+                <Button
+                  variant={totalCoordMode ? 'default' : 'outline'}
+                  size="sm"
+                  className="h-7 text-xs gap-1"
+                  onClick={() => { setTotalCoordMode(!totalCoordMode); setTotalRulerMode(false); setTotalRulerDraw(null); }}
+                  title="Crear coordenadas en la cuadrícula"
+                >
+                  <Plus className="h-3 w-3" /> Coord
+                </Button>
+                {totalRulerLines.length > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs gap-1 text-destructive"
+                    onClick={() => setTotalRulerLines([])}
+                    title="Borrar todas las medidas"
+                  >
+                    <Trash2 className="h-3 w-3" /> Borrar medidas
+                  </Button>
+                )}
+              </div>
               <Button variant="destructive" size="sm" className="h-7 text-xs ml-auto" onClick={() => setFullscreen(false)}>
                 ✕ Cerrar
               </Button>

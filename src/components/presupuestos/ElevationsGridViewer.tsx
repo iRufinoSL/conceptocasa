@@ -8,9 +8,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Plus, Trash2, Box, Layers, ArrowUpDown, Maximize2, Merge, Unlink, Map as MapIcon, Printer, FileDown, Ruler, Check, Pencil } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 import { OPENING_PRESETS, WALL_LABELS, WALL_SIDE_LETTERS, computeWallSegments, autoClassifyWalls, generateExternalWallNames, isExteriorType, isInvisibleType, computeBuildingOutline, computeCompositeWalls, computeCompositeWallsFromCorners, calcBajoCubiertaWallHeight, getBlockDimensions, getEffectiveRidgeHeight, calculateRoom } from '@/lib/floor-plan-calculations';
 import type { RoomData, WallData, OpeningData, FloorPlanData, WallSegment, FloorLevel, WallType, BlockGroupData, OutlineVertex, CompositeWall } from '@/lib/floor-plan-calculations';
 import type { CustomCorner, ManualElevation } from '@/hooks/useFloorPlan';
@@ -1236,6 +1238,7 @@ export function ElevationsGridViewer({
                             allCorners={customCorners || []}
                             plan={plan}
                             cellSizeM={cellSizeM}
+                            onCustomCornersChange={onCustomCornersChange}
                             onDelete={() => {
                               if (!onManualElevationsChange) return;
                               onManualElevationsChange((manualElevations || []).filter(e => e.id !== me.id));
@@ -1279,6 +1282,7 @@ export function ElevationsGridViewer({
               allCorners={customCorners || []}
               plan={plan}
               cellSizeM={cellSizeM}
+              onCustomCornersChange={onCustomCornersChange}
               onDelete={() => {
                 if (!onManualElevationsChange) return;
                 onManualElevationsChange((manualElevations || []).filter(e => e.id !== me.id));
@@ -1585,15 +1589,139 @@ export function ElevationsGridViewer({
     </div>
   );
 }
+/** Editable vertex row for fullscreen table */
+function EditableVertexRow({ vertex, allCorners, onCustomCornersChange }: {
+  vertex: { label: string; x: number; y: number; z: number; col: number; row: number; zBlocks: number };
+  allCorners: CustomCorner[];
+  onCustomCornersChange?: (corners: CustomCorner[]) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [editCol, setEditCol] = useState(String(vertex.col));
+  const [editRow, setEditRow] = useState(String(vertex.row));
+  const [editZ, setEditZ] = useState(String(vertex.zBlocks));
+
+  const canEdit = !!onCustomCornersChange;
+
+  const handleSave = () => {
+    if (!onCustomCornersChange) return;
+    const newCol = parseInt(editCol);
+    const newRow = parseInt(editRow);
+    const newZ = parseInt(editZ);
+    if (isNaN(newCol) || isNaN(newRow) || isNaN(newZ)) { setEditing(false); return; }
+    const updated = allCorners.map(c =>
+      c.label === vertex.label ? { ...c, col: newCol, row: newRow, z: newZ } : c
+    );
+    onCustomCornersChange(updated);
+    setEditing(false);
+    toast.success(`Coordenada ${vertex.label} actualizada a (${newCol},${newRow},${newZ})`);
+  };
+
+  if (editing) {
+    return (
+      <tr className="border-b border-border/30 bg-primary/5">
+        <td className="px-3 py-1 font-bold">{vertex.label}</td>
+        <td className="px-1 py-1"><Input value={editCol} onChange={e => setEditCol(e.target.value)} className="h-6 w-14 text-xs text-right p-1" onKeyDown={e => e.key === 'Enter' && handleSave()} /></td>
+        <td className="px-1 py-1"><Input value={editRow} onChange={e => setEditRow(e.target.value)} className="h-6 w-14 text-xs text-right p-1" onKeyDown={e => e.key === 'Enter' && handleSave()} /></td>
+        <td className="px-1 py-1"><Input value={editZ} onChange={e => setEditZ(e.target.value)} className="h-6 w-14 text-xs text-right p-1" onKeyDown={e => e.key === 'Enter' && handleSave()} /></td>
+        <td colSpan={3} className="px-2 py-1 text-center">
+          <Button size="sm" variant="ghost" className="h-5 text-[10px] px-2" onClick={handleSave}>✓</Button>
+          <Button size="sm" variant="ghost" className="h-5 text-[10px] px-2" onClick={() => setEditing(false)}>✕</Button>
+        </td>
+        <td></td>
+      </tr>
+    );
+  }
+
+  return (
+    <tr className={cn("border-b border-border/30", canEdit && "cursor-pointer hover:bg-muted/50")} onClick={() => {
+      if (!canEdit) return;
+      setEditCol(String(vertex.col)); setEditRow(String(vertex.row)); setEditZ(String(vertex.zBlocks));
+      setEditing(true);
+    }}>
+      <td className="px-3 py-1 font-bold">{vertex.label}</td>
+      <td className="px-3 py-1 text-right">{vertex.col}</td>
+      <td className="px-3 py-1 text-right">{vertex.row}</td>
+      <td className="px-3 py-1 text-right">{vertex.zBlocks}</td>
+      <td className="px-3 py-1 text-right font-mono">{Math.round(vertex.x * 1000)}</td>
+      <td className="px-3 py-1 text-right font-mono">{Math.round(vertex.y * 1000)}</td>
+      <td className="px-3 py-1 text-right font-mono">{Math.round(vertex.z * 1000)}</td>
+      {canEdit && <td className="px-2 py-1"><Pencil className="h-3 w-3 text-muted-foreground" /></td>}
+    </tr>
+  );
+}
+
+/** Editable vertex badge for card view */
+function EditableVertexBadge({ vertex, allCorners, onCustomCornersChange }: {
+  vertex: { label: string; col: number; row: number; zBlocks: number };
+  allCorners: CustomCorner[];
+  onCustomCornersChange: (corners: CustomCorner[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [editCol, setEditCol] = useState(String(vertex.col));
+  const [editRow, setEditRow] = useState(String(vertex.row));
+  const [editZ, setEditZ] = useState(String(vertex.zBlocks));
+
+  const handleSave = () => {
+    const newCol = parseInt(editCol);
+    const newRow = parseInt(editRow);
+    const newZ = parseInt(editZ);
+    if (isNaN(newCol) || isNaN(newRow) || isNaN(newZ)) { setOpen(false); return; }
+    const updated = allCorners.map(c =>
+      c.label === vertex.label ? { ...c, col: newCol, row: newRow, z: newZ } : c
+    );
+    onCustomCornersChange(updated);
+    setOpen(false);
+    toast.success(`${vertex.label} → (${newCol},${newRow},${newZ})`);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={o => {
+      if (o) { setEditCol(String(vertex.col)); setEditRow(String(vertex.row)); setEditZ(String(vertex.zBlocks)); }
+      setOpen(o);
+    }}>
+      <PopoverTrigger asChild>
+        <button className="inline-flex items-center gap-1 bg-muted hover:bg-muted/80 text-[10px] px-1.5 py-0.5 rounded transition-colors">
+          <span className="font-bold">{vertex.label}</span>
+          <span className="text-muted-foreground">({vertex.col},{vertex.row},{vertex.zBlocks})</span>
+          <Pencil className="h-2.5 w-2.5 text-muted-foreground" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-56 p-3" align="start">
+        <div className="space-y-2">
+          <p className="text-xs font-semibold">Editar {vertex.label}</p>
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <Label className="text-[10px]">X (col)</Label>
+              <Input value={editCol} onChange={e => setEditCol(e.target.value)} className="h-7 text-xs" onKeyDown={e => e.key === 'Enter' && handleSave()} />
+            </div>
+            <div>
+              <Label className="text-[10px]">Y (fila)</Label>
+              <Input value={editRow} onChange={e => setEditRow(e.target.value)} className="h-7 text-xs" onKeyDown={e => e.key === 'Enter' && handleSave()} />
+            </div>
+            <div>
+              <Label className="text-[10px]">Z (bloq)</Label>
+              <Input value={editZ} onChange={e => setEditZ(e.target.value)} className="h-7 text-xs" onKeyDown={e => e.key === 'Enter' && handleSave()} />
+            </div>
+          </div>
+          <div className="flex justify-end gap-1">
+            <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => setOpen(false)}>Cancelar</Button>
+            <Button size="sm" className="h-6 text-[10px]" onClick={handleSave}>Guardar</Button>
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 /** Manual elevation polygon card — renders arbitrary N-vertex polygon */
-function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, onDelete, onEdit }: {
+function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, onDelete, onEdit, onCustomCornersChange }: {
   elevation: ManualElevation;
   allCorners: CustomCorner[];
   plan: FloorPlanData;
   cellSizeM: number;
   onDelete: () => void;
   onEdit?: (updated: ManualElevation) => void;
+  onCustomCornersChange?: (corners: CustomCorner[]) => void;
 }) {
   const blockHMm = plan.blockHeightMm || 250;
   const blockHM = blockHMm / 1000;
@@ -1863,6 +1991,22 @@ function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, on
               </span>
             ))}
           </div>
+          {/* Compact editable coordinates */}
+          {onCustomCornersChange && (
+            <div className="mt-2 space-y-1">
+              <span className="text-[10px] text-muted-foreground font-semibold">Coordenadas (click para editar):</span>
+              <div className="flex flex-wrap gap-1">
+                {vertices.map(v => (
+                  <EditableVertexBadge
+                    key={v.label}
+                    vertex={v}
+                    allCorners={allCorners}
+                    onCustomCornersChange={onCustomCornersChange}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -1894,7 +2038,7 @@ function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, on
                 Superficie: {area3D.toFixed(2)} m²
               </span>
             </div>
-            {/* Vertex table */}
+            {/* Editable vertex table */}
             <table className="mt-4 text-xs border-collapse">
               <thead>
                 <tr className="border-b border-border">
@@ -1905,19 +2049,17 @@ function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, on
                   <th className="px-3 py-1 text-right text-muted-foreground">X (mm)</th>
                   <th className="px-3 py-1 text-right text-muted-foreground">Y (mm)</th>
                   <th className="px-3 py-1 text-right text-muted-foreground">Z (mm)</th>
+                  {onCustomCornersChange && <th className="px-2 py-1"></th>}
                 </tr>
               </thead>
               <tbody>
                 {vertices.map(v => (
-                  <tr key={v.label} className="border-b border-border/30">
-                    <td className="px-3 py-1 font-bold">{v.label}</td>
-                    <td className="px-3 py-1 text-right">{v.col}</td>
-                    <td className="px-3 py-1 text-right">{v.row}</td>
-                    <td className="px-3 py-1 text-right">{v.zBlocks}</td>
-                    <td className="px-3 py-1 text-right font-mono">{Math.round(v.x * 1000)}</td>
-                    <td className="px-3 py-1 text-right font-mono">{Math.round(v.y * 1000)}</td>
-                    <td className="px-3 py-1 text-right font-mono">{Math.round(v.z * 1000)}</td>
-                  </tr>
+                  <EditableVertexRow
+                    key={v.label}
+                    vertex={v}
+                    allCorners={allCorners}
+                    onCustomCornersChange={onCustomCornersChange}
+                  />
                 ))}
               </tbody>
             </table>

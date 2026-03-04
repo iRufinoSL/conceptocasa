@@ -85,27 +85,52 @@ function formatXYZ(x: number, y: number, z: number): string {
   return `(${Math.round(x)},${Math.round(y)},${Math.round(z)})`;
 }
 
+type ElevationSide = 'top' | 'right' | 'bottom' | 'left';
+
+function getHorizontalGridIndexForSide(corner: Pick<CustomCorner, 'col' | 'row'>, side: ElevationSide): number {
+  return side === 'left' || side === 'right' ? corner.row - 1 : corner.col - 1;
+}
+
+function getHorizontalMetersForSide(corner: Pick<CustomCorner, 'col' | 'row'>, side: ElevationSide, cellSizeM: number): number {
+  return getHorizontalGridIndexForSide(corner, side) * cellSizeM;
+}
+
 /**
  * Sort vertex labels in counter-clockwise (CCW) order for a vertical elevation polygon.
  * Uses centroid-based angles (robust for collinear vertices), then rotates
  * the sequence so the bottom-left vertex comes first.
- * CCW = left→right (bottom), then right→up→left (top).
  */
-function sortVerticesCCW(labels: string[], corners: CustomCorner[], cellSizeM: number, blockHM: number): string[] {
+function sortVerticesCCW(
+  labels: string[],
+  corners: CustomCorner[],
+  cellSizeM: number,
+  blockHM: number,
+  preferredAxis?: 'col' | 'row'
+): string[] {
   if (labels.length <= 2) return labels;
+
   const resolved = labels.map(label => {
     const c = corners.find(cc => cc.label === label);
     if (!c) return null;
-    const u = (c.col - 1) * cellSizeM;
-    const v = (c.z ?? 0) * blockHM;
-    return { label, u, v };
-  }).filter(Boolean) as Array<{ label: string; u: number; v: number }>;
+    return {
+      label,
+      uCol: (c.col - 1) * cellSizeM,
+      uRow: (c.row - 1) * cellSizeM,
+      v: (c.z ?? 0) * blockHM,
+    };
+  }).filter(Boolean) as Array<{ label: string; uCol: number; uRow: number; v: number }>;
+
   if (resolved.length <= 2) return labels;
-  // Compute centroid
-  const cu = resolved.reduce((s, p) => s + p.u, 0) / resolved.length;
-  const cv = resolved.reduce((s, p) => s + p.v, 0) / resolved.length;
-  // Sort by angle from centroid — CCW = increasing atan2
-  const sorted = [...resolved].sort((a, b) => {
+
+  const colSpread = Math.max(...resolved.map(p => p.uCol)) - Math.min(...resolved.map(p => p.uCol));
+  const rowSpread = Math.max(...resolved.map(p => p.uRow)) - Math.min(...resolved.map(p => p.uRow));
+  const axis = preferredAxis ?? (rowSpread > colSpread ? 'row' : 'col');
+  const points = resolved.map(p => ({ label: p.label, u: axis === 'row' ? p.uRow : p.uCol, v: p.v }));
+
+  const cu = points.reduce((s, p) => s + p.u, 0) / points.length;
+  const cv = points.reduce((s, p) => s + p.v, 0) / points.length;
+
+  const sorted = [...points].sort((a, b) => {
     const aa = Math.atan2(a.v - cv, a.u - cu);
     const ab = Math.atan2(b.v - cv, b.u - cu);
     if (Math.abs(aa - ab) < 1e-9) {
@@ -115,13 +140,14 @@ function sortVerticesCCW(labels: string[], corners: CustomCorner[], cellSizeM: n
     }
     return aa - ab;
   });
-  // Rotate so bottom-left vertex is first (min V, then min U as tiebreaker)
+
   let blIdx = 0;
   for (let i = 1; i < sorted.length; i++) {
     const best = sorted[blIdx];
     const cur = sorted[i];
     if (cur.v < best.v || (cur.v === best.v && cur.u < best.u)) blIdx = i;
   }
+
   const rotated = [...sorted.slice(blIdx), ...sorted.slice(0, blIdx)];
   return rotated.map(s => s.label);
 }
@@ -1207,12 +1233,14 @@ export function ElevationsGridViewer({
       if (corners.length < 3) return;
       const csm2 = cellSizeM || 0.625;
       const blockHM2 = (plan.blockHeightMm || 250) / 1000;
+      const sideAxis: 'col' | 'row' = side === 'left' || side === 'right' ? 'row' : 'col';
       // Sort CCW and compute area using shoelace formula
       const sorted = sortVerticesCCW(
         corners.map(c => c.label),
         corners,
         csm2,
-        blockHM2
+        blockHM2,
+        sideAxis
       );
       const sortedCorners = sorted.map(l => corners.find(c => c.label === l)!).filter(Boolean);
       if (sortedCorners.length < 3) return;
@@ -1223,12 +1251,12 @@ export function ElevationsGridViewer({
       for (let i = 0; i < sortedCorners.length; i++) {
         const c1 = sortedCorners[i];
         const c2 = sortedCorners[(i + 1) % sortedCorners.length];
-        const u1 = (c1.col - 1) * csm2;
+        const u1 = getHorizontalMetersForSide(c1, side as ElevationSide, csm2);
         const v1 = (c1.z ?? 0) * blockHM2;
-        const u2 = (c2.col - 1) * csm2;
+        const u2 = getHorizontalMetersForSide(c2, side as ElevationSide, csm2);
         const v2 = (c2.z ?? 0) * blockHM2;
         area += u1 * v2 - u2 * v1;
-        perimeter += Math.sqrt((u2 - u1) ** 2 + (v2 - v1) ** 2);
+        perimeter += Math.hypot(u2 - u1, v2 - v1);
       }
       area = Math.abs(area) / 2;
       
@@ -1237,6 +1265,20 @@ export function ElevationsGridViewer({
     
     return polygons;
   }, [customCorners, cellSizeM, plan.blockHeightMm]);
+
+  const viviendaSavedCrossSections = useMemo(() => {
+    return (manualElevations || []).filter(me =>
+      me.sourceType === 'cross_section' ||
+      (!me.sourceType && /(secci|corte|transversal|longitudinal)/i.test(me.name))
+    );
+  }, [manualElevations]);
+
+  const viviendaSavedByFace = useMemo(() => {
+    return (manualElevations || []).filter(me =>
+      me.sourceType === 'face' ||
+      (!me.sourceType && !me.floorId && !/(secci|corte|transversal|longitudinal)/i.test(me.name))
+    );
+  }, [manualElevations]);
 
   const [gridFullscreen, setGridFullscreen] = useState(false);
   const [gridPrintScale, setGridPrintScale] = useState(100);
@@ -1665,19 +1707,21 @@ export function ElevationsGridViewer({
               customCorners={customCorners}
               onCustomCornersChange={onCustomCornersChange}
               onSaveElevation={onManualElevationsChange && customCorners ? (name, side, edges, polyName) => {
-                // Collect all coord labels used in edges for this face
                 const labels = new Set<string>();
                 edges.forEach(e => { labels.add(e.from); labels.add(e.to); });
                 if (labels.size < 2) return;
-                // Sort labels CCW for polygon
                 const csm2 = cellSizeM || 0.625;
                 const bhm2 = (plan.blockHeightMm || 250) / 1000;
-                const sortedLabels = sortVerticesCCW(Array.from(labels), customCorners!, csm2, bhm2);
+                const axis: 'col' | 'row' = side === 'left' || side === 'right' ? 'row' : 'col';
+                const sortedLabels = sortVerticesCCW(Array.from(labels), customCorners!, csm2, bhm2, axis);
                 const newElev: ManualElevation = {
                   id: crypto.randomUUID(),
-                  name: name || `Alzado ${side}`,
+                  name: (name || polyName || `Alzado ${side}`).trim(),
                   vertexLabels: sortedLabels,
                   showBlocks: true,
+                  sourceType: 'face',
+                  sourceSide: side as ElevationSide,
+                  sourceAxis: side === 'left' || side === 'right' ? 'X' : 'Y',
                 };
                 onManualElevationsChange([...(manualElevations || []), newElev]);
               } : undefined}
@@ -1713,18 +1757,94 @@ export function ElevationsGridViewer({
                       if (labels.size < 2) return;
                       const csm2 = cellSizeM || 0.625;
                       const bhm2 = (plan.blockHeightMm || 250) / 1000;
-                      const sortedLabels = sortVerticesCCW(Array.from(labels), customCorners!, csm2, bhm2);
+                      const axisPref: 'col' | 'row' = side === 'left' || side === 'right' ? 'row' : 'col';
+                      const sortedLabels = sortVerticesCCW(Array.from(labels), customCorners!, csm2, bhm2, axisPref);
+                      const sourceMatch = cse.label.match(/([XY])=([\-\d.]+)/);
+                      const sourceAxis = (sourceMatch?.[1] === 'X' || sourceMatch?.[1] === 'Y') ? sourceMatch[1] as 'X' | 'Y' : undefined;
+                      const sourceValue = sourceMatch?.[2] != null ? Number(sourceMatch[2]) : undefined;
                       const newElev: ManualElevation = {
                         id: crypto.randomUUID(),
-                        name: name || `Sección`,
+                        name: (name || `Sección`).trim(),
                         vertexLabels: sortedLabels,
                         showBlocks: true,
+                        sourceType: 'cross_section',
+                        sourceSide: side as ElevationSide,
+                        sourceAxis,
+                        sourceValue: Number.isFinite(sourceValue) ? sourceValue : undefined,
                       };
                       onManualElevationsChange([...(manualElevations || []), newElev]);
                     } : undefined}
                   />
                 </div>
               ))}
+            </div>
+          )}
+
+          {(viviendaSavedCrossSections.length > 0 || viviendaSavedByFace.length > 0) && (
+            <div className="space-y-3 border border-border rounded-lg p-3 bg-muted/20">
+              <h4 className="text-xs font-bold text-foreground">Alzados guardados (Nivel Vivienda)</h4>
+
+              {viviendaSavedCrossSections.length > 0 && (
+                <Collapsible defaultOpen>
+                  <CollapsibleTrigger className="flex items-center gap-2 w-full text-left group hover:bg-muted/50 rounded px-2 py-1 transition-colors border-b border-border/30 pb-1">
+                    <ChevronRight className="h-3.5 w-3.5 text-foreground transition-transform group-data-[state=open]:rotate-90" />
+                    <h5 className="text-xs font-bold text-foreground">Alzados transversales / longitudinales</h5>
+                    <Badge variant="outline" className="text-[9px] h-4">{viviendaSavedCrossSections.length}</Badge>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="space-y-2 mt-1 ml-2">
+                    {viviendaSavedCrossSections.map(me => (
+                      <ManualElevationPolygonCard
+                        key={me.id}
+                        elevation={me}
+                        allCorners={customCorners || []}
+                        plan={plan}
+                        cellSizeM={cellSizeM}
+                        rooms={rooms}
+                        onCustomCornersChange={onCustomCornersChange}
+                        onDelete={() => {
+                          if (!onManualElevationsChange) return;
+                          onManualElevationsChange((manualElevations || []).filter(e => e.id !== me.id));
+                          toast.success('Alzado guardado eliminado');
+                        }}
+                        onEdit={onManualElevationsChange ? (updated) => {
+                          onManualElevationsChange((manualElevations || []).map(e => e.id === updated.id ? updated : e));
+                        } : undefined}
+                      />
+                    ))}
+                  </CollapsibleContent>
+                </Collapsible>
+              )}
+
+              {viviendaSavedByFace.length > 0 && (
+                <Collapsible defaultOpen>
+                  <CollapsibleTrigger className="flex items-center gap-2 w-full text-left group hover:bg-muted/50 rounded px-2 py-1 transition-colors border-b border-border/30 pb-1">
+                    <ChevronRight className="h-3.5 w-3.5 text-foreground transition-transform group-data-[state=open]:rotate-90" />
+                    <h5 className="text-xs font-bold text-foreground">Alzados guardados por cara</h5>
+                    <Badge variant="outline" className="text-[9px] h-4">{viviendaSavedByFace.length}</Badge>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="space-y-2 mt-1 ml-2">
+                    {viviendaSavedByFace.map(me => (
+                      <ManualElevationPolygonCard
+                        key={me.id}
+                        elevation={me}
+                        allCorners={customCorners || []}
+                        plan={plan}
+                        cellSizeM={cellSizeM}
+                        rooms={rooms}
+                        onCustomCornersChange={onCustomCornersChange}
+                        onDelete={() => {
+                          if (!onManualElevationsChange) return;
+                          onManualElevationsChange((manualElevations || []).filter(e => e.id !== me.id));
+                          toast.success('Alzado guardado eliminado');
+                        }}
+                        onEdit={onManualElevationsChange ? (updated) => {
+                          onManualElevationsChange((manualElevations || []).map(e => e.id === updated.id ? updated : e));
+                        } : undefined}
+                      />
+                    ))}
+                  </CollapsibleContent>
+                </Collapsible>
+              )}
             </div>
           )}
 
@@ -1744,7 +1864,12 @@ export function ElevationsGridViewer({
                       const c2 = poly.corners[(ci + 1) % poly.corners.length];
                       const csm3 = cellSizeM || 0.625;
                       const bhm3 = (plan.blockHeightMm || 250) / 1000;
-                      const d = Math.sqrt(((c2.col - c.col) * csm3) ** 2 + (((c2.z ?? 0) - (c.z ?? 0)) * bhm3) ** 2);
+                      const sideKey = (poly.side as ElevationSide);
+                      const h1 = getHorizontalMetersForSide(c, sideKey, csm3);
+                      const h2 = getHorizontalMetersForSide(c2, sideKey, csm3);
+                      const z1 = (c.z ?? 0) * bhm3;
+                      const z2 = (c2.z ?? 0) * bhm3;
+                      const d = Math.hypot(h2 - h1, z2 - z1);
                       return (
                         <span key={ci} className="text-muted-foreground text-[8px]">
                           {c.label}→{c2.label}: {Math.round(d * 1000)}mm
@@ -6138,21 +6263,46 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
           });
 
           // Render edges (connected coordinate lines) with measurements
-          coordEdges.forEach((edge, ei) => {
+          const displayEdges: Array<{ from: string; to: string; autoClosed?: boolean }> = [...coordEdges];
+          if (faceCoords.length >= 3 && coordEdges.length >= 2) {
+            const degreeMap = new Map<string, number>();
+            coordEdges.forEach(e => {
+              degreeMap.set(e.from, (degreeMap.get(e.from) ?? 0) + 1);
+              degreeMap.set(e.to, (degreeMap.get(e.to) ?? 0) + 1);
+            });
+            const usedLabels = Array.from(degreeMap.keys());
+            const endpoints = usedLabels.filter(l => (degreeMap.get(l) ?? 0) === 1);
+            const hasBranch = usedLabels.some(l => (degreeMap.get(l) ?? 0) > 2);
+            const isSimpleOpenChain = !hasBranch && usedLabels.length === coordEdges.length + 1 && endpoints.length === 2;
+            if (isSimpleOpenChain) {
+              const [a, b] = endpoints;
+              const alreadyClosed = coordEdges.some(ed =>
+                (ed.from === a && ed.to === b) ||
+                (ed.from === b && ed.to === a)
+              );
+              if (!alreadyClosed) {
+                displayEdges.push({ from: a, to: b, autoClosed: true });
+              }
+            }
+          }
+
+          displayEdges.forEach((edge, ei) => {
             const from = faceCoords.find(fc => fc.label === edge.from);
             const to = faceCoords.find(fc => fc.label === edge.to);
             if (!from || !to) return;
-            const dx = ((to.cc.col - from.cc.col)) * csm;
-            const dz = ((to.cc.z ?? 0) - (from.cc.z ?? 0)) * blockHM;
-            const distMm = Math.round(Math.sqrt(dx * dx + dz * dz) * 1000);
+            const fromH = getHorizontalMetersForSide(from.cc, side, csm);
+            const toH = getHorizontalMetersForSide(to.cc, side, csm);
+            const fromZ = (from.cc.z ?? 0) * blockHM;
+            const toZ = (to.cc.z ?? 0) * blockHM;
+            const distMm = Math.round(Math.hypot(toH - fromH, toZ - fromZ) * 1000);
             const midX = (from.mx + to.mx) / 2;
             const midY = (from.my + to.my) / 2;
             markers.push(
               <g key={`edge-${ei}`}>
                 <line x1={from.mx} y1={from.my} x2={to.mx} y2={to.my}
-                  stroke="hsl(280, 70%, 50%)" strokeWidth={3} strokeDasharray="8 4" />
+                  stroke="hsl(280, 70%, 50%)" strokeWidth={edge.autoClosed ? 2 : 3} strokeDasharray={edge.autoClosed ? '6 3' : '8 4'} opacity={edge.autoClosed ? 0.8 : 1} />
                 <rect x={midX - 45} y={midY - 14} width={90} height={28} rx={5}
-                  fill="hsl(280, 70%, 50%)" />
+                  fill="hsl(280, 70%, 50%)" opacity={edge.autoClosed ? 0.9 : 1} />
                 <text x={midX} y={midY + 5} textAnchor="middle" fontSize={16} fontWeight="900" fill="white">
                   {distMm} mm
                 </text>
@@ -6161,10 +6311,10 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
           });
 
           // If we have a closed polygon (3+ coords all connected), show area
-          if (faceCoords.length >= 3 && coordEdges.length >= 3) {
+          if (faceCoords.length >= 3 && displayEdges.length >= 3) {
             // Check if edges form a cycle visiting all face coords
             const adjMap = new Map<string, string[]>();
-            coordEdges.forEach(e => {
+            displayEdges.forEach(e => {
               if (!adjMap.has(e.from)) adjMap.set(e.from, []);
               if (!adjMap.has(e.to)) adjMap.set(e.to, []);
               adjMap.get(e.from)!.push(e.to);
@@ -6193,18 +6343,20 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
               for (let i = 0; i < orderedCoords.length; i++) {
                 const c1 = orderedCoords[i];
                 const c2 = orderedCoords[(i + 1) % orderedCoords.length];
-                const u1 = (c1.cc.col - 1) * csm;
+                const u1 = getHorizontalMetersForSide(c1.cc, side, csm);
                 const v1 = (c1.cc.z ?? 0) * blockHM;
-                const u2 = (c2.cc.col - 1) * csm;
+                const u2 = getHorizontalMetersForSide(c2.cc, side, csm);
                 const v2 = (c2.cc.z ?? 0) * blockHM;
                 area += u1 * v2 - u2 * v1;
-                perim += Math.sqrt((u2 - u1) ** 2 + (v2 - v1) ** 2);
+                perim += Math.hypot(u2 - u1, v2 - v1);
               }
               area = Math.abs(area) / 2;
               // Draw polygon fill
               const polyPoints = orderedCoords.map(fc => `${fc.mx},${fc.my}`).join(' ');
               markers.unshift(
                 <polygon key="coord-polygon-fill" points={polyPoints}
+                  onDoubleClick={(e) => { e.stopPropagation(); setEditingPolygonSide(side); setEditingPolygonName(polygonNames[side] || ''); }}
+                  style={{ cursor: 'pointer' }}
                   fill="hsl(280, 70%, 50%)" fillOpacity={0.12} stroke="hsl(280, 70%, 50%)" strokeWidth={2} />
               );
               // Area/perimeter label at centroid — double-click to edit name

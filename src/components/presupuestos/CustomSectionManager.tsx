@@ -415,12 +415,12 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
                       <Pentagon className="h-2.5 w-2.5 mr-0.5" />{section.polygons.length}
                     </Badge>
                   </div>
-                  <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
-                    <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={() => { setEditingSectionId(section.id); setEditName(section.name); }}>
-                      <Pencil className="h-3 w-3" />
+                  <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { setEditingSectionId(section.id); setEditName(section.name); }}>
+                      <Pencil className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-destructive" onClick={() => handleDelete(section.id)}>
-                      <Trash2 className="h-3 w-3" />
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10" onClick={() => handleDelete(section.id)}>
+                      <Trash2 className="h-4.5 w-4.5" />
                     </Button>
                   </div>
                 </div>

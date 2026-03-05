@@ -1,18 +1,23 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Box, Pencil, Trash2, Plus, ChevronDown, ChevronRight, Triangle, Pyramid, Cuboid, Grid3x3 } from 'lucide-react';
+import { Pencil, Trash2, Plus, ChevronDown, ChevronRight, Triangle, Pyramid, Cuboid, Grid3x3, MapPin, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { toast } from 'sonner';
 import type { CustomSection } from './CustomSectionManager';
 
 interface BudgetWorkspacesTabProps {
   budgetId: string;
   isAdmin: boolean;
+}
+
+interface PolygonVertex {
+  x: number;
+  y: number;
 }
 
 interface Workspace {
@@ -25,6 +30,7 @@ interface Workspace {
   has_ceiling: boolean;
   has_roof: boolean;
   vertical_section_id: string | null;
+  floor_polygon: PolygonVertex[] | null;
 }
 
 interface WallData {
@@ -51,13 +57,47 @@ const FLOOR_CEILING_TYPES: { value: FloorCeilingType; label: string }[] = [
   { value: 'shared', label: 'Compartido' },
 ];
 
-const WALL_LABELS = ['Superior', 'Derecha', 'Inferior', 'Izquierda'];
-
 const GEOMETRY_INFO: Record<GeometryType, { label: string; vertices: number; description: string }> = {
   cube: { label: 'Cubo', vertices: 8, description: '6 caras — forma estándar' },
   prism: { label: 'Prisma', vertices: 6, description: 'Tejado a dos aguas' },
   pyramid: { label: 'Pirámide', vertices: 5, description: 'Punta central' },
 };
+
+/** Shoelace formula for polygon area in m² */
+function polygonArea(vertices: PolygonVertex[]): number {
+  if (vertices.length < 3) return 0;
+  let area = 0;
+  for (let i = 0; i < vertices.length; i++) {
+    const j = (i + 1) % vertices.length;
+    area += vertices[i].x * vertices[j].y;
+    area -= vertices[j].x * vertices[i].y;
+  }
+  return Math.abs(area) / 2;
+}
+
+/** Bounding box dimensions */
+function polygonBBox(vertices: PolygonVertex[]) {
+  if (vertices.length === 0) return { minX: 0, maxX: 0, minY: 0, maxY: 0, w: 0, h: 0 };
+  const xs = vertices.map(v => v.x);
+  const ys = vertices.map(v => v.y);
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+  return { minX, maxX, minY, maxY, w: maxX - minX, h: maxY - minY };
+}
+
+/** Edge length between two vertices */
+function edgeLength(a: PolygonVertex, b: PolygonVertex): number {
+  return Math.sqrt((b.x - a.x) ** 2 + (b.y - a.y) ** 2);
+}
+
+/** Wall label from edge index */
+function wallLabel(index: number, total: number): string {
+  if (total <= 4) {
+    const labels = ['Superior', 'Derecha', 'Inferior', 'Izquierda'];
+    return labels[index] || `Pared ${index + 1}`;
+  }
+  return `Pared ${index + 1}`;
+}
 
 function getGeometryType(room: Workspace): GeometryType {
   if (room.has_roof) return 'prism';
@@ -83,12 +123,124 @@ function GeometryIcon({ type }: { type: GeometryType }) {
   }
 }
 
+/** Small inline SVG polygon preview */
+function PolygonPreview({ vertices, size = 40 }: { vertices: PolygonVertex[]; size?: number }) {
+  if (vertices.length < 3) return null;
+  const bbox = polygonBBox(vertices);
+  const pad = 2;
+  const scale = Math.min((size - pad * 2) / (bbox.w || 1), (size - pad * 2) / (bbox.h || 1));
+  const points = vertices.map(v =>
+    `${pad + (v.x - bbox.minX) * scale},${pad + (bbox.maxY - v.y) * scale}`
+  ).join(' ');
+
+  return (
+    <svg width={size} height={size} className="shrink-0">
+      <polygon points={points} fill="hsl(var(--primary) / 0.15)" stroke="hsl(var(--primary))" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
+// ─── Vertex Editor ───────────────────────────────────────────────
+
+interface VertexEditorProps {
+  vertices: PolygonVertex[];
+  onChange: (vertices: PolygonVertex[]) => void;
+}
+
+function VertexEditor({ vertices, onChange }: VertexEditorProps) {
+  const addVertex = () => {
+    const last = vertices[vertices.length - 1];
+    onChange([...vertices, { x: (last?.x ?? 0) + 1, y: last?.y ?? 0 }]);
+  };
+
+  const updateVertex = (idx: number, field: 'x' | 'y', val: string) => {
+    const next = [...vertices];
+    next[idx] = { ...next[idx], [field]: parseFloat(val) || 0 };
+    onChange(next);
+  };
+
+  const removeVertex = (idx: number) => {
+    onChange(vertices.filter((_, i) => i !== idx));
+  };
+
+  const area = polygonArea(vertices);
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <Label className="text-[10px] font-semibold">Vértices del polígono base (X, Y en metros)</Label>
+        {vertices.length >= 3 && (
+          <Badge variant="secondary" className="text-[9px] h-4">📐 {area.toFixed(2)} m²</Badge>
+        )}
+      </div>
+
+      <div className="space-y-1">
+        {vertices.map((v, i) => (
+          <div key={i} className="flex items-center gap-1">
+            <span className="text-[9px] text-muted-foreground w-4 text-right">{i + 1}</span>
+            <Input
+              className="h-6 text-[10px] w-16"
+              type="number"
+              step="0.01"
+              placeholder="X"
+              value={v.x || ''}
+              onChange={e => updateVertex(i, 'x', e.target.value)}
+            />
+            <Input
+              className="h-6 text-[10px] w-16"
+              type="number"
+              step="0.01"
+              placeholder="Y"
+              value={v.y || ''}
+              onChange={e => updateVertex(i, 'y', e.target.value)}
+            />
+            <span className="text-[9px] text-muted-foreground">
+              {i > 0 ? `↔ ${edgeLength(vertices[i - 1], v).toFixed(2)}m` : ''}
+            </span>
+            {vertices.length > 3 && (
+              <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => removeVertex(i)}>
+                <X className="h-2.5 w-2.5" />
+              </Button>
+            )}
+          </div>
+        ))}
+        {/* Closing edge length */}
+        {vertices.length >= 3 && (
+          <div className="flex items-center gap-1 pl-5">
+            <span className="text-[9px] text-muted-foreground">
+              Cierre: ↔ {edgeLength(vertices[vertices.length - 1], vertices[0]).toFixed(2)}m
+            </span>
+          </div>
+        )}
+      </div>
+
+      <Button variant="outline" size="sm" className="h-5 text-[10px] gap-0.5" onClick={addVertex}>
+        <Plus className="h-2.5 w-2.5" /> Vértice
+      </Button>
+
+      {/* Mini preview */}
+      {vertices.length >= 3 && (
+        <div className="flex justify-center pt-1">
+          <PolygonPreview vertices={vertices} size={80} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Main Component ──────────────────────────────────────────────
+
 export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabProps) {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const [form, setForm] = useState({ name: '', length: '', width: '', height: '', verticalSectionId: '' });
+  const [formName, setFormName] = useState('');
+  const [formHeight, setFormHeight] = useState('');
+  const [formVertices, setFormVertices] = useState<PolygonVertex[]>([
+    { x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 3 }, { x: 0, y: 3 },
+  ]);
+  const [formSectionId, setFormSectionId] = useState('');
   const [showNewSection, setShowNewSection] = useState(false);
   const [newSectionName, setNewSectionName] = useState('');
   const [newSectionAxisValue, setNewSectionAxisValue] = useState('');
@@ -105,7 +257,6 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     },
   });
 
-  // Extract vertical sections from custom_corners JSON
   const verticalSections = useMemo<CustomSection[]>(() => {
     if (!floorPlan?.custom_corners) return [];
     try {
@@ -114,9 +265,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
         : floorPlan.custom_corners;
       const sections: CustomSection[] = parsed?.customSections || [];
       return sections.filter(s => s.sectionType === 'vertical');
-    } catch {
-      return [];
-    }
+    } catch { return []; }
   }, [floorPlan?.custom_corners]);
 
   const { data: rooms = [], refetch } = useQuery({
@@ -125,10 +274,13 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     queryFn: async () => {
       const { data } = await supabase
         .from('budget_floor_plan_rooms')
-        .select('id, name, length, width, height, has_floor, has_ceiling, has_roof, vertical_section_id')
+        .select('id, name, length, width, height, has_floor, has_ceiling, has_roof, vertical_section_id, floor_polygon')
         .eq('floor_plan_id', floorPlan!.id)
         .order('name', { ascending: true });
-      return (data || []) as Workspace[];
+      return (data || []).map((r: any) => ({
+        ...r,
+        floor_polygon: Array.isArray(r.floor_polygon) ? r.floor_polygon : null,
+      })) as Workspace[];
     },
   });
 
@@ -149,13 +301,16 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
   const toggleExpand = (id: string) => {
     setExpandedIds(prev => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
+      next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
   };
 
   const resetForm = () => {
-    setForm({ name: '', length: '', width: '', height: '', verticalSectionId: '' });
+    setFormName('');
+    setFormHeight('');
+    setFormVertices([{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 3 }, { x: 0, y: 3 }]);
+    setFormSectionId('');
     setEditingId(null);
     setShowForm(false);
     setShowNewSection(false);
@@ -173,28 +328,16 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
       axisValue: parseFloat(newSectionAxisValue) || 0,
       polygons: [],
     };
-
-    // Persist to custom_corners JSON
     let parsed: any = {};
     try {
       parsed = typeof floorPlan.custom_corners === 'string'
-        ? JSON.parse(floorPlan.custom_corners)
-        : (floorPlan.custom_corners || {});
+        ? JSON.parse(floorPlan.custom_corners) : (floorPlan.custom_corners || {});
     } catch { parsed = {}; }
     const allSections: CustomSection[] = parsed.customSections || [];
     allSections.push(newSection);
     parsed.customSections = allSections;
-
-    const { error } = await supabase
-      .from('budget_floor_plans')
-      .update({ custom_corners: parsed })
-      .eq('id', floorPlan.id);
-
-    if (error) {
-      toast.error('Error al crear sección vertical');
-      return null;
-    }
-
+    const { error } = await supabase.from('budget_floor_plans').update({ custom_corners: parsed }).eq('id', floorPlan.id);
+    if (error) { toast.error('Error al crear sección vertical'); return null; }
     toast.success(`Sección vertical "${newSection.name}" creada`);
     queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces'] });
     setShowNewSection(false);
@@ -204,49 +347,43 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
   };
 
   const handleSave = async () => {
-    if (!form.name.trim() || !floorPlan?.id) return;
+    if (!formName.trim() || !floorPlan?.id) return;
+    if (formVertices.length < 3) { toast.error('El polígono necesita al menos 3 vértices'); return; }
 
-    let sectionId = form.verticalSectionId;
-
-    // If creating a new section inline
+    let sectionId = formSectionId;
     if (showNewSection) {
       const created = await createVerticalSection();
       if (!created) return;
       sectionId = created;
     }
+    if (!sectionId) { toast.error('Debes seleccionar una Sección Vertical'); return; }
 
-    if (!sectionId) {
-      toast.error('Debes seleccionar una Sección Vertical');
-      return;
-    }
-
+    const bbox = polygonBBox(formVertices);
     const payload: any = {
-      name: form.name.trim(),
-      length: parseFloat(form.length) || 0,
-      width: parseFloat(form.width) || 0,
-      height: parseFloat(form.height) || 0,
+      name: formName.trim(),
+      length: Math.round(bbox.w * 100) / 100,
+      width: Math.round(bbox.h * 100) / 100,
+      height: parseFloat(formHeight) || 0,
       floor_plan_id: floorPlan.id,
       vertical_section_id: sectionId,
+      floor_polygon: formVertices,
     };
 
     if (editingId) {
       const { error } = await supabase.from('budget_floor_plan_rooms').update(payload).eq('id', editingId);
       if (error) { toast.error('Error al actualizar'); return; }
+      // Rebuild walls: delete old, create new per edge
+      await supabase.from('budget_floor_plan_walls').delete().eq('room_id', editingId);
+      const walls = formVertices.map((_, i) => ({ room_id: editingId, wall_index: i, wall_type: 'external' }));
+      await supabase.from('budget_floor_plan_walls').insert(walls);
       toast.success('Espacio actualizado');
     } else {
       const { data: newRoom, error } = await supabase
-        .from('budget_floor_plan_rooms')
-        .insert(payload)
-        .select('id')
-        .single();
+        .from('budget_floor_plan_rooms').insert(payload).select('id').single();
       if (error || !newRoom) { toast.error('Error al crear'); return; }
-      const defaultWalls = WALL_LABELS.map((_, i) => ({
-        room_id: newRoom.id,
-        wall_index: i,
-        wall_type: 'external',
-      }));
-      await supabase.from('budget_floor_plan_walls').insert(defaultWalls);
-      toast.success('Espacio creado con 4 paredes');
+      const walls = formVertices.map((_, i) => ({ room_id: newRoom.id, wall_index: i, wall_type: 'external' }));
+      await supabase.from('budget_floor_plan_walls').insert(walls);
+      toast.success(`Espacio creado con ${formVertices.length} paredes`);
     }
     resetForm();
     refetch();
@@ -254,63 +391,48 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
   };
 
   const handleEdit = (r: Workspace) => {
-    setForm({
-      name: r.name,
-      length: String(r.length),
-      width: String(r.width),
-      height: String(r.height || ''),
-      verticalSectionId: r.vertical_section_id || '',
-    });
+    setFormName(r.name);
+    setFormHeight(String(r.height || ''));
+    setFormVertices(r.floor_polygon && r.floor_polygon.length >= 3
+      ? r.floor_polygon
+      : [{ x: 0, y: 0 }, { x: r.length, y: 0 }, { x: r.length, y: r.width }, { x: 0, y: r.width }]
+    );
+    setFormSectionId(r.vertical_section_id || '');
     setEditingId(r.id);
     setShowForm(true);
   };
 
   const handleDelete = async (id: string) => {
-    const { error } = await supabase.from('budget_floor_plan_rooms').delete().eq('id', id);
-    if (error) { toast.error('Error al eliminar'); return; }
+    await supabase.from('budget_floor_plan_rooms').delete().eq('id', id);
     toast.success('Espacio eliminado');
     refetch();
   };
 
   const updateWallType = async (wallId: string, newType: string) => {
-    const { error } = await supabase.from('budget_floor_plan_walls').update({ wall_type: newType }).eq('id', wallId);
-    if (error) { toast.error('Error al actualizar tipo de pared'); return; }
+    await supabase.from('budget_floor_plan_walls').update({ wall_type: newType }).eq('id', wallId);
     queryClient.invalidateQueries({ queryKey: ['workspace-walls'] });
   };
 
   const updateFloorCeiling = async (roomId: string, field: 'has_floor' | 'has_ceiling', value: FloorCeilingType) => {
     const boolVal = value !== 'invisible';
-    const { error } = await supabase.from('budget_floor_plan_rooms').update({ [field]: boolVal }).eq('id', roomId);
-    if (error) { toast.error('Error al actualizar'); return; }
+    await supabase.from('budget_floor_plan_rooms').update({ [field]: boolVal }).eq('id', roomId);
     refetch();
   };
 
-  // Group workspaces by vertical section
+  // Group by vertical section
   const grouped = useMemo(() => {
     const map = new Map<string, { section: CustomSection | null; rooms: Workspace[] }>();
-    // Init groups for known sections
-    for (const s of verticalSections) {
-      map.set(s.id, { section: s, rooms: [] });
-    }
-    // Assign rooms
+    for (const s of verticalSections) map.set(s.id, { section: s, rooms: [] });
     for (const r of rooms) {
       const key = r.vertical_section_id || '__unassigned__';
-      if (!map.has(key)) {
-        map.set(key, { section: null, rooms: [] });
-      }
+      if (!map.has(key)) map.set(key, { section: null, rooms: [] });
       map.get(key)!.rooms.push(r);
     }
-    // Sort rooms within each group
-    for (const g of map.values()) {
-      g.rooms.sort((a, b) => a.name.localeCompare(b.name, 'es'));
-    }
+    for (const g of map.values()) g.rooms.sort((a, b) => a.name.localeCompare(b.name, 'es'));
     return map;
   }, [rooms, verticalSections]);
 
-  const getSectionName = (sectionId: string | null) => {
-    if (!sectionId) return null;
-    return verticalSections.find(s => s.id === sectionId)?.name || null;
-  };
+  const canSave = formName.trim() && formVertices.length >= 3 && (formSectionId || showNewSection);
 
   return (
     <div className="space-y-3">
@@ -323,9 +445,10 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
         )}
       </div>
 
+      {/* ── Creation/Edit form ── */}
       {showForm && (
-        <div className="border rounded-lg p-3 space-y-2 bg-muted/30">
-          {/* Vertical section selector */}
+        <div className="border rounded-lg p-3 space-y-3 bg-muted/30">
+          {/* Section selector */}
           <div>
             <Label className="text-[10px] font-semibold">Sección Vertical *</Label>
             {verticalSections.length === 0 && !showNewSection ? (
@@ -338,17 +461,17 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
             ) : !showNewSection ? (
               <div className="flex gap-1 items-end">
                 <div className="flex-1">
-                  <Select value={form.verticalSectionId} onValueChange={v => setForm(f => ({ ...f, verticalSectionId: v }))}>
+                  <Select value={formSectionId} onValueChange={setFormSectionId}>
                     <SelectTrigger className="h-7 text-xs">
                       <SelectValue placeholder="Seleccionar sección..." />
                     </SelectTrigger>
                     <SelectContent>
                       {verticalSections.map(s => (
                         <SelectItem key={s.id} value={s.id} className="text-xs">
-                          <div className="flex items-center gap-1.5">
-                            <Grid3x3 className="h-3 w-3 text-blue-600" />
+                          <span className="flex items-center gap-1">
+                            <Grid3x3 className="h-3 w-3 text-primary" />
                             {s.name} <span className="text-muted-foreground">(Z={s.axisValue})</span>
-                          </div>
+                          </span>
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -361,8 +484,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
             ) : null}
 
             {showNewSection && (
-              <div className="mt-1 p-2 rounded bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 space-y-1.5">
-                <p className="text-[10px] font-medium text-blue-700 dark:text-blue-300">Nueva Sección Vertical</p>
+              <div className="mt-1 p-2 rounded border border-primary/30 bg-primary/5 space-y-1.5">
+                <p className="text-[10px] font-medium text-primary">Nueva Sección Vertical</p>
                 <div className="grid grid-cols-2 gap-1.5">
                   <div>
                     <Label className="text-[10px]">Nombre</Label>
@@ -373,34 +496,29 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                     <Input className="h-7 text-xs" type="number" placeholder="0" value={newSectionAxisValue} onChange={e => setNewSectionAxisValue(e.target.value)} />
                   </div>
                 </div>
-                <div className="flex gap-1 justify-end">
-                  <Button variant="ghost" size="sm" className="h-5 text-[10px]" onClick={() => setShowNewSection(false)}>Cancelar</Button>
-                </div>
+                <Button variant="ghost" size="sm" className="h-5 text-[10px]" onClick={() => setShowNewSection(false)}>Cancelar</Button>
               </div>
             )}
           </div>
 
+          {/* Name + Height */}
           <div className="grid grid-cols-2 gap-2">
             <div className="col-span-2">
               <Label className="text-[10px]">Nombre</Label>
-              <Input className="h-7 text-xs" placeholder="Ej: Cocina" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
-            </div>
-            <div>
-              <Label className="text-[10px]">Largo X (m)</Label>
-              <Input className="h-7 text-xs" type="number" step="0.01" placeholder="4" value={form.length} onChange={e => setForm(f => ({ ...f, length: e.target.value }))} />
-            </div>
-            <div>
-              <Label className="text-[10px]">Ancho Y (m)</Label>
-              <Input className="h-7 text-xs" type="number" step="0.01" placeholder="3" value={form.width} onChange={e => setForm(f => ({ ...f, width: e.target.value }))} />
+              <Input className="h-7 text-xs" placeholder="Ej: Cocina" value={formName} onChange={e => setFormName(e.target.value)} />
             </div>
             <div>
               <Label className="text-[10px]">Alto Z (m)</Label>
-              <Input className="h-7 text-xs" type="number" step="0.01" placeholder="3" value={form.height} onChange={e => setForm(f => ({ ...f, height: e.target.value }))} />
+              <Input className="h-7 text-xs" type="number" step="0.01" placeholder="2.6" value={formHeight} onChange={e => setFormHeight(e.target.value)} />
             </div>
           </div>
+
+          {/* Polygon vertex editor */}
+          <VertexEditor vertices={formVertices} onChange={setFormVertices} />
+
           <div className="flex gap-1 justify-end">
             <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={resetForm}>Cancelar</Button>
-            <Button size="sm" className="h-6 text-[10px]" onClick={handleSave} disabled={!form.name.trim() || (!form.verticalSectionId && !showNewSection)}>
+            <Button size="sm" className="h-6 text-[10px]" onClick={handleSave} disabled={!canSave}>
               {editingId ? 'Actualizar' : 'Crear'}
             </Button>
           </div>
@@ -411,29 +529,24 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
         <p className="text-xs text-muted-foreground text-center py-4">No hay espacios de trabajo definidos</p>
       )}
 
-      {/* Grouped by vertical section */}
+      {/* ── Grouped list ── */}
       <div className="space-y-3">
         {Array.from(grouped.entries()).map(([key, { section, rooms: groupRooms }]) => {
-          if (groupRooms.length === 0 && key !== '__unassigned__') return null;
           if (groupRooms.length === 0) return null;
-
           return (
             <div key={key} className="space-y-1.5">
-              {/* Section header */}
               <div className="flex items-center gap-1.5 px-1">
-                <Grid3x3 className="h-3.5 w-3.5 text-blue-600" />
-                <span className="text-xs font-semibold text-foreground">
-                  {section ? section.name : 'Sin sección asignada'}
-                </span>
-                {section && (
-                  <Badge variant="outline" className="text-[9px] h-4 px-1">Z={section.axisValue}</Badge>
-                )}
+                <Grid3x3 className="h-3.5 w-3.5 text-primary" />
+                <span className="text-xs font-semibold">{section ? section.name : 'Sin sección asignada'}</span>
+                {section && <Badge variant="outline" className="text-[9px] h-4 px-1">Z={section.axisValue}</Badge>}
                 <Badge variant="secondary" className="text-[9px] h-4 px-1">{groupRooms.length}</Badge>
               </div>
 
               {groupRooms.map(r => {
-                const area = r.length * r.width;
-                const vol = r.height ? r.length * r.width * r.height : null;
+                const poly = r.floor_polygon && r.floor_polygon.length >= 3 ? r.floor_polygon : null;
+                const area = poly ? polygonArea(poly) : r.length * r.width;
+                const vol = r.height ? area * r.height : null;
+                const edgeCount = poly ? poly.length : 4;
                 const geo = getGeometryType(r);
                 const geoInfo = GEOMETRY_INFO[geo];
                 const isExpanded = expandedIds.has(r.id);
@@ -448,22 +561,20 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                       className="flex items-center gap-2 p-2.5 w-full text-left hover:bg-accent/30 transition-colors"
                     >
                       {isExpanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
-                      <GeometryIcon type={geo} />
+                      {poly ? <PolygonPreview vertices={poly} size={28} /> : <GeometryIcon type={geo} />}
                       <div className="flex-1 min-w-0">
                         <span className="text-sm font-medium">{r.name}</span>
                         <div className="flex flex-wrap gap-1.5 mt-0.5">
-                          <Badge variant="outline" className="text-[10px] h-4 px-1">X {r.length}m</Badge>
-                          <Badge variant="outline" className="text-[10px] h-4 px-1">Y {r.width}m</Badge>
-                          {r.height != null && r.height > 0 && (
-                            <Badge variant="outline" className="text-[10px] h-4 px-1">Z {r.height}m</Badge>
-                          )}
                           <Badge variant="secondary" className="text-[10px] h-4 px-1">📐 {area.toFixed(2)} m²</Badge>
                           {vol != null && vol > 0 && (
                             <Badge variant="secondary" className="text-[10px] h-4 px-1">📦 {vol.toFixed(2)} m³</Badge>
                           )}
-                          <Badge variant="outline" className="text-[10px] h-4 px-1 gap-0.5">
-                            {geoInfo.label} ({geoInfo.vertices}v)
+                          <Badge variant="outline" className="text-[10px] h-4 px-1">
+                            {edgeCount} aristas · {edgeCount + 2} caras
                           </Badge>
+                          {r.height != null && r.height > 0 && (
+                            <Badge variant="outline" className="text-[10px] h-4 px-1">Z {r.height}m</Badge>
+                          )}
                         </div>
                       </div>
                       {isAdmin && (
@@ -480,10 +591,28 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
 
                     {isExpanded && (
                       <div className="border-t px-3 py-2 space-y-2 bg-muted/20">
+                        {/* Polygon vertices list */}
+                        {poly && (
+                          <div className="space-y-1">
+                            <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
+                              Polígono base — {poly.length} vértices
+                            </p>
+                            <div className="flex flex-wrap gap-1">
+                              {poly.map((v, i) => (
+                                <Badge key={i} variant="outline" className="text-[9px] h-4 px-1 gap-0.5">
+                                  <MapPin className="h-2.5 w-2.5" />
+                                  ({v.x}, {v.y})
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
                         <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
-                          Caras del volumen — {geoInfo.description}
+                          Caras del volumen
                         </p>
 
+                        {/* Floor */}
                         <FaceRow
                           label="🟫 Suelo"
                           type={floorType}
@@ -492,12 +621,14 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                           onChange={(v) => updateFloorCeiling(r.id, 'has_floor', v as FloorCeilingType)}
                         />
 
-                        {WALL_LABELS.map((label, i) => {
+                        {/* Walls — one per edge */}
+                        {Array.from({ length: edgeCount }).map((_, i) => {
                           const wall = roomWalls.find(w => w.wall_index === i);
+                          const edgeLen = poly ? edgeLength(poly[i], poly[(i + 1) % poly.length]) : null;
                           return (
                             <FaceRow
                               key={i}
-                              label={`🧱 Pared ${label}`}
+                              label={`🧱 ${wallLabel(i, edgeCount)}${edgeLen ? ` (${edgeLen.toFixed(2)}m)` : ''}`}
                               type={wall?.wall_type || 'external'}
                               options={WALL_TYPES}
                               isAdmin={isAdmin}
@@ -506,6 +637,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                           );
                         })}
 
+                        {/* Ceiling */}
                         <FaceRow
                           label={r.has_roof ? '🏠 Techo (cubierta)' : '⬜ Techo'}
                           type={ceilingType}
@@ -527,11 +659,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
 }
 
 function FaceRow({
-  label,
-  type,
-  options,
-  isAdmin,
-  onChange,
+  label, type, options, isAdmin, onChange,
 }: {
   label: string;
   type: string;
@@ -550,9 +678,7 @@ function FaceRow({
           </SelectTrigger>
           <SelectContent>
             {options.map(o => (
-              <SelectItem key={o.value} value={o.value} className="text-xs">
-                {o.label}
-              </SelectItem>
+              <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
             ))}
           </SelectContent>
         </Select>

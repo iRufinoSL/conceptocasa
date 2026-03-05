@@ -3,29 +3,34 @@ Updated: now
 
 ## Espacios de Trabajo = Volúmenes
 
-Los Espacios de trabajo son volúmenes geométricos con tres formas posibles:
-- **Cubo (8 vértices)**: 6 caras — Suelo + 4 paredes (Superior, Derecha, Inferior, Izquierda) + Techo
-- **Prisma (6 vértices)**: Tejado a dos aguas (2 coordenadas superiores)
-- **Pirámide (5 vértices)**: Punta central (1 coordenada superior)
+Los Espacios de trabajo son volúmenes geométricos cuya base/suelo es un **polígono de N vértices** (mínimo 3). El campo `floor_polygon` (JSONB) en `budget_floor_plan_rooms` almacena `[{x, y}, ...]` en metros. Los campos `length` y `width` se calculan del bounding box del polígono para retrocompatibilidad.
 
 ### Vinculación obligatoria a Sección Vertical
-Cada Espacio de trabajo DEBE pertenecer a una Sección Vertical. No se puede crear un Espacio sin asignar una Sección Vertical. El campo `vertical_section_id` (text) en `budget_floor_plan_rooms` almacena el ID de la sección vertical (del JSON `customSections` en `custom_corners`). Si no existen secciones verticales, el formulario permite crear una nueva inline.
+Cada Espacio DEBE pertenecer a una Sección Vertical (`vertical_section_id` text). Si no existen secciones verticales, el formulario permite crear una nueva inline. Los espacios se agrupan visualmente por su Sección Vertical.
 
-Los espacios se agrupan visualmente por su Sección Vertical en el listado.
+### Geometría de caras
+- **Suelo**: Polígono de N vértices → N aristas
+- **Paredes**: Una pared por cada arista del polígono base (no fijo en 4). Cada pared muestra su longitud calculada.
+- **Techo**: Una cara superior (Normal, Invisible, Compartido)
+- Total de caras: N aristas + Suelo + Techo = N + 2
 
 ### Tipos de cara
 - **Paredes**: Externa, Interna, Invisible, Externa compartida, Interna compartida
-- **Suelo**: Normal, Invisible, Compartido
-- **Techo**: Normal, Invisible, Compartido
+- **Suelo/Techo**: Normal, Invisible, Compartido
 
-### Nomenclatura de paredes
-La posición (Superior/Derecha/Inferior/Izquierda) viene de la sección vertical del nivel correspondiente.
+### Cálculos automáticos
+- Área (m²): Fórmula del shoelace sobre el polígono base
+- Volumen (m³): Área × altura Z
+- Longitud de cada arista mostrada junto al tipo de pared
 
-### Altura
-Cada espacio puede tener su altura propia individual o heredar la altura por defecto del nivel. Las paredes compartidas se computan al 50% y los segmentos 'Invisibles' se excluyen de los totales.
+### Formas especiales en alzado
+- **Cubo**: 8 vértices (base rectangular + techo plano)
+- **Prisma**: 6 vértices (tejado a dos aguas)
+- **Pirámide**: 5 vértices (punta central)
+
+### Entrada de geometría
+- Manual: Editor de vértices (X, Y) con preview SVG inline
+- Interactivo: Dibujo sobre cuadrícula (futuro)
 
 ### Objetos y capas (futuro)
-Dentro de cada Espacio de trabajo habrá objetos organizados por capas (ej. Bloques 625×250×300 como volumen conjunto → m²/m³, o Vigas de madera/acero). Se definirán en una fase posterior.
-
-### Definición de espacios
-Los espacios se pueden definir desde las Secciones (coordenadas XYZ) o directamente en 3D proporcionando las coordenadas del volumen.
+Dentro de cada Espacio habrá objetos organizados por capas.

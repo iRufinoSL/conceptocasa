@@ -52,6 +52,51 @@ function generateId() {
   return crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/** Compute 2D polygon metrics: area (m²), max width (largo), max height (alto) */
+function computePolygonMetrics(
+  vertices: Array<{ x: number; y: number; z: number }>,
+  sectionType: string,
+  scaleConfig?: ScaleConfig
+) {
+  if (vertices.length < 2) return { areaM2: 0, largoM: 0, altoM: 0 };
+
+  // Map to 2D based on section type
+  const get2D = (v: { x: number; y: number; z: number }): [number, number] => {
+    if (sectionType === 'vertical') return [v.x, v.y];
+    if (sectionType === 'longitudinal') return [v.x, v.z];
+    return [v.y, v.z]; // transversal
+  };
+
+  // Scale factors (mm per grid unit → m per grid unit)
+  const hScale = sectionType === 'transversal'
+    ? (scaleConfig?.scaleY ?? 625) / 1000
+    : (scaleConfig?.scaleX ?? 625) / 1000;
+  const vScale = sectionType === 'vertical'
+    ? (scaleConfig?.scaleY ?? 625) / 1000
+    : (scaleConfig?.scaleZ ?? 250) / 1000;
+
+  const pts = vertices.map(get2D);
+
+  // Bounding box in meters
+  const hs = pts.map(p => p[0]);
+  const vs = pts.map(p => p[1]);
+  const largoM = (Math.max(...hs) - Math.min(...hs)) * hScale;
+  const altoM = (Math.max(...vs) - Math.min(...vs)) * vScale;
+
+  // Shoelace formula for area (in real-world m²)
+  let area = 0;
+  if (pts.length >= 3) {
+    for (let i = 0; i < pts.length; i++) {
+      const j = (i + 1) % pts.length;
+      area += (pts[i][0] * hScale) * (pts[j][1] * vScale);
+      area -= (pts[j][0] * hScale) * (pts[i][1] * vScale);
+    }
+    area = Math.abs(area) / 2;
+  }
+
+  return { areaM2: area, largoM, altoM };
+}
+
 // Colors for polygons
 const POLY_COLORS = [
   'hsl(var(--primary))',
@@ -454,25 +499,35 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
                   {section.polygons.length === 0 && (
                     <p className="text-[10px] text-muted-foreground italic">Sin polígonos definidos. La cuadrícula se muestra vacía.</p>
                   )}
-                  {section.polygons.map(poly => (
-                    <div key={poly.id} className="flex items-center justify-between bg-muted/30 rounded px-2 py-1">
-                      <div className="flex items-center gap-2">
-                        <Pentagon className="h-3 w-3 text-primary" />
-                        <span className="text-[11px] font-medium">{poly.name}</span>
-                        <span className="text-[9px] text-muted-foreground">
-                          {poly.vertices.length} vértices: {poly.vertices.map(v => `(${v.x},${v.y},${v.z})`).join(' → ')}
-                        </span>
+                  {section.polygons.map(poly => {
+                    const metrics = computePolygonMetrics(poly.vertices, section.sectionType, scaleConfig);
+                    return (
+                      <div key={poly.id} className="bg-muted/30 rounded px-2 py-1.5">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Pentagon className="h-3 w-3 text-primary" />
+                            <span className="text-[11px] font-medium">{poly.name}</span>
+                            <span className="text-[9px] text-muted-foreground">
+                              {poly.vertices.length} vértices
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => startEditPolygon(section.id, poly)}>
+                              <Pencil className="h-3 w-3" />
+                            </Button>
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive hover:bg-destructive/10" onClick={() => deletePolygon(section.id, poly.id)}>
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 mt-1 ml-5 text-[10px] text-muted-foreground">
+                          <span title="Superficie">📐 {metrics.areaM2.toFixed(2)} m²</span>
+                          <span title="Largo máximo (horizontal)">↔ {metrics.largoM.toFixed(2)} m</span>
+                          <span title="Alto máximo (vertical)">↕ {metrics.altoM.toFixed(2)} m</span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => startEditPolygon(section.id, poly)}>
-                          <Pencil className="h-3 w-3" />
-                        </Button>
-                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive hover:bg-destructive/10" onClick={() => deletePolygon(section.id, poly.id)}>
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
 
                   {/* Add/Edit polygon form */}
                   {editingPolygonOf === section.id ? (

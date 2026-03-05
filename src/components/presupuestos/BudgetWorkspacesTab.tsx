@@ -569,12 +569,20 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                   const cx = verts.reduce((s, v) => s + v.x, 0) / verts.length;
                   const cy = verts.reduce((s, v) => s + v.y, 0) / verts.length;
                   const { sx, sy } = toSvg(cx, cy);
+                  const areaVal = polygonArea(verts) * cellSizeM * cellSizeM;
                   return (
-                    <text x={sx} y={sy} textAnchor="middle" dominantBaseline="central"
-                      className="text-[8px] font-semibold select-none pointer-events-none"
-                      fill={color}>
-                      {op.name}
-                    </text>
+                    <>
+                      <text x={sx} y={sy - 5} textAnchor="middle" dominantBaseline="central"
+                        className="text-[8px] font-semibold select-none pointer-events-none"
+                        fill={color}>
+                        {op.name}
+                      </text>
+                      <text x={sx} y={sy + 7} textAnchor="middle" dominantBaseline="central"
+                        className="text-[7px] select-none pointer-events-none"
+                        fill={color} opacity={0.8}>
+                        {areaVal.toFixed(2)} m²
+                      </text>
+                    </>
                   );
                 })()}
               </g>
@@ -1278,7 +1286,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                               cellSizeM={cellSizeM}
                               activeRoomId={r.id}
                               otherPolygons={rooms
-                                .filter(other => other.id !== r.id && other.floor_polygon && other.floor_polygon.length >= 3)
+                                .filter(other => other.id !== r.id && other.vertical_section_id === r.vertical_section_id && other.floor_polygon && other.floor_polygon.length >= 3)
                                 .map(other => ({ id: other.id, name: other.name, vertices: other.floor_polygon! }))}
                               onSwitchRoom={switchGridEditRoom}
                               perimeterPolygon={getSectionPerimeter(r.vertical_section_id)}

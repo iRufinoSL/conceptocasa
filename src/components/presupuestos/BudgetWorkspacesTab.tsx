@@ -281,6 +281,10 @@ const POLY_COLORS = [
 function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16, gridOffsetX = 0, gridOffsetY = 0, placedRooms = [], cellSizeM = 1, otherPolygons = [], activeRoomId, onSwitchRoom, perimeterPolygon }: GridPolygonDrawerProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null);
+  const [draggingIdx, setDraggingIdx] = useState<number | null>(null);
+
+  // Polygon is "closed" when it has >= 3 vertices and was explicitly closed by clicking first vertex
+  const [isClosed, setIsClosed] = useState(() => vertices.length >= 3);
 
   const cellSize = 28;
   const pad = 30;
@@ -292,28 +296,96 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
     sy: pad + (gridHeight - (gy - gridOffsetY)) * cellSize,
   });
 
+  const fromSvg = (sx: number, sy: number) => ({
+    gx: Math.round((sx - pad) / cellSize + gridOffsetX),
+    gy: Math.round(gridOffsetY + gridHeight - (sy - pad) / cellSize),
+  });
+
   const handleClick = (gx: number, gy: number) => {
-    if (vertices.length >= 3 && gx === vertices[0].x && gy === vertices[0].y) return;
+    if (isClosed) return; // In closed/edit mode, no new vertices
+    // Close polygon by clicking first vertex
+    if (vertices.length >= 3 && gx === vertices[0].x && gy === vertices[0].y) {
+      setIsClosed(true);
+      return;
+    }
     if (vertices.some(v => v.x === gx && v.y === gy)) return;
     onChange([...vertices, { x: gx, y: gy }]);
   };
 
   const handleUndo = () => {
-    if (vertices.length > 0) onChange(vertices.slice(0, -1));
+    if (isClosed) {
+      // Reopen for drawing (remove last vertex)
+      setIsClosed(false);
+      onChange(vertices.slice(0, -1));
+    } else if (vertices.length > 0) {
+      onChange(vertices.slice(0, -1));
+    }
   };
 
-  const handleClear = () => onChange([]);
+  const handleClear = () => {
+    onChange([]);
+    setIsClosed(false);
+  };
+
+  // Drag vertex handling
+  const handleMouseDown = (idx: number, e: React.MouseEvent) => {
+    if (!isClosed) return;
+    e.stopPropagation();
+    e.preventDefault();
+    setDraggingIdx(idx);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (draggingIdx === null || !svgRef.current) return;
+    const rect = svgRef.current.getBoundingClientRect();
+    const sx = e.clientX - rect.left;
+    const sy = e.clientY - rect.top;
+    const { gx, gy } = fromSvg(sx, sy);
+    // Snap to grid
+    const snappedX = Math.max(gridOffsetX, Math.min(gridOffsetX + gridWidth, gx));
+    const snappedY = Math.max(gridOffsetY, Math.min(gridOffsetY + gridHeight, gy));
+    if (snappedX !== vertices[draggingIdx].x || snappedY !== vertices[draggingIdx].y) {
+      const next = [...vertices];
+      next[draggingIdx] = { x: snappedX, y: snappedY };
+      onChange(next);
+    }
+  };
+
+  const handleMouseUp = () => {
+    setDraggingIdx(null);
+  };
 
   const areaM2 = polygonArea(vertices) * cellSizeM * cellSizeM;
   const closingLen = vertices.length >= 3 ? edgeLength(vertices[vertices.length - 1], vertices[0]) * cellSizeM : 0;
 
+  // Check if hovering near first vertex (for close hint)
+  const isNearFirst = !isClosed && vertices.length >= 3 && hoverCell && hoverCell.x === vertices[0].x && hoverCell.y === vertices[0].y;
+
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
-        <Label className="text-[10px] font-semibold">Dibujar polígono en cuadrícula (click para añadir vértices)</Label>
+        <Label className="text-[10px] font-semibold">
+          {!isClosed
+            ? vertices.length === 0
+              ? 'Pulsa en las intersecciones para dibujar el polígono'
+              : vertices.length < 3
+                ? `Sigue añadiendo vértices (${vertices.length}/mín.3)`
+                : 'Pulsa el primer vértice para cerrar el polígono'
+            : 'Polígono cerrado — arrastra los vértices para editar'}
+        </Label>
         {vertices.length >= 3 && (
           <Badge variant="secondary" className="text-[9px] h-4">📐 {areaM2.toFixed(2)} m²</Badge>
         )}
+      </div>
+
+      {/* Status indicator */}
+      <div className="flex items-center gap-1.5">
+        <Badge variant={isClosed ? 'default' : 'outline'} className="text-[9px] h-4 gap-0.5">
+          {isClosed ? '✅ Cerrado' : '⏳ Abierto'}
+        </Badge>
+        <span className="text-[9px] text-muted-foreground">
+          {vertices.length} vértice{vertices.length !== 1 ? 's' : ''}
+        </span>
       </div>
 
       {/* Legend for other polygons */}
@@ -345,7 +417,10 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
           width={svgW}
           height={svgH}
           className="block"
-          style={{ minWidth: svgW }}
+          style={{ minWidth: svgW, cursor: draggingIdx !== null ? 'grabbing' : undefined }}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
         >
           {/* Grid cells — checkerboard */}
           {Array.from({ length: gridHeight }).map((_, row) =>
@@ -458,7 +533,6 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             if (verts.length < 3) return null;
             return (
               <g key={`other-${op.id}`} className="cursor-pointer" onClick={() => onSwitchRoom?.(op.id)}>
-                {/* Filled polygon */}
                 <polygon
                   points={verts.map(v => { const { sx, sy } = toSvg(v.x, v.y); return `${sx},${sy}`; }).join(' ')}
                   fill={color.replace(')', ' / 0.12)')}
@@ -466,17 +540,6 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                   strokeWidth={1.5}
                   strokeDasharray="4 2"
                 />
-                {/* Edges */}
-                {verts.map((v, i) => {
-                  const next = verts[(i + 1) % verts.length];
-                  const { sx: x1, sy: y1 } = toSvg(v.x, v.y);
-                  const { sx: x2, sy: y2 } = toSvg(next.x, next.y);
-                  return (
-                    <line key={`oe-${op.id}-${i}`} x1={x1} y1={y1} x2={x2} y2={y2}
-                      stroke={color} strokeWidth={1.5} strokeDasharray="4 2" />
-                  );
-                })}
-                {/* Vertices */}
                 {verts.map((v, i) => {
                   const { sx, sy } = toSvg(v.x, v.y);
                   return (
@@ -484,7 +547,6 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                       fill={color} opacity={0.7} />
                   );
                 })}
-                {/* Label at centroid */}
                 {(() => {
                   const cx = verts.reduce((s, v) => s + v.x, 0) / verts.length;
                   const cy = verts.reduce((s, v) => s + v.y, 0) / verts.length;
@@ -501,36 +563,15 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             );
           })}
 
-          {/* Clickable intersections */}
-          {Array.from({ length: gridHeight + 1 }).map((_, iy) =>
-            Array.from({ length: gridWidth + 1 }).map((_, ix) => {
-              const gx = ix + gridOffsetX;
-              const gy = iy + gridOffsetY;
-              const { sx, sy } = toSvg(gx, gy);
-              const isPlaced = vertices.some(v => v.x === gx && v.y === gy);
-              const isHover = hoverCell?.x === gx && hoverCell?.y === gy;
-              const isFirst = vertices.length >= 3 && gx === vertices[0].x && gy === vertices[0].y;
-              return (
-                <g key={`pt-${gx}-${gy}`}>
-                  <circle
-                    cx={sx} cy={sy} r={isPlaced ? 5 : isHover ? 4 : 2}
-                    fill={isPlaced ? 'hsl(var(--primary))' : isHover ? 'hsl(var(--primary) / 0.4)' : 'hsl(var(--muted-foreground) / 0.25)'}
-                    stroke={isFirst && !isPlaced ? 'hsl(var(--primary))' : 'none'}
-                    strokeWidth={2}
-                    className="cursor-pointer"
-                    onClick={() => handleClick(gx, gy)}
-                    onMouseEnter={() => setHoverCell({ x: gx, y: gy })}
-                    onMouseLeave={() => setHoverCell(null)}
-                  />
-                  {isPlaced && (
-                    <text x={sx} y={sy - 7} textAnchor="middle"
-                      className="text-[7px] fill-primary font-bold select-none pointer-events-none">
-                      {vertices.findIndex(v => v.x === gx && v.y === gy) + 1}
-                    </text>
-                  )}
-                </g>
-              );
-            })
+          {/* Filled polygon preview */}
+          {vertices.length >= 3 && (
+            <polygon
+              points={vertices.map(v => { const { sx, sy } = toSvg(v.x, v.y); return `${sx},${sy}`; }).join(' ')}
+              fill={isClosed ? 'hsl(var(--primary) / 0.15)' : 'hsl(var(--primary) / 0.08)'}
+              stroke={isClosed ? 'hsl(var(--primary))' : 'none'}
+              strokeWidth={isClosed ? 2 : 0}
+              className="pointer-events-none"
+            />
           )}
 
           {/* Edges between placed vertices */}
@@ -551,24 +592,26 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             );
           })}
 
-          {/* Closing edge (dashed) */}
+          {/* Closing edge */}
           {vertices.length >= 3 && (() => {
             const { sx: x1, sy: y1 } = toSvg(vertices[vertices.length - 1].x, vertices[vertices.length - 1].y);
             const { sx: x2, sy: y2 } = toSvg(vertices[0].x, vertices[0].y);
             return (
               <g>
                 <line x1={x1} y1={y1} x2={x2} y2={y2}
-                  stroke="hsl(var(--primary) / 0.5)" strokeWidth={1.5} strokeDasharray="4 3" />
+                  stroke={isClosed ? 'hsl(var(--primary))' : 'hsl(var(--primary) / 0.5)'}
+                  strokeWidth={isClosed ? 2 : 1.5}
+                  strokeDasharray={isClosed ? 'none' : '4 3'} />
                 <text x={(x1 + x2) / 2} y={(y1 + y2) / 2 - 5} textAnchor="middle"
-                  className="text-[7px] fill-muted-foreground font-semibold select-none pointer-events-none">
+                  className="text-[7px] fill-primary font-semibold select-none pointer-events-none">
                   {closingLen.toFixed(2)}m
                 </text>
               </g>
             );
           })()}
 
-          {/* Preview line from last vertex to hover */}
-          {vertices.length > 0 && hoverCell && !vertices.some(v => v.x === hoverCell.x && v.y === hoverCell.y) && (() => {
+          {/* Preview line from last vertex to hover (only while drawing) */}
+          {!isClosed && vertices.length > 0 && hoverCell && !vertices.some(v => v.x === hoverCell.x && v.y === hoverCell.y) && (() => {
             const last = vertices[vertices.length - 1];
             const { sx: x1, sy: y1 } = toSvg(last.x, last.y);
             const { sx: x2, sy: y2 } = toSvg(hoverCell.x, hoverCell.y);
@@ -578,27 +621,84 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             );
           })()}
 
-          {/* Filled polygon preview */}
-          {vertices.length >= 3 && (
-            <polygon
-              points={vertices.map(v => { const { sx, sy } = toSvg(v.x, v.y); return `${sx},${sy}`; }).join(' ')}
-              fill="hsl(var(--primary) / 0.08)"
-              stroke="none"
-              className="pointer-events-none"
-            />
+          {/* Clickable intersections (drawing mode) or draggable vertices (edit mode) */}
+          {!isClosed && Array.from({ length: gridHeight + 1 }).map((_, iy) =>
+            Array.from({ length: gridWidth + 1 }).map((_, ix) => {
+              const gx = ix + gridOffsetX;
+              const gy = iy + gridOffsetY;
+              const { sx, sy } = toSvg(gx, gy);
+              const isPlaced = vertices.some(v => v.x === gx && v.y === gy);
+              const isHover = hoverCell?.x === gx && hoverCell?.y === gy;
+              const isFirstClose = isNearFirst && gx === vertices[0].x && gy === vertices[0].y;
+              return (
+                <g key={`pt-${gx}-${gy}`}>
+                  <circle
+                    cx={sx} cy={sy}
+                    r={isPlaced ? 5 : isFirstClose ? 6 : isHover ? 4 : 2}
+                    fill={isPlaced ? 'hsl(var(--primary))' : isFirstClose ? 'hsl(var(--chart-2))' : isHover ? 'hsl(var(--primary) / 0.4)' : 'hsl(var(--muted-foreground) / 0.25)'}
+                    stroke={isFirstClose ? 'hsl(var(--chart-2))' : 'none'}
+                    strokeWidth={isFirstClose ? 2.5 : 0}
+                    className="cursor-pointer"
+                    onClick={() => handleClick(gx, gy)}
+                    onMouseEnter={() => setHoverCell({ x: gx, y: gy })}
+                    onMouseLeave={() => setHoverCell(null)}
+                  />
+                  {isPlaced && (
+                    <text x={sx} y={sy - 7} textAnchor="middle"
+                      className="text-[7px] fill-primary font-bold select-none pointer-events-none">
+                      {vertices.findIndex(v => v.x === gx && v.y === gy) + 1}
+                    </text>
+                  )}
+                  {isFirstClose && (
+                    <text x={sx} y={sy + 14} textAnchor="middle"
+                      className="text-[7px] fill-chart-2 font-bold select-none pointer-events-none">
+                      Cerrar
+                    </text>
+                  )}
+                </g>
+              );
+            })
           )}
+
+          {/* Draggable vertices when closed */}
+          {isClosed && vertices.map((v, i) => {
+            const { sx, sy } = toSvg(v.x, v.y);
+            const isDragging = draggingIdx === i;
+            return (
+              <g key={`dv-${i}`}>
+                <circle
+                  cx={sx} cy={sy} r={isDragging ? 7 : 6}
+                  fill={isDragging ? 'hsl(var(--chart-2))' : 'hsl(var(--primary))'}
+                  stroke="hsl(var(--background))"
+                  strokeWidth={2}
+                  className="cursor-grab active:cursor-grabbing"
+                  onMouseDown={(e) => handleMouseDown(i, e)}
+                />
+                <text x={sx} y={sy - 9} textAnchor="middle"
+                  className="text-[7px] fill-primary font-bold select-none pointer-events-none">
+                  {i + 1} ({v.x},{v.y})
+                </text>
+              </g>
+            );
+          })}
         </svg>
       </div>
 
       <div className="flex items-center gap-1.5">
-        <Button variant="outline" size="sm" className="h-5 text-[10px] gap-0.5" onClick={handleUndo} disabled={vertices.length === 0}>
-          Deshacer
+        <Button variant="outline" size="sm" className="h-5 text-[10px] gap-0.5" onClick={handleUndo}
+          disabled={vertices.length === 0}>
+          {isClosed ? 'Reabrir' : 'Deshacer'}
         </Button>
-        <Button variant="outline" size="sm" className="h-5 text-[10px] gap-0.5" onClick={handleClear} disabled={vertices.length === 0}>
+        <Button variant="outline" size="sm" className="h-5 text-[10px] gap-0.5" onClick={handleClear}
+          disabled={vertices.length === 0}>
           Limpiar
         </Button>
         <span className="text-[9px] text-muted-foreground ml-auto">
-          {vertices.length} vértice{vertices.length !== 1 ? 's' : ''} · Mín. 3
+          {isClosed
+            ? 'Arrastra vértices · Deshacer para reabrir'
+            : vertices.length >= 3
+              ? 'Pulsa primer vértice para cerrar'
+              : `${vertices.length}/3 mín.`}
         </span>
       </div>
     </div>
@@ -616,9 +716,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
   const [gridEditVertices, setGridEditVertices] = useState<PolygonVertex[]>([]);
   const [formName, setFormName] = useState('');
   const [formHeight, setFormHeight] = useState('');
-  const [formVertices, setFormVertices] = useState<PolygonVertex[]>([
-    { x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 3 }, { x: 0, y: 3 },
-  ]);
+  const [formVertices, setFormVertices] = useState<PolygonVertex[]>([]);
   const [formSectionId, setFormSectionId] = useState('');
   const [showNewSection, setShowNewSection] = useState(false);
   const [newSectionName, setNewSectionName] = useState('');
@@ -757,7 +855,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
   const resetForm = () => {
     setFormName('');
     setFormHeight('');
-    setFormVertices([{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 3 }, { x: 0, y: 3 }]);
+    setFormVertices([]);
     setFormSectionId('');
     setEditingId(null);
     setShowForm(false);
@@ -845,7 +943,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     setFormHeight(String(r.height || ''));
     setFormVertices(r.floor_polygon && r.floor_polygon.length >= 3
       ? r.floor_polygon
-      : [{ x: 0, y: 0 }, { x: r.length, y: 0 }, { x: r.length, y: r.width }, { x: 0, y: r.width }]
+      : []
     );
     setFormSectionId(r.vertical_section_id || '');
     setEditingId(r.id);
@@ -872,7 +970,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
   const openGridEditor = (r: Workspace) => {
     const verts = r.floor_polygon && r.floor_polygon.length >= 3
       ? r.floor_polygon
-      : [{ x: 0, y: 0 }, { x: r.length, y: 0 }, { x: r.length, y: r.width }, { x: 0, y: r.width }];
+      : [];
     setGridEditVertices(verts);
     setGridEditId(r.id);
     // Ensure the room is expanded

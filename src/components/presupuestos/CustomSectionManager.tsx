@@ -259,6 +259,7 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
   const [editingPolygonOf, setEditingPolygonOf] = useState<string | null>(null);
   const [polygonName, setPolygonName] = useState('');
   const [polygonVertices, setPolygonVertices] = useState('');
+  const [editingPolygonId, setEditingPolygonId] = useState<string | null>(null);
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
 
@@ -314,17 +315,36 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
     if (!polygonName.trim() || !polygonVertices.trim()) return;
     const vertices = parseVertices(polygonVertices);
     if (vertices.length < 2) return;
-    const polygon: SectionPolygon = {
-      id: generateId(),
-      name: polygonName.trim(),
-      vertices,
-    };
-    onSectionsChange(sections.map(s =>
-      s.id === sectionId ? { ...s, polygons: [...s.polygons, polygon] } : s
-    ));
+
+    if (editingPolygonId) {
+      // Update existing polygon
+      onSectionsChange(sections.map(s =>
+        s.id === sectionId
+          ? { ...s, polygons: s.polygons.map(p => p.id === editingPolygonId ? { ...p, name: polygonName.trim(), vertices } : p) }
+          : s
+      ));
+    } else {
+      // Add new polygon
+      const polygon: SectionPolygon = {
+        id: generateId(),
+        name: polygonName.trim(),
+        vertices,
+      };
+      onSectionsChange(sections.map(s =>
+        s.id === sectionId ? { ...s, polygons: [...s.polygons, polygon] } : s
+      ));
+    }
     setPolygonName('');
     setPolygonVertices('');
     setEditingPolygonOf(null);
+    setEditingPolygonId(null);
+  };
+
+  const startEditPolygon = (sectionId: string, poly: SectionPolygon) => {
+    setEditingPolygonOf(sectionId);
+    setEditingPolygonId(poly.id);
+    setPolygonName(poly.name);
+    setPolygonVertices(poly.vertices.map(v => `${v.x},${v.y},${v.z}`).join('; '));
   };
 
   const deletePolygon = (sectionId: string, polygonId: string) => {
@@ -443,13 +463,18 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
                           {poly.vertices.length} vértices: {poly.vertices.map(v => `(${v.x},${v.y},${v.z})`).join(' → ')}
                         </span>
                       </div>
-                      <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-destructive" onClick={() => deletePolygon(section.id, poly.id)}>
-                        <Trash2 className="h-2.5 w-2.5" />
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => startEditPolygon(section.id, poly)}>
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive hover:bg-destructive/10" onClick={() => deletePolygon(section.id, poly.id)}>
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
                     </div>
                   ))}
 
-                  {/* Add polygon form */}
+                  {/* Add/Edit polygon form */}
                   {editingPolygonOf === section.id ? (
                     <div className="border border-dashed border-primary/30 rounded p-2 space-y-1.5">
                       <div>
@@ -461,8 +486,10 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
                         <Input className="h-6 text-xs" placeholder="0,0,0; 5,0,0; 5,0,10; 0,0,10" value={polygonVertices} onChange={e => setPolygonVertices(e.target.value)} />
                       </div>
                       <div className="flex gap-1 justify-end">
-                        <Button variant="ghost" size="sm" className="h-5 text-[10px]" onClick={() => setEditingPolygonOf(null)}>Cancelar</Button>
-                        <Button size="sm" className="h-5 text-[10px]" onClick={() => addPolygon(section.id)} disabled={!polygonName.trim() || !polygonVertices.trim()}>Añadir</Button>
+                        <Button variant="ghost" size="sm" className="h-5 text-[10px]" onClick={() => { setEditingPolygonOf(null); setEditingPolygonId(null); }}>Cancelar</Button>
+                        <Button size="sm" className="h-5 text-[10px]" onClick={() => addPolygon(section.id)} disabled={!polygonName.trim() || !polygonVertices.trim()}>
+                          {editingPolygonId ? 'Guardar' : 'Añadir'}
+                        </Button>
                       </div>
                     </div>
                   ) : (

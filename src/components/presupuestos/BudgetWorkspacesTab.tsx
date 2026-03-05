@@ -967,7 +967,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
       toast.success(`Espacio creado con ${formVertices.length} paredes`);
     }
     resetForm();
-    refetch();
+    await refetch();
     queryClient.invalidateQueries({ queryKey: ['workspace-walls'] });
   };
 
@@ -1037,7 +1037,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     await supabase.from('budget_floor_plan_walls').insert(walls);
     toast.success('Polígono actualizado');
     setGridEditId(null);
-    refetch();
+    await refetch();
     queryClient.invalidateQueries({ queryKey: ['workspace-walls'] });
   };
 

@@ -6,7 +6,7 @@ import { Separator } from '@/components/ui/separator';
 import { Grid3x3, ArrowLeftRight, ArrowUpDown, AlertTriangle } from 'lucide-react';
 import { FloorPlanGridView } from './FloorPlanGridView';
 import { ElevationsGridViewer } from './ElevationsGridViewer';
-import { CustomSectionManager, type CustomSection } from './CustomSectionManager';
+import { CustomSectionManager, type CustomSection, type ScaleConfig } from './CustomSectionManager';
 import type { FloorPlanData, RoomData, FloorLevel, WallType } from '@/lib/floor-plan-calculations';
 import type { CustomCorner, ManualElevation } from '@/hooks/useFloorPlan';
 
@@ -145,6 +145,26 @@ export function SectionsView(props: SectionsViewProps) {
     [props.floors, props.planData, props.rooms]
   );
 
+  // Build scale config for custom section grids
+  const scaleConfig: ScaleConfig = useMemo(() => {
+    const scaleX = props.planData.blockLengthMm || 625;
+    const scaleY = props.planData.blockLengthMm || 625;
+    const scaleZ = props.planData.blockHeightMm || 250;
+    const csm = scaleX / 1000;
+    const placedRooms = props.rooms.filter(r => r.posX != null && r.posY != null);
+
+    let minX = 0, maxX = 10, minY = 0, maxY = 10, minZ = 0, maxZ = 10;
+    if (placedRooms.length > 0) {
+      minX = Math.min(...placedRooms.map(r => Math.round(r.posX! / csm)));
+      maxX = Math.max(...placedRooms.map(r => Math.round((r.posX! + r.width) / csm)));
+      minY = Math.min(...placedRooms.map(r => Math.round(r.posY! / csm)));
+      maxY = Math.max(...placedRooms.map(r => Math.round((r.posY! + r.length) / csm)));
+      const defaultHMm = (props.planData.defaultHeight || 2.6) * 1000;
+      maxZ = Math.ceil(defaultHMm / scaleZ) * (props.floors.length || 1);
+    }
+    return { scaleX, scaleY, scaleZ, gridRange: { minX, maxX, minY, maxY, minZ, maxZ } };
+  }, [props.planData, props.rooms, props.floors]);
+
   return (
     <div className="space-y-3">
       <Tabs value={sectionType} onValueChange={v => setSectionType(v as any)}>
@@ -170,6 +190,7 @@ export function SectionsView(props: SectionsViewProps) {
             sectionType="vertical"
             sections={props.customSections || []}
             onSectionsChange={props.onCustomSectionsChange || (() => {})}
+            scaleConfig={scaleConfig}
           />
           <Separator />
           <div className="mb-2">
@@ -224,6 +245,7 @@ export function SectionsView(props: SectionsViewProps) {
             sectionType="longitudinal"
             sections={props.customSections || []}
             onSectionsChange={props.onCustomSectionsChange || (() => {})}
+            scaleConfig={scaleConfig}
           />
           <Separator />
           <div className="mb-2">
@@ -263,6 +285,7 @@ export function SectionsView(props: SectionsViewProps) {
             sectionType="transversal"
             sections={props.customSections || []}
             onSectionsChange={props.onCustomSectionsChange || (() => {})}
+            scaleConfig={scaleConfig}
           />
           <Separator />
           <div className="mb-2">

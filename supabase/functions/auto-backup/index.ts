@@ -59,6 +59,41 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Authentication: require admin JWT or cron scheduler secret
+  const authHeader = req.headers.get('Authorization');
+  const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.replace('Bearer ', '') : null;
+
+  if (!bearerToken) {
+    return new Response(JSON.stringify({ error: 'No autorizado' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
+
+  // Check scheduler secret first (for cron jobs)
+  const schedulerSecret = Deno.env.get('SCHEDULER_SECRET');
+  let isAuthorized = false;
+
+  if (schedulerSecret && bearerToken === schedulerSecret) {
+    isAuthorized = true;
+  } else {
+    // Fallback: validate as admin JWT
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const authClient = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authHeader! } },
+    });
+    const { data: claims, error: claimsErr } = await authClient.auth.getClaims(bearerToken);
+    if (!claimsErr && claims?.claims?.sub) {
+      const userId = claims.claims.sub;
+      const { data: roleCheck } = await authClient.rpc('is_admin', { _user_id: userId });
+      if (roleCheck === true) {
+        isAuthorized = true;
+      }
+    }
+  }
+
+  if (!isAuthorized) {
+    return new Response(JSON.stringify({ error: 'Acceso denegado' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
+
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;

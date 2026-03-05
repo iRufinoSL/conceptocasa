@@ -1,37 +1,39 @@
-import React, { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import React, { useState, useMemo } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Plus, Trash2, ChevronDown, ChevronRight, Pencil, MapPin, Pentagon } from 'lucide-react';
 
 export interface SectionPolygon {
   id: string;
   name: string;
-  /** Ordered vertex coordinates as "X,Y,Z" strings */
   vertices: Array<{ x: number; y: number; z: number; label?: string }>;
 }
 
 export interface CustomSection {
   id: string;
   name: string;
-  /** 'vertical' | 'longitudinal' | 'transversal' */
   sectionType: 'vertical' | 'longitudinal' | 'transversal';
-  /** The axis this section is based on */
   axis: 'X' | 'Y' | 'Z';
-  /** The value on that axis */
   axisValue: number;
-  /** Polygons defined within this section */
   polygons: SectionPolygon[];
+}
+
+export interface ScaleConfig {
+  scaleX: number; // mm per unit X (default 625)
+  scaleY: number; // mm per unit Y (default 625)
+  scaleZ: number; // mm per unit Z (default 250)
+  gridRange?: { minX: number; maxX: number; minY: number; maxY: number; minZ: number; maxZ: number };
 }
 
 interface CustomSectionManagerProps {
   sectionType: 'vertical' | 'longitudinal' | 'transversal';
   sections: CustomSection[];
   onSectionsChange: (sections: CustomSection[]) => void;
+  scaleConfig?: ScaleConfig;
 }
 
 const AXIS_MAP: Record<string, { axis: 'X' | 'Y' | 'Z'; label: string; placeholder: string }[]> = {
@@ -50,7 +52,176 @@ function generateId() {
   return crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export function CustomSectionManager({ sectionType, sections, onSectionsChange }: CustomSectionManagerProps) {
+// Colors for polygons
+const POLY_COLORS = [
+  'hsl(var(--primary))',
+  'hsl(210, 70%, 50%)',
+  'hsl(150, 60%, 40%)',
+  'hsl(30, 80%, 50%)',
+  'hsl(280, 60%, 50%)',
+  'hsl(0, 70%, 50%)',
+];
+
+/** Renders an SVG grid for a custom section with its polygons */
+function SectionGrid({ section, scaleConfig }: { section: CustomSection; scaleConfig?: ScaleConfig }) {
+  const { sectionType, axisValue, polygons } = section;
+
+  // Determine which two axes we display
+  // vertical (Z=const): show X (horizontal) vs Y (vertical-down)
+  // longitudinal (Y=const): show X (horizontal) vs Z (vertical-up)
+  // transversal (X=const): show Y (horizontal) vs Z (vertical-up)
+  const axisMapping = useMemo(() => {
+    if (sectionType === 'vertical') return { hAxis: 'X', vAxis: 'Y', hLabel: 'X', vLabel: 'Y', flipV: false } as const;
+    if (sectionType === 'longitudinal') return { hAxis: 'X', vAxis: 'Z', hLabel: 'X', vLabel: 'Z', flipV: true } as const;
+    return { hAxis: 'Y', vAxis: 'Z', hLabel: 'Y', vLabel: 'Z', flipV: true } as const;
+  }, [sectionType]);
+
+  // Compute grid bounds from polygons + default range
+  const bounds = useMemo(() => {
+    const allH: number[] = [];
+    const allV: number[] = [];
+
+    polygons.forEach(p => p.vertices.forEach(v => {
+      const h = v[axisMapping.hAxis.toLowerCase() as 'x' | 'y' | 'z'];
+      const vVal = v[axisMapping.vAxis.toLowerCase() as 'x' | 'y' | 'z'];
+      allH.push(h);
+      allV.push(vVal);
+    }));
+
+    const defaultRange = scaleConfig?.gridRange;
+    const hKey = axisMapping.hAxis.toLowerCase() as 'x' | 'y' | 'z';
+    const vKey = axisMapping.vAxis.toLowerCase() as 'x' | 'y' | 'z';
+
+    let minH = allH.length > 0 ? Math.min(...allH) : (defaultRange ? defaultRange[`min${axisMapping.hAxis}` as keyof typeof defaultRange] as number : 0);
+    let maxH = allH.length > 0 ? Math.max(...allH) : (defaultRange ? defaultRange[`max${axisMapping.hAxis}` as keyof typeof defaultRange] as number : 10);
+    let minV = allV.length > 0 ? Math.min(...allV) : (defaultRange ? defaultRange[`min${axisMapping.vAxis}` as keyof typeof defaultRange] as number : 0);
+    let maxV = allV.length > 0 ? Math.max(...allV) : (defaultRange ? defaultRange[`max${axisMapping.vAxis}` as keyof typeof defaultRange] as number : 10);
+
+    // Add margin
+    const hRange = maxH - minH || 10;
+    const vRange = maxV - minV || 10;
+    minH = Math.floor(minH - hRange * 0.15);
+    maxH = Math.ceil(maxH + hRange * 0.15);
+    minV = Math.floor(minV - vRange * 0.15);
+    maxV = Math.ceil(maxV + vRange * 0.15);
+
+    // Ensure minimum size
+    if (maxH - minH < 5) { minH -= 2; maxH += 3; }
+    if (maxV - minV < 5) { minV -= 2; maxV += 3; }
+
+    return { minH, maxH, minV, maxV };
+  }, [polygons, axisMapping, scaleConfig]);
+
+  const cellSize = 32;
+  const padding = 40;
+  const cols = bounds.maxH - bounds.minH;
+  const rows = bounds.maxV - bounds.minV;
+  const svgW = cols * cellSize + padding * 2;
+  const svgH = rows * cellSize + padding * 2;
+
+  const toSvgX = (val: number) => padding + (val - bounds.minH) * cellSize;
+  const toSvgY = (val: number) => axisMapping.flipV
+    ? padding + (bounds.maxV - val) * cellSize  // Z goes up
+    : padding + (val - bounds.minV) * cellSize;  // Y goes down
+
+  return (
+    <div className="overflow-auto border rounded bg-muted/20 my-2">
+      <svg width={Math.min(svgW, 900)} height={Math.min(svgH, 600)} viewBox={`0 0 ${svgW} ${svgH}`} className="w-full">
+        {/* Grid lines */}
+        {Array.from({ length: cols + 1 }, (_, i) => {
+          const x = padding + i * cellSize;
+          const val = bounds.minH + i;
+          return (
+            <g key={`h-${i}`}>
+              <line x1={x} y1={padding} x2={x} y2={padding + rows * cellSize} stroke="hsl(var(--border))" strokeWidth={val === 0 ? 1.5 : 0.5} strokeDasharray={val === 0 ? undefined : '2,2'} />
+              <text x={x} y={padding - 6} textAnchor="middle" className="fill-muted-foreground" fontSize={9}>
+                {axisMapping.hLabel}{val}
+              </text>
+            </g>
+          );
+        })}
+        {Array.from({ length: rows + 1 }, (_, i) => {
+          const y = padding + i * cellSize;
+          const val = axisMapping.flipV ? bounds.maxV - i : bounds.minV + i;
+          return (
+            <g key={`v-${i}`}>
+              <line x1={padding} y1={y} x2={padding + cols * cellSize} y2={y} stroke="hsl(var(--border))" strokeWidth={val === 0 ? 1.5 : 0.5} strokeDasharray={val === 0 ? undefined : '2,2'} />
+              <text x={padding - 6} y={y + 3} textAnchor="end" className="fill-muted-foreground" fontSize={9}>
+                {axisMapping.vLabel}{val}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Origin marker if visible */}
+        {bounds.minH <= 0 && bounds.maxH >= 0 && bounds.minV <= 0 && bounds.maxV >= 0 && (
+          <circle cx={toSvgX(0)} cy={toSvgY(0)} r={4} fill="hsl(var(--primary))" opacity={0.6} />
+        )}
+
+        {/* Polygons */}
+        {polygons.map((poly, pi) => {
+          if (poly.vertices.length < 2) return null;
+          const color = POLY_COLORS[pi % POLY_COLORS.length];
+          const hKey = axisMapping.hAxis.toLowerCase() as 'x' | 'y' | 'z';
+          const vKey = axisMapping.vAxis.toLowerCase() as 'x' | 'y' | 'z';
+          const points = poly.vertices.map(v => `${toSvgX(v[hKey])},${toSvgY(v[vKey])}`).join(' ');
+
+          return (
+            <g key={poly.id}>
+              {/* Filled polygon */}
+              {poly.vertices.length >= 3 && (
+                <polygon points={points} fill={color} fillOpacity={0.15} stroke={color} strokeWidth={1.5} />
+              )}
+              {/* Line for 2-vertex */}
+              {poly.vertices.length === 2 && (
+                <polyline points={points} fill="none" stroke={color} strokeWidth={2} />
+              )}
+              {/* Vertex dots and labels */}
+              {poly.vertices.map((v, vi) => (
+                <g key={vi}>
+                  <circle cx={toSvgX(v[hKey])} cy={toSvgY(v[vKey])} r={3} fill={color} />
+                  <text
+                    x={toSvgX(v[hKey]) + 5}
+                    y={toSvgY(v[vKey]) - 5}
+                    fontSize={8}
+                    fill={color}
+                    fontWeight="bold"
+                  >
+                    ({v.x},{v.y},{v.z})
+                  </text>
+                </g>
+              ))}
+              {/* Polygon name label at centroid */}
+              {poly.vertices.length >= 2 && (() => {
+                const cx = poly.vertices.reduce((s, v) => s + v[hKey], 0) / poly.vertices.length;
+                const cy = poly.vertices.reduce((s, v) => s + v[vKey], 0) / poly.vertices.length;
+                return (
+                  <text
+                    x={toSvgX(cx)}
+                    y={toSvgY(cy)}
+                    textAnchor="middle"
+                    fontSize={10}
+                    fontWeight="bold"
+                    fill={color}
+                  >
+                    {poly.name}
+                  </text>
+                );
+              })()}
+            </g>
+          );
+        })}
+
+        {/* Section title */}
+        <text x={svgW / 2} y={14} textAnchor="middle" fontSize={11} fontWeight="bold" className="fill-foreground">
+          {section.name} — {section.axis}={section.axisValue}
+        </text>
+      </svg>
+    </div>
+  );
+}
+
+export function CustomSectionManager({ sectionType, sections, onSectionsChange, scaleConfig }: CustomSectionManagerProps) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState('');
   const [newAxisValue, setNewAxisValue] = useState('0');
@@ -75,7 +246,10 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange }
       axisValue: val,
       polygons: [],
     };
-    onSectionsChange([...sections, section]);
+    const newSections = [...sections, section];
+    onSectionsChange(newSections);
+    // Auto-expand the new section
+    setExpandedSections(prev => new Set([...prev, section.id]));
     setNewName('');
     setNewAxisValue('0');
     setShowAddForm(false);
@@ -100,7 +274,6 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange }
   };
 
   const parseVertices = (text: string): Array<{ x: number; y: number; z: number }> => {
-    // Format: "x1,y1,z1; x2,y2,z2; ..."
     return text.split(';').map(v => {
       const parts = v.trim().split(',').map(Number);
       return { x: parts[0] || 0, y: parts[1] || 0, z: parts[2] || 0 };
@@ -145,7 +318,6 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange }
         </Button>
       </div>
 
-      {/* Add form */}
       {showAddForm && (
         <Card className="border-dashed border-primary/30">
           <CardContent className="pt-3 pb-3 space-y-2">
@@ -180,7 +352,6 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange }
         </Card>
       )}
 
-      {/* List of sections */}
       {filtered.length === 0 && !showAddForm && (
         <p className="text-[10px] text-muted-foreground italic py-2">No hay secciones definidas. Pulse "Nueva Sección" para crear una.</p>
       )}
@@ -226,9 +397,12 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange }
               </CollapsibleTrigger>
               <CollapsibleContent>
                 <CardContent className="pt-1 pb-2 space-y-2">
+                  {/* SVG Grid for this section */}
+                  <SectionGrid section={section} scaleConfig={scaleConfig} />
+
                   {/* Polygons list */}
                   {section.polygons.length === 0 && (
-                    <p className="text-[10px] text-muted-foreground italic">Sin polígonos definidos.</p>
+                    <p className="text-[10px] text-muted-foreground italic">Sin polígonos definidos. La cuadrícula se muestra vacía.</p>
                   )}
                   {section.polygons.map(poly => (
                     <div key={poly.id} className="flex items-center justify-between bg-muted/30 rounded px-2 py-1">

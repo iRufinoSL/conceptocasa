@@ -812,6 +812,7 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
     undoLastChange, undoCount,
     addFloor, updateFloor, deleteFloor,
     addBlockGroup, deleteBlockGroup, updateBlockGroup, shiftGrid,
+    customSections, updateCustomSections,
   } = useFloorPlan(budgetId);
 
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
@@ -1281,6 +1282,8 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
           onUpdateBlockGroup={updateBlockGroup}
           manualElevations={manualElevations}
           onManualElevationsChange={updateManualElevations}
+          customSections={customSections}
+          onCustomSectionsChange={updateCustomSections}
           focusWallId={elevationReturnContext?.wallId}
           renderSelectedRoom={selectedRoom && planData ? () => {
             const cellSizeM = planData.scaleMode === 'bloque' ? planData.blockLengthMm / 1000 : 1;

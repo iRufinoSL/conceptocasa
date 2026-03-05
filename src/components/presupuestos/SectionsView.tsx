@@ -2,9 +2,11 @@ import React, { useState, useCallback, useRef, useMemo } from 'react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
 import { Grid3x3, ArrowLeftRight, ArrowUpDown, AlertTriangle } from 'lucide-react';
 import { FloorPlanGridView } from './FloorPlanGridView';
 import { ElevationsGridViewer } from './ElevationsGridViewer';
+import { CustomSectionManager, type CustomSection } from './CustomSectionManager';
 import type { FloorPlanData, RoomData, FloorLevel, WallType } from '@/lib/floor-plan-calculations';
 import type { CustomCorner, ManualElevation } from '@/hooks/useFloorPlan';
 
@@ -78,6 +80,8 @@ interface SectionsViewProps {
   manualElevations?: ManualElevation[];
   onManualElevationsChange?: (elevations: ManualElevation[]) => void;
   focusWallId?: string;
+  customSections?: CustomSection[];
+  onCustomSectionsChange?: (sections: CustomSection[]) => void;
   // Render child for selected room
   renderSelectedRoom?: () => React.ReactNode;
 }
@@ -160,10 +164,17 @@ export function SectionsView(props: SectionsViewProps) {
         </TabsList>
 
         {/* Secciones Verticales = current grid view */}
-        <TabsContent value="vertical" className="mt-3">
+        <TabsContent value="vertical" className="mt-3 space-y-4">
+          {/* Custom named sections */}
+          <CustomSectionManager
+            sectionType="vertical"
+            sections={props.customSections || []}
+            onSectionsChange={props.onCustomSectionsChange || (() => {})}
+          />
+          <Separator />
           <div className="mb-2">
-            <p className="text-[10px] text-muted-foreground">
-              Planos horizontales a distintas alturas Z. Cada nivel genera una cuadrícula XY.
+            <p className="text-[10px] text-muted-foreground font-semibold">
+              Por espacio — Planos horizontales a distintas alturas Z.
               {sectionNames.vertical.map(s => ` ${s.name} (Z${s.z})`).join(',')}
             </p>
           </div>
@@ -207,10 +218,17 @@ export function SectionsView(props: SectionsViewProps) {
         </TabsContent>
 
         {/* Secciones Longitudinales = Y-axis elevations (Cara Superior/Inferior) */}
-        <TabsContent value="longitudinal" className="mt-3">
+        <TabsContent value="longitudinal" className="mt-3 space-y-4">
+          {/* Custom named sections */}
+          <CustomSectionManager
+            sectionType="longitudinal"
+            sections={props.customSections || []}
+            onSectionsChange={props.onCustomSectionsChange || (() => {})}
+          />
+          <Separator />
           <div className="mb-2">
-            <p className="text-[10px] text-muted-foreground">
-              Alzados en el eje Y (longitudinal). Muestran la fachada frontal y posterior del edificio.
+            <p className="text-[10px] text-muted-foreground font-semibold">
+              Por espacio — Alzados en el eje Y (longitudinal).
               {sectionNames.longitudinal.map(s => ` ${s.name}`).join(',')}
             </p>
           </div>
@@ -239,10 +257,17 @@ export function SectionsView(props: SectionsViewProps) {
         </TabsContent>
 
         {/* Secciones Transversales = X-axis elevations (Cara Izquierda/Derecha) */}
-        <TabsContent value="transversal" className="mt-3">
+        <TabsContent value="transversal" className="mt-3 space-y-4">
+          {/* Custom named sections */}
+          <CustomSectionManager
+            sectionType="transversal"
+            sections={props.customSections || []}
+            onSectionsChange={props.onCustomSectionsChange || (() => {})}
+          />
+          <Separator />
           <div className="mb-2">
-            <p className="text-[10px] text-muted-foreground">
-              Alzados en el eje X (transversal). Muestran los laterales del edificio.
+            <p className="text-[10px] text-muted-foreground font-semibold">
+              Por espacio — Alzados en el eje X (transversal).
               {sectionNames.transversal.map(s => ` ${s.name}`).join(',')}
             </p>
           </div>

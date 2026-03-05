@@ -1,12 +1,12 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Pencil, Trash2, Plus, ChevronDown, ChevronRight, Triangle, Pyramid, Cuboid, Grid3x3, MapPin, X } from 'lucide-react';
+import { Pencil, Trash2, Plus, ChevronDown, ChevronRight, Triangle, Pyramid, Cuboid, Grid3x3, MapPin, X, MousePointerClick, List } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 import type { CustomSection } from './CustomSectionManager';
 
@@ -228,6 +228,210 @@ function VertexEditor({ vertices, onChange }: VertexEditorProps) {
   );
 }
 
+// ─── Grid Polygon Drawer ─────────────────────────────────────────
+
+interface GridPolygonDrawerProps {
+  vertices: PolygonVertex[];
+  onChange: (vertices: PolygonVertex[]) => void;
+  gridWidth?: number;
+  gridHeight?: number;
+}
+
+function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16 }: GridPolygonDrawerProps) {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null);
+
+  const cellSize = 28;
+  const pad = 30;
+  const svgW = gridWidth * cellSize + pad * 2;
+  const svgH = gridHeight * cellSize + pad * 2;
+
+  const toSvg = (gx: number, gy: number) => ({
+    sx: pad + gx * cellSize,
+    sy: pad + (gridHeight - gy) * cellSize,
+  });
+
+  const handleClick = (gx: number, gy: number) => {
+    // If clicking on the first vertex and we have >= 3, close polygon
+    if (vertices.length >= 3 && gx === vertices[0].x && gy === vertices[0].y) {
+      // Already closed — no-op
+      return;
+    }
+    // Check if vertex already exists at this position
+    if (vertices.some(v => v.x === gx && v.y === gy)) return;
+    onChange([...vertices, { x: gx, y: gy }]);
+  };
+
+  const handleUndo = () => {
+    if (vertices.length > 0) onChange(vertices.slice(0, -1));
+  };
+
+  const handleClear = () => onChange([]);
+
+  const area = polygonArea(vertices);
+  const closingLen = vertices.length >= 3 ? edgeLength(vertices[vertices.length - 1], vertices[0]) : 0;
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <Label className="text-[10px] font-semibold">Dibujar polígono en cuadrícula (click para añadir vértices)</Label>
+        {vertices.length >= 3 && (
+          <Badge variant="secondary" className="text-[9px] h-4">📐 {area.toFixed(2)} m²</Badge>
+        )}
+      </div>
+
+      <div className="overflow-auto rounded border bg-background max-h-[400px]">
+        <svg
+          ref={svgRef}
+          width={svgW}
+          height={svgH}
+          className="block"
+          style={{ minWidth: svgW }}
+        >
+          {/* Grid cells — checkerboard */}
+          {Array.from({ length: gridHeight }).map((_, row) =>
+            Array.from({ length: gridWidth }).map((_, col) => {
+              const { sx, sy } = toSvg(col, gridHeight - row - 1);
+              const isEven = (col + row) % 2 === 0;
+              return (
+                <rect
+                  key={`c-${col}-${row}`}
+                  x={sx}
+                  y={sy - cellSize}
+                  width={cellSize}
+                  height={cellSize}
+                  fill={isEven ? 'hsl(var(--muted))' : 'hsl(var(--background))'}
+                  stroke="hsl(var(--border))"
+                  strokeWidth={0.5}
+                />
+              );
+            })
+          )}
+
+          {/* X axis labels (bottom) */}
+          {Array.from({ length: gridWidth + 1 }).map((_, i) => {
+            const { sx } = toSvg(i, 0);
+            return (
+              <text key={`xl-${i}`} x={sx} y={svgH - 6} textAnchor="middle"
+                className="text-[8px] fill-destructive font-bold select-none">
+                X{i}
+              </text>
+            );
+          })}
+
+          {/* Y axis labels (left) */}
+          {Array.from({ length: gridHeight + 1 }).map((_, i) => {
+            const { sy } = toSvg(0, i);
+            return (
+              <text key={`yl-${i}`} x={8} y={sy + 3} textAnchor="middle"
+                className="text-[8px] fill-emerald-600 dark:fill-emerald-400 font-bold select-none">
+                Y{i}
+              </text>
+            );
+          })}
+
+          {/* Clickable intersections */}
+          {Array.from({ length: gridHeight + 1 }).map((_, gy) =>
+            Array.from({ length: gridWidth + 1 }).map((_, gx) => {
+              const { sx, sy } = toSvg(gx, gy);
+              const isPlaced = vertices.some(v => v.x === gx && v.y === gy);
+              const isHover = hoverCell?.x === gx && hoverCell?.y === gy;
+              const isFirst = vertices.length >= 3 && gx === vertices[0].x && gy === vertices[0].y;
+              return (
+                <g key={`pt-${gx}-${gy}`}>
+                  <circle
+                    cx={sx} cy={sy} r={isPlaced ? 5 : isHover ? 4 : 2}
+                    fill={isPlaced ? 'hsl(var(--primary))' : isHover ? 'hsl(var(--primary) / 0.4)' : 'hsl(var(--muted-foreground) / 0.25)'}
+                    stroke={isFirst && !isPlaced ? 'hsl(var(--primary))' : 'none'}
+                    strokeWidth={2}
+                    className="cursor-pointer"
+                    onClick={() => handleClick(gx, gy)}
+                    onMouseEnter={() => setHoverCell({ x: gx, y: gy })}
+                    onMouseLeave={() => setHoverCell(null)}
+                  />
+                  {isPlaced && (
+                    <text x={sx} y={sy - 7} textAnchor="middle"
+                      className="text-[7px] fill-primary font-bold select-none pointer-events-none">
+                      {vertices.findIndex(v => v.x === gx && v.y === gy) + 1}
+                    </text>
+                  )}
+                </g>
+              );
+            })
+          )}
+
+          {/* Edges between placed vertices */}
+          {vertices.map((v, i) => {
+            if (i === 0) return null;
+            const { sx: x1, sy: y1 } = toSvg(vertices[i - 1].x, vertices[i - 1].y);
+            const { sx: x2, sy: y2 } = toSvg(v.x, v.y);
+            const len = edgeLength(vertices[i - 1], v);
+            return (
+              <g key={`e-${i}`}>
+                <line x1={x1} y1={y1} x2={x2} y2={y2}
+                  stroke="hsl(var(--primary))" strokeWidth={2} />
+                <text x={(x1 + x2) / 2} y={(y1 + y2) / 2 - 5} textAnchor="middle"
+                  className="text-[7px] fill-primary font-semibold select-none pointer-events-none">
+                  {len.toFixed(1)}m
+                </text>
+              </g>
+            );
+          })}
+
+          {/* Closing edge (dashed) */}
+          {vertices.length >= 3 && (() => {
+            const { sx: x1, sy: y1 } = toSvg(vertices[vertices.length - 1].x, vertices[vertices.length - 1].y);
+            const { sx: x2, sy: y2 } = toSvg(vertices[0].x, vertices[0].y);
+            return (
+              <g>
+                <line x1={x1} y1={y1} x2={x2} y2={y2}
+                  stroke="hsl(var(--primary) / 0.5)" strokeWidth={1.5} strokeDasharray="4 3" />
+                <text x={(x1 + x2) / 2} y={(y1 + y2) / 2 - 5} textAnchor="middle"
+                  className="text-[7px] fill-muted-foreground font-semibold select-none pointer-events-none">
+                  {closingLen.toFixed(1)}m
+                </text>
+              </g>
+            );
+          })()}
+
+          {/* Preview line from last vertex to hover */}
+          {vertices.length > 0 && hoverCell && !vertices.some(v => v.x === hoverCell.x && v.y === hoverCell.y) && (() => {
+            const last = vertices[vertices.length - 1];
+            const { sx: x1, sy: y1 } = toSvg(last.x, last.y);
+            const { sx: x2, sy: y2 } = toSvg(hoverCell.x, hoverCell.y);
+            return (
+              <line x1={x1} y1={y1} x2={x2} y2={y2}
+                stroke="hsl(var(--primary) / 0.3)" strokeWidth={1} strokeDasharray="3 3" />
+            );
+          })()}
+
+          {/* Filled polygon preview */}
+          {vertices.length >= 3 && (
+            <polygon
+              points={vertices.map(v => { const { sx, sy } = toSvg(v.x, v.y); return `${sx},${sy}`; }).join(' ')}
+              fill="hsl(var(--primary) / 0.08)"
+              stroke="none"
+              className="pointer-events-none"
+            />
+          )}
+        </svg>
+      </div>
+
+      <div className="flex items-center gap-1.5">
+        <Button variant="outline" size="sm" className="h-5 text-[10px] gap-0.5" onClick={handleUndo} disabled={vertices.length === 0}>
+          Deshacer
+        </Button>
+        <Button variant="outline" size="sm" className="h-5 text-[10px] gap-0.5" onClick={handleClear} disabled={vertices.length === 0}>
+          Limpiar
+        </Button>
+        <span className="text-[9px] text-muted-foreground ml-auto">
+          {vertices.length} vértice{vertices.length !== 1 ? 's' : ''} · Mín. 3
+        </span>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Component ──────────────────────────────────────────────
 
 export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabProps) {
@@ -244,6 +448,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
   const [showNewSection, setShowNewSection] = useState(false);
   const [newSectionName, setNewSectionName] = useState('');
   const [newSectionAxisValue, setNewSectionAxisValue] = useState('');
+  const [inputMode, setInputMode] = useState<'manual' | 'grid'>('manual');
 
   const { data: floorPlan } = useQuery({
     queryKey: ['floor-plan-for-workspaces', budgetId],
@@ -316,6 +521,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     setShowNewSection(false);
     setNewSectionName('');
     setNewSectionAxisValue('');
+    setInputMode('manual');
   };
 
   const createVerticalSection = async (): Promise<string | null> => {
@@ -513,8 +719,33 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
             </div>
           </div>
 
-          {/* Polygon vertex editor */}
-          <VertexEditor vertices={formVertices} onChange={setFormVertices} />
+          {/* Input mode toggle + editor */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-1">
+              <Button
+                variant={inputMode === 'manual' ? 'default' : 'outline'}
+                size="sm"
+                className="h-6 text-[10px] gap-1"
+                onClick={() => setInputMode('manual')}
+              >
+                <List className="h-3 w-3" /> Coordenadas
+              </Button>
+              <Button
+                variant={inputMode === 'grid' ? 'default' : 'outline'}
+                size="sm"
+                className="h-6 text-[10px] gap-1"
+                onClick={() => setInputMode('grid')}
+              >
+                <MousePointerClick className="h-3 w-3" /> Dibujar en cuadrícula
+              </Button>
+            </div>
+
+            {inputMode === 'manual' ? (
+              <VertexEditor vertices={formVertices} onChange={setFormVertices} />
+            ) : (
+              <GridPolygonDrawer vertices={formVertices} onChange={setFormVertices} />
+            )}
+          </div>
 
           <div className="flex gap-1 justify-end">
             <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={resetForm}>Cancelar</Button>

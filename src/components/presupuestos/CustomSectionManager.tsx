@@ -351,16 +351,32 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
     });
   };
 
-  const parseVertices = (text: string): Array<{ x: number; y: number; z: number }> => {
+  /** Get the two free axes for a section type */
+  const getFreeAxes = (section: CustomSection): { first: 'x' | 'y' | 'z'; second: 'x' | 'y' | 'z'; fixedAxis: 'x' | 'y' | 'z' } => {
+    const fixedAxis = section.axis.toLowerCase() as 'x' | 'y' | 'z';
+    if (fixedAxis === 'z') return { first: 'x', second: 'y', fixedAxis };
+    if (fixedAxis === 'y') return { first: 'x', second: 'z', fixedAxis };
+    return { first: 'y', second: 'z', fixedAxis };
+  };
+
+  const parseVertices2D = (text: string, section: CustomSection): Array<{ x: number; y: number; z: number }> => {
+    const { first, second, fixedAxis } = getFreeAxes(section);
     return text.split(';').map(v => {
       const parts = v.trim().split(',').map(Number);
-      return { x: parts[0] || 0, y: parts[1] || 0, z: parts[2] || 0 };
-    }).filter(v => !isNaN(v.x));
+      if (parts.length < 2 || isNaN(parts[0]) || isNaN(parts[1])) return null;
+      const vertex = { x: 0, y: 0, z: 0 };
+      vertex[first] = parts[0];
+      vertex[second] = parts[1];
+      vertex[fixedAxis] = section.axisValue;
+      return vertex;
+    }).filter((v): v is { x: number; y: number; z: number } => v !== null);
   };
 
   const addPolygon = (sectionId: string) => {
     if (!polygonName.trim() || !polygonVertices.trim()) return;
-    const vertices = parseVertices(polygonVertices);
+    const section = sections.find(s => s.id === sectionId);
+    if (!section) return;
+    const vertices = parseVertices2D(polygonVertices, section);
     if (vertices.length < 2) return;
 
     if (editingPolygonId) {
@@ -388,10 +404,13 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
   };
 
   const startEditPolygon = (sectionId: string, poly: SectionPolygon) => {
+    const section = sections.find(s => s.id === sectionId);
+    if (!section) return;
+    const { first, second } = getFreeAxes(section);
     setEditingPolygonOf(sectionId);
     setEditingPolygonId(poly.id);
     setPolygonName(poly.name);
-    setPolygonVertices(poly.vertices.map(v => `${v.x},${v.y},${v.z}`).join('; '));
+    setPolygonVertices(poly.vertices.map(v => `${v[first]},${v[second]}`).join('; '));
   };
 
   const deletePolygon = (sectionId: string, polygonId: string) => {
@@ -559,10 +578,21 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
                       <Label className="text-[10px]">Nombre del polígono</Label>
                       <Input className="h-6 text-xs" placeholder="Ej: Muro principal" value={polygonName} onChange={e => setPolygonName(e.target.value)} />
                     </div>
-                    <div>
-                      <Label className="text-[10px]">Vértices (X,Y,Z separados por ;)</Label>
-                      <Input className="h-6 text-xs" placeholder="0,0,0; 5,0,0; 5,0,10; 0,0,10" value={polygonVertices} onChange={e => setPolygonVertices(e.target.value)} />
-                    </div>
+                    {(() => {
+                      const { first, second, fixedAxis } = getFreeAxes(section);
+                      const fixedLabel = fixedAxis.toUpperCase();
+                      const firstLabel = first.toUpperCase();
+                      const secondLabel = second.toUpperCase();
+                      return (
+                        <div>
+                          <Label className="text-[10px]">
+                            Vértices ({firstLabel},{secondLabel} separados por ;)
+                            <span className="ml-1 text-muted-foreground">— {fixedLabel}={section.axisValue} (fijo)</span>
+                          </Label>
+                          <Input className="h-6 text-xs" placeholder={`Ej: 0,0; 5,0; 5,10; 0,10`} value={polygonVertices} onChange={e => setPolygonVertices(e.target.value)} />
+                        </div>
+                      );
+                    })()}
                     <div className="flex gap-1 justify-end">
                       <Button variant="ghost" size="sm" className="h-5 text-[10px]" onClick={() => { setEditingPolygonOf(null); setEditingPolygonId(null); }}>Cancelar</Button>
                       <Button size="sm" className="h-5 text-[10px]" onClick={() => addPolygon(section.id)} disabled={!polygonName.trim() || !polygonVertices.trim()}>

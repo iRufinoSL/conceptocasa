@@ -911,6 +911,7 @@ export type Database = {
           ext_wall_thickness: number | null
           floor_id: string | null
           floor_plan_id: string
+          floor_polygon: Json | null
           group_id: string | null
           group_name: string | null
           has_ceiling: boolean
@@ -933,6 +934,7 @@ export type Database = {
           ext_wall_thickness?: number | null
           floor_id?: string | null
           floor_plan_id: string
+          floor_polygon?: Json | null
           group_id?: string | null
           group_name?: string | null
           has_ceiling?: boolean
@@ -955,6 +957,7 @@ export type Database = {
           ext_wall_thickness?: number | null
           floor_id?: string | null
           floor_plan_id?: string
+          floor_polygon?: Json | null
           group_id?: string | null
           group_name?: string | null
           has_ceiling?: boolean

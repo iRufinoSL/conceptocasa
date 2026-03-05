@@ -1,0 +1,1 @@
+ALTER TABLE public.budget_floor_plan_rooms ADD COLUMN floor_polygon jsonb DEFAULT NULL;

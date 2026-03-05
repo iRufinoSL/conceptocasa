@@ -33,6 +33,22 @@ interface Workspace {
   floor_polygon: PolygonVertex[] | null;
 }
 
+interface PlacedGridRoom {
+  id: string;
+  name: string;
+  pos_x: number;
+  pos_y: number;
+  width: number;
+  length: number;
+}
+
+interface GridBounds {
+  minCol: number;
+  maxCol: number;
+  minRow: number;
+  maxRow: number;
+}
+
 interface WallData {
   id: string;
   room_id: string;
@@ -241,6 +257,10 @@ interface GridPolygonDrawerProps {
   onChange: (vertices: PolygonVertex[]) => void;
   gridWidth?: number;
   gridHeight?: number;
+  gridOffsetX?: number;
+  gridOffsetY?: number;
+  placedRooms?: PlacedGridRoom[];
+  cellSizeM?: number;
   otherPolygons?: OtherPolygon[];
   activeRoomId?: string | null;
   onSwitchRoom?: (roomId: string) => void;
@@ -257,7 +277,7 @@ const POLY_COLORS = [
   'hsl(280 60% 55%)',
 ];
 
-function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16, otherPolygons = [], activeRoomId, onSwitchRoom }: GridPolygonDrawerProps) {
+function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16, gridOffsetX = 0, gridOffsetY = 0, placedRooms = [], cellSizeM = 1, otherPolygons = [], activeRoomId, onSwitchRoom }: GridPolygonDrawerProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null);
 
@@ -267,8 +287,8 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
   const svgH = gridHeight * cellSize + pad * 2;
 
   const toSvg = (gx: number, gy: number) => ({
-    sx: pad + gx * cellSize,
-    sy: pad + (gridHeight - gy) * cellSize,
+    sx: pad + (gx - gridOffsetX) * cellSize,
+    sy: pad + (gridHeight - (gy - gridOffsetY)) * cellSize,
   });
 
   const handleClick = (gx: number, gy: number) => {
@@ -283,15 +303,15 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
 
   const handleClear = () => onChange([]);
 
-  const area = polygonArea(vertices);
-  const closingLen = vertices.length >= 3 ? edgeLength(vertices[vertices.length - 1], vertices[0]) : 0;
+  const areaM2 = polygonArea(vertices) * cellSizeM * cellSizeM;
+  const closingLen = vertices.length >= 3 ? edgeLength(vertices[vertices.length - 1], vertices[0]) * cellSizeM : 0;
 
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
         <Label className="text-[10px] font-semibold">Dibujar polígono en cuadrícula (click para añadir vértices)</Label>
         {vertices.length >= 3 && (
-          <Badge variant="secondary" className="text-[9px] h-4">📐 {area.toFixed(2)} m²</Badge>
+          <Badge variant="secondary" className="text-[9px] h-4">📐 {areaM2.toFixed(2)} m²</Badge>
         )}
       </div>
 
@@ -329,7 +349,9 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
           {/* Grid cells — checkerboard */}
           {Array.from({ length: gridHeight }).map((_, row) =>
             Array.from({ length: gridWidth }).map((_, col) => {
-              const { sx, sy } = toSvg(col, gridHeight - row - 1);
+              const gx = col + gridOffsetX;
+              const gy = gridOffsetY + gridHeight - row - 1;
+              const { sx, sy } = toSvg(gx, gy);
               const isEven = (col + row) % 2 === 0;
               return (
                 <rect
@@ -346,24 +368,59 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             })
           )}
 
+          {/* Placed rooms from the floor plan grid (background context) */}
+          {placedRooms.map(pr => {
+            const startGx = Math.round(pr.pos_x / cellSizeM);
+            const startGy = Math.round(pr.pos_y / cellSizeM);
+            const spanW = Math.max(1, Math.round(pr.width / cellSizeM));
+            const spanH = Math.max(1, Math.round(pr.length / cellSizeM));
+            const { sx: rx, sy: ry } = toSvg(startGx, startGy + spanH);
+            return (
+              <g key={`pr-${pr.id}`}>
+                <rect
+                  x={rx}
+                  y={ry - cellSize}
+                  width={spanW * cellSize}
+                  height={spanH * cellSize}
+                  fill="hsl(var(--accent) / 0.25)"
+                  stroke="hsl(var(--accent-foreground) / 0.4)"
+                  strokeWidth={1}
+                  rx={2}
+                />
+                <text
+                  x={rx + (spanW * cellSize) / 2}
+                  y={ry - cellSize + (spanH * cellSize) / 2}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  className="text-[7px] fill-accent-foreground font-medium select-none pointer-events-none"
+                  opacity={0.6}
+                >
+                  {pr.name}
+                </text>
+              </g>
+            );
+          })}
+
           {/* X axis labels (bottom) */}
           {Array.from({ length: gridWidth + 1 }).map((_, i) => {
-            const { sx } = toSvg(i, 0);
+            const gx = i + gridOffsetX;
+            const { sx } = toSvg(gx, gridOffsetY);
             return (
               <text key={`xl-${i}`} x={sx} y={svgH - 6} textAnchor="middle"
                 className="text-[8px] fill-destructive font-bold select-none">
-                X{i}
+                X{gx}
               </text>
             );
           })}
 
           {/* Y axis labels (left) */}
           {Array.from({ length: gridHeight + 1 }).map((_, i) => {
-            const { sy } = toSvg(0, i);
+            const gy = i + gridOffsetY;
+            const { sy } = toSvg(gridOffsetX, gy);
             return (
               <text key={`yl-${i}`} x={8} y={sy + 3} textAnchor="middle"
                 className="text-[8px] fill-emerald-600 dark:fill-emerald-400 font-bold select-none">
-                Y{i}
+                Y{gy}
               </text>
             );
           })}
@@ -419,8 +476,10 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
           })}
 
           {/* Clickable intersections */}
-          {Array.from({ length: gridHeight + 1 }).map((_, gy) =>
-            Array.from({ length: gridWidth + 1 }).map((_, gx) => {
+          {Array.from({ length: gridHeight + 1 }).map((_, iy) =>
+            Array.from({ length: gridWidth + 1 }).map((_, ix) => {
+              const gx = ix + gridOffsetX;
+              const gy = iy + gridOffsetY;
               const { sx, sy } = toSvg(gx, gy);
               const isPlaced = vertices.some(v => v.x === gx && v.y === gy);
               const isHover = hoverCell?.x === gx && hoverCell?.y === gy;
@@ -453,14 +512,14 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             if (i === 0) return null;
             const { sx: x1, sy: y1 } = toSvg(vertices[i - 1].x, vertices[i - 1].y);
             const { sx: x2, sy: y2 } = toSvg(v.x, v.y);
-            const len = edgeLength(vertices[i - 1], v);
+            const len = edgeLength(vertices[i - 1], v) * cellSizeM;
             return (
               <g key={`e-${i}`}>
                 <line x1={x1} y1={y1} x2={x2} y2={y2}
                   stroke="hsl(var(--primary))" strokeWidth={2} />
                 <text x={(x1 + x2) / 2} y={(y1 + y2) / 2 - 5} textAnchor="middle"
                   className="text-[7px] fill-primary font-semibold select-none pointer-events-none">
-                  {len.toFixed(1)}m
+                  {len.toFixed(2)}m
                 </text>
               </g>
             );
@@ -476,7 +535,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                   stroke="hsl(var(--primary) / 0.5)" strokeWidth={1.5} strokeDasharray="4 3" />
                 <text x={(x1 + x2) / 2} y={(y1 + y2) / 2 - 5} textAnchor="middle"
                   className="text-[7px] fill-muted-foreground font-semibold select-none pointer-events-none">
-                  {closingLen.toFixed(1)}m
+                  {closingLen.toFixed(2)}m
                 </text>
               </g>
             );
@@ -545,7 +604,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     queryFn: async () => {
       const { data } = await supabase
         .from('budget_floor_plans')
-        .select('id, default_height, custom_corners')
+        .select('id, default_height, custom_corners, scale_mode, block_length_mm, length, width')
         .eq('budget_id', budgetId)
         .maybeSingle();
       return data;
@@ -578,6 +637,50 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
       })) as Workspace[];
     },
   });
+
+  // Query ALL rooms from floor plan to get placed rooms for grid context
+  const { data: allFloorPlanRooms = [] } = useQuery({
+    queryKey: ['floor-plan-all-rooms', floorPlan?.id],
+    enabled: !!floorPlan?.id,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('budget_floor_plan_rooms')
+        .select('id, name, pos_x, pos_y, width, length')
+        .eq('floor_plan_id', floorPlan!.id)
+        .not('pos_x', 'is', null)
+        .not('pos_y', 'is', null);
+      return (data || []) as PlacedGridRoom[];
+    },
+  });
+
+  const cellSizeM = useMemo(() => {
+    if (!floorPlan) return 1;
+    return floorPlan.scale_mode === 'bloque' ? (floorPlan.block_length_mm || 625) / 1000 : 1;
+  }, [floorPlan]);
+
+  const gridBounds = useMemo<GridBounds>(() => {
+    if (allFloorPlanRooms.length === 0) {
+      const defaultCols = Math.max(1, Math.ceil((floorPlan?.width || 10) / cellSizeM));
+      const defaultRows = Math.max(1, Math.ceil((floorPlan?.length || 10) / cellSizeM));
+      return { minCol: 0, maxCol: defaultCols - 1, minRow: 0, maxRow: defaultRows - 1 };
+    }
+    let minCol = Infinity, maxCol = -Infinity, minRow = Infinity, maxRow = -Infinity;
+    for (const r of allFloorPlanRooms) {
+      const startCol = Math.round(r.pos_x / cellSizeM);
+      const endCol = startCol + Math.max(1, Math.round(r.width / cellSizeM)) - 1;
+      const startRow = Math.round(r.pos_y / cellSizeM);
+      const endRow = startRow + Math.max(1, Math.round(r.length / cellSizeM)) - 1;
+      minCol = Math.min(minCol, startCol);
+      maxCol = Math.max(maxCol, endCol);
+      minRow = Math.min(minRow, startRow);
+      maxRow = Math.max(maxRow, endRow);
+    }
+    // Add 1 cell margin around
+    return { minCol: minCol - 1, maxCol: maxCol + 1, minRow: minRow - 1, maxRow: maxRow + 1 };
+  }, [allFloorPlanRooms, cellSizeM, floorPlan]);
+
+  const gridWidth = gridBounds.maxCol - gridBounds.minCol + 1;
+  const gridHeight = gridBounds.maxRow - gridBounds.minRow + 1;
 
   const roomIds = rooms.map(r => r.id);
   const { data: allWalls = [] } = useQuery({
@@ -655,10 +758,11 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     if (!sectionId) { toast.error('Debes seleccionar una Sección Vertical'); return; }
 
     const bbox = polygonBBox(formVertices);
+    const scale = inputMode === 'grid' ? cellSizeM : 1;
     const payload: any = {
       name: formName.trim(),
-      length: Math.round(bbox.w * 100) / 100,
-      width: Math.round(bbox.h * 100) / 100,
+      length: Math.round(bbox.w * scale * 100) / 100,
+      width: Math.round(bbox.h * scale * 100) / 100,
       height: parseFloat(formHeight) || 0,
       floor_plan_id: floorPlan.id,
       vertical_section_id: sectionId,
@@ -740,8 +844,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     const bbox = polygonBBox(gridEditVertices);
     await supabase.from('budget_floor_plan_rooms').update({
       floor_polygon: gridEditVertices as any,
-      length: Math.round(bbox.w * 100) / 100,
-      width: Math.round(bbox.h * 100) / 100,
+      length: Math.round(bbox.w * cellSizeM * 100) / 100,
+      width: Math.round(bbox.h * cellSizeM * 100) / 100,
     }).eq('id', roomId);
     // Rebuild walls per edge
     await supabase.from('budget_floor_plan_walls').delete().eq('room_id', roomId);
@@ -871,7 +975,16 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
             {inputMode === 'manual' ? (
               <VertexEditor vertices={formVertices} onChange={setFormVertices} />
             ) : (
-              <GridPolygonDrawer vertices={formVertices} onChange={setFormVertices} />
+              <GridPolygonDrawer
+                vertices={formVertices}
+                onChange={setFormVertices}
+                gridWidth={gridWidth}
+                gridHeight={gridHeight}
+                gridOffsetX={gridBounds.minCol}
+                gridOffsetY={gridBounds.minRow}
+                placedRooms={allFloorPlanRooms}
+                cellSizeM={cellSizeM}
+              />
             )}
           </div>
 
@@ -986,6 +1099,12 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                             <GridPolygonDrawer
                               vertices={gridEditVertices}
                               onChange={setGridEditVertices}
+                              gridWidth={gridWidth}
+                              gridHeight={gridHeight}
+                              gridOffsetX={gridBounds.minCol}
+                              gridOffsetY={gridBounds.minRow}
+                              placedRooms={allFloorPlanRooms}
+                              cellSizeM={cellSizeM}
                               activeRoomId={r.id}
                               otherPolygons={rooms
                                 .filter(other => other.id !== r.id && other.floor_polygon && other.floor_polygon.length >= 3)
@@ -996,8 +1115,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                               <div className="flex flex-wrap gap-1.5">
                                 {gridEditVertices.length >= 3 && (
                                   <>
-                                    <Badge variant="secondary" className="text-[10px] h-4">📐 {polygonArea(gridEditVertices).toFixed(2)} m²</Badge>
-                                    <Badge variant="outline" className="text-[10px] h-4">↔ {polygonBBox(gridEditVertices).w.toFixed(2)}m × ↕ {polygonBBox(gridEditVertices).h.toFixed(2)}m</Badge>
+                                    <Badge variant="secondary" className="text-[10px] h-4">📐 {(polygonArea(gridEditVertices) * cellSizeM * cellSizeM).toFixed(2)} m²</Badge>
+                                    <Badge variant="outline" className="text-[10px] h-4">↔ {(polygonBBox(gridEditVertices).w * cellSizeM).toFixed(2)}m × ↕ {(polygonBBox(gridEditVertices).h * cellSizeM).toFixed(2)}m</Badge>
                                   </>
                                 )}
                               </div>

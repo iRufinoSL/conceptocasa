@@ -264,6 +264,7 @@ interface GridPolygonDrawerProps {
   otherPolygons?: OtherPolygon[];
   activeRoomId?: string | null;
   onSwitchRoom?: (roomId: string) => void;
+  perimeterPolygon?: PolygonVertex[];
 }
 
 const POLY_COLORS = [
@@ -277,7 +278,7 @@ const POLY_COLORS = [
   'hsl(280 60% 55%)',
 ];
 
-function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16, gridOffsetX = 0, gridOffsetY = 0, placedRooms = [], cellSizeM = 1, otherPolygons = [], activeRoomId, onSwitchRoom }: GridPolygonDrawerProps) {
+function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16, gridOffsetX = 0, gridOffsetY = 0, placedRooms = [], cellSizeM = 1, otherPolygons = [], activeRoomId, onSwitchRoom, perimeterPolygon }: GridPolygonDrawerProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null);
 
@@ -367,6 +368,31 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
               );
             })
           )}
+
+          {/* Perimeter polygon from the section */}
+          {perimeterPolygon && perimeterPolygon.length >= 3 && (
+            <polygon
+              points={perimeterPolygon.map(v => { const { sx, sy } = toSvg(v.x, v.y); return `${sx},${sy}`; }).join(' ')}
+              fill="hsl(var(--primary) / 0.04)"
+              stroke="hsl(var(--primary))"
+              strokeWidth={2.5}
+              strokeDasharray="6 3"
+              className="pointer-events-none"
+            />
+          )}
+          {/* Perimeter vertex markers */}
+          {perimeterPolygon && perimeterPolygon.map((v, i) => {
+            const { sx, sy } = toSvg(v.x, v.y);
+            return (
+              <g key={`pv-${i}`}>
+                <circle cx={sx} cy={sy} r={4} fill="hsl(var(--primary))" opacity={0.6} className="pointer-events-none" />
+                <text x={sx} y={sy - 8} textAnchor="middle"
+                  className="text-[7px] fill-primary font-bold select-none pointer-events-none">
+                  ({v.x},{v.y})
+                </text>
+              </g>
+            );
+          })}
 
           {/* Placed rooms from the floor plan grid (background context) */}
           {placedRooms.map(pr => {
@@ -622,6 +648,17 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     } catch { return []; }
   }, [floorPlan?.custom_corners]);
 
+  /** Get the perimeter polygon (XY) from a vertical section's first polygon */
+  const getSectionPerimeter = useCallback((sectionId: string | null): PolygonVertex[] | undefined => {
+    if (!sectionId) return undefined;
+    const section = verticalSections.find(s => s.id === sectionId);
+    if (!section || !section.polygons || section.polygons.length === 0) return undefined;
+    // Use the first polygon's XY projection
+    const poly = section.polygons[0];
+    if (!poly.vertices || poly.vertices.length < 3) return undefined;
+    return poly.vertices.map(v => ({ x: v.x, y: v.y }));
+  }, [verticalSections]);
+
   const { data: rooms = [], refetch } = useQuery({
     queryKey: ['workspace-rooms', floorPlan?.id],
     enabled: !!floorPlan?.id,
@@ -658,26 +695,39 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     return floorPlan.scale_mode === 'bloque' ? (floorPlan.block_length_mm || 625) / 1000 : 1;
   }, [floorPlan]);
 
+  /** Compute grid bounds from the active section's perimeter polygon, falling back to placed rooms */
+  const activeRoom = rooms.find(r => r.id === gridEditId);
+  const activePerimeter = getSectionPerimeter(activeRoom?.vertical_section_id ?? null);
+
   const gridBounds = useMemo<GridBounds>(() => {
-    if (allFloorPlanRooms.length === 0) {
-      const defaultCols = Math.max(1, Math.ceil((floorPlan?.width || 10) / cellSizeM));
-      const defaultRows = Math.max(1, Math.ceil((floorPlan?.length || 10) / cellSizeM));
-      return { minCol: 0, maxCol: defaultCols - 1, minRow: 0, maxRow: defaultRows - 1 };
+    // Priority 1: section perimeter polygon
+    if (activePerimeter && activePerimeter.length >= 3) {
+      const xs = activePerimeter.map(v => v.x);
+      const ys = activePerimeter.map(v => v.y);
+      const minX = Math.min(...xs), maxX = Math.max(...xs);
+      const minY = Math.min(...ys), maxY = Math.max(...ys);
+      return { minCol: minX - 1, maxCol: maxX + 1, minRow: minY - 1, maxRow: maxY + 1 };
     }
-    let minCol = Infinity, maxCol = -Infinity, minRow = Infinity, maxRow = -Infinity;
-    for (const r of allFloorPlanRooms) {
-      const startCol = Math.round(r.pos_x / cellSizeM);
-      const endCol = startCol + Math.max(1, Math.round(r.width / cellSizeM)) - 1;
-      const startRow = Math.round(r.pos_y / cellSizeM);
-      const endRow = startRow + Math.max(1, Math.round(r.length / cellSizeM)) - 1;
-      minCol = Math.min(minCol, startCol);
-      maxCol = Math.max(maxCol, endCol);
-      minRow = Math.min(minRow, startRow);
-      maxRow = Math.max(maxRow, endRow);
+    // Priority 2: placed rooms
+    if (allFloorPlanRooms.length > 0) {
+      let minCol = Infinity, maxCol = -Infinity, minRow = Infinity, maxRow = -Infinity;
+      for (const r of allFloorPlanRooms) {
+        const startCol = Math.round(r.pos_x / cellSizeM);
+        const endCol = startCol + Math.max(1, Math.round(r.width / cellSizeM)) - 1;
+        const startRow = Math.round(r.pos_y / cellSizeM);
+        const endRow = startRow + Math.max(1, Math.round(r.length / cellSizeM)) - 1;
+        minCol = Math.min(minCol, startCol);
+        maxCol = Math.max(maxCol, endCol);
+        minRow = Math.min(minRow, startRow);
+        maxRow = Math.max(maxRow, endRow);
+      }
+      return { minCol: minCol - 1, maxCol: maxCol + 1, minRow: minRow - 1, maxRow: maxRow + 1 };
     }
-    // Add 1 cell margin around
-    return { minCol: minCol - 1, maxCol: maxCol + 1, minRow: minRow - 1, maxRow: maxRow + 1 };
-  }, [allFloorPlanRooms, cellSizeM, floorPlan]);
+    // Fallback
+    const defaultCols = Math.max(1, Math.ceil((floorPlan?.width || 10) / cellSizeM));
+    const defaultRows = Math.max(1, Math.ceil((floorPlan?.length || 10) / cellSizeM));
+    return { minCol: 0, maxCol: defaultCols - 1, minRow: 0, maxRow: defaultRows - 1 };
+  }, [activePerimeter, allFloorPlanRooms, cellSizeM, floorPlan]);
 
   const gridWidth = gridBounds.maxCol - gridBounds.minCol + 1;
   const gridHeight = gridBounds.maxRow - gridBounds.minRow + 1;
@@ -984,6 +1034,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                 gridOffsetY={gridBounds.minRow}
                 placedRooms={allFloorPlanRooms}
                 cellSizeM={cellSizeM}
+                perimeterPolygon={getSectionPerimeter(formSectionId)}
               />
             )}
           </div>
@@ -1110,6 +1161,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                                 .filter(other => other.id !== r.id && other.floor_polygon && other.floor_polygon.length >= 3)
                                 .map(other => ({ id: other.id, name: other.name, vertices: other.floor_polygon! }))}
                               onSwitchRoom={switchGridEditRoom}
+                              perimeterPolygon={getSectionPerimeter(r.vertical_section_id)}
                             />
                             <div className="flex items-center justify-between">
                               <div className="flex flex-wrap gap-1.5">

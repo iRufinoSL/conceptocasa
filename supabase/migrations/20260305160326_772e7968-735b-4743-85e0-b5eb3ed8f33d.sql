@@ -1,0 +1,1 @@
+ALTER TABLE public.budget_floor_plan_rooms ADD COLUMN vertical_section_id text DEFAULT NULL;

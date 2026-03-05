@@ -8,6 +8,11 @@ Los Espacios de trabajo son volúmenes geométricos con tres formas posibles:
 - **Prisma (6 vértices)**: Tejado a dos aguas (2 coordenadas superiores)
 - **Pirámide (5 vértices)**: Punta central (1 coordenada superior)
 
+### Vinculación obligatoria a Sección Vertical
+Cada Espacio de trabajo DEBE pertenecer a una Sección Vertical. No se puede crear un Espacio sin asignar una Sección Vertical. El campo `vertical_section_id` (text) en `budget_floor_plan_rooms` almacena el ID de la sección vertical (del JSON `customSections` en `custom_corners`). Si no existen secciones verticales, el formulario permite crear una nueva inline.
+
+Los espacios se agrupan visualmente por su Sección Vertical en el listado.
+
 ### Tipos de cara
 - **Paredes**: Externa, Interna, Invisible, Externa compartida, Interna compartida
 - **Suelo**: Normal, Invisible, Compartido

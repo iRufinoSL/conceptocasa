@@ -604,34 +604,39 @@ export function ElevationsGridViewer({
   }, [cellSizeM, plan.blockHeightMm, plan.blockLengthMm, plan.scaleMode]);
 
   const perFloorComposites = useMemo(() => {
-    const hasUserCorners = customCorners && customCorners.length > 0;
+    try {
+      const hasUserCorners = customCorners && customCorners.length > 0;
 
-    const filterHidden = (composites: CompositeWall[]) =>
-      composites.filter(cw => !cw.sections.every(s => s.wall.elevationGroup === '__hidden__'));
+      const filterHidden = (composites: CompositeWall[]) =>
+        composites.filter(cw => !cw.sections.every(s => s.wall.elevationGroup === '__hidden__'));
 
-    if (!floors || floors.length <= 1) {
-      // Single floor or no floors: compute from all rooms
-      const composites = hasUserCorners
-        ? computeCompositeWallsFromCorners(rooms, plan, customCorners!, cellSizeM)
-        : (() => { const outline = computeBuildingOutline(rooms); return computeCompositeWalls(rooms, outline, plan); })();
-      const visible = filterHidden(composites);
-      return [{ floorId: 'all', floorName: '', composites: ensureMainPerimeterComposites(visible, customCorners || []) }];
+      if (!floors || floors.length <= 1) {
+        // Single floor or no floors: compute from all rooms
+        const composites = hasUserCorners
+          ? computeCompositeWallsFromCorners(rooms, plan, customCorners!, cellSizeM)
+          : (() => { const outline = computeBuildingOutline(rooms); return computeCompositeWalls(rooms, outline, plan); })();
+        const visible = filterHidden(composites);
+        return [{ floorId: 'all', floorName: '', composites: ensureMainPerimeterComposites(visible, customCorners || []) }];
+      }
+      const sortedFloors = [...floors].sort((a, b) => a.orderIndex - b.orderIndex);
+      return sortedFloors.map(floor => {
+        const floorRooms = rooms.filter(r => r.floorId === floor.id);
+        if (floorRooms.length === 0) return { floorId: floor.id, floorName: floor.name, composites: [] as CompositeWall[] };
+        // Filter custom corners STRICTLY by floorId — never leak between levels
+        const floorCorners = hasUserCorners
+          ? customCorners!.filter(c => c.floorId === floor.id)
+          : [];
+        const hasFloorCorners = floorCorners.length > 0;
+        const composites = hasFloorCorners
+          ? computeCompositeWallsFromCorners(floorRooms, plan, floorCorners, cellSizeM)
+          : (() => { const outline = computeBuildingOutline(floorRooms); return computeCompositeWalls(floorRooms, outline, plan); })();
+        const visible = filterHidden(composites);
+        return { floorId: floor.id, floorName: floor.name, composites: ensureMainPerimeterComposites(visible, floorCorners) };
+      }).filter(f => f.composites.length > 0);
+    } catch (err) {
+      console.error('Error computing composite walls:', err);
+      return [];
     }
-    const sortedFloors = [...floors].sort((a, b) => a.orderIndex - b.orderIndex);
-    return sortedFloors.map(floor => {
-      const floorRooms = rooms.filter(r => r.floorId === floor.id);
-      if (floorRooms.length === 0) return { floorId: floor.id, floorName: floor.name, composites: [] as CompositeWall[] };
-      // Filter custom corners STRICTLY by floorId — never leak between levels
-      const floorCorners = hasUserCorners
-        ? customCorners!.filter(c => c.floorId === floor.id)
-        : [];
-      const hasFloorCorners = floorCorners.length > 0;
-      const composites = hasFloorCorners
-        ? computeCompositeWallsFromCorners(floorRooms, plan, floorCorners, cellSizeM)
-        : (() => { const outline = computeBuildingOutline(floorRooms); return computeCompositeWalls(floorRooms, outline, plan); })();
-      const visible = filterHidden(composites);
-      return { floorId: floor.id, floorName: floor.name, composites: ensureMainPerimeterComposites(visible, floorCorners) };
-    }).filter(f => f.composites.length > 0);
   }, [rooms, floors, plan, customCorners, cellSizeM, ensureMainPerimeterComposites]);
 
   // Flat list of all composite walls (for counting)
@@ -5365,10 +5370,8 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
   // Calculate total width (max across all layers) and per-layer heights
   const layerDetails = useMemo(() => {
     return layers.map((layer) => {
-      const maxLength = Math.max(
-        ...layer.composites.map(cw => (Number.isFinite(cw.totalLength) ? cw.totalLength : 0)),
-        0
-      );
+      const lengthValues = layer.composites.map(cw => (Number.isFinite(cw.totalLength) ? cw.totalLength : 0));
+      const maxLength = lengthValues.length > 0 ? Math.max(...lengthValues, 0) : 0;
 
       const sectionMetrics = layer.composites.flatMap(cw =>
         cw.sections.map(s => ({
@@ -5379,17 +5382,24 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
 
       // For gable sides on roof layer, height = peak height of the gable triangle
       // For non-gable layers, use max section height
-      const maxHeight = isGableSide && layer.isGable
-        ? Math.max(...sectionMetrics.map(s => s.gablePeakHeight ?? s.height), 0)
-        : Math.max(...sectionMetrics.map(s => s.height), 0);
+      let maxHeight = 0;
+      if (sectionMetrics.length > 0) {
+        const heights = isGableSide && layer.isGable
+          ? sectionMetrics.map(s => s.gablePeakHeight ?? s.height)
+          : sectionMetrics.map(s => s.height);
+        maxHeight = Math.max(...heights, 0);
+      }
+      if (!Number.isFinite(maxHeight) || maxHeight < 0) maxHeight = 0;
 
-      return { ...layer, maxLength, maxHeight };
+      return { ...layer, maxLength: Number.isFinite(maxLength) ? maxLength : 0, maxHeight };
     });
   }, [layers, isGableSide]);
 
-  const totalWidth = Math.max(...layerDetails.map(l => l.maxLength), 0);
+  const totalWidthRaw = layerDetails.length > 0 ? Math.max(...layerDetails.map(l => l.maxLength), 0) : 0;
+  const totalWidth = Number.isFinite(totalWidthRaw) && totalWidthRaw > 0 ? totalWidthRaw : 0;
   // For gable sides, total height includes the triangle
-  const totalHeight = layerDetails.reduce((sum, l) => sum + l.maxHeight, 0);
+  const totalHeightRaw = layerDetails.reduce((sum, l) => sum + l.maxHeight, 0);
+  const totalHeight = Number.isFinite(totalHeightRaw) && totalHeightRaw > 0 ? totalHeightRaw : 0;
 
   // Build corner labels
   const cornerLabels = useMemo(() => {
@@ -5434,6 +5444,7 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
   const getBlockDims = (isExt: boolean) => getBlockDimensions(plan, isExt);
 
   const renderTotalSvg = (fsScale?: number) => {
+   try {
     const padding = 80;
     const maxW = fsScale ? window.innerWidth * 0.9 : 600;
 
@@ -5454,6 +5465,8 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
         if (Number.isFinite(roomEndRow)) maxGridRow = Math.max(maxGridRow, Math.round(roomEndRow / csm));
       }
     });
+    if (!Number.isFinite(maxGridCol)) maxGridCol = 1;
+    if (!Number.isFinite(maxGridRow)) maxGridRow = 1;
 
     // Max Z from floors + heights
     const defaultRoomHeight = Number.isFinite(plan.defaultHeight) ? plan.defaultHeight : 0;
@@ -5462,20 +5475,22 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
       sortedFl.forEach(f => {
         const baseZ = floorBaseZMap.get(f.id) ?? 0;
         const floorRooms = rooms.filter(r => r.floorId === f.id);
-        const maxH = Math.max(
-          ...floorRooms.map(r => {
-            const h = r.height ?? defaultRoomHeight;
-            return Number.isFinite(h) ? h : defaultRoomHeight;
-          }),
-          defaultRoomHeight
-        );
-        maxGridZ = Math.max(maxGridZ, baseZ + Math.round(maxH * 1000 / (plan.blockHeightMm || 250)));
+        if (floorRooms.length === 0) return;
+        const heightValues = floorRooms.map(r => {
+          const h = r.height ?? defaultRoomHeight;
+          return Number.isFinite(h) ? h : defaultRoomHeight;
+        });
+        const maxH = Math.max(...heightValues, defaultRoomHeight);
+        const zVal = baseZ + Math.round((Number.isFinite(maxH) ? maxH : 0) * 1000 / (plan.blockHeightMm || 250));
+        if (Number.isFinite(zVal)) maxGridZ = Math.max(maxGridZ, zVal);
       });
     }
 
     // Ensure grid can always contain the rendered section geometry (including roof profiles)
     const safeTotalHeight = Number.isFinite(totalHeight) ? totalHeight : 0;
-    maxGridZ = Math.max(maxGridZ, Math.round(safeTotalHeight / blockHM));
+    const safeTotalHeightZ = Math.round(safeTotalHeight / blockHM);
+    if (Number.isFinite(safeTotalHeightZ)) maxGridZ = Math.max(maxGridZ, safeTotalHeightZ);
+    if (!Number.isFinite(maxGridZ) || maxGridZ <= 0) maxGridZ = 1;
 
     const gridH = Math.max(1, isHorizontalX ? maxGridCol : maxGridRow); // horizontal grid units
     const gridV = Math.max(1, maxGridZ); // vertical grid units (Z)
@@ -5489,10 +5504,10 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
 
     const autoScale = Math.min((maxW - padding * 2) / Math.max(effectiveWidth, 0.001), 80);
     const scale = fsScale || (Number.isFinite(autoScale) && autoScale > 0 ? autoScale : 60);
-    const svgW = effectiveWidth * scale + padding * 2 + 40;
-    const svgH = effectiveHeight * scale + padding * 2 + 60;
+    const svgW = Number.isFinite(effectiveWidth * scale) ? effectiveWidth * scale + padding * 2 + 40 : 800;
+    const svgH = Number.isFinite(effectiveHeight * scale) ? effectiveHeight * scale + padding * 2 + 60 : 500;
     const rx = padding;
-    const baseY = padding / 2 + effectiveHeight * scale + 10;
+    const baseY = padding / 2 + (Number.isFinite(effectiveHeight * scale) ? effectiveHeight * scale : 300) + 10;
 
     // Grid step in pixels
     const gridStepH = csm * scale;
@@ -6593,11 +6608,30 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
         })()}
       </svg>
     );
+   } catch (err) {
+    console.error('Error rendering elevation SVG:', err);
+    return (
+      <div className="p-4 text-center text-destructive text-sm">
+        Error al renderizar el alzado. Verifique los datos del plano.
+      </div>
+    );
+   }
   };
 
   const TOTAL_SIDE_NAMES: Record<string, string> = {
     top: 'Superior (Norte)', right: 'Derecha (Este)', bottom: 'Inferior (Sur)', left: 'Izquierda (Oeste)',
   };
+
+  // Safeguard: if totalWidth or totalHeight are invalid, render fallback
+  if (!Number.isFinite(totalWidth) || !Number.isFinite(totalHeight) || totalWidth <= 0 || totalHeight <= 0) {
+    return (
+      <Card className="overflow-hidden">
+        <CardContent className="p-4 text-center text-muted-foreground text-sm">
+          No se pueden calcular las dimensiones del alzado. Verifique que las estancias tengan posición y dimensiones válidas.
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <>

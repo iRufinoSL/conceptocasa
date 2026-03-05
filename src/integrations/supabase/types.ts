@@ -925,6 +925,7 @@ export type Database = {
           pos_x: number | null
           pos_y: number | null
           updated_at: string | null
+          vertical_section_id: string | null
           width: number
         }
         Insert: {
@@ -946,6 +947,7 @@ export type Database = {
           pos_x?: number | null
           pos_y?: number | null
           updated_at?: string | null
+          vertical_section_id?: string | null
           width?: number
         }
         Update: {
@@ -967,6 +969,7 @@ export type Database = {
           pos_x?: number | null
           pos_y?: number | null
           updated_at?: string | null
+          vertical_section_id?: string | null
           width?: number
         }
         Relationships: [

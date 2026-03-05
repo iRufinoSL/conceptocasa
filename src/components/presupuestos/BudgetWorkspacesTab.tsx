@@ -1,13 +1,14 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Box, Pencil, Trash2, Plus, ChevronDown, ChevronRight, Triangle, Pyramid, Cuboid } from 'lucide-react';
+import { Box, Pencil, Trash2, Plus, ChevronDown, ChevronRight, Triangle, Pyramid, Cuboid, Grid3x3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { toast } from 'sonner';
+import type { CustomSection } from './CustomSectionManager';
 
 interface BudgetWorkspacesTabProps {
   budgetId: string;
@@ -23,6 +24,7 @@ interface Workspace {
   has_floor: boolean;
   has_ceiling: boolean;
   has_roof: boolean;
+  vertical_section_id: string | null;
 }
 
 interface WallData {
@@ -86,19 +88,36 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const [form, setForm] = useState({ name: '', length: '', width: '', height: '' });
+  const [form, setForm] = useState({ name: '', length: '', width: '', height: '', verticalSectionId: '' });
+  const [showNewSection, setShowNewSection] = useState(false);
+  const [newSectionName, setNewSectionName] = useState('');
+  const [newSectionAxisValue, setNewSectionAxisValue] = useState('');
 
   const { data: floorPlan } = useQuery({
     queryKey: ['floor-plan-for-workspaces', budgetId],
     queryFn: async () => {
       const { data } = await supabase
         .from('budget_floor_plans')
-        .select('id, default_height')
+        .select('id, default_height, custom_corners')
         .eq('budget_id', budgetId)
         .maybeSingle();
       return data;
     },
   });
+
+  // Extract vertical sections from custom_corners JSON
+  const verticalSections = useMemo<CustomSection[]>(() => {
+    if (!floorPlan?.custom_corners) return [];
+    try {
+      const parsed = typeof floorPlan.custom_corners === 'string'
+        ? JSON.parse(floorPlan.custom_corners)
+        : floorPlan.custom_corners;
+      const sections: CustomSection[] = parsed?.customSections || [];
+      return sections.filter(s => s.sectionType === 'vertical');
+    } catch {
+      return [];
+    }
+  }, [floorPlan?.custom_corners]);
 
   const { data: rooms = [], refetch } = useQuery({
     queryKey: ['workspace-rooms', floorPlan?.id],
@@ -106,7 +125,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     queryFn: async () => {
       const { data } = await supabase
         .from('budget_floor_plan_rooms')
-        .select('id, name, length, width, height, has_floor, has_ceiling, has_roof')
+        .select('id, name, length, width, height, has_floor, has_ceiling, has_roof, vertical_section_id')
         .eq('floor_plan_id', floorPlan!.id)
         .order('name', { ascending: true });
       return (data || []) as Workspace[];
@@ -136,19 +155,78 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
   };
 
   const resetForm = () => {
-    setForm({ name: '', length: '', width: '', height: '' });
+    setForm({ name: '', length: '', width: '', height: '', verticalSectionId: '' });
     setEditingId(null);
     setShowForm(false);
+    setShowNewSection(false);
+    setNewSectionName('');
+    setNewSectionAxisValue('');
+  };
+
+  const createVerticalSection = async (): Promise<string | null> => {
+    if (!newSectionName.trim() || !floorPlan?.id) return null;
+    const newSection: CustomSection = {
+      id: crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      name: newSectionName.trim(),
+      sectionType: 'vertical',
+      axis: 'Z',
+      axisValue: parseFloat(newSectionAxisValue) || 0,
+      polygons: [],
+    };
+
+    // Persist to custom_corners JSON
+    let parsed: any = {};
+    try {
+      parsed = typeof floorPlan.custom_corners === 'string'
+        ? JSON.parse(floorPlan.custom_corners)
+        : (floorPlan.custom_corners || {});
+    } catch { parsed = {}; }
+    const allSections: CustomSection[] = parsed.customSections || [];
+    allSections.push(newSection);
+    parsed.customSections = allSections;
+
+    const { error } = await supabase
+      .from('budget_floor_plans')
+      .update({ custom_corners: parsed })
+      .eq('id', floorPlan.id);
+
+    if (error) {
+      toast.error('Error al crear sección vertical');
+      return null;
+    }
+
+    toast.success(`Sección vertical "${newSection.name}" creada`);
+    queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces'] });
+    setShowNewSection(false);
+    setNewSectionName('');
+    setNewSectionAxisValue('');
+    return newSection.id;
   };
 
   const handleSave = async () => {
     if (!form.name.trim() || !floorPlan?.id) return;
-    const payload = {
+
+    let sectionId = form.verticalSectionId;
+
+    // If creating a new section inline
+    if (showNewSection) {
+      const created = await createVerticalSection();
+      if (!created) return;
+      sectionId = created;
+    }
+
+    if (!sectionId) {
+      toast.error('Debes seleccionar una Sección Vertical');
+      return;
+    }
+
+    const payload: any = {
       name: form.name.trim(),
       length: parseFloat(form.length) || 0,
       width: parseFloat(form.width) || 0,
       height: parseFloat(form.height) || 0,
       floor_plan_id: floorPlan.id,
+      vertical_section_id: sectionId,
     };
 
     if (editingId) {
@@ -162,7 +240,6 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
         .select('id')
         .single();
       if (error || !newRoom) { toast.error('Error al crear'); return; }
-      // Create default 4 walls
       const defaultWalls = WALL_LABELS.map((_, i) => ({
         room_id: newRoom.id,
         wall_index: i,
@@ -177,7 +254,13 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
   };
 
   const handleEdit = (r: Workspace) => {
-    setForm({ name: r.name, length: String(r.length), width: String(r.width), height: String(r.height || '') });
+    setForm({
+      name: r.name,
+      length: String(r.length),
+      width: String(r.width),
+      height: String(r.height || ''),
+      verticalSectionId: r.vertical_section_id || '',
+    });
     setEditingId(r.id);
     setShowForm(true);
   };
@@ -202,7 +285,32 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     refetch();
   };
 
-  const sorted = [...rooms].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+  // Group workspaces by vertical section
+  const grouped = useMemo(() => {
+    const map = new Map<string, { section: CustomSection | null; rooms: Workspace[] }>();
+    // Init groups for known sections
+    for (const s of verticalSections) {
+      map.set(s.id, { section: s, rooms: [] });
+    }
+    // Assign rooms
+    for (const r of rooms) {
+      const key = r.vertical_section_id || '__unassigned__';
+      if (!map.has(key)) {
+        map.set(key, { section: null, rooms: [] });
+      }
+      map.get(key)!.rooms.push(r);
+    }
+    // Sort rooms within each group
+    for (const g of map.values()) {
+      g.rooms.sort((a, b) => a.name.localeCompare(b.name, 'es'));
+    }
+    return map;
+  }, [rooms, verticalSections]);
+
+  const getSectionName = (sectionId: string | null) => {
+    if (!sectionId) return null;
+    return verticalSections.find(s => s.id === sectionId)?.name || null;
+  };
 
   return (
     <div className="space-y-3">
@@ -217,6 +325,61 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
 
       {showForm && (
         <div className="border rounded-lg p-3 space-y-2 bg-muted/30">
+          {/* Vertical section selector */}
+          <div>
+            <Label className="text-[10px] font-semibold">Sección Vertical *</Label>
+            {verticalSections.length === 0 && !showNewSection ? (
+              <div className="text-xs text-muted-foreground mt-1 space-y-1">
+                <p>No hay secciones verticales registradas.</p>
+                <Button variant="outline" size="sm" className="h-6 text-[10px] gap-1" onClick={() => setShowNewSection(true)}>
+                  <Plus className="h-3 w-3" /> Crear Sección Vertical
+                </Button>
+              </div>
+            ) : !showNewSection ? (
+              <div className="flex gap-1 items-end">
+                <div className="flex-1">
+                  <Select value={form.verticalSectionId} onValueChange={v => setForm(f => ({ ...f, verticalSectionId: v }))}>
+                    <SelectTrigger className="h-7 text-xs">
+                      <SelectValue placeholder="Seleccionar sección..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {verticalSections.map(s => (
+                        <SelectItem key={s.id} value={s.id} className="text-xs">
+                          <div className="flex items-center gap-1.5">
+                            <Grid3x3 className="h-3 w-3 text-blue-600" />
+                            {s.name} <span className="text-muted-foreground">(Z={s.axisValue})</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button variant="ghost" size="sm" className="h-7 text-[10px] px-2 gap-0.5" onClick={() => setShowNewSection(true)}>
+                  <Plus className="h-3 w-3" /> Nueva
+                </Button>
+              </div>
+            ) : null}
+
+            {showNewSection && (
+              <div className="mt-1 p-2 rounded bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 space-y-1.5">
+                <p className="text-[10px] font-medium text-blue-700 dark:text-blue-300">Nueva Sección Vertical</p>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <div>
+                    <Label className="text-[10px]">Nombre</Label>
+                    <Input className="h-7 text-xs" placeholder="Ej: Sección 1" value={newSectionName} onChange={e => setNewSectionName(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label className="text-[10px]">Eje Z</Label>
+                    <Input className="h-7 text-xs" type="number" placeholder="0" value={newSectionAxisValue} onChange={e => setNewSectionAxisValue(e.target.value)} />
+                  </div>
+                </div>
+                <div className="flex gap-1 justify-end">
+                  <Button variant="ghost" size="sm" className="h-5 text-[10px]" onClick={() => setShowNewSection(false)}>Cancelar</Button>
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="grid grid-cols-2 gap-2">
             <div className="col-span-2">
               <Label className="text-[10px]">Nombre</Label>
@@ -237,107 +400,124 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
           </div>
           <div className="flex gap-1 justify-end">
             <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={resetForm}>Cancelar</Button>
-            <Button size="sm" className="h-6 text-[10px]" onClick={handleSave} disabled={!form.name.trim()}>
+            <Button size="sm" className="h-6 text-[10px]" onClick={handleSave} disabled={!form.name.trim() || (!form.verticalSectionId && !showNewSection)}>
               {editingId ? 'Actualizar' : 'Crear'}
             </Button>
           </div>
         </div>
       )}
 
-      {sorted.length === 0 && !showForm && (
+      {rooms.length === 0 && !showForm && (
         <p className="text-xs text-muted-foreground text-center py-4">No hay espacios de trabajo definidos</p>
       )}
 
-      <div className="space-y-1.5">
-        {sorted.map(r => {
-          const area = r.length * r.width;
-          const vol = r.height ? r.length * r.width * r.height : null;
-          const geo = getGeometryType(r);
-          const geoInfo = GEOMETRY_INFO[geo];
-          const isExpanded = expandedIds.has(r.id);
-          const roomWalls = allWalls.filter(w => w.room_id === r.id).sort((a, b) => a.wall_index - b.wall_index);
-          const floorType = getFloorType(r);
-          const ceilingType = getCeilingType(r);
+      {/* Grouped by vertical section */}
+      <div className="space-y-3">
+        {Array.from(grouped.entries()).map(([key, { section, rooms: groupRooms }]) => {
+          if (groupRooms.length === 0 && key !== '__unassigned__') return null;
+          if (groupRooms.length === 0) return null;
 
           return (
-            <div key={r.id} className="rounded-lg border bg-card overflow-hidden">
-              {/* Header */}
-              <button
-                onClick={() => toggleExpand(r.id)}
-                className="flex items-center gap-2 p-2.5 w-full text-left hover:bg-accent/30 transition-colors"
-              >
-                {isExpanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
-                <GeometryIcon type={geo} />
-                <div className="flex-1 min-w-0">
-                  <span className="text-sm font-medium">{r.name}</span>
-                  <div className="flex flex-wrap gap-1.5 mt-0.5">
-                    <Badge variant="outline" className="text-[10px] h-4 px-1">X {r.length}m</Badge>
-                    <Badge variant="outline" className="text-[10px] h-4 px-1">Y {r.width}m</Badge>
-                    {r.height != null && r.height > 0 && (
-                      <Badge variant="outline" className="text-[10px] h-4 px-1">Z {r.height}m</Badge>
-                    )}
-                    <Badge variant="secondary" className="text-[10px] h-4 px-1">📐 {area.toFixed(2)} m²</Badge>
-                    {vol != null && vol > 0 && (
-                      <Badge variant="secondary" className="text-[10px] h-4 px-1">📦 {vol.toFixed(2)} m³</Badge>
-                    )}
-                    <Badge variant="outline" className="text-[10px] h-4 px-1 gap-0.5">
-                      {geoInfo.label} ({geoInfo.vertices}v)
-                    </Badge>
-                  </div>
-                </div>
-                {isAdmin && (
-                  <div className="flex gap-0.5 shrink-0" onClick={e => e.stopPropagation()}>
-                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEdit(r)}>
-                      <Pencil className="h-3 w-3" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => handleDelete(r.id)}>
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
+            <div key={key} className="space-y-1.5">
+              {/* Section header */}
+              <div className="flex items-center gap-1.5 px-1">
+                <Grid3x3 className="h-3.5 w-3.5 text-blue-600" />
+                <span className="text-xs font-semibold text-foreground">
+                  {section ? section.name : 'Sin sección asignada'}
+                </span>
+                {section && (
+                  <Badge variant="outline" className="text-[9px] h-4 px-1">Z={section.axisValue}</Badge>
                 )}
-              </button>
+                <Badge variant="secondary" className="text-[9px] h-4 px-1">{groupRooms.length}</Badge>
+              </div>
 
-              {/* Expanded: Faces detail */}
-              {isExpanded && (
-                <div className="border-t px-3 py-2 space-y-2 bg-muted/20">
-                  <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
-                    Caras del volumen — {geoInfo.description}
-                  </p>
+              {groupRooms.map(r => {
+                const area = r.length * r.width;
+                const vol = r.height ? r.length * r.width * r.height : null;
+                const geo = getGeometryType(r);
+                const geoInfo = GEOMETRY_INFO[geo];
+                const isExpanded = expandedIds.has(r.id);
+                const roomWalls = allWalls.filter(w => w.room_id === r.id).sort((a, b) => a.wall_index - b.wall_index);
+                const floorType = getFloorType(r);
+                const ceilingType = getCeilingType(r);
 
-                  {/* Floor */}
-                  <FaceRow
-                    label="🟫 Suelo"
-                    type={floorType}
-                    options={FLOOR_CEILING_TYPES}
-                    isAdmin={isAdmin}
-                    onChange={(v) => updateFloorCeiling(r.id, 'has_floor', v as FloorCeilingType)}
-                  />
+                return (
+                  <div key={r.id} className="rounded-lg border bg-card overflow-hidden">
+                    <button
+                      onClick={() => toggleExpand(r.id)}
+                      className="flex items-center gap-2 p-2.5 w-full text-left hover:bg-accent/30 transition-colors"
+                    >
+                      {isExpanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+                      <GeometryIcon type={geo} />
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm font-medium">{r.name}</span>
+                        <div className="flex flex-wrap gap-1.5 mt-0.5">
+                          <Badge variant="outline" className="text-[10px] h-4 px-1">X {r.length}m</Badge>
+                          <Badge variant="outline" className="text-[10px] h-4 px-1">Y {r.width}m</Badge>
+                          {r.height != null && r.height > 0 && (
+                            <Badge variant="outline" className="text-[10px] h-4 px-1">Z {r.height}m</Badge>
+                          )}
+                          <Badge variant="secondary" className="text-[10px] h-4 px-1">📐 {area.toFixed(2)} m²</Badge>
+                          {vol != null && vol > 0 && (
+                            <Badge variant="secondary" className="text-[10px] h-4 px-1">📦 {vol.toFixed(2)} m³</Badge>
+                          )}
+                          <Badge variant="outline" className="text-[10px] h-4 px-1 gap-0.5">
+                            {geoInfo.label} ({geoInfo.vertices}v)
+                          </Badge>
+                        </div>
+                      </div>
+                      {isAdmin && (
+                        <div className="flex gap-0.5 shrink-0" onClick={e => e.stopPropagation()}>
+                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEdit(r)}>
+                            <Pencil className="h-3 w-3" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => handleDelete(r.id)}>
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
+                    </button>
 
-                  {/* 4 Walls */}
-                  {WALL_LABELS.map((label, i) => {
-                    const wall = roomWalls.find(w => w.wall_index === i);
-                    return (
-                      <FaceRow
-                        key={i}
-                        label={`🧱 Pared ${label}`}
-                        type={wall?.wall_type || 'external'}
-                        options={WALL_TYPES}
-                        isAdmin={isAdmin}
-                        onChange={(v) => wall && updateWallType(wall.id, v)}
-                      />
-                    );
-                  })}
+                    {isExpanded && (
+                      <div className="border-t px-3 py-2 space-y-2 bg-muted/20">
+                        <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
+                          Caras del volumen — {geoInfo.description}
+                        </p>
 
-                  {/* Ceiling/Roof */}
-                  <FaceRow
-                    label={r.has_roof ? '🏠 Techo (cubierta)' : '⬜ Techo'}
-                    type={ceilingType}
-                    options={FLOOR_CEILING_TYPES}
-                    isAdmin={isAdmin}
-                    onChange={(v) => updateFloorCeiling(r.id, 'has_ceiling', v as FloorCeilingType)}
-                  />
-                </div>
-              )}
+                        <FaceRow
+                          label="🟫 Suelo"
+                          type={floorType}
+                          options={FLOOR_CEILING_TYPES}
+                          isAdmin={isAdmin}
+                          onChange={(v) => updateFloorCeiling(r.id, 'has_floor', v as FloorCeilingType)}
+                        />
+
+                        {WALL_LABELS.map((label, i) => {
+                          const wall = roomWalls.find(w => w.wall_index === i);
+                          return (
+                            <FaceRow
+                              key={i}
+                              label={`🧱 Pared ${label}`}
+                              type={wall?.wall_type || 'external'}
+                              options={WALL_TYPES}
+                              isAdmin={isAdmin}
+                              onChange={(v) => wall && updateWallType(wall.id, v)}
+                            />
+                          );
+                        })}
+
+                        <FaceRow
+                          label={r.has_roof ? '🏠 Techo (cubierta)' : '⬜ Techo'}
+                          type={ceilingType}
+                          options={FLOOR_CEILING_TYPES}
+                          isAdmin={isAdmin}
+                          onChange={(v) => updateFloorCeiling(r.id, 'has_ceiling', v as FloorCeilingType)}
+                        />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           );
         })}

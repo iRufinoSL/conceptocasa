@@ -282,11 +282,13 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
   const svgRef = useRef<SVGSVGElement>(null);
   const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null);
   const [draggingIdx, setDraggingIdx] = useState<number | null>(null);
+  const [zoomLevel, setZoomLevel] = useState(1);
 
   // Polygon is "closed" when it has >= 3 vertices and was explicitly closed by clicking first vertex
   const [isClosed, setIsClosed] = useState(() => vertices.length >= 3);
 
-  const cellSize = 28;
+  const baseCellSize = 28;
+  const cellSize = Math.round(baseCellSize * zoomLevel);
   const pad = 30;
   const svgW = gridWidth * cellSize + pad * 2;
   const svgH = gridHeight * cellSize + pad * 2;
@@ -373,9 +375,25 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                 : 'Pulsa el primer vértice para cerrar el polígono'
             : 'Polígono cerrado — arrastra los vértices para editar'}
         </Label>
-        {vertices.length >= 3 && (
+          {vertices.length >= 3 && (
           <Badge variant="secondary" className="text-[9px] h-4">📐 {areaM2.toFixed(2)} m²</Badge>
         )}
+      </div>
+
+      {/* Zoom controls */}
+      <div className="flex items-center gap-1.5">
+        <span className="text-[9px] text-muted-foreground">Zoom:</span>
+        {[1, 1.5, 2, 2.5].map(z => (
+          <Button
+            key={z}
+            variant={zoomLevel === z ? 'default' : 'outline'}
+            size="sm"
+            className="h-5 text-[10px] px-2"
+            onClick={() => setZoomLevel(z)}
+          >
+            {z === 1 ? '1×' : `${z}×`}
+          </Button>
+        ))}
       </div>
 
       {/* Status indicator */}
@@ -564,11 +582,11 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
           })}
 
           {/* Filled polygon preview */}
-          {vertices.length >= 3 && (
+           {vertices.length >= 3 && (
             <polygon
               points={vertices.map(v => { const { sx, sy } = toSvg(v.x, v.y); return `${sx},${sy}`; }).join(' ')}
-              fill={isClosed ? 'hsl(var(--primary) / 0.15)' : 'hsl(var(--primary) / 0.08)'}
-              stroke={isClosed ? 'hsl(var(--primary))' : 'none'}
+              fill={isClosed ? 'hsl(200 80% 50% / 0.18)' : 'hsl(200 80% 50% / 0.08)'}
+              stroke={isClosed ? 'hsl(200 80% 50%)' : 'none'}
               strokeWidth={isClosed ? 2 : 0}
               className="pointer-events-none"
             />
@@ -583,9 +601,10 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             return (
               <g key={`e-${i}`}>
                 <line x1={x1} y1={y1} x2={x2} y2={y2}
-                  stroke="hsl(var(--primary))" strokeWidth={2} />
+                  stroke="hsl(200 80% 50%)" strokeWidth={2} />
                 <text x={(x1 + x2) / 2} y={(y1 + y2) / 2 - 5} textAnchor="middle"
-                  className="text-[7px] fill-primary font-semibold select-none pointer-events-none">
+                  className="text-[7px] font-semibold select-none pointer-events-none"
+                  fill="hsl(200 80% 50%)">
                   {len.toFixed(2)}m
                 </text>
               </g>
@@ -599,11 +618,12 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             return (
               <g>
                 <line x1={x1} y1={y1} x2={x2} y2={y2}
-                  stroke={isClosed ? 'hsl(var(--primary))' : 'hsl(var(--primary) / 0.5)'}
+                  stroke={isClosed ? 'hsl(200 80% 50%)' : 'hsl(200 80% 50% / 0.5)'}
                   strokeWidth={isClosed ? 2 : 1.5}
                   strokeDasharray={isClosed ? 'none' : '4 3'} />
                 <text x={(x1 + x2) / 2} y={(y1 + y2) / 2 - 5} textAnchor="middle"
-                  className="text-[7px] fill-primary font-semibold select-none pointer-events-none">
+                  className="text-[7px] font-semibold select-none pointer-events-none"
+                  fill="hsl(200 80% 50%)">
                   {closingLen.toFixed(2)}m
                 </text>
               </g>
@@ -617,7 +637,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             const { sx: x2, sy: y2 } = toSvg(hoverCell.x, hoverCell.y);
             return (
               <line x1={x1} y1={y1} x2={x2} y2={y2}
-                stroke="hsl(var(--primary) / 0.3)" strokeWidth={1} strokeDasharray="3 3" />
+                stroke="hsl(200 80% 50% / 0.3)" strokeWidth={1} strokeDasharray="3 3" />
             );
           })()}
 
@@ -635,7 +655,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                   <circle
                     cx={sx} cy={sy}
                     r={isPlaced ? 5 : isFirstClose ? 6 : isHover ? 4 : 2}
-                    fill={isPlaced ? 'hsl(var(--primary))' : isFirstClose ? 'hsl(var(--chart-2))' : isHover ? 'hsl(var(--primary) / 0.4)' : 'hsl(var(--muted-foreground) / 0.25)'}
+                    fill={isPlaced ? 'hsl(200 80% 50%)' : isFirstClose ? 'hsl(var(--chart-2))' : isHover ? 'hsl(200 80% 50% / 0.4)' : 'hsl(var(--muted-foreground) / 0.25)'}
                     stroke={isFirstClose ? 'hsl(var(--chart-2))' : 'none'}
                     strokeWidth={isFirstClose ? 2.5 : 0}
                     className="cursor-pointer"
@@ -645,7 +665,8 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                   />
                   {isPlaced && (
                     <text x={sx} y={sy - 7} textAnchor="middle"
-                      className="text-[7px] fill-primary font-bold select-none pointer-events-none">
+                      className="text-[7px] font-bold select-none pointer-events-none"
+                      fill="hsl(200 80% 50%)">
                       {vertices.findIndex(v => v.x === gx && v.y === gy) + 1}
                     </text>
                   )}
@@ -668,14 +689,15 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
               <g key={`dv-${i}`}>
                 <circle
                   cx={sx} cy={sy} r={isDragging ? 7 : 6}
-                  fill={isDragging ? 'hsl(var(--chart-2))' : 'hsl(var(--primary))'}
+                  fill={isDragging ? 'hsl(var(--chart-2))' : 'hsl(200 80% 50%)'}
                   stroke="hsl(var(--background))"
                   strokeWidth={2}
                   className="cursor-grab active:cursor-grabbing"
                   onMouseDown={(e) => handleMouseDown(i, e)}
                 />
                 <text x={sx} y={sy - 9} textAnchor="middle"
-                  className="text-[7px] fill-primary font-bold select-none pointer-events-none">
+                  className="text-[7px] font-bold select-none pointer-events-none"
+                  fill="hsl(200 80% 50%)">
                   {i + 1} ({v.x},{v.y})
                 </text>
               </g>

@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Pencil, Trash2, Plus, ChevronDown, ChevronRight, Triangle, Pyramid, Cuboid, Grid3x3, MapPin, X, MousePointerClick, List } from 'lucide-react';
+import { Pencil, Trash2, Plus, ChevronDown, ChevronRight, Triangle, Pyramid, Cuboid, Grid3x3, MapPin, X, MousePointerClick, List, Layers, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -439,6 +439,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [gridEditId, setGridEditId] = useState<string | null>(null);
+  const [gridEditVertices, setGridEditVertices] = useState<PolygonVertex[]>([]);
   const [formName, setFormName] = useState('');
   const [formHeight, setFormHeight] = useState('');
   const [formVertices, setFormVertices] = useState<PolygonVertex[]>([
@@ -623,6 +625,32 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     const boolVal = value !== 'invisible';
     await supabase.from('budget_floor_plan_rooms').update({ [field]: boolVal }).eq('id', roomId);
     refetch();
+  };
+
+  const openGridEditor = (r: Workspace) => {
+    const verts = r.floor_polygon && r.floor_polygon.length >= 3
+      ? r.floor_polygon
+      : [{ x: 0, y: 0 }, { x: r.length, y: 0 }, { x: r.length, y: r.width }, { x: 0, y: r.width }];
+    setGridEditVertices(verts);
+    setGridEditId(r.id);
+  };
+
+  const saveGridEditorPolygon = async (roomId: string) => {
+    if (gridEditVertices.length < 3) { toast.error('Mínimo 3 vértices'); return; }
+    const bbox = polygonBBox(gridEditVertices);
+    await supabase.from('budget_floor_plan_rooms').update({
+      floor_polygon: gridEditVertices as any,
+      length: Math.round(bbox.w * 100) / 100,
+      width: Math.round(bbox.h * 100) / 100,
+    }).eq('id', roomId);
+    // Rebuild walls per edge
+    await supabase.from('budget_floor_plan_walls').delete().eq('room_id', roomId);
+    const walls = gridEditVertices.map((_, i) => ({ room_id: roomId, wall_index: i, wall_type: 'external' }));
+    await supabase.from('budget_floor_plan_walls').insert(walls);
+    toast.success('Polígono actualizado');
+    setGridEditId(null);
+    refetch();
+    queryClient.invalidateQueries({ queryKey: ['workspace-walls'] });
   };
 
   // Group by vertical section
@@ -822,8 +850,66 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
 
                     {isExpanded && (
                       <div className="border-t px-3 py-2 space-y-2 bg-muted/20">
+                        {/* Summary header */}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-xs font-semibold">{r.name}</span>
+                          <Badge variant="secondary" className="text-[10px] h-4 px-1">📐 {area.toFixed(2)} m²</Badge>
+                          <Badge variant="outline" className="text-[10px] h-4 px-1">↔ {(poly ? polygonBBox(poly).w : r.length).toFixed(2)}m × ↕ {(poly ? polygonBBox(poly).h : r.width).toFixed(2)}m</Badge>
+                          {vol != null && vol > 0 && (
+                            <Badge variant="secondary" className="text-[10px] h-4 px-1">📦 {vol.toFixed(2)} m³</Badge>
+                          )}
+                        </div>
+
+                        {/* Sección Z button */}
+                        {isAdmin && (
+                          <div>
+                            <Button
+                              variant={gridEditId === r.id ? 'default' : 'outline'}
+                              size="sm"
+                              className="h-6 text-[10px] gap-1"
+                              onClick={() => {
+                                if (gridEditId === r.id) {
+                                  setGridEditId(null);
+                                } else {
+                                  openGridEditor(r);
+                                }
+                              }}
+                            >
+                              <Layers className="h-3 w-3" /> Sección Z
+                            </Button>
+                          </div>
+                        )}
+
+                        {/* Inline grid editor */}
+                        {gridEditId === r.id && (
+                          <div className="space-y-2 border rounded-lg p-2 bg-background">
+                            <GridPolygonDrawer
+                              vertices={gridEditVertices}
+                              onChange={setGridEditVertices}
+                            />
+                            <div className="flex items-center justify-between">
+                              <div className="flex flex-wrap gap-1.5">
+                                {gridEditVertices.length >= 3 && (
+                                  <>
+                                    <Badge variant="secondary" className="text-[10px] h-4">📐 {polygonArea(gridEditVertices).toFixed(2)} m²</Badge>
+                                    <Badge variant="outline" className="text-[10px] h-4">↔ {polygonBBox(gridEditVertices).w.toFixed(2)}m × ↕ {polygonBBox(gridEditVertices).h.toFixed(2)}m</Badge>
+                                  </>
+                                )}
+                              </div>
+                              <div className="flex gap-1">
+                                <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => setGridEditId(null)}>
+                                  Cancelar
+                                </Button>
+                                <Button size="sm" className="h-6 text-[10px] gap-1" onClick={() => saveGridEditorPolygon(r.id)} disabled={gridEditVertices.length < 3}>
+                                  <Save className="h-3 w-3" /> Guardar polígono
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
                         {/* Polygon vertices list */}
-                        {poly && (
+                        {poly && gridEditId !== r.id && (
                           <div className="space-y-1">
                             <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
                               Polígono base — {poly.length} vértices

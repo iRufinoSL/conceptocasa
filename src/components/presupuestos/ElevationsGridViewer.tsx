@@ -380,8 +380,10 @@ function EditableCornerLabel({
 }
 
 
-function isSectionWallInvisible(section: { wall: WallData; effectiveWallType?: string }): boolean {
-  return isInvisibleType((section.effectiveWallType || section.wall.wallType) as string);
+function isSectionWallInvisible(section: { wall?: WallData; effectiveWallType?: string }): boolean {
+  const wallType = section.effectiveWallType || section.wall?.wallType;
+  if (!wallType) return false;
+  return isInvisibleType(wallType as string);
 }
 
 function getOpeningSillHeight(op: OpeningData): number {
@@ -411,12 +413,21 @@ function isBajoCubierta(room: RoomData, plan: FloorPlanData, floors?: FloorLevel
 
 /** Calculate gable peak height for a bajo cubierta room (between walls, excluding eaves) */
 function getGablePeakHeight(plan: FloorPlanData, rooms: RoomData[]): number {
-  let minX = Infinity, maxX = Infinity;
-  rooms.forEach(r => {
-    minX = Math.min(minX, r.posX);
-    maxX = Math.max(maxX !== Infinity ? maxX : r.posX + r.width, r.posX + r.width);
+  const placedRooms = rooms.filter(r => Number.isFinite(r.posX) && Number.isFinite(r.width));
+  if (placedRooms.length === 0) return 0;
+
+  let minX = Infinity;
+  let maxX = -Infinity;
+
+  placedRooms.forEach(r => {
+    const startX = Number(r.posX);
+    const endX = startX + Number(r.width);
+    minX = Math.min(minX, startX);
+    maxX = Math.max(maxX, endX);
   });
-  if (minX === Infinity) return 0;
+
+  if (!Number.isFinite(minX) || !Number.isFinite(maxX) || maxX <= minX) return 0;
+
   // Gable is strictly between wall perimeter, NO eave overhang
   const totalWidth = (maxX - minX) + 2 * plan.externalWallThickness;
   const halfWidth = totalWidth / 2;
@@ -1140,7 +1151,13 @@ export function ElevationsGridViewer({
           wallIdx = cutPos <= room.posX! + room.width / 2 ? 4 : 2; // left or right wall
         }
 
-        const wall = room.walls.find(w => w.wallIndex === wallIdx) || room.walls[0];
+        const fallbackWall: WallData = {
+          id: `virtual-wall-${room.id}-${wallIdx}`,
+          wallIndex: wallIdx,
+          wallType: 'interior',
+          openings: [],
+        };
+        const wall = room.walls.find(w => w.wallIndex === wallIdx) || room.walls[0] || fallbackWall;
         let roomH = room.height ?? plan.defaultHeight;
 
         // Bajo cubierta / gable handling
@@ -1162,10 +1179,10 @@ export function ElevationsGridViewer({
           roomId: room.id,
           roomName: room.name,
           wallIndex: wallIdx,
-          wallId: wall?.id || '',
+          wallId: wall.id,
           length: sLen,
           height: roomH,
-          wall: wall || room.walls[0],
+          wall,
           openings: [], // A section cut is not a façade wall; avoid unrelated openings
           startOffset,
           isGable: isGableWall,
@@ -5347,24 +5364,25 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
 
   // Calculate total width (max across all layers) and per-layer heights
   const layerDetails = useMemo(() => {
-    return layers.map((layer, layerIdx) => {
-      const maxLength = Math.max(...layer.composites.map(cw => cw.totalLength), 0);
-      // For gable sides on roof layer (last layer), height = peak height of the gable triangle
+    return layers.map((layer) => {
+      const maxLength = Math.max(
+        ...layer.composites.map(cw => (Number.isFinite(cw.totalLength) ? cw.totalLength : 0)),
+        0
+      );
+
+      const sectionMetrics = layer.composites.flatMap(cw =>
+        cw.sections.map(s => ({
+          height: Number.isFinite(s.height) ? s.height : 0,
+          gablePeakHeight: Number.isFinite(s.gablePeakHeight ?? NaN) ? (s.gablePeakHeight as number) : undefined,
+        }))
+      );
+
+      // For gable sides on roof layer, height = peak height of the gable triangle
       // For non-gable layers, use max section height
-      let maxHeight: number;
-      if (isGableSide && layer.isGable) {
-        // Gable peak height: use the max section gablePeakHeight or calculate from slope
-        const gph = Math.max(
-          ...layer.composites.flatMap(cw => cw.sections.map(s => s.gablePeakHeight ?? s.height)),
-          0
-        );
-        maxHeight = gph;
-      } else {
-        maxHeight = Math.max(
-          ...layer.composites.flatMap(cw => cw.sections.map(s => s.height)),
-          0
-        );
-      }
+      const maxHeight = isGableSide && layer.isGable
+        ? Math.max(...sectionMetrics.map(s => s.gablePeakHeight ?? s.height), 0)
+        : Math.max(...sectionMetrics.map(s => s.height), 0);
+
       return { ...layer, maxLength, maxHeight };
     });
   }, [layers, isGableSide]);
@@ -5420,41 +5438,57 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
     const maxW = fsScale ? window.innerWidth * 0.9 : 600;
 
     // Compute full building grid bounds
-    const csm = cellSizeM || (plan.blockLengthMm / 1000) || 0.625;
-    const blockHM = (plan.blockHeightMm || 250) / 1000;
+    const csmRaw = cellSizeM || (plan.blockLengthMm / 1000) || 0.625;
+    const csm = Number.isFinite(csmRaw) && csmRaw > 0 ? csmRaw : 0.625;
+    const blockHMRaw = (plan.blockHeightMm || 250) / 1000;
+    const blockHM = Number.isFinite(blockHMRaw) && blockHMRaw > 0 ? blockHMRaw : 0.25;
     const isHorizontalX = side === 'top' || side === 'bottom';
 
     // Find max grid extents from rooms
     let maxGridCol = 0, maxGridRow = 0, maxGridZ = 0;
     rooms.forEach(r => {
       if (r.posX != null && r.posY != null) {
-        maxGridCol = Math.max(maxGridCol, Math.round((r.posX + r.width) / csm));
-        maxGridRow = Math.max(maxGridRow, Math.round((r.posY + r.length) / csm));
+        const roomEndCol = Number(r.posX) + Number(r.width);
+        const roomEndRow = Number(r.posY) + Number(r.length);
+        if (Number.isFinite(roomEndCol)) maxGridCol = Math.max(maxGridCol, Math.round(roomEndCol / csm));
+        if (Number.isFinite(roomEndRow)) maxGridRow = Math.max(maxGridRow, Math.round(roomEndRow / csm));
       }
     });
+
     // Max Z from floors + heights
+    const defaultRoomHeight = Number.isFinite(plan.defaultHeight) ? plan.defaultHeight : 0;
     if (floors && floorBaseZMap) {
       const sortedFl = [...floors].sort((a, b) => a.orderIndex - b.orderIndex);
       sortedFl.forEach(f => {
         const baseZ = floorBaseZMap.get(f.id) ?? 0;
         const floorRooms = rooms.filter(r => r.floorId === f.id);
-        const maxH = Math.max(...floorRooms.map(r => r.height ?? plan.defaultHeight), plan.defaultHeight);
+        const maxH = Math.max(
+          ...floorRooms.map(r => {
+            const h = r.height ?? defaultRoomHeight;
+            return Number.isFinite(h) ? h : defaultRoomHeight;
+          }),
+          defaultRoomHeight
+        );
         maxGridZ = Math.max(maxGridZ, baseZ + Math.round(maxH * 1000 / (plan.blockHeightMm || 250)));
       });
     }
-    // Ensure grid can always contain the rendered section geometry (including roof profiles)
-    maxGridZ = Math.max(maxGridZ, Math.round(totalHeight / blockHM));
 
-    const gridH = isHorizontalX ? maxGridCol : maxGridRow; // horizontal grid units
-    const gridV = maxGridZ; // vertical grid units (Z)
+    // Ensure grid can always contain the rendered section geometry (including roof profiles)
+    const safeTotalHeight = Number.isFinite(totalHeight) ? totalHeight : 0;
+    maxGridZ = Math.max(maxGridZ, Math.round(safeTotalHeight / blockHM));
+
+    const gridH = Math.max(1, isHorizontalX ? maxGridCol : maxGridRow); // horizontal grid units
+    const gridV = Math.max(1, maxGridZ); // vertical grid units (Z)
     const gridWidthM = gridH * csm;
     const gridHeightM = gridV * blockHM;
 
     // Use the larger of elevation size vs grid size
-    const effectiveWidth = Math.max(totalWidth, gridWidthM);
-    const effectiveHeight = Math.max(totalHeight, gridHeightM);
+    const safeTotalWidth = Number.isFinite(totalWidth) ? totalWidth : 0;
+    const effectiveWidth = Math.max(safeTotalWidth, gridWidthM, csm);
+    const effectiveHeight = Math.max(safeTotalHeight, gridHeightM, blockHM);
 
-    const scale = fsScale || Math.min((maxW - padding * 2) / effectiveWidth, 80);
+    const autoScale = Math.min((maxW - padding * 2) / Math.max(effectiveWidth, 0.001), 80);
+    const scale = fsScale || (Number.isFinite(autoScale) && autoScale > 0 ? autoScale : 60);
     const svgW = effectiveWidth * scale + padding * 2 + 40;
     const svgH = effectiveHeight * scale + padding * 2 + 60;
     const rx = padding;
@@ -5587,7 +5621,8 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
               const rColEnd = Math.round((r.posX + r.width) / csm);
               const rRowStart = Math.round(r.posY / csm);
               const rRowEnd = Math.round((r.posY + r.length) / csm);
-              const roomH = r.height ?? plan.defaultHeight;
+              const roomHRaw = r.height ?? plan.defaultHeight;
+              const roomH = Number.isFinite(roomHRaw) ? roomHRaw : (Number.isFinite(plan.defaultHeight) ? plan.defaultHeight : 0);
               const roomHBlocks = Math.round(roomH / blockHM);
               
               // Find base Z for this room's floor

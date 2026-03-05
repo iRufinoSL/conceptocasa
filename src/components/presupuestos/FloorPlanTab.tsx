@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Plus, Trash2, Layout, BarChart3, RefreshCw, Save, Wand2, Settings2, Layers, Pencil, Printer, ChevronUp, ChevronDown, X, Box } from 'lucide-react';
+import { Loader2, Plus, Trash2, Layout, BarChart3, RefreshCw, Save, Wand2, Settings2, Layers, Pencil, Printer, ChevronUp, ChevronDown, X, Box, Ruler } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFloorPlan } from '@/hooks/useFloorPlan';
 import { FloorPlanGridView } from './FloorPlanGridView';
@@ -18,6 +18,8 @@ import { ArrowLeft } from 'lucide-react';
 import { FloorPlanSummaryView } from './FloorPlanSummary';
 import { FloorPlanVolumesView } from './FloorPlanVolumesView';
 import { ElevationsGridViewer } from './ElevationsGridViewer';
+import { CoordinateVariablesPanel } from './CoordinateVariablesPanel';
+import { SectionsView } from './SectionsView';
 import { deriveGridPositions, computeGridRuler, formatCoord, parseCoord } from './FloorPlanGridView';
 import { calculateFloorPlanSummary, slopePercentToDegrees, degreesToSlopePercent, calcRidgeHeight, calcSlopeFromRidge } from '@/lib/floor-plan-calculations';
 import { FloorPlanPdfExport } from './FloorPlanPdfExport';
@@ -813,7 +815,7 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
   } = useFloorPlan(budgetId);
 
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
-  const [viewTab, setViewTab] = useState('cuadricula');
+  const [viewTab, setViewTab] = useState('secciones');
   const [elevationReturnContext, setElevationReturnContext] = useState<{ roomId: string; wallId: string } | null>(null);
   const [activeFloorTab, setActiveFloorTab] = useState('0');
   const [showAddSpace, setShowAddSpace] = useState(false);
@@ -1123,13 +1125,12 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
       {/* Toolbar */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
-          {elevationReturnContext && viewTab === 'alzados' && (
+          {elevationReturnContext && viewTab === 'secciones' && (
             <Button
               variant="outline"
               size="sm"
               onClick={() => {
                 setSelectedRoomId(elevationReturnContext.roomId);
-                setViewTab('cuadricula');
                 setElevationReturnContext(null);
               }}
               className="gap-1"
@@ -1139,20 +1140,20 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
           )}
           <Tabs value={viewTab} onValueChange={(v) => {
             setViewTab(v);
-            if (v !== 'alzados') setElevationReturnContext(null);
+            if (v !== 'secciones') setElevationReturnContext(null);
           }}>
             <TabsList className="h-8">
-              <TabsTrigger value="cuadricula" className="text-xs h-7 px-3">
-                <Layout className="h-3.5 w-3.5 mr-1" /> Cuadrícula
-              </TabsTrigger>
-              <TabsTrigger value="alzados" className="text-xs h-7 px-3">
-                <Layers className="h-3.5 w-3.5 mr-1" /> Alzados
+              <TabsTrigger value="variables" className="text-xs h-7 px-3">
+                <Settings2 className="h-3.5 w-3.5 mr-1" /> Variables
               </TabsTrigger>
               <TabsTrigger value="volumenes" className="text-xs h-7 px-3">
                 <Box className="h-3.5 w-3.5 mr-1" /> Volúmenes
               </TabsTrigger>
+              <TabsTrigger value="secciones" className="text-xs h-7 px-3">
+                <Ruler className="h-3.5 w-3.5 mr-1" /> Secciones
+              </TabsTrigger>
               <TabsTrigger value="resumen" className="text-xs h-7 px-3">
-                <BarChart3 className="h-3.5 w-3.5 mr-1" /> Resumen m²
+                <BarChart3 className="h-3.5 w-3.5 mr-1" /> Resumen Mediciones
               </TabsTrigger>
             </TabsList>
           </Tabs>
@@ -1233,139 +1234,43 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
       )}
 
 
-      {/* Content */}
-      {viewTab === 'cuadricula' && (
-        <div className={`grid gap-4 ${selectedRoom ? 'grid-cols-1 lg:grid-cols-3' : 'grid-cols-1'}`}>
-          <div className={selectedRoom ? 'lg:col-span-2' : ''}>
-            <FloorPlanGridView
-              rooms={rooms}
-              floors={floors}
-              planWidth={planData?.width || 12}
-              planLength={planData?.length || 9}
-              selectedRoomId={selectedRoomId}
-              onSelectRoom={setSelectedRoomId}
-              onAddRoom={addRoom}
-              onGroupRooms={groupRooms}
-              onUngroupRooms={ungroupRooms}
-              onUndo={undoLastChange}
-              undoCount={undoCount}
-              saving={saving}
-              gridRef={gridRef}
-              onActiveFloorChange={handleActiveFloorChange}
-              forceActiveFloorId={forceActiveFloorId}
-              scaleMode={planData?.scaleMode}
-              blockLengthMm={planData?.blockLengthMm}
-              budgetName={budgetName}
-              customCorners={customCorners}
-              onCustomCornersChange={updateCustomCorners}
-              roofType={planData?.roofType}
-              roofSlopePercent={planData?.roofSlopePercent}
-              roofOverhang={planData?.roofOverhang}
-              defaultHeight={planData?.defaultHeight}
-              onRecalculateSegments={async () => {
-                await classifyPerimeterWalls();
-                await refetch();
-                toast.success('Segmentos recalculados');
-              }}
-              onShiftGrid={shiftGrid}
-            />
-          </div>
-          {selectedRoom && planData ? (
-            <div className="space-y-4">
-              <div className="flex justify-end">
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setSelectedRoomId(null)}>
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-              <SpaceFormErrorBoundary onReset={() => setSelectedRoomId(null)}>
-                {(() => {
-                  const cellSizeM = planData.scaleMode === 'bloque' ? planData.blockLengthMm / 1000 : 1;
-                   const isUnplaced = selectedRoom.posX == null || selectedRoom.posY == null;
-                   const coordCol = isUnplaced ? undefined : Math.round(selectedRoom.posX! / cellSizeM) + 1;
-                   const coordRow = isUnplaced ? undefined : Math.round(selectedRoom.posY! / cellSizeM) + 1;
-                  const floorObj = floors.find(f => f.id === selectedRoom.floorId);
-                  const floorName = floorObj?.name;
-
-                  // Compute base Z for each floor based on accumulated heights of lower floors
-                  const blockHMmVal = planData.blockHeightMm || 250;
-                  const sortedFloors = [...floors].sort((a, b) => a.orderIndex - b.orderIndex);
-                  const floorBaseZMap = new Map<string, number>();
-                  let accumulatedZ = 0;
-                  for (const f of sortedFloors) {
-                    floorBaseZMap.set(f.id, accumulatedZ);
-                    const floorRooms = rooms.filter(r => r.floorId === f.id);
-                    const firstHeight = floorRooms[0]?.height;
-                    const heightM = firstHeight !== undefined ? firstHeight : planData.defaultHeight;
-                    const heightMm = Math.round(heightM * 1000);
-                    accumulatedZ += Math.round(heightMm / blockHMmVal);
-                  }
-                  const coordZ = floorObj ? (floorBaseZMap.get(floorObj.id) ?? 0) : 0;
-
-                  const handleChangeCoordinate = async (targetCol: number, targetRow: number, targetZ?: number) => {
-                    const posX = (targetCol - 1) * cellSizeM;
-                    const posY = (targetRow - 1) * cellSizeM;
-                    const updates: { posX: number; posY: number; floorId?: string } = {
-                      posX: Math.round(posX * 1000) / 1000,
-                      posY: Math.round(posY * 1000) / 1000,
-                    };
-
-                    if (typeof targetZ === 'number' && Number.isFinite(targetZ)) {
-                      const normalizedZ = Math.round(targetZ);
-                      const matchedFloor = sortedFloors.find(f => (floorBaseZMap.get(f.id) ?? 0) === normalizedZ);
-                      if (!matchedFloor) {
-                        toast.error(`No existe un nivel con Z=${normalizedZ}.`);
-                        return;
-                      }
-                      if (matchedFloor.id !== selectedRoom.floorId) {
-                        updates.floorId = matchedFloor.id;
-                      }
-                    }
-
-                    await updateRoom(selectedRoom.id, updates);
-                    const finalZ = updates.floorId ? (floorBaseZMap.get(updates.floorId) ?? (targetZ ?? coordZ)) : (targetZ ?? coordZ);
-                    toast.success(`${selectedRoom.name} movido a ${formatCoord(targetCol, targetRow, undefined, finalZ)}`);
-                  };
-
-                  return (
-                    <FloorPlanSpaceForm
-                      room={selectedRoom}
-                      allRooms={rooms}
-                      planData={planData}
-                      coordCol={coordCol}
-                      coordRow={coordRow}
-                      coordZ={coordZ}
-                      floorName={floorName}
-                      onUpdateRoom={(data) => updateRoom(selectedRoom.id, data)}
-                      onUpdateWall={(wallId, data) => updateWall(wallId, data)}
-                      onUpdateWallSegmentType={(wallId, segIdx, segType) => updateWallSegmentType(wallId, segIdx, segType)}
-                      onAddOpening={(wallId, type, w, h, sh, px) => addOpening(wallId, type, w, h, sh, px)}
-                      onDeleteOpening={(openingId) => deleteOpening(openingId)}
-                      onDuplicateRoom={async (direction) => {
-                        const newId = await duplicateRoom(selectedRoom.id, direction, true);
-                        if (newId) setSelectedRoomId(newId);
-                      }}
-                      onChangeCoordinate={handleChangeCoordinate}
-                      onUngroupRoom={selectedRoom.groupId ? () => ungroupRooms(selectedRoom.groupId!) : undefined}
-                      onDeleteRoom={() => { deleteRoom(selectedRoom.id); setSelectedRoomId(null); }}
-                      onNavigateToElevation={(wallId, _wallIndex) => {
-                        setElevationReturnContext({ roomId: selectedRoom.id, wallId });
-                        setViewTab('alzados');
-                      }}
-                      saving={saving}
-                    />
-                  );
-                })()}
-              </SpaceFormErrorBoundary>
-            </div>
-          ) : null}
-        </div>
-      )}
-
-      {viewTab === 'alzados' && planData && (
-        <ElevationsGridViewer
-          plan={planData}
+      {/* Variables section */}
+      {viewTab === 'variables' && planData && (
+        <CoordinateVariablesPanel
+          planData={planData}
           rooms={rooms}
           floors={floors}
+          onUpdatePlan={updateFloorPlan}
+          saving={saving}
+        />
+      )}
+
+      {/* Secciones section (Verticales + Longitudinales + Transversales) */}
+      {viewTab === 'secciones' && planData && (
+        <SectionsView
+          planData={planData}
+          rooms={rooms}
+          floors={floors}
+          budgetName={budgetName}
+          saving={saving}
+          selectedRoomId={selectedRoomId}
+          onSelectRoom={setSelectedRoomId}
+          onAddRoom={addRoom}
+          onGroupRooms={groupRooms}
+          onUngroupRooms={ungroupRooms}
+          onUndo={undoLastChange}
+          undoCount={undoCount}
+          gridRef={gridRef}
+          onActiveFloorChange={handleActiveFloorChange}
+          forceActiveFloorId={forceActiveFloorId}
+          customCorners={customCorners}
+          onCustomCornersChange={updateCustomCorners}
+          onRecalculateSegments={async () => {
+            await classifyPerimeterWalls();
+            await refetch();
+            toast.success('Segmentos recalculados');
+          }}
+          onShiftGrid={shiftGrid}
           onUpdateOpening={updateOpening}
           onAddOpening={(wallId, type, w, h, sh) => addOpening(wallId, type, w, h, sh)}
           onDeleteOpening={deleteOpening}
@@ -1374,13 +1279,89 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
           onAddBlockGroup={addBlockGroup}
           onDeleteBlockGroup={deleteBlockGroup}
           onUpdateBlockGroup={updateBlockGroup}
-          saving={saving}
-          focusWallId={elevationReturnContext?.wallId}
-          budgetName={budgetName}
-          customCorners={customCorners}
-          onCustomCornersChange={updateCustomCorners}
           manualElevations={manualElevations}
           onManualElevationsChange={updateManualElevations}
+          focusWallId={elevationReturnContext?.wallId}
+          renderSelectedRoom={selectedRoom && planData ? () => {
+            const cellSizeM = planData.scaleMode === 'bloque' ? planData.blockLengthMm / 1000 : 1;
+            const isUnplaced = selectedRoom.posX == null || selectedRoom.posY == null;
+            const coordCol = isUnplaced ? undefined : Math.round(selectedRoom.posX! / cellSizeM) + 1;
+            const coordRow = isUnplaced ? undefined : Math.round(selectedRoom.posY! / cellSizeM) + 1;
+            const floorObj = floors.find(f => f.id === selectedRoom.floorId);
+            const floorName = floorObj?.name;
+            const blockHMmVal = planData.blockHeightMm || 250;
+            const sortedFloors = [...floors].sort((a, b) => a.orderIndex - b.orderIndex);
+            const floorBaseZMap = new Map<string, number>();
+            let accumulatedZ = 0;
+            for (const f of sortedFloors) {
+              floorBaseZMap.set(f.id, accumulatedZ);
+              const floorRooms = rooms.filter(r => r.floorId === f.id);
+              const firstHeight = floorRooms[0]?.height;
+              const heightM = firstHeight !== undefined ? firstHeight : planData.defaultHeight;
+              const heightMm = Math.round(heightM * 1000);
+              accumulatedZ += Math.round(heightMm / blockHMmVal);
+            }
+            const coordZ = floorObj ? (floorBaseZMap.get(floorObj.id) ?? 0) : 0;
+            const handleChangeCoordinate = async (targetCol: number, targetRow: number, targetZ?: number) => {
+              const posX = (targetCol - 1) * cellSizeM;
+              const posY = (targetRow - 1) * cellSizeM;
+              const updates: { posX: number; posY: number; floorId?: string } = {
+                posX: Math.round(posX * 1000) / 1000,
+                posY: Math.round(posY * 1000) / 1000,
+              };
+              if (typeof targetZ === 'number' && Number.isFinite(targetZ)) {
+                const normalizedZ = Math.round(targetZ);
+                const matchedFloor = sortedFloors.find(f => (floorBaseZMap.get(f.id) ?? 0) === normalizedZ);
+                if (!matchedFloor) {
+                  toast.error(`No existe un nivel con Z=${normalizedZ}.`);
+                  return;
+                }
+                if (matchedFloor.id !== selectedRoom.floorId) {
+                  updates.floorId = matchedFloor.id;
+                }
+              }
+              await updateRoom(selectedRoom.id, updates);
+              const finalZ = updates.floorId ? (floorBaseZMap.get(updates.floorId) ?? (targetZ ?? coordZ)) : (targetZ ?? coordZ);
+              toast.success(`${selectedRoom.name} movido a ${formatCoord(targetCol, targetRow, undefined, finalZ)}`);
+            };
+
+            return (
+              <>
+                <div className="flex justify-end">
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setSelectedRoomId(null)}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+                <SpaceFormErrorBoundary onReset={() => setSelectedRoomId(null)}>
+                  <FloorPlanSpaceForm
+                    room={selectedRoom}
+                    allRooms={rooms}
+                    planData={planData}
+                    coordCol={coordCol}
+                    coordRow={coordRow}
+                    coordZ={coordZ}
+                    floorName={floorName}
+                    onUpdateRoom={(data) => updateRoom(selectedRoom.id, data)}
+                    onUpdateWall={(wallId, data) => updateWall(wallId, data)}
+                    onUpdateWallSegmentType={(wallId, segIdx, segType) => updateWallSegmentType(wallId, segIdx, segType)}
+                    onAddOpening={(wallId, type, w, h, sh, px) => addOpening(wallId, type, w, h, sh, px)}
+                    onDeleteOpening={(openingId) => deleteOpening(openingId)}
+                    onDuplicateRoom={async (direction) => {
+                      const newId = await duplicateRoom(selectedRoom.id, direction, true);
+                      if (newId) setSelectedRoomId(newId);
+                    }}
+                    onChangeCoordinate={handleChangeCoordinate}
+                    onUngroupRoom={selectedRoom.groupId ? () => ungroupRooms(selectedRoom.groupId!) : undefined}
+                    onDeleteRoom={() => { deleteRoom(selectedRoom.id); setSelectedRoomId(null); }}
+                    onNavigateToElevation={(wallId, _wallIndex) => {
+                      setElevationReturnContext({ roomId: selectedRoom.id, wallId });
+                    }}
+                    saving={saving}
+                  />
+                </SpaceFormErrorBoundary>
+              </>
+            );
+          } : undefined}
         />
       )}
 

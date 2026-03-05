@@ -17,7 +17,7 @@ import {
   Paperclip, Eye, Clock, CheckCircle, XCircle, Search, Inbox, Send,
   ArrowLeft, Maximize2, FolderOpen, ClipboardList, Building2,
   FileText, Image, File as FileIcon, Download, ExternalLink, X, RefreshCw, Loader2, FilePlus,
-  SortAsc, Phone
+  SortAsc, ArrowUpDown, ArrowUp, ArrowDown, Phone
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Tables } from '@/integrations/supabase/types';
@@ -125,7 +125,8 @@ export function UnifiedCommunicationsList({
   type StatFilter = 'total' | 'inbound' | 'outbound' | 'emails' | 'whatsapp' | 'sms' | 'unread' | null;
   const [activeStatFilter, setActiveStatFilter] = useState<StatFilter>(null);
   const [statSearch, setStatSearch] = useState('');
-  const [statSortBy, setStatSortBy] = useState<'date' | 'contact'>('date');
+  const [statSortBy, setStatSortBy] = useState<'date' | 'contact' | 'subject' | 'type'>('date');
+  const [statSortDir, setStatSortDir] = useState<'asc' | 'desc'>('desc');
   const [statPage, setStatPage] = useState(1);
   const ITEMS_PER_PAGE = 50;
 
@@ -593,12 +594,30 @@ export function UnifiedCommunicationsList({
 
     // Apply sort
     if (statSortBy === 'contact') {
-      list = [...list].sort((a, b) => a.contactName.localeCompare(b.contactName, 'es'));
+      list = [...list].sort((a, b) => {
+        const cmp = a.contactName.localeCompare(b.contactName, 'es');
+        return statSortDir === 'asc' ? cmp : -cmp;
+      });
+    } else if (statSortBy === 'subject') {
+      list = [...list].sort((a, b) => {
+        const cmp = (a.subject || '').localeCompare(b.subject || '', 'es');
+        return statSortDir === 'asc' ? cmp : -cmp;
+      });
+    } else if (statSortBy === 'type') {
+      list = [...list].sort((a, b) => {
+        const cmp = a.type.localeCompare(b.type, 'es');
+        return statSortDir === 'asc' ? cmp : -cmp;
+      });
+    } else {
+      // date
+      list = [...list].sort((a, b) => {
+        const cmp = a.createdAt.getTime() - b.createdAt.getTime();
+        return statSortDir === 'asc' ? cmp : -cmp;
+      });
     }
-    // date is already default sort
 
     return list;
-  }, [unifiedCommunications, activeStatFilter, statSearch, statSortBy]);
+  }, [unifiedCommunications, activeStatFilter, statSearch, statSortBy, statSortDir]);
 
   const statTotalPages = Math.max(1, Math.ceil(statFilteredList.length / ITEMS_PER_PAGE));
   const statPagedList = useMemo(() => {
@@ -610,6 +629,7 @@ export function UnifiedCommunicationsList({
     setActiveStatFilter(filter);
     setStatSearch('');
     setStatSortBy('date');
+    setStatSortDir('desc');
     setStatPage(1);
     setSelectedCommunication(null);
   };
@@ -1211,16 +1231,6 @@ export function UnifiedCommunicationsList({
                     className="pl-9 h-9"
                   />
                 </div>
-                <Select value={statSortBy} onValueChange={(v) => { setStatSortBy(v as 'date' | 'contact'); setStatPage(1); }}>
-                  <SelectTrigger className="w-[180px] h-9">
-                    <SortAsc className="h-4 w-4 mr-1" />
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="date">Fecha envío/recepción</SelectItem>
-                    <SelectItem value="contact">Receptor/Emisor (A-Z)</SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
             </div>
 
@@ -1232,11 +1242,37 @@ export function UnifiedCommunicationsList({
                     {(activeStatFilter === 'total') && (
                       <th className="px-3 py-2 text-left w-10"></th>
                     )}
-                    <th className="px-3 py-2 text-left">Contacto</th>
-                    <th className="px-3 py-2 text-left">Asunto</th>
-                    <th className="px-3 py-2 text-left hidden md:table-cell">Extracto</th>
-                    <th className="px-3 py-2 text-left">Tipo</th>
-                    <th className="px-3 py-2 text-left">Fecha</th>
+                    {([
+                      { key: 'contact' as const, label: 'Contacto', hideOnMobile: false },
+                      { key: 'subject' as const, label: 'Asunto', hideOnMobile: false },
+                      { key: null as null, label: 'Extracto', hideOnMobile: true },
+                      { key: 'type' as const, label: 'Tipo', hideOnMobile: false },
+                      { key: 'date' as const, label: 'Fecha', hideOnMobile: false },
+                    ]).map((col, idx) => {
+                      const isSortable = col.key !== null;
+                      const isActive = isSortable && statSortBy === col.key;
+                      const SortIcon = isActive ? (statSortDir === 'asc' ? ArrowUp : ArrowDown) : ArrowUpDown;
+                      return (
+                        <th
+                          key={idx}
+                          className={`px-3 py-2 text-left ${col.hideOnMobile ? 'hidden md:table-cell' : ''} ${isSortable ? 'cursor-pointer select-none hover:bg-muted transition-colors' : ''}`}
+                          onClick={isSortable ? () => {
+                            if (statSortBy === col.key) {
+                              setStatSortDir(d => d === 'asc' ? 'desc' : 'asc');
+                            } else {
+                              setStatSortBy(col.key);
+                              setStatSortDir(col.key === 'date' ? 'desc' : 'asc');
+                            }
+                            setStatPage(1);
+                          } : undefined}
+                        >
+                          <span className="inline-flex items-center gap-1">
+                            {col.label}
+                            {isSortable && <SortIcon className={`h-3 w-3 ${isActive ? 'text-primary' : 'text-muted-foreground/50'}`} />}
+                          </span>
+                        </th>
+                      );
+                    })}
                   </tr>
                 </thead>
                 <tbody>

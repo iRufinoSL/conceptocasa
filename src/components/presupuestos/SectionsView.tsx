@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { Grid3x3, ArrowLeftRight, ArrowUpDown, AlertTriangle } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Grid3x3, ArrowLeftRight, ArrowUpDown, AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react';
 import { CustomSectionManager, type CustomSection, type ScaleConfig } from './CustomSectionManager';
 import type { FloorPlanData, RoomData, FloorLevel, WallType } from '@/lib/floor-plan-calculations';
 import type { CustomCorner, ManualElevation } from '@/hooks/useFloorPlan';
@@ -50,7 +50,6 @@ interface SectionsViewProps {
   floors: FloorLevel[];
   budgetName?: string;
   saving: boolean;
-  // Grid view props
   selectedRoomId: string | null;
   onSelectRoom: (id: string | null) => void;
   onAddRoom?: (name: string, width: number, length: number, floorId?: string, gridCol?: number, gridRow?: number) => Promise<void>;
@@ -65,7 +64,6 @@ interface SectionsViewProps {
   onCustomCornersChange?: (corners: CustomCorner[]) => void;
   onRecalculateSegments?: () => Promise<void>;
   onShiftGrid?: (deltaCol: number, deltaRow: number) => Promise<void>;
-  // Elevation props
   onUpdateOpening: (openingId: string, data: any) => Promise<void>;
   onAddOpening: (wallId: string, type: string, w: number, h: number, sh?: number, px?: number) => Promise<void>;
   onDeleteOpening: (openingId: string) => Promise<void>;
@@ -79,16 +77,29 @@ interface SectionsViewProps {
   focusWallId?: string;
   customSections?: CustomSection[];
   onCustomSectionsChange?: (sections: CustomSection[]) => void;
-  // Render child for selected room
   renderSelectedRoom?: () => React.ReactNode;
 }
 
+const SECTION_GROUPS = [
+  { type: 'vertical' as const, label: 'S. Verticales', icon: Grid3x3, color: 'text-blue-600' },
+  { type: 'longitudinal' as const, label: 'S. Longitudinales', icon: ArrowLeftRight, color: 'text-green-600' },
+  { type: 'transversal' as const, label: 'S. Transversales', icon: ArrowUpDown, color: 'text-orange-600' },
+];
 
 export function SectionsView(props: SectionsViewProps) {
-  const [sectionType, setSectionType] = useState<'vertical' | 'longitudinal' | 'transversal'>('vertical');
+  // All expanded by default
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
+    new Set(['vertical', 'longitudinal', 'transversal'])
+  );
 
+  const toggleGroup = (type: string) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      next.has(type) ? next.delete(type) : next.add(type);
+      return next;
+    });
+  };
 
-  // Build scale config for custom section grids
   const scaleConfig: ScaleConfig = useMemo(() => {
     const scaleX = props.planData.blockLengthMm || 625;
     const scaleY = props.planData.blockLengthMm || 625;
@@ -108,54 +119,50 @@ export function SectionsView(props: SectionsViewProps) {
     return { scaleX, scaleY, scaleZ, gridRange: { minX, maxX, minY, maxY, minZ, maxZ } };
   }, [props.planData, props.rooms, props.floors]);
 
+  const allSections = props.customSections || [];
+
   return (
-    <div className="space-y-3">
-      <Tabs value={sectionType} onValueChange={v => setSectionType(v as any)}>
-        <TabsList className="h-8">
-          <TabsTrigger value="vertical" className="text-xs h-7 px-3 gap-1">
-            <Grid3x3 className="h-3.5 w-3.5" /> S. Verticales
-            <Badge variant="secondary" className="text-[9px] h-4 ml-0.5">{(props.customSections || []).filter(s => s.sectionType === 'vertical').length}</Badge>
-          </TabsTrigger>
-          <TabsTrigger value="longitudinal" className="text-xs h-7 px-3 gap-1">
-            <ArrowLeftRight className="h-3.5 w-3.5" /> S. Longitudinales
-            <Badge variant="secondary" className="text-[9px] h-4 ml-0.5">{(props.customSections || []).filter(s => s.sectionType === 'longitudinal').length}</Badge>
-          </TabsTrigger>
-          <TabsTrigger value="transversal" className="text-xs h-7 px-3 gap-1">
-            <ArrowUpDown className="h-3.5 w-3.5" /> S. Transversales
-            <Badge variant="secondary" className="text-[9px] h-4 ml-0.5">{(props.customSections || []).filter(s => s.sectionType === 'transversal').length}</Badge>
-          </TabsTrigger>
-        </TabsList>
+    <div className="space-y-2">
+      {SECTION_GROUPS.map(group => {
+        const Icon = group.icon;
+        const count = allSections.filter(s => s.sectionType === group.type).length;
+        const isOpen = expandedGroups.has(group.type);
 
-        {/* Secciones Verticales = current grid view */}
-        <TabsContent value="vertical" className="mt-3 space-y-4">
-          <CustomSectionManager
-            sectionType="vertical"
-            sections={props.customSections || []}
-            onSectionsChange={props.onCustomSectionsChange || (() => {})}
-            scaleConfig={scaleConfig}
-          />
-        </TabsContent>
+        return (
+          <div key={group.type} className="border border-border rounded-lg overflow-hidden">
+            {/* Group header */}
+            <button
+              className="flex items-center justify-between w-full px-3 py-2.5 bg-muted/50 hover:bg-muted/80 transition-colors"
+              onClick={() => toggleGroup(group.type)}
+            >
+              <div className="flex items-center gap-2">
+                {isOpen ? (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                )}
+                <Icon className={`h-4 w-4 ${group.color}`} />
+                <span className="text-sm font-semibold text-foreground">{group.label}</span>
+              </div>
+              <Badge variant="secondary" className="text-[10px] h-5">
+                {count} {count === 1 ? 'sección' : 'secciones'}
+              </Badge>
+            </button>
 
-        {/* Secciones Longitudinales = Y-axis elevations (Cara Superior/Inferior) */}
-        <TabsContent value="longitudinal" className="mt-3 space-y-4">
-          <CustomSectionManager
-            sectionType="longitudinal"
-            sections={props.customSections || []}
-            onSectionsChange={props.onCustomSectionsChange || (() => {})}
-            scaleConfig={scaleConfig}
-          />
-        </TabsContent>
-
-        {/* Secciones Transversales = X-axis elevations (Cara Izquierda/Derecha) */}
-        <TabsContent value="transversal" className="mt-3 space-y-4">
-          <CustomSectionManager
-            sectionType="transversal"
-            sections={props.customSections || []}
-            onSectionsChange={props.onCustomSectionsChange || (() => {})}
-            scaleConfig={scaleConfig}
-          />
-        </TabsContent>
-      </Tabs>
+            {/* Group content */}
+            {isOpen && (
+              <div className="px-3 py-2 bg-background border-t border-border">
+                <CustomSectionManager
+                  sectionType={group.type}
+                  sections={allSections}
+                  onSectionsChange={props.onCustomSectionsChange || (() => {})}
+                  scaleConfig={scaleConfig}
+                />
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

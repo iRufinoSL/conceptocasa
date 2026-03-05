@@ -6,16 +6,18 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { 
-  Mail, MessageSquare, Smartphone, ChevronDown, ChevronRight, 
+  Mail, MessageSquare, Smartphone, ChevronDown, ChevronRight, ChevronLeft,
   Reply, Forward, Trash2, ArrowDownLeft, ArrowUpRight,
   Paperclip, Eye, Clock, CheckCircle, XCircle, Search, Inbox, Send,
   ArrowLeft, Maximize2, FolderOpen, ClipboardList, Building2,
-  FileText, Image, File as FileIcon, Download, ExternalLink, X, RefreshCw, Loader2, FilePlus
+  FileText, Image, File as FileIcon, Download, ExternalLink, X, RefreshCw, Loader2, FilePlus,
+  SortAsc, Phone
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Tables } from '@/integrations/supabase/types';
@@ -118,6 +120,14 @@ export function UnifiedCommunicationsList({
   const [fullscreenCommunication, setFullscreenCommunication] = useState<UnifiedCommunication | null>(null);
   const [showCreateDocument, setShowCreateDocument] = useState(false);
   const [emailForDocument, setEmailForDocument] = useState<EmailMessage | null>(null);
+  
+  // Stat card filter states
+  type StatFilter = 'total' | 'inbound' | 'outbound' | 'emails' | 'whatsapp' | 'sms' | 'unread' | null;
+  const [activeStatFilter, setActiveStatFilter] = useState<StatFilter>(null);
+  const [statSearch, setStatSearch] = useState('');
+  const [statSortBy, setStatSortBy] = useState<'date' | 'contact'>('date');
+  const [statPage, setStatPage] = useState(1);
+  const ITEMS_PER_PAGE = 50;
 
   const handleSyncResend = async () => {
     setIsSyncing(true);
@@ -555,6 +565,53 @@ export function UnifiedCommunicationsList({
     whatsapp: filteredCommunications.filter(c => c.type === 'whatsapp').length,
     sms: filteredCommunications.filter(c => c.type === 'sms').length,
     unread: unreadEmailIds.length,
+  };
+
+  // Stat card filtered & paginated list
+  const statFilteredList = useMemo(() => {
+    let list = unifiedCommunications;
+    // Apply stat filter
+    if (activeStatFilter === 'inbound') list = list.filter(c => c.direction === 'inbound');
+    else if (activeStatFilter === 'outbound') list = list.filter(c => c.direction === 'outbound');
+    else if (activeStatFilter === 'emails') list = list.filter(c => c.type === 'email');
+    else if (activeStatFilter === 'whatsapp') list = list.filter(c => c.type === 'whatsapp');
+    else if (activeStatFilter === 'sms') list = list.filter(c => c.type === 'sms');
+    else if (activeStatFilter === 'unread') list = list.filter(c => c.type === 'email' && !c.isRead && c.direction === 'inbound');
+    // else 'total' -> all
+
+    // Apply search
+    if (statSearch) {
+      const s = statSearch.toLowerCase();
+      list = list.filter(c =>
+        c.contactName.toLowerCase().includes(s) ||
+        c.subject?.toLowerCase().includes(s) ||
+        c.content.replace(/<[^>]*>/g, '').toLowerCase().includes(s) ||
+        c.contactEmail?.toLowerCase().includes(s) ||
+        c.phoneNumber?.includes(s)
+      );
+    }
+
+    // Apply sort
+    if (statSortBy === 'contact') {
+      list = [...list].sort((a, b) => a.contactName.localeCompare(b.contactName, 'es'));
+    }
+    // date is already default sort
+
+    return list;
+  }, [unifiedCommunications, activeStatFilter, statSearch, statSortBy]);
+
+  const statTotalPages = Math.max(1, Math.ceil(statFilteredList.length / ITEMS_PER_PAGE));
+  const statPagedList = useMemo(() => {
+    const start = (statPage - 1) * ITEMS_PER_PAGE;
+    return statFilteredList.slice(start, start + ITEMS_PER_PAGE);
+  }, [statFilteredList, statPage]);
+
+  const handleStatCardClick = (filter: StatFilter) => {
+    setActiveStatFilter(filter);
+    setStatSearch('');
+    setStatSortBy('date');
+    setStatPage(1);
+    setSelectedCommunication(null);
   };
 
   const handleSelectCommunication = (comm: UnifiedCommunication) => {
@@ -1107,42 +1164,165 @@ export function UnifiedCommunicationsList({
 
   return (
     <div className="space-y-4">
-      {/* Stats */}
-      <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
-        <Card className="p-3">
-          <div className="text-xl font-bold text-primary">{stats.total}</div>
-          <div className="text-xs text-muted-foreground">Total</div>
-        </Card>
-        <Card className="p-3">
-          <div className="text-xl font-bold text-green-600">{stats.inbound}</div>
-          <div className="text-xs text-muted-foreground">Entrada</div>
-        </Card>
-        <Card className="p-3">
-          <div className="text-xl font-bold text-blue-600">{stats.outbound}</div>
-          <div className="text-xs text-muted-foreground">Salida</div>
-        </Card>
-        <Card className="p-3">
-          <div className="text-xl font-bold text-blue-500">{stats.emails}</div>
-          <div className="text-xs text-muted-foreground">Emails</div>
-        </Card>
-        <Card className="p-3">
-          <div className="text-xl font-bold text-green-500">{stats.whatsapp}</div>
-          <div className="text-xs text-muted-foreground">WhatsApp</div>
-        </Card>
-        <Card 
-          className={`p-3 cursor-pointer transition-colors hover:bg-accent ${filterUnreadOnly ? 'ring-2 ring-amber-500 bg-amber-50 dark:bg-amber-950/20' : ''}`}
-          onClick={() => {
-            if (stats.unread > 0) {
-              setFilterUnreadOnly(true);
-              // Unread emails are only in inbox (inbound)
-              setFullscreenFolder('inbox');
-            }
-          }}
-        >
-          <div className="text-xl font-bold text-amber-600">{stats.unread}</div>
-          <div className="text-xs text-muted-foreground">No leídos</div>
-        </Card>
+      {/* Stats - clickable cards */}
+      <div className="grid grid-cols-3 md:grid-cols-7 gap-2">
+        {([
+          { key: 'total' as StatFilter, value: stats.total, label: 'Todos', colorClass: 'text-primary' },
+          { key: 'inbound' as StatFilter, value: stats.inbound, label: 'Entrada', colorClass: 'text-green-600' },
+          { key: 'outbound' as StatFilter, value: stats.outbound, label: 'Salida', colorClass: 'text-blue-600' },
+          { key: 'emails' as StatFilter, value: stats.emails, label: 'Emails', colorClass: 'text-blue-500' },
+          { key: 'whatsapp' as StatFilter, value: stats.whatsapp, label: 'WhatsApp', colorClass: 'text-green-500' },
+          { key: 'sms' as StatFilter, value: stats.sms, label: 'SMS', colorClass: 'text-purple-500' },
+          { key: 'unread' as StatFilter, value: stats.unread, label: 'No leídos', colorClass: 'text-amber-600' },
+        ]).map(card => (
+          <Card
+            key={card.key}
+            className={`p-3 cursor-pointer transition-colors hover:bg-accent ${activeStatFilter === card.key ? 'ring-2 ring-primary bg-primary/5' : ''}`}
+            onClick={() => handleStatCardClick(card.key)}
+          >
+            <div className={`text-xl font-bold ${card.colorClass}`}>{card.value}</div>
+            <div className="text-xs text-muted-foreground">{card.label}</div>
+          </Card>
+        ))}
       </div>
+
+      {/* Stat card filtered list panel */}
+      {activeStatFilter && (
+        <Card>
+          <CardContent className="p-4 space-y-3">
+            {/* Header */}
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="sm" onClick={() => setActiveStatFilter(null)}>
+                  <X className="h-4 w-4" />
+                </Button>
+                <h3 className="font-semibold text-base">
+                  {activeStatFilter === 'total' ? 'Todos' : activeStatFilter === 'inbound' ? 'Entrada' : activeStatFilter === 'outbound' ? 'Salida' : activeStatFilter === 'emails' ? 'Emails' : activeStatFilter === 'whatsapp' ? 'WhatsApp' : activeStatFilter === 'sms' ? 'SMS' : 'No leídos'}
+                </h3>
+                <Badge variant="secondary">{statFilteredList.length}</Badge>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="relative w-64">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar asunto, receptor, contenido..."
+                    value={statSearch}
+                    onChange={(e) => { setStatSearch(e.target.value); setStatPage(1); }}
+                    className="pl-9 h-9"
+                  />
+                </div>
+                <Select value={statSortBy} onValueChange={(v) => { setStatSortBy(v as 'date' | 'contact'); setStatPage(1); }}>
+                  <SelectTrigger className="w-[180px] h-9">
+                    <SortAsc className="h-4 w-4 mr-1" />
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="date">Fecha envío/recepción</SelectItem>
+                    <SelectItem value="contact">Receptor/Emisor (A-Z)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Table */}
+            <div className="border rounded-md overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50">
+                  <tr>
+                    {(activeStatFilter === 'total') && (
+                      <th className="px-3 py-2 text-left w-10"></th>
+                    )}
+                    <th className="px-3 py-2 text-left">Contacto</th>
+                    <th className="px-3 py-2 text-left">Asunto</th>
+                    <th className="px-3 py-2 text-left hidden md:table-cell">Extracto</th>
+                    <th className="px-3 py-2 text-left">Tipo</th>
+                    <th className="px-3 py-2 text-left">Fecha</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {statPagedList.length === 0 ? (
+                    <tr>
+                      <td colSpan={activeStatFilter === 'total' ? 6 : 5} className="px-3 py-8 text-center text-muted-foreground">
+                        No se encontraron comunicaciones
+                      </td>
+                    </tr>
+                  ) : (
+                    statPagedList.map(comm => {
+                      const TypeIcon = typeIcons[comm.type];
+                      return (
+                        <tr
+                          key={comm.id}
+                          className={`border-t cursor-pointer hover:bg-accent/50 transition-colors ${
+                            selectedCommunication?.id === comm.id ? 'bg-primary/10' : ''
+                          } ${comm.type === 'email' && !comm.isRead ? 'font-semibold' : ''}`}
+                          onClick={() => handleSelectCommunication(comm)}
+                        >
+                          {activeStatFilter === 'total' && (
+                            <td className="px-3 py-2">
+                              {comm.direction === 'inbound' ? (
+                                <span title="Recibido"><ArrowDownLeft className="h-4 w-4 text-green-600" /></span>
+                              ) : (
+                                <span title="Enviado"><ArrowUpRight className="h-4 w-4 text-blue-600" /></span>
+                              )}
+                            </td>
+                          )}
+                          <td className="px-3 py-2 max-w-[180px] truncate">
+                            {comm.contactName}
+                          </td>
+                          <td className="px-3 py-2 max-w-[200px] truncate">
+                            {comm.subject || '(Sin asunto)'}
+                          </td>
+                          <td className="px-3 py-2 max-w-[250px] truncate hidden md:table-cell text-muted-foreground">
+                            {comm.content.replace(/<[^>]*>/g, '').substring(0, 80)}
+                          </td>
+                          <td className="px-3 py-2">
+                            <Badge variant="outline" className={`text-xs ${typeColors[comm.type]}`}>
+                              <TypeIcon className="h-3 w-3 mr-1" />
+                              {typeLabels[comm.type]}
+                            </Badge>
+                          </td>
+                          <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap">
+                            {format(comm.createdAt, "d MMM yy, HH:mm", { locale: es })}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination */}
+            {statTotalPages > 1 && (
+              <div className="flex items-center justify-between pt-2">
+                <span className="text-xs text-muted-foreground">
+                  Pág. {statPage} de {statTotalPages} ({statFilteredList.length} resultados)
+                </span>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={statPage <= 1}
+                    onClick={() => setStatPage(p => p - 1)}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Anterior
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={statPage >= statTotalPages}
+                    onClick={() => setStatPage(p => p + 1)}
+                  >
+                    Siguiente
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Search + Sync */}
       <div className="flex items-center gap-2">

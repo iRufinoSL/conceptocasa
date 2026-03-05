@@ -1351,12 +1351,12 @@ export default function Documentos() {
             {/* Description */}
             <div className="space-y-2 flex-1 min-h-0">
               <Label>Descripción (opcional)</Label>
-              <div className="h-[300px] overflow-hidden">
+              <div className="h-[200px] overflow-hidden">
                 <RichTextEditor
                   value={uploadDescription}
                   onChange={setUploadDescription}
                   placeholder="Descripción del documento..."
-                  minHeight="280px"
+                  minHeight="180px"
                   className="h-full"
                 />
               </div>
@@ -1494,7 +1494,7 @@ export default function Documentos() {
               Editar documento
             </DialogTitle>
           </DialogHeader>
-          <div className="flex-1 overflow-y-auto min-h-0">
+          <ScrollArea className="flex-1 min-h-0">
             <div className="space-y-4 py-4 pr-2">
               {/* Edit Name */}
               <div className="space-y-2">
@@ -1611,12 +1611,12 @@ export default function Documentos() {
               {/* Edit Description */}
               <div className="space-y-2">
                 <Label>Descripción</Label>
-                <div className="h-[300px] overflow-hidden">
+                <div className="h-[200px] overflow-hidden">
                   <RichTextEditor
                     value={editDescription}
                     onChange={setEditDescription}
                     placeholder="Descripción del documento..."
-                    minHeight="280px"
+                    minHeight="180px"
                     className="h-full"
                   />
                 </div>
@@ -1683,7 +1683,7 @@ export default function Documentos() {
                 </p>
               </div>
             </div>
-          </div>
+          </ScrollArea>
           <DialogFooter className="flex-shrink-0 border-t pt-4 mt-2">
             <Button
               variant="outline"

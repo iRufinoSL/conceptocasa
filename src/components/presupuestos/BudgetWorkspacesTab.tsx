@@ -1083,7 +1083,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold">Espacios de trabajo</h3>
         {isAdmin && (
-          <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => { resetForm(); setShowForm(true); }}>
+          <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => { resetForm(); setFormHeight(String(floorPlan?.default_height ?? '')); setShowForm(true); }}>
             <Plus className="h-3 w-3" /> Añadir
           </Button>
         )}

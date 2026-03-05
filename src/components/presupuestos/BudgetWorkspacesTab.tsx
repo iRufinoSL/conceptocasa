@@ -950,9 +950,12 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     if (editingId) {
       const { error } = await supabase.from('budget_floor_plan_rooms').update(payload).eq('id', editingId);
       if (error) { toast.error('Error al actualizar'); return; }
-      // Rebuild walls: delete old, create new per edge
+      // Preserve existing wall types when rebuilding walls
+      const { data: existingWalls } = await supabase.from('budget_floor_plan_walls')
+        .select('wall_index, wall_type').eq('room_id', editingId).order('wall_index');
+      const oldTypeMap = new Map((existingWalls || []).map(w => [w.wall_index, w.wall_type]));
       await supabase.from('budget_floor_plan_walls').delete().eq('room_id', editingId);
-      const walls = formVertices.map((_, i) => ({ room_id: editingId, wall_index: i, wall_type: 'external' }));
+      const walls = formVertices.map((_, i) => ({ room_id: editingId, wall_index: i, wall_type: oldTypeMap.get(i) || 'external' }));
       await supabase.from('budget_floor_plan_walls').insert(walls);
       toast.success('Espacio actualizado');
     } else {
@@ -1025,9 +1028,12 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
       length: Math.round(bbox.w * cellSizeM * 100) / 100,
       width: Math.round(bbox.h * cellSizeM * 100) / 100,
     }).eq('id', roomId);
-    // Rebuild walls per edge
+    // Preserve existing wall types when rebuilding walls
+    const { data: existingWalls } = await supabase.from('budget_floor_plan_walls')
+      .select('wall_index, wall_type').eq('room_id', roomId).order('wall_index');
+    const oldTypeMap = new Map((existingWalls || []).map(w => [w.wall_index, w.wall_type]));
     await supabase.from('budget_floor_plan_walls').delete().eq('room_id', roomId);
-    const walls = gridEditVertices.map((_, i) => ({ room_id: roomId, wall_index: i, wall_type: 'external' }));
+    const walls = gridEditVertices.map((_, i) => ({ room_id: roomId, wall_index: i, wall_type: oldTypeMap.get(i) || 'external' }));
     await supabase.from('budget_floor_plan_walls').insert(walls);
     toast.success('Polígono actualizado');
     setGridEditId(null);

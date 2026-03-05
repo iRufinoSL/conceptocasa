@@ -307,6 +307,7 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
   const [editingPolygonId, setEditingPolygonId] = useState<string | null>(null);
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
+  const [editAxisValue, setEditAxisValue] = useState('0');
 
   const axisConfig = AXIS_MAP[sectionType][0];
   const filtered = sections.filter(s => s.sectionType === sectionType);
@@ -337,7 +338,8 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
 
   const handleRename = (id: string) => {
     if (!editName.trim()) return;
-    onSectionsChange(sections.map(s => s.id === id ? { ...s, name: editName.trim() } : s));
+    const val = parseFloat(editAxisValue) || 0;
+    onSectionsChange(sections.map(s => s.id === id ? { ...s, name: editName.trim(), axisValue: val } : s));
     setEditingSectionId(null);
   };
 
@@ -453,109 +455,129 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
 
       {filtered.map(section => {
         const isExpanded = expandedSections.has(section.id);
+        const isEditing = editingSectionId === section.id;
         return (
-          <Collapsible key={section.id} open={isExpanded} onOpenChange={() => toggleExpand(section.id)}>
-            <Card className="border-muted">
-              <CollapsibleTrigger asChild>
-                <div className="flex items-center justify-between px-3 py-1.5 cursor-pointer hover:bg-muted/50 rounded-t-lg">
-                  <div className="flex items-center gap-2">
-                    {isExpanded ? <ChevronDown className="h-3 w-3 text-muted-foreground" /> : <ChevronRight className="h-3 w-3 text-muted-foreground" />}
-                    {editingSectionId === section.id ? (
+          <div key={section.id} className="border-2 border-border rounded-xl overflow-hidden shadow-sm">
+            {/* Section header */}
+            <div
+              className="flex items-center justify-between px-3 py-2 cursor-pointer bg-muted/60 hover:bg-muted/80"
+              onClick={() => !isEditing && toggleExpand(section.id)}
+            >
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                {isExpanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+                {isEditing ? (
+                  <div className="flex items-center gap-2 flex-1" onClick={e => e.stopPropagation()}>
+                    <Input
+                      className="h-7 text-xs w-36"
+                      value={editName}
+                      onChange={e => setEditName(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') handleRename(section.id); if (e.key === 'Escape') setEditingSectionId(null); }}
+                      autoFocus
+                      placeholder="Nombre"
+                    />
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] text-muted-foreground">{axisConfig.label}=</span>
                       <Input
-                        className="h-6 text-xs w-40"
-                        value={editName}
-                        onChange={e => setEditName(e.target.value)}
+                        className="h-7 text-xs w-16"
+                        type="number"
+                        value={editAxisValue}
+                        onChange={e => setEditAxisValue(e.target.value)}
                         onKeyDown={e => { if (e.key === 'Enter') handleRename(section.id); if (e.key === 'Escape') setEditingSectionId(null); }}
-                        onBlur={() => handleRename(section.id)}
-                        autoFocus
-                        onClick={e => e.stopPropagation()}
                       />
-                    ) : (
-                      <span className="text-xs font-medium">{section.name}</span>
-                    )}
-                    <Badge variant="secondary" className="text-[9px] h-4">
-                      {section.axis}{section.axisValue}
+                    </div>
+                    <Button size="sm" className="h-6 text-[10px] px-2" onClick={() => handleRename(section.id)}>Guardar</Button>
+                    <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2" onClick={() => setEditingSectionId(null)}>Cancelar</Button>
+                  </div>
+                ) : (
+                  <>
+                    <span className="text-xs font-semibold truncate">{section.name}</span>
+                    <Badge variant="secondary" className="text-[9px] h-4 shrink-0">
+                      {section.axis}={section.axisValue}
                     </Badge>
-                    <Badge variant="outline" className="text-[9px] h-4">
+                    <Badge variant="outline" className="text-[9px] h-4 shrink-0">
                       <Pentagon className="h-2.5 w-2.5 mr-0.5" />{section.polygons.length}
                     </Badge>
-                  </div>
-                  <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
-                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { setEditingSectionId(section.id); setEditName(section.name); }}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10" onClick={() => handleDelete(section.id)}>
-                      <Trash2 className="h-4.5 w-4.5" />
-                    </Button>
-                  </div>
+                  </>
+                )}
+              </div>
+              {!isEditing && (
+                <div className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { setEditingSectionId(section.id); setEditName(section.name); setEditAxisValue(String(section.axisValue)); }}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10" onClick={() => handleDelete(section.id)}>
+                    <Trash2 className="h-4.5 w-4.5" />
+                  </Button>
                 </div>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <CardContent className="pt-1 pb-2 space-y-2">
-                  {/* SVG Grid for this section */}
-                  <SectionGrid section={section} scaleConfig={scaleConfig} />
+              )}
+            </div>
 
-                  {/* Polygons list */}
-                  {section.polygons.length === 0 && (
-                    <p className="text-[10px] text-muted-foreground italic">Sin polígonos definidos. La cuadrícula se muestra vacía.</p>
-                  )}
-                  {section.polygons.map(poly => {
-                    const metrics = computePolygonMetrics(poly.vertices, section.sectionType, scaleConfig);
-                    return (
-                      <div key={poly.id} className="bg-muted/30 rounded px-2 py-1.5">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <Pentagon className="h-3 w-3 text-primary" />
-                            <span className="text-[11px] font-medium">{poly.name}</span>
-                            <span className="text-[9px] text-muted-foreground">
-                              {poly.vertices.length} vértices
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => startEditPolygon(section.id, poly)}>
-                              <Pencil className="h-3 w-3" />
-                            </Button>
-                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive hover:bg-destructive/10" onClick={() => deletePolygon(section.id, poly.id)}>
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </div>
+            {/* Section content — always show grid when expanded */}
+            {isExpanded && (
+              <div className="px-3 py-2 space-y-2 bg-background">
+                {/* SVG Grid for THIS section only */}
+                <SectionGrid section={section} scaleConfig={scaleConfig} />
+
+                {/* Polygons list */}
+                {section.polygons.length === 0 && (
+                  <p className="text-[10px] text-muted-foreground italic">Sin polígonos definidos. La cuadrícula se muestra vacía.</p>
+                )}
+                {section.polygons.map(poly => {
+                  const metrics = computePolygonMetrics(poly.vertices, section.sectionType, scaleConfig);
+                  return (
+                    <div key={poly.id} className="bg-muted/30 rounded px-2 py-1.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Pentagon className="h-3 w-3 text-primary" />
+                          <span className="text-[11px] font-medium">{poly.name}</span>
+                          <span className="text-[9px] text-muted-foreground">
+                            {poly.vertices.length} vértices
+                          </span>
                         </div>
-                        <div className="flex items-center gap-3 mt-1 ml-5 text-[10px] text-muted-foreground">
-                          <span title="Superficie">📐 {metrics.areaM2.toFixed(2)} m²</span>
-                          <span title="Largo máximo (horizontal)">↔ {metrics.largoM.toFixed(2)} m</span>
-                          <span title="Alto máximo (vertical)">↕ {metrics.altoM.toFixed(2)} m</span>
+                        <div className="flex items-center gap-1">
+                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => startEditPolygon(section.id, poly)}>
+                            <Pencil className="h-3 w-3" />
+                          </Button>
+                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive hover:bg-destructive/10" onClick={() => deletePolygon(section.id, poly.id)}>
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
                         </div>
                       </div>
-                    );
-                  })}
-
-                  {/* Add/Edit polygon form */}
-                  {editingPolygonOf === section.id ? (
-                    <div className="border border-dashed border-primary/30 rounded p-2 space-y-1.5">
-                      <div>
-                        <Label className="text-[10px]">Nombre del polígono</Label>
-                        <Input className="h-6 text-xs" placeholder="Ej: Muro principal" value={polygonName} onChange={e => setPolygonName(e.target.value)} />
-                      </div>
-                      <div>
-                        <Label className="text-[10px]">Vértices (X,Y,Z separados por ;)</Label>
-                        <Input className="h-6 text-xs" placeholder="0,0,0; 5,0,0; 5,0,10; 0,0,10" value={polygonVertices} onChange={e => setPolygonVertices(e.target.value)} />
-                      </div>
-                      <div className="flex gap-1 justify-end">
-                        <Button variant="ghost" size="sm" className="h-5 text-[10px]" onClick={() => { setEditingPolygonOf(null); setEditingPolygonId(null); }}>Cancelar</Button>
-                        <Button size="sm" className="h-5 text-[10px]" onClick={() => addPolygon(section.id)} disabled={!polygonName.trim() || !polygonVertices.trim()}>
-                          {editingPolygonId ? 'Guardar' : 'Añadir'}
-                        </Button>
+                      <div className="flex items-center gap-3 mt-1 ml-5 text-[10px] text-muted-foreground">
+                        <span title="Superficie">📐 {metrics.areaM2.toFixed(2)} m²</span>
+                        <span title="Largo máximo (horizontal)">↔ {metrics.largoM.toFixed(2)} m</span>
+                        <span title="Alto máximo (vertical)">↕ {metrics.altoM.toFixed(2)} m</span>
                       </div>
                     </div>
-                  ) : (
-                    <Button variant="outline" size="sm" className="h-6 text-[10px] w-full" onClick={() => setEditingPolygonOf(section.id)}>
-                      <Plus className="h-3 w-3 mr-1" /> Añadir Polígono
-                    </Button>
-                  )}
-                </CardContent>
-              </CollapsibleContent>
-            </Card>
-          </Collapsible>
+                  );
+                })}
+
+                {/* Add/Edit polygon form */}
+                {editingPolygonOf === section.id ? (
+                  <div className="border border-dashed border-primary/30 rounded p-2 space-y-1.5">
+                    <div>
+                      <Label className="text-[10px]">Nombre del polígono</Label>
+                      <Input className="h-6 text-xs" placeholder="Ej: Muro principal" value={polygonName} onChange={e => setPolygonName(e.target.value)} />
+                    </div>
+                    <div>
+                      <Label className="text-[10px]">Vértices (X,Y,Z separados por ;)</Label>
+                      <Input className="h-6 text-xs" placeholder="0,0,0; 5,0,0; 5,0,10; 0,0,10" value={polygonVertices} onChange={e => setPolygonVertices(e.target.value)} />
+                    </div>
+                    <div className="flex gap-1 justify-end">
+                      <Button variant="ghost" size="sm" className="h-5 text-[10px]" onClick={() => { setEditingPolygonOf(null); setEditingPolygonId(null); }}>Cancelar</Button>
+                      <Button size="sm" className="h-5 text-[10px]" onClick={() => addPolygon(section.id)} disabled={!polygonName.trim() || !polygonVertices.trim()}>
+                        {editingPolygonId ? 'Guardar' : 'Añadir'}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <Button variant="outline" size="sm" className="h-6 text-[10px] w-full" onClick={() => setEditingPolygonOf(section.id)}>
+                    <Plus className="h-3 w-3 mr-1" /> Añadir Polígono
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
         );
       })}
     </div>

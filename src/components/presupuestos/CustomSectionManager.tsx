@@ -62,58 +62,53 @@ const POLY_COLORS = [
   'hsl(0, 70%, 50%)',
 ];
 
+// SketchUp axis colors
+const AXIS_COLORS = { X: '#c0392b', Y: '#27ae60', Z: '#2980b9' };
+
 /** Renders an SVG grid for a custom section with its polygons */
 function SectionGrid({ section, scaleConfig }: { section: CustomSection; scaleConfig?: ScaleConfig }) {
-  const { sectionType, axisValue, polygons } = section;
+  const { sectionType, polygons } = section;
 
-  // Determine which two axes we display
-  // vertical (Z=const): show X (horizontal) vs Y (vertical-down)
-  // longitudinal (Y=const): show X (horizontal) vs Z (vertical-up)
-  // transversal (X=const): show Y (horizontal) vs Z (vertical-up)
   const axisMapping = useMemo(() => {
     if (sectionType === 'vertical') return { hAxis: 'X', vAxis: 'Y', hLabel: 'X', vLabel: 'Y', flipV: false } as const;
     if (sectionType === 'longitudinal') return { hAxis: 'X', vAxis: 'Z', hLabel: 'X', vLabel: 'Z', flipV: true } as const;
     return { hAxis: 'Y', vAxis: 'Z', hLabel: 'Y', vLabel: 'Z', flipV: true } as const;
   }, [sectionType]);
 
-  // Compute grid bounds from polygons + default range
+  const hColor = AXIS_COLORS[axisMapping.hAxis];
+  const vColor = AXIS_COLORS[axisMapping.vAxis];
+
   const bounds = useMemo(() => {
     const allH: number[] = [];
     const allV: number[] = [];
 
     polygons.forEach(p => p.vertices.forEach(v => {
-      const h = v[axisMapping.hAxis.toLowerCase() as 'x' | 'y' | 'z'];
-      const vVal = v[axisMapping.vAxis.toLowerCase() as 'x' | 'y' | 'z'];
-      allH.push(h);
-      allV.push(vVal);
+      allH.push(v[axisMapping.hAxis.toLowerCase() as 'x' | 'y' | 'z']);
+      allV.push(v[axisMapping.vAxis.toLowerCase() as 'x' | 'y' | 'z']);
     }));
 
     const defaultRange = scaleConfig?.gridRange;
-    const hKey = axisMapping.hAxis.toLowerCase() as 'x' | 'y' | 'z';
-    const vKey = axisMapping.vAxis.toLowerCase() as 'x' | 'y' | 'z';
 
     let minH = allH.length > 0 ? Math.min(...allH) : (defaultRange ? defaultRange[`min${axisMapping.hAxis}` as keyof typeof defaultRange] as number : 0);
     let maxH = allH.length > 0 ? Math.max(...allH) : (defaultRange ? defaultRange[`max${axisMapping.hAxis}` as keyof typeof defaultRange] as number : 10);
     let minV = allV.length > 0 ? Math.min(...allV) : (defaultRange ? defaultRange[`min${axisMapping.vAxis}` as keyof typeof defaultRange] as number : 0);
     let maxV = allV.length > 0 ? Math.max(...allV) : (defaultRange ? defaultRange[`max${axisMapping.vAxis}` as keyof typeof defaultRange] as number : 10);
 
-    // Add margin
     const hRange = maxH - minH || 10;
     const vRange = maxV - minV || 10;
-    minH = Math.floor(minH - hRange * 0.15);
-    maxH = Math.ceil(maxH + hRange * 0.15);
-    minV = Math.floor(minV - vRange * 0.15);
-    maxV = Math.ceil(maxV + vRange * 0.15);
+    minH = Math.floor(minH - hRange * 0.1);
+    maxH = Math.ceil(maxH + hRange * 0.1);
+    minV = Math.floor(minV - vRange * 0.1);
+    maxV = Math.ceil(maxV + vRange * 0.1);
 
-    // Ensure minimum size
     if (maxH - minH < 5) { minH -= 2; maxH += 3; }
     if (maxV - minV < 5) { minV -= 2; maxV += 3; }
 
     return { minH, maxH, minV, maxV };
   }, [polygons, axisMapping, scaleConfig]);
 
-  const cellSize = 32;
-  const padding = 40;
+  const cellSize = 36;
+  const padding = 48;
   const cols = bounds.maxH - bounds.minH;
   const rows = bounds.maxV - bounds.minV;
   const svgW = cols * cellSize + padding * 2;
@@ -121,20 +116,53 @@ function SectionGrid({ section, scaleConfig }: { section: CustomSection; scaleCo
 
   const toSvgX = (val: number) => padding + (val - bounds.minH) * cellSize;
   const toSvgY = (val: number) => axisMapping.flipV
-    ? padding + (bounds.maxV - val) * cellSize  // Z goes up
-    : padding + (val - bounds.minV) * cellSize;  // Y goes down
+    ? padding + (bounds.maxV - val) * cellSize
+    : padding + (val - bounds.minV) * cellSize;
+
+  // Chess cells
+  const chessCells: React.ReactNode[] = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const isDark = (r + c) % 2 === 0;
+      chessCells.push(
+        <rect
+          key={`cell-${r}-${c}`}
+          x={padding + c * cellSize}
+          y={padding + r * cellSize}
+          width={cellSize}
+          height={cellSize}
+          fill={isDark ? '#e8e8e8' : '#ffffff'}
+          stroke="#cccccc"
+          strokeWidth={0.5}
+        />
+      );
+    }
+  }
 
   return (
-    <div className="overflow-auto border rounded bg-muted/20 my-2">
-      <svg width={Math.min(svgW, 900)} height={Math.min(svgH, 600)} viewBox={`0 0 ${svgW} ${svgH}`} className="w-full">
+    <div className="overflow-auto border-2 border-border rounded-lg bg-white my-2 shadow-sm">
+      <svg width={Math.min(svgW, 960)} height={Math.min(svgH, 640)} viewBox={`0 0 ${svgW} ${svgH}`} className="w-full" style={{ minHeight: 200 }}>
+        {/* Title bar */}
+        <rect x={0} y={0} width={svgW} height={28} fill="#2c3e50" />
+        <text x={svgW / 2} y={18} textAnchor="middle" fontSize={13} fontWeight="bold" fill="#ffffff" fontFamily="system-ui, sans-serif">
+          {section.name} — {section.axis}={section.axisValue}
+        </text>
+
+        {/* Chess pattern background */}
+        {chessCells}
+
+        {/* Border around grid area */}
+        <rect x={padding} y={padding} width={cols * cellSize} height={rows * cellSize} fill="none" stroke="#555555" strokeWidth={1.5} />
+
         {/* Grid lines */}
         {Array.from({ length: cols + 1 }, (_, i) => {
           const x = padding + i * cellSize;
           const val = bounds.minH + i;
+          const isOrigin = val === 0;
           return (
             <g key={`h-${i}`}>
-              <line x1={x} y1={padding} x2={x} y2={padding + rows * cellSize} stroke="hsl(var(--border))" strokeWidth={val === 0 ? 1.5 : 0.5} strokeDasharray={val === 0 ? undefined : '2,2'} />
-              <text x={x} y={padding - 6} textAnchor="middle" className="fill-muted-foreground" fontSize={9}>
+              <line x1={x} y1={padding} x2={x} y2={padding + rows * cellSize} stroke={isOrigin ? hColor : '#999999'} strokeWidth={isOrigin ? 2 : 0.5} />
+              <text x={x} y={padding - 8} textAnchor="middle" fontSize={12} fontWeight="bold" fill={hColor} fontFamily="system-ui, sans-serif">
                 {axisMapping.hLabel}{val}
               </text>
             </g>
@@ -143,19 +171,25 @@ function SectionGrid({ section, scaleConfig }: { section: CustomSection; scaleCo
         {Array.from({ length: rows + 1 }, (_, i) => {
           const y = padding + i * cellSize;
           const val = axisMapping.flipV ? bounds.maxV - i : bounds.minV + i;
+          const isOrigin = val === 0;
           return (
             <g key={`v-${i}`}>
-              <line x1={padding} y1={y} x2={padding + cols * cellSize} y2={y} stroke="hsl(var(--border))" strokeWidth={val === 0 ? 1.5 : 0.5} strokeDasharray={val === 0 ? undefined : '2,2'} />
-              <text x={padding - 6} y={y + 3} textAnchor="end" className="fill-muted-foreground" fontSize={9}>
+              <line x1={padding} y1={y} x2={padding + cols * cellSize} y2={y} stroke={isOrigin ? vColor : '#999999'} strokeWidth={isOrigin ? 2 : 0.5} />
+              <text x={padding - 8} y={y + 4} textAnchor="end" fontSize={12} fontWeight="bold" fill={vColor} fontFamily="system-ui, sans-serif">
                 {axisMapping.vLabel}{val}
               </text>
             </g>
           );
         })}
 
-        {/* Origin marker if visible */}
+        {/* Origin marker */}
         {bounds.minH <= 0 && bounds.maxH >= 0 && bounds.minV <= 0 && bounds.maxV >= 0 && (
-          <circle cx={toSvgX(0)} cy={toSvgY(0)} r={4} fill="hsl(var(--primary))" opacity={0.6} />
+          <>
+            <circle cx={toSvgX(0)} cy={toSvgY(0)} r={5} fill="#e74c3c" stroke="#ffffff" strokeWidth={1.5} />
+            <text x={toSvgX(0) + 8} y={toSvgY(0) - 8} fontSize={10} fontWeight="bold" fill="#e74c3c" fontFamily="system-ui, sans-serif">
+              O
+            </text>
+          </>
         )}
 
         {/* Polygons */}
@@ -168,42 +202,32 @@ function SectionGrid({ section, scaleConfig }: { section: CustomSection; scaleCo
 
           return (
             <g key={poly.id}>
-              {/* Filled polygon */}
               {poly.vertices.length >= 3 && (
-                <polygon points={points} fill={color} fillOpacity={0.15} stroke={color} strokeWidth={1.5} />
+                <polygon points={points} fill={color} fillOpacity={0.2} stroke={color} strokeWidth={2} />
               )}
-              {/* Line for 2-vertex */}
               {poly.vertices.length === 2 && (
-                <polyline points={points} fill="none" stroke={color} strokeWidth={2} />
+                <polyline points={points} fill="none" stroke={color} strokeWidth={2.5} />
               )}
-              {/* Vertex dots and labels */}
               {poly.vertices.map((v, vi) => (
                 <g key={vi}>
-                  <circle cx={toSvgX(v[hKey])} cy={toSvgY(v[vKey])} r={3} fill={color} />
+                  <circle cx={toSvgX(v[hKey])} cy={toSvgY(v[vKey])} r={4} fill={color} stroke="#fff" strokeWidth={1} />
                   <text
-                    x={toSvgX(v[hKey]) + 5}
-                    y={toSvgY(v[vKey]) - 5}
-                    fontSize={8}
-                    fill={color}
+                    x={toSvgX(v[hKey]) + 6}
+                    y={toSvgY(v[vKey]) - 6}
+                    fontSize={10}
+                    fill="#333333"
                     fontWeight="bold"
+                    fontFamily="system-ui, sans-serif"
                   >
                     ({v.x},{v.y},{v.z})
                   </text>
                 </g>
               ))}
-              {/* Polygon name label at centroid */}
               {poly.vertices.length >= 2 && (() => {
                 const cx = poly.vertices.reduce((s, v) => s + v[hKey], 0) / poly.vertices.length;
                 const cy = poly.vertices.reduce((s, v) => s + v[vKey], 0) / poly.vertices.length;
                 return (
-                  <text
-                    x={toSvgX(cx)}
-                    y={toSvgY(cy)}
-                    textAnchor="middle"
-                    fontSize={10}
-                    fontWeight="bold"
-                    fill={color}
-                  >
+                  <text x={toSvgX(cx)} y={toSvgY(cy)} textAnchor="middle" fontSize={12} fontWeight="bold" fill={color} fontFamily="system-ui, sans-serif">
                     {poly.name}
                   </text>
                 );
@@ -211,11 +235,6 @@ function SectionGrid({ section, scaleConfig }: { section: CustomSection; scaleCo
             </g>
           );
         })}
-
-        {/* Section title */}
-        <text x={svgW / 2} y={14} textAnchor="middle" fontSize={11} fontWeight="bold" className="fill-foreground">
-          {section.name} — {section.axis}={section.axisValue}
-        </text>
       </svg>
     </div>
   );

@@ -129,6 +129,7 @@ export function useFloorPlan(budgetId: string) {
   const [floors, setFloors] = useState<FloorLevel[]>([]);
   const [customCorners, setCustomCornersState] = useState<CustomCorner[]>([]);
   const [manualElevations, setManualElevationsState] = useState<ManualElevation[]>([]);
+  const [customSections, setCustomSectionsState] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, _setSaving] = useState(false);
   const savingRef = useRef(false);
@@ -170,9 +171,11 @@ export function useFloorPlan(budgetId: string) {
       } else if (rawCorners && typeof rawCorners === 'object' && Array.isArray(rawCorners.corners)) {
         setCustomCornersState(rawCorners.corners);
         setManualElevationsState(Array.isArray(rawCorners.manualElevations) ? rawCorners.manualElevations : []);
+        setCustomSectionsState(Array.isArray(rawCorners.customSections) ? rawCorners.customSections : []);
       } else {
         setCustomCornersState([]);
         setManualElevationsState([]);
+        setCustomSectionsState([]);
       }
 
       // Fetch floors
@@ -1477,12 +1480,13 @@ export function useFloorPlan(budgetId: string) {
     }
   };
 
-  /** Helper to persist corners + manual elevations together */
-  const persistCornersData = async (corners: CustomCorner[], elevations: ManualElevation[]) => {
+  /** Helper to persist corners + manual elevations + custom sections together */
+  const persistCornersData = async (corners: CustomCorner[], elevations: ManualElevation[], sections?: any[]) => {
     if (!floorPlan) return;
-    // If there are manual elevations, store as wrapper object; otherwise keep plain array for backward compat
-    const payload = elevations.length > 0
-      ? { corners, manualElevations: elevations }
+    const sects = sections ?? customSections;
+    // Store as wrapper object if there's any extra data; otherwise keep plain array for backward compat
+    const payload = (elevations.length > 0 || sects.length > 0)
+      ? { corners, manualElevations: elevations, customSections: sects }
       : corners;
     try {
       const { error } = await supabase
@@ -1512,6 +1516,12 @@ export function useFloorPlan(budgetId: string) {
     await persistCornersData(customCorners, elevations);
   };
 
+  const updateCustomSections = async (sections: any[]) => {
+    if (!floorPlan) return;
+    setCustomSectionsState(sections);
+    await persistCornersData(customCorners, manualElevations, sections);
+  };
+
   return {
     floorPlan,
     rooms,
@@ -1520,6 +1530,8 @@ export function useFloorPlan(budgetId: string) {
     updateCustomCorners,
     manualElevations,
     updateManualElevations,
+    customSections,
+    updateCustomSections,
     loading,
     saving,
     createFloorPlan,

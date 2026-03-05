@@ -265,6 +265,7 @@ interface GridPolygonDrawerProps {
   activeRoomId?: string | null;
   onSwitchRoom?: (roomId: string) => void;
   perimeterPolygon?: PolygonVertex[];
+  activeName?: string;
 }
 
 const POLY_COLORS = [
@@ -278,7 +279,7 @@ const POLY_COLORS = [
   'hsl(280 60% 55%)',
 ];
 
-function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16, gridOffsetX = 0, gridOffsetY = 0, placedRooms = [], cellSizeM = 1, otherPolygons = [], activeRoomId, onSwitchRoom, perimeterPolygon }: GridPolygonDrawerProps) {
+function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16, gridOffsetX = 0, gridOffsetY = 0, placedRooms = [], cellSizeM = 1, otherPolygons = [], activeRoomId, onSwitchRoom, perimeterPolygon, activeName }: GridPolygonDrawerProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null);
   const [draggingIdx, setDraggingIdx] = useState<number | null>(null);
@@ -410,15 +411,15 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
       {otherPolygons.length > 0 && (
         <div className="flex flex-wrap gap-1.5 items-center">
           <span className="text-[9px] text-muted-foreground">Espacios:</span>
-          {otherPolygons.map((op, idx) => (
+          {otherPolygons.map((op) => (
             <button
               key={op.id}
               className="flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded border hover:bg-accent/50 transition-colors"
-              style={{ borderColor: POLY_COLORS[idx % POLY_COLORS.length] }}
+              style={{ borderColor: 'hsl(200 80% 50%)' }}
               onClick={() => onSwitchRoom?.(op.id)}
               title={`Editar ${op.name}`}
             >
-              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: POLY_COLORS[idx % POLY_COLORS.length] }} />
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'hsl(200 80% 50%)' }} />
               {op.name}
             </button>
           ))}
@@ -545,16 +546,16 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
           })}
 
           {/* ── Other rooms' polygons (background, clickable) ── */}
-          {otherPolygons.map((op, idx) => {
-            const color = POLY_COLORS[idx % POLY_COLORS.length];
+          {otherPolygons.map((op) => {
             const verts = op.vertices;
             if (verts.length < 3) return null;
+            const areaVal = polygonArea(verts) * cellSizeM * cellSizeM;
             return (
               <g key={`other-${op.id}`} className="cursor-pointer" onClick={() => onSwitchRoom?.(op.id)}>
                 <polygon
                   points={verts.map(v => { const { sx, sy } = toSvg(v.x, v.y); return `${sx},${sy}`; }).join(' ')}
-                  fill={color.replace(')', ' / 0.12)')}
-                  stroke={color}
+                  fill="hsl(200 80% 50% / 0.12)"
+                  stroke="hsl(200 80% 50%)"
                   strokeWidth={1.5}
                   strokeDasharray="4 2"
                 />
@@ -562,24 +563,23 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                   const { sx, sy } = toSvg(v.x, v.y);
                   return (
                     <circle key={`ov-${op.id}-${i}`} cx={sx} cy={sy} r={3}
-                      fill={color} opacity={0.7} />
+                      fill="hsl(200 80% 50%)" opacity={0.7} />
                   );
                 })}
                 {(() => {
                   const cx = verts.reduce((s, v) => s + v.x, 0) / verts.length;
                   const cy = verts.reduce((s, v) => s + v.y, 0) / verts.length;
                   const { sx, sy } = toSvg(cx, cy);
-                  const areaVal = polygonArea(verts) * cellSizeM * cellSizeM;
                   return (
                     <>
                       <text x={sx} y={sy - 5} textAnchor="middle" dominantBaseline="central"
                         className="text-[8px] font-semibold select-none pointer-events-none"
-                        fill={color}>
+                        fill="hsl(200 80% 50%)">
                         {op.name}
                       </text>
                       <text x={sx} y={sy + 7} textAnchor="middle" dominantBaseline="central"
                         className="text-[7px] select-none pointer-events-none"
-                        fill={color} opacity={0.8}>
+                        fill="hsl(200 80% 50%)" opacity={0.8}>
                         {areaVal.toFixed(2)} m²
                       </text>
                     </>
@@ -589,16 +589,37 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             );
           })}
 
-          {/* Filled polygon preview */}
-           {vertices.length >= 3 && (
-            <polygon
-              points={vertices.map(v => { const { sx, sy } = toSvg(v.x, v.y); return `${sx},${sy}`; }).join(' ')}
-              fill={isClosed ? 'hsl(200 80% 50% / 0.18)' : 'hsl(200 80% 50% / 0.08)'}
-              stroke={isClosed ? 'hsl(200 80% 50%)' : 'none'}
-              strokeWidth={isClosed ? 2 : 0}
-              className="pointer-events-none"
-            />
-          )}
+          {/* Filled polygon preview + name/area label */}
+           {vertices.length >= 3 && (() => {
+            const cx = vertices.reduce((s, v) => s + v.x, 0) / vertices.length;
+            const cy = vertices.reduce((s, v) => s + v.y, 0) / vertices.length;
+            const { sx: labelSx, sy: labelSy } = toSvg(cx, cy);
+            return (
+              <>
+                <polygon
+                  points={vertices.map(v => { const { sx, sy } = toSvg(v.x, v.y); return `${sx},${sy}`; }).join(' ')}
+                  fill={isClosed ? 'hsl(200 80% 50% / 0.18)' : 'hsl(200 80% 50% / 0.08)'}
+                  stroke={isClosed ? 'hsl(200 80% 50%)' : 'none'}
+                  strokeWidth={isClosed ? 2 : 0}
+                  className="pointer-events-none"
+                />
+                {activeName && (
+                  <>
+                    <text x={labelSx} y={labelSy - 5} textAnchor="middle" dominantBaseline="central"
+                      className="text-[8px] font-semibold select-none pointer-events-none"
+                      fill="hsl(200 80% 50%)">
+                      {activeName}
+                    </text>
+                    <text x={labelSx} y={labelSy + 7} textAnchor="middle" dominantBaseline="central"
+                      className="text-[7px] select-none pointer-events-none"
+                      fill="hsl(200 80% 50%)" opacity={0.8}>
+                      {areaM2.toFixed(2)} m²
+                    </text>
+                  </>
+                )}
+              </>
+            );
+           })()}
 
           {/* Edges between placed vertices */}
           {vertices.map((v, i) => {
@@ -825,7 +846,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
 
   /** Compute grid bounds from the active section's perimeter polygon, falling back to placed rooms */
   const activeRoom = rooms.find(r => r.id === gridEditId);
-  const activePerimeter = getSectionPerimeter(activeRoom?.vertical_section_id ?? null);
+  const formPerimeter = getSectionPerimeter(formSectionId || null);
+  const activePerimeter = getSectionPerimeter(activeRoom?.vertical_section_id ?? null) || (showForm ? formPerimeter : undefined);
 
   const gridBounds = useMemo<GridBounds>(() => {
     // Priority 1: section perimeter polygon
@@ -1169,6 +1191,11 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                 placedRooms={allFloorPlanRooms}
                 cellSizeM={cellSizeM}
                 perimeterPolygon={getSectionPerimeter(formSectionId)}
+                activeName={formName || undefined}
+                otherPolygons={rooms
+                  .filter(other => other.id !== editingId && other.vertical_section_id === formSectionId && other.floor_polygon && other.floor_polygon.length >= 3)
+                  .map(other => ({ id: other.id, name: other.name, vertices: other.floor_polygon! }))}
+                onSwitchRoom={editingId ? switchGridEditRoom : undefined}
               />
             )}
           </div>
@@ -1291,6 +1318,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                               placedRooms={allFloorPlanRooms}
                               cellSizeM={cellSizeM}
                               activeRoomId={r.id}
+                              activeName={r.name}
                               otherPolygons={rooms
                                 .filter(other => other.id !== r.id && other.vertical_section_id === r.vertical_section_id && other.floor_polygon && other.floor_polygon.length >= 3)
                                 .map(other => ({ id: other.id, name: other.name, vertices: other.floor_polygon! }))}

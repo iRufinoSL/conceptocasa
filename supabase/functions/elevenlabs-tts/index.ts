@@ -34,6 +34,21 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // Verify user has admin or colaborador role
+    const { data: roleData } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .in('role', ['administrador', 'colaborador'])
+      .maybeSingle();
+
+    if (!roleData) {
+      return new Response(JSON.stringify({ error: 'Forbidden - Insufficient privileges' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const body = await req.json();
     const text = typeof body?.text === 'string' ? body.text.trim() : '';
 

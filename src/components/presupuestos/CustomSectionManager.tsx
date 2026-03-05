@@ -154,7 +154,7 @@ function SectionGrid({ section, scaleConfig }: { section: CustomSection; scaleCo
         {/* Border around grid area */}
         <rect x={padding} y={padding} width={cols * cellSize} height={rows * cellSize} fill="none" stroke="#555555" strokeWidth={1.5} />
 
-        {/* Grid lines */}
+        {/* Grid lines — H axis labels on top AND bottom */}
         {Array.from({ length: cols + 1 }, (_, i) => {
           const x = padding + i * cellSize;
           const val = bounds.minH + i;
@@ -162,12 +162,18 @@ function SectionGrid({ section, scaleConfig }: { section: CustomSection; scaleCo
           return (
             <g key={`h-${i}`}>
               <line x1={x} y1={padding} x2={x} y2={padding + rows * cellSize} stroke={isOrigin ? hColor : '#999999'} strokeWidth={isOrigin ? 2 : 0.5} />
+              {/* Top label */}
               <text x={x} y={padding - 8} textAnchor="middle" fontSize={12} fontWeight="bold" fill={hColor} fontFamily="system-ui, sans-serif">
+                {axisMapping.hLabel}{val}
+              </text>
+              {/* Bottom label */}
+              <text x={x} y={padding + rows * cellSize + 16} textAnchor="middle" fontSize={12} fontWeight="bold" fill={hColor} fontFamily="system-ui, sans-serif">
                 {axisMapping.hLabel}{val}
               </text>
             </g>
           );
         })}
+        {/* Grid lines — V axis labels on left AND right */}
         {Array.from({ length: rows + 1 }, (_, i) => {
           const y = padding + i * cellSize;
           const val = axisMapping.flipV ? bounds.maxV - i : bounds.minV + i;
@@ -175,7 +181,12 @@ function SectionGrid({ section, scaleConfig }: { section: CustomSection; scaleCo
           return (
             <g key={`v-${i}`}>
               <line x1={padding} y1={y} x2={padding + cols * cellSize} y2={y} stroke={isOrigin ? vColor : '#999999'} strokeWidth={isOrigin ? 2 : 0.5} />
+              {/* Left label */}
               <text x={padding - 8} y={y + 4} textAnchor="end" fontSize={12} fontWeight="bold" fill={vColor} fontFamily="system-ui, sans-serif">
+                {axisMapping.vLabel}{val}
+              </text>
+              {/* Right label */}
+              <text x={padding + cols * cellSize + 8} y={y + 4} textAnchor="start" fontSize={12} fontWeight="bold" fill={vColor} fontFamily="system-ui, sans-serif">
                 {axisMapping.vLabel}{val}
               </text>
             </g>

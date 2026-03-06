@@ -266,6 +266,7 @@ interface GridPolygonDrawerProps {
   onSwitchRoom?: (roomId: string) => void;
   perimeterPolygon?: PolygonVertex[];
   activeName?: string;
+  originTopLeft?: boolean;
 }
 
 const POLY_COLORS = [

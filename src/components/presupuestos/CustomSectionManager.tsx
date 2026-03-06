@@ -80,9 +80,10 @@ const GRID_COUNT = GRID_MAX - GRID_MIN + 1; // 24 cells
 interface SectionGridProps {
   section: CustomSection;
   scaleConfig?: ScaleConfig;
+  rooms?: RoomData[];
 }
 
-function SectionGrid({ section, scaleConfig }: SectionGridProps) {
+function SectionGrid({ section, scaleConfig, rooms }: SectionGridProps) {
   const cellSize = 28;
   const margin = { top: 24, left: 32, right: 12, bottom: 24 };
   const totalW = margin.left + GRID_COUNT * cellSize + margin.right;

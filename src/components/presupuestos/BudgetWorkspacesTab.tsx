@@ -871,7 +871,9 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
   const formPerimeter = getSectionPerimeter(formSectionId || null);
   const activePerimeter = getSectionPerimeter(activeRoom?.vertical_section_id ?? null) || (showForm ? formPerimeter : undefined);
 
-  const gridBounds = useMemo<GridBounds>(() => {
+  const [gridExtend, setGridExtend] = useState({ left: 0, right: 0, top: 0, bottom: 0 });
+
+  const autoGridBounds = useMemo<GridBounds>(() => {
     // Priority 1: section perimeter polygon
     if (activePerimeter && activePerimeter.length >= 3) {
       const xs = activePerimeter.map(v => v.x);
@@ -900,6 +902,13 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     const defaultRows = Math.max(1, Math.ceil((floorPlan?.length || 10) / cellSizeM));
     return { minCol: 0, maxCol: defaultCols - 1, minRow: 0, maxRow: defaultRows - 1 };
   }, [activePerimeter, allFloorPlanRooms, cellSizeM, floorPlan]);
+
+  const gridBounds: GridBounds = {
+    minCol: autoGridBounds.minCol - gridExtend.left,
+    maxCol: autoGridBounds.maxCol + gridExtend.right,
+    minRow: autoGridBounds.minRow - gridExtend.top,
+    maxRow: autoGridBounds.maxRow + gridExtend.bottom,
+  };
 
   const gridWidth = gridBounds.maxCol - gridBounds.minCol + 1;
   const gridHeight = gridBounds.maxRow - gridBounds.minRow + 1;

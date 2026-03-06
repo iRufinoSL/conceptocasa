@@ -37,13 +37,29 @@ interface WorkspacePolygonData {
   lengthM: number;
 }
 
+/** Cross-section projection of a workspace in longitudinal/transversal views */
+export interface SectionWallProjection {
+  workspaceId: string;
+  workspaceName: string;
+  /** Start on horizontal axis (X for longitudinal, Y for transversal) */
+  hStart: number;
+  /** End on horizontal axis */
+  hEnd: number;
+  /** Z base (in Z grid units) */
+  zBase: number;
+  /** Z top = zBase + height (in Z grid units) */
+  zTop: number;
+}
+
 interface CustomSectionManagerProps {
   sectionType: 'vertical' | 'longitudinal' | 'transversal';
   sections: CustomSection[];
   onSectionsChange: (sections: CustomSection[]) => void;
   scaleConfig?: ScaleConfig;
-  /** Workspace polygons grouped by vertical_section_id */
+  /** Workspace polygons grouped by vertical_section_id (for vertical sections) */
   workspacesBySection?: Map<string, WorkspacePolygonData[]>;
+  /** Workspace wall projections per section id (for longitudinal/transversal sections) */
+  wallProjectionsBySection?: Map<string, SectionWallProjection[]>;
 }
 
 const AXIS_MAP: Record<string, { axis: 'X' | 'Y' | 'Z'; label: string; placeholder: string }[]> = {
@@ -121,7 +137,7 @@ const POLY_COLORS = [
 const AXIS_COLORS = { X: '#c0392b', Y: '#27ae60', Z: '#2980b9' };
 
 /** Renders an SVG grid for a custom section with its polygons */
-function SectionGrid({ section, scaleConfig, workspaces }: { section: CustomSection; scaleConfig?: ScaleConfig; workspaces?: WorkspacePolygonData[] }) {
+function SectionGrid({ section, scaleConfig, workspaces, wallProjections }: { section: CustomSection; scaleConfig?: ScaleConfig; workspaces?: WorkspacePolygonData[]; wallProjections?: SectionWallProjection[] }) {
   const { sectionType, polygons } = section;
 
   const axisMapping = useMemo(() => {
@@ -336,12 +352,60 @@ function SectionGrid({ section, scaleConfig, workspaces }: { section: CustomSect
             </g>
           );
         })}
+        {/* Workspace wall projections for longitudinal/transversal sections */}
+        {wallProjections && wallProjections.length > 0 && (sectionType === 'longitudinal' || sectionType === 'transversal') && (() => {
+          const grouped = new Map<string, SectionWallProjection[]>();
+          wallProjections.forEach(wp => {
+            if (!grouped.has(wp.workspaceId)) grouped.set(wp.workspaceId, []);
+            grouped.get(wp.workspaceId)!.push(wp);
+          });
+
+          return Array.from(grouped.entries()).map(([wsId, projections]) => {
+            const wsName = projections[0].workspaceName;
+            const allH = projections.flatMap(p => [p.hStart, p.hEnd]);
+            const allV = projections.flatMap(p => [p.zBase, p.zTop]);
+            const hMin = Math.min(...allH);
+            const hMax = Math.max(...allH);
+            const vMin = Math.min(...allV);
+            const vMax = Math.max(...allV);
+
+            return (
+              <g key={`wp-${wsId}`}>
+                {/* Filled interior */}
+                <rect
+                  x={toSvgX(hMin)}
+                  y={toSvgY(vMax)}
+                  width={toSvgX(hMax) - toSvgX(hMin)}
+                  height={toSvgY(vMin) - toSvgY(vMax)}
+                  fill="hsl(200, 80%, 50%)"
+                  fillOpacity={0.1}
+                  stroke="none"
+                />
+                {/* Wall lines */}
+                {projections.map((p, pi) => (
+                  <g key={`wall-${pi}`}>
+                    <line x1={toSvgX(p.hStart)} y1={toSvgY(p.zBase)} x2={toSvgX(p.hStart)} y2={toSvgY(p.zTop)} stroke="hsl(200, 80%, 50%)" strokeWidth={2.5} />
+                    {p.hEnd !== p.hStart && (
+                      <line x1={toSvgX(p.hEnd)} y1={toSvgY(p.zBase)} x2={toSvgX(p.hEnd)} y2={toSvgY(p.zTop)} stroke="hsl(200, 80%, 50%)" strokeWidth={2.5} />
+                    )}
+                    <line x1={toSvgX(p.hStart)} y1={toSvgY(p.zTop)} x2={toSvgX(p.hEnd)} y2={toSvgY(p.zTop)} stroke="hsl(200, 80%, 50%)" strokeWidth={1.5} strokeDasharray="4 2" />
+                    <line x1={toSvgX(p.hStart)} y1={toSvgY(p.zBase)} x2={toSvgX(p.hEnd)} y2={toSvgY(p.zBase)} stroke="hsl(200, 80%, 50%)" strokeWidth={1.5} strokeDasharray="4 2" />
+                  </g>
+                ))}
+                {/* Label */}
+                <text x={toSvgX((hMin + hMax) / 2)} y={toSvgY((vMin + vMax) / 2) - 4} textAnchor="middle" fontSize={11} fontWeight="bold" fill="hsl(200, 80%, 50%)" fontFamily="system-ui, sans-serif">
+                  {wsName}
+                </text>
+              </g>
+            );
+          });
+        })()}
       </svg>
     </div>
   );
 }
 
-export function CustomSectionManager({ sectionType, sections, onSectionsChange, scaleConfig, workspacesBySection }: CustomSectionManagerProps) {
+export function CustomSectionManager({ sectionType, sections, onSectionsChange, scaleConfig, workspacesBySection, wallProjectionsBySection }: CustomSectionManagerProps) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState('');
   const [newAxisValue, setNewAxisValue] = useState('0');
@@ -580,7 +644,7 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
             {isExpanded && (
               <div className="px-3 py-2 space-y-2 bg-background">
                 {/* SVG Grid for THIS section only */}
-                <SectionGrid section={section} scaleConfig={scaleConfig} workspaces={workspacesBySection?.get(section.id)} />
+                <SectionGrid section={section} scaleConfig={scaleConfig} workspaces={workspacesBySection?.get(section.id)} wallProjections={wallProjectionsBySection?.get(section.id)} />
 
                 {/* Polygons list */}
                 {section.polygons.length === 0 && (

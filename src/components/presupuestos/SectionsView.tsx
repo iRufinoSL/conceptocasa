@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Grid3x3, ArrowLeftRight, ArrowUpDown, AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react';
-import { CustomSectionManager, type CustomSection, type ScaleConfig } from './CustomSectionManager';
+import { CustomSectionManager, type CustomSection, type ScaleConfig, type SectionWallProjection } from './CustomSectionManager';
 import type { FloorPlanData, RoomData, FloorLevel, WallType } from '@/lib/floor-plan-calculations';
 import type { CustomCorner, ManualElevation } from '@/hooks/useFloorPlan';
 
@@ -138,6 +138,120 @@ export function SectionsView(props: SectionsViewProps) {
 
   const allSections = props.customSections || [];
 
+  // Build wall projections for longitudinal/transversal sections
+  // For each workspace, find edges of its floor_polygon that intersect the section plane
+  const wallProjectionsBySection = useMemo(() => {
+    const map = new Map<string, SectionWallProjection[]>();
+    const scaleZ = scaleConfig.scaleZ;
+    const scaleXmm = scaleConfig.scaleX;
+
+    // Build workspace info: resolve Z level from vertical section
+    const verticalSections = allSections.filter(s => s.sectionType === 'vertical');
+    const workspacesWithZ: Array<{
+      id: string; name: string;
+      vertices: Array<{ x: number; y: number }>;
+      zBase: number; heightGridUnits: number;
+    }> = [];
+
+    for (const room of props.rooms) {
+      if (!room.verticalSectionId || !room.floorPolygon || room.floorPolygon.length < 3) continue;
+      const vs = verticalSections.find(s => s.id === room.verticalSectionId);
+      if (!vs) continue;
+      const zBase = vs.axisValue;
+      const heightM = room.height ?? props.planData.defaultHeight ?? 2.6;
+      const heightGridUnits = (heightM * 1000) / scaleZ;
+      workspacesWithZ.push({
+        id: room.id, name: room.name,
+        vertices: room.floorPolygon,
+        zBase, heightGridUnits,
+      });
+    }
+
+    // For each longitudinal section (Y=const): find polygon edges crossing Y=axisValue
+    const longSections = allSections.filter(s => s.sectionType === 'longitudinal');
+    for (const sec of longSections) {
+      const yVal = sec.axisValue;
+      const projections: SectionWallProjection[] = [];
+
+      for (const ws of workspacesWithZ) {
+        // Find min/max X of polygon where it intersects Y=yVal
+        const intersectionsX: number[] = [];
+        const verts = ws.vertices;
+        for (let i = 0; i < verts.length; i++) {
+          const j = (i + 1) % verts.length;
+          const y1 = verts[i].y, y2 = verts[j].y;
+          const x1 = verts[i].x, x2 = verts[j].x;
+          // Edge crosses Y=yVal
+          if ((y1 <= yVal && y2 > yVal) || (y2 <= yVal && y1 > yVal)) {
+            const t = (yVal - y1) / (y2 - y1);
+            intersectionsX.push(x1 + t * (x2 - x1));
+          }
+          // Edge runs along Y=yVal
+          if (y1 === yVal && y2 === yVal) {
+            intersectionsX.push(x1, x2);
+          }
+        }
+
+        if (intersectionsX.length >= 2) {
+          intersectionsX.sort((a, b) => a - b);
+          // Pair intersections (enter/exit)
+          for (let k = 0; k < intersectionsX.length - 1; k += 2) {
+            projections.push({
+              workspaceId: ws.id,
+              workspaceName: ws.name,
+              hStart: intersectionsX[k],
+              hEnd: intersectionsX[k + 1] ?? intersectionsX[k],
+              zBase: ws.zBase,
+              zTop: ws.zBase + ws.heightGridUnits,
+            });
+          }
+        }
+      }
+      if (projections.length > 0) map.set(sec.id, projections);
+    }
+
+    // For each transversal section (X=const): find polygon edges crossing X=axisValue
+    const transSections = allSections.filter(s => s.sectionType === 'transversal');
+    for (const sec of transSections) {
+      const xVal = sec.axisValue;
+      const projections: SectionWallProjection[] = [];
+
+      for (const ws of workspacesWithZ) {
+        const intersectionsY: number[] = [];
+        const verts = ws.vertices;
+        for (let i = 0; i < verts.length; i++) {
+          const j = (i + 1) % verts.length;
+          const x1 = verts[i].x, x2 = verts[j].x;
+          const y1 = verts[i].y, y2 = verts[j].y;
+          if ((x1 <= xVal && x2 > xVal) || (x2 <= xVal && x1 > xVal)) {
+            const t = (xVal - x1) / (x2 - x1);
+            intersectionsY.push(y1 + t * (y2 - y1));
+          }
+          if (x1 === xVal && x2 === xVal) {
+            intersectionsY.push(y1, y2);
+          }
+        }
+
+        if (intersectionsY.length >= 2) {
+          intersectionsY.sort((a, b) => a - b);
+          for (let k = 0; k < intersectionsY.length - 1; k += 2) {
+            projections.push({
+              workspaceId: ws.id,
+              workspaceName: ws.name,
+              hStart: intersectionsY[k],
+              hEnd: intersectionsY[k + 1] ?? intersectionsY[k],
+              zBase: ws.zBase,
+              zTop: ws.zBase + ws.heightGridUnits,
+            });
+          }
+        }
+      }
+      if (projections.length > 0) map.set(sec.id, projections);
+    }
+
+    return map;
+  }, [props.rooms, allSections, scaleConfig, props.planData]);
+
   return (
     <div className="space-y-2">
       {SECTION_GROUPS.map(group => {
@@ -175,6 +289,7 @@ export function SectionsView(props: SectionsViewProps) {
                   onSectionsChange={props.onCustomSectionsChange || (() => {})}
                   scaleConfig={scaleConfig}
                   workspacesBySection={group.type === 'vertical' ? workspacesBySection : undefined}
+                  wallProjectionsBySection={group.type !== 'vertical' ? wallProjectionsBySection : undefined}
                 />
               </div>
             )}

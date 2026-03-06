@@ -511,7 +511,7 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
               )}
             </div>
             {gridVisible && (
-              <SectionGrid section={section} scaleConfig={scaleConfig} rooms={rooms} />
+              <SectionGrid section={section} scaleConfig={scaleConfig} rooms={rooms} budgetName={budgetName} />
             )}
           </div>
         );

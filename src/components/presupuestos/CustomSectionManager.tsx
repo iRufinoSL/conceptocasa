@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import type { RoomData } from '@/lib/floor-plan-calculations';
 import { Plus, Trash2, Pencil, MapPin, Eye, EyeOff } from 'lucide-react';
 
 export interface SectionPolygon {

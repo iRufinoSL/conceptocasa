@@ -1284,6 +1284,7 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
           onManualElevationsChange={updateManualElevations}
           customSections={customSections}
           onCustomSectionsChange={updateCustomSections}
+          onRefresh={async () => { await refetch(); }}
           focusWallId={elevationReturnContext?.wallId}
           renderSelectedRoom={selectedRoom && planData ? () => {
             const cellSizeM = planData.scaleMode === 'bloque' ? planData.blockLengthMm / 1000 : 1;

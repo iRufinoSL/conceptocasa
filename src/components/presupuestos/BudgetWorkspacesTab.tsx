@@ -536,8 +536,8 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             const gx = i + gridOffsetX;
             const { sx } = toSvg(gx, gridOffsetY);
             return (
-              <text key={`xl-${i}`} x={sx} y={originTopLeft ? pad - 6 : svgH - 6} textAnchor="middle"
-                className="text-[8px] fill-destructive font-bold select-none">
+              <text key={`xl-${i}`} x={sx} y={originTopLeft ? 12 : svgH - 6} textAnchor="middle"
+                fill="hsl(0 84% 60%)" fontSize={9} fontWeight="bold" className="select-none">
                 X{gx}
               </text>
             );

@@ -97,6 +97,7 @@ export function SectionsView(props: SectionsViewProps) {
                   sections={allSections}
                   onSectionsChange={props.onCustomSectionsChange || (() => {})}
                   rooms={props.rooms}
+                  budgetName={props.budgetName}
                 />
               </div>
             )}

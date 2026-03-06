@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Pencil, Trash2, Plus, ChevronDown, ChevronRight, Triangle, Pyramid, Cuboid, Grid3x3, MapPin, X, MousePointerClick, List, Layers, Save } from 'lucide-react';
+import { GridPdfExport } from './GridPdfExport';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -267,6 +268,8 @@ interface GridPolygonDrawerProps {
   perimeterPolygon?: PolygonVertex[];
   activeName?: string;
   originTopLeft?: boolean;
+  pdfTitle?: string;
+  pdfSubtitle?: string;
 }
 
 const POLY_COLORS = [
@@ -280,8 +283,9 @@ const POLY_COLORS = [
   'hsl(280 60% 55%)',
 ];
 
-function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16, gridOffsetX = 0, gridOffsetY = 0, placedRooms = [], cellSizeM = 1, otherPolygons = [], activeRoomId, onSwitchRoom, perimeterPolygon, activeName, originTopLeft = false }: GridPolygonDrawerProps) {
+function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16, gridOffsetX = 0, gridOffsetY = 0, placedRooms = [], cellSizeM = 1, otherPolygons = [], activeRoomId, onSwitchRoom, perimeterPolygon, activeName, originTopLeft = false, pdfTitle, pdfSubtitle }: GridPolygonDrawerProps) {
   const svgRef = useRef<SVGSVGElement>(null);
+  const gridContainerRef = useRef<HTMLDivElement>(null);
   const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null);
   const [draggingIdx, setDraggingIdx] = useState<number | null>(null);
   const [zoomLevel, setZoomLevel] = useState(1);
@@ -386,7 +390,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
         )}
       </div>
 
-      {/* Zoom controls */}
+      {/* Zoom controls + PDF */}
       <div className="flex items-center gap-1.5">
         <span className="text-[9px] text-muted-foreground">Zoom:</span>
         {[1, 1.5, 2, 2.5].map(z => (
@@ -400,6 +404,14 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             {z === 1 ? '1×' : `${z}×`}
           </Button>
         ))}
+        {pdfTitle && (
+          <GridPdfExport
+            title={pdfTitle}
+            subtitle={pdfSubtitle || activeName || 'Espacio'}
+            containerRef={gridContainerRef}
+            size="sm"
+          />
+        )}
       </div>
 
       {/* Status indicator */}
@@ -435,7 +447,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
         </div>
       )}
 
-      <div className="overflow-auto rounded border bg-background max-h-[400px]">
+      <div ref={gridContainerRef} className="overflow-auto rounded border bg-background max-h-[400px]">
         <svg
           ref={svgRef}
           width={svgW}
@@ -1207,6 +1219,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                   .filter(other => other.id !== editingId && other.vertical_section_id === formSectionId && other.floor_polygon && other.floor_polygon.length >= 3)
                   .map(other => ({ id: other.id, name: other.name, vertices: other.floor_polygon! }))}
                 onSwitchRoom={editingId ? switchGridEditRoom : undefined}
+                pdfTitle="Espacio de trabajo"
+                pdfSubtitle={formName || 'Nuevo espacio'}
               />
             )}
           </div>
@@ -1336,6 +1350,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                                 .map(other => ({ id: other.id, name: other.name, vertices: other.floor_polygon! }))}
                               onSwitchRoom={switchGridEditRoom}
                               perimeterPolygon={getSectionPerimeter(r.vertical_section_id)}
+                              pdfTitle="Espacio de trabajo"
+                              pdfSubtitle={r.name}
                             />
                             <div className="flex items-center justify-between">
                               <div className="flex flex-wrap gap-1.5">

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import type { RoomData } from '@/lib/floor-plan-calculations';
 import { Plus, Trash2, Pencil, MapPin, Eye, EyeOff } from 'lucide-react';
+import { GridPdfExport } from './GridPdfExport';
 
 export interface SectionPolygon {
   id: string;
@@ -48,6 +49,7 @@ interface CustomSectionManagerProps {
   workspacesBySection?: Map<string, any[]>;
   wallProjectionsBySection?: Map<string, SectionWallProjection[]>;
   rooms?: RoomData[];
+  budgetName?: string;
 }
 
 const AXIS_MAP: Record<string, { axis: 'X' | 'Y' | 'Z'; label: string; placeholder: string }> = {
@@ -81,9 +83,11 @@ interface SectionGridProps {
   section: CustomSection;
   scaleConfig?: ScaleConfig;
   rooms?: RoomData[];
+  budgetName?: string;
 }
 
-function SectionGrid({ section, scaleConfig, rooms }: SectionGridProps) {
+function SectionGrid({ section, scaleConfig, rooms, budgetName }: SectionGridProps) {
+  const gridContainerRef = useRef<HTMLDivElement>(null);
   const cellSize = 28;
   const margin = { top: 24, left: 32, right: 12, bottom: 24 };
   const totalW = margin.left + GRID_COUNT * cellSize + margin.right;
@@ -118,17 +122,26 @@ function SectionGrid({ section, scaleConfig, rooms }: SectionGridProps) {
     : (scaleConfig?.scaleY ?? 625);
 
   return (
-    <div className="mt-2 overflow-auto border border-border rounded-md bg-muted/20">
-      <div className="text-[9px] text-muted-foreground px-2 pt-1 flex items-center justify-between">
-        <span>
+    <div className="mt-2">
+      <div className="flex items-center justify-between px-2 pt-1 pb-0.5">
+        <span className="text-[9px] text-muted-foreground">
           {section.sectionType === 'vertical' && `Vista planta Z=${section.axisValue} — Origen (0,0) arriba-izq`}
           {section.sectionType === 'longitudinal' && `Vista longitudinal Y=${section.axisValue} — Origen (0,0) abajo-izq`}
           {section.sectionType === 'transversal' && `Vista transversal X=${section.axisValue} — Origen (0,0) abajo-izq`}
         </span>
-        <span className="text-muted-foreground/60">
-          {hLabel}: {scaleH}mm · {vLabel}: {scaleV}mm
-        </span>
+        <div className="flex items-center gap-1">
+          <span className="text-[9px] text-muted-foreground/60">
+            {hLabel}: {scaleH}mm · {vLabel}: {scaleV}mm
+          </span>
+          <GridPdfExport
+            title={budgetName || 'Presupuesto'}
+            subtitle={`${section.name} (${section.axis}=${section.axisValue})`}
+            containerRef={gridContainerRef}
+            size="sm"
+          />
+        </div>
       </div>
+      <div ref={gridContainerRef} className="overflow-auto border border-border rounded-md bg-muted/20">
       <svg width={totalW} height={totalH} className="block">
         {/* Checkerboard cells */}
         {Array.from({ length: GRID_COUNT }, (_, row) =>
@@ -314,11 +327,12 @@ function SectionGrid({ section, scaleConfig, rooms }: SectionGridProps) {
           })
         }
       </svg>
+      </div>
     </div>
   );
 }
 
-export function CustomSectionManager({ sectionType, sections, onSectionsChange, scaleConfig, rooms }: CustomSectionManagerProps) {
+export function CustomSectionManager({ sectionType, sections, onSectionsChange, scaleConfig, rooms, budgetName }: CustomSectionManagerProps) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState('');
   const [newAxisValue, setNewAxisValue] = useState('0');
@@ -497,7 +511,7 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
               )}
             </div>
             {gridVisible && (
-              <SectionGrid section={section} scaleConfig={scaleConfig} rooms={rooms} />
+              <SectionGrid section={section} scaleConfig={scaleConfig} rooms={rooms} budgetName={budgetName} />
             )}
           </div>
         );

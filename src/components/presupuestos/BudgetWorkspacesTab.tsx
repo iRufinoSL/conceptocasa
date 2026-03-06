@@ -1350,6 +1350,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                                 .map(other => ({ id: other.id, name: other.name, vertices: other.floor_polygon! }))}
                               onSwitchRoom={switchGridEditRoom}
                               perimeterPolygon={getSectionPerimeter(r.vertical_section_id)}
+                              pdfTitle="Espacio de trabajo"
+                              pdfSubtitle={r.name}
                             />
                             <div className="flex items-center justify-between">
                               <div className="flex flex-wrap gap-1.5">

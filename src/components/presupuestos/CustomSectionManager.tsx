@@ -47,6 +47,7 @@ interface CustomSectionManagerProps {
   scaleConfig?: ScaleConfig;
   workspacesBySection?: Map<string, any[]>;
   wallProjectionsBySection?: Map<string, SectionWallProjection[]>;
+  rooms?: RoomData[];
 }
 
 const AXIS_MAP: Record<string, { axis: 'X' | 'Y' | 'Z'; label: string; placeholder: string }> = {

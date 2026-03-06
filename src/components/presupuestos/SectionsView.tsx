@@ -119,6 +119,23 @@ export function SectionsView(props: SectionsViewProps) {
     return { scaleX, scaleY, scaleZ, gridRange: { minX, maxX, minY, maxY, minZ, maxZ } };
   }, [props.planData, props.rooms, props.floors]);
 
+  // Build workspace polygons grouped by vertical_section_id
+  const workspacesBySection = useMemo(() => {
+    const map = new Map<string, Array<{ id: string; name: string; vertices: Array<{ x: number; y: number }>; widthM: number; lengthM: number }>>();
+    for (const room of props.rooms) {
+      if (!room.verticalSectionId || !room.floorPolygon || room.floorPolygon.length < 3) continue;
+      if (!map.has(room.verticalSectionId)) map.set(room.verticalSectionId, []);
+      map.get(room.verticalSectionId)!.push({
+        id: room.id,
+        name: room.name,
+        vertices: room.floorPolygon,
+        widthM: room.width,
+        lengthM: room.length,
+      });
+    }
+    return map;
+  }, [props.rooms]);
+
   const allSections = props.customSections || [];
 
   return (
@@ -157,6 +174,7 @@ export function SectionsView(props: SectionsViewProps) {
                   sections={allSections}
                   onSectionsChange={props.onCustomSectionsChange || (() => {})}
                   scaleConfig={scaleConfig}
+                  workspacesBySection={group.type === 'vertical' ? workspacesBySection : undefined}
                 />
               </div>
             )}

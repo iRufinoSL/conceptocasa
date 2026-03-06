@@ -280,7 +280,7 @@ const POLY_COLORS = [
   'hsl(280 60% 55%)',
 ];
 
-function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16, gridOffsetX = 0, gridOffsetY = 0, placedRooms = [], cellSizeM = 1, otherPolygons = [], activeRoomId, onSwitchRoom, perimeterPolygon, activeName }: GridPolygonDrawerProps) {
+function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16, gridOffsetX = 0, gridOffsetY = 0, placedRooms = [], cellSizeM = 1, otherPolygons = [], activeRoomId, onSwitchRoom, perimeterPolygon, activeName, originTopLeft = false }: GridPolygonDrawerProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null);
   const [draggingIdx, setDraggingIdx] = useState<number | null>(null);
@@ -297,12 +297,16 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
 
   const toSvg = (gx: number, gy: number) => ({
     sx: pad + (gx - gridOffsetX) * cellSize,
-    sy: pad + (gridHeight - (gy - gridOffsetY)) * cellSize,
+    sy: originTopLeft
+      ? pad + (gy - gridOffsetY) * cellSize
+      : pad + (gridHeight - (gy - gridOffsetY)) * cellSize,
   });
 
   const fromSvg = (sx: number, sy: number) => ({
     gx: Math.round((sx - pad) / cellSize + gridOffsetX),
-    gy: Math.round(gridOffsetY + gridHeight - (sy - pad) / cellSize),
+    gy: originTopLeft
+      ? Math.round((sy - pad) / cellSize + gridOffsetY)
+      : Math.round(gridOffsetY + gridHeight - (sy - pad) / cellSize),
   });
 
   const handleClick = (gx: number, gy: number) => {

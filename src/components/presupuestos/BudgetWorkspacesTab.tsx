@@ -1187,6 +1187,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
               <VertexEditor vertices={formVertices} onChange={setFormVertices} />
             ) : (
               <GridPolygonDrawer
+                originTopLeft
                 vertices={formVertices}
                 onChange={setFormVertices}
                 gridWidth={gridWidth}
@@ -1314,6 +1315,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                         {gridEditId === r.id && (
                           <div className="space-y-2 border rounded-lg p-2 bg-background">
                             <GridPolygonDrawer
+                              originTopLeft
                               vertices={gridEditVertices}
                               onChange={setGridEditVertices}
                               gridWidth={gridWidth}

@@ -1491,7 +1491,7 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
       {/* Email Detail Dialog - Normal or Fullscreen */}
       {!isFullscreen ? (
         <Dialog open={!!selectedEmail} onOpenChange={() => setSelectedEmail(null)}>
-          <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col overflow-hidden">
+          <DialogContent className="max-w-3xl w-[95vw] max-h-[90vh] sm:max-h-[85vh] flex flex-col overflow-hidden p-4 sm:p-6">
             <DialogHeader className="flex-shrink-0">
               <DialogTitle className="flex items-center gap-2 pr-8">
                 <Mail className="h-5 w-5 flex-shrink-0" />
@@ -1649,7 +1649,7 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
                 <div className="py-4">
                   {selectedEmail.body_html || selectedEmail.body_text ? (
                     <div 
-                      className="prose prose-sm max-w-none dark:prose-invert"
+                      className="prose prose-sm max-w-none dark:prose-invert break-words overflow-hidden [word-break:break-word] [overflow-wrap:anywhere] [&_*]:max-w-full [&_img]:max-w-full [&_img]:h-auto [&_table]:text-xs [&_table]:max-w-full [&_table]:overflow-x-auto [&_table]:block [&_pre]:overflow-x-auto [&_pre]:max-w-full"
                       dangerouslySetInnerHTML={{ 
                         __html: DOMPurify.sanitize(
                           selectedEmail.body_html || selectedEmail.body_text?.replace(/\n/g, '<br>') || ''
@@ -1681,7 +1681,7 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
                 </div>
 
                 {/* Actions */}
-                <div className="border-t pt-4 mt-4 flex flex-wrap gap-2">
+                <div className="border-t pt-4 mt-4 flex flex-wrap gap-1.5 sm:gap-2">
                   <Button 
                     variant="default" 
                     size="sm"

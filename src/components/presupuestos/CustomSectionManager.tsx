@@ -122,17 +122,26 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName }: SectionGridPro
     : (scaleConfig?.scaleY ?? 625);
 
   return (
-    <div className="mt-2 overflow-auto border border-border rounded-md bg-muted/20">
-      <div className="text-[9px] text-muted-foreground px-2 pt-1 flex items-center justify-between">
-        <span>
+    <div className="mt-2">
+      <div className="flex items-center justify-between px-2 pt-1 pb-0.5">
+        <span className="text-[9px] text-muted-foreground">
           {section.sectionType === 'vertical' && `Vista planta Z=${section.axisValue} — Origen (0,0) arriba-izq`}
           {section.sectionType === 'longitudinal' && `Vista longitudinal Y=${section.axisValue} — Origen (0,0) abajo-izq`}
           {section.sectionType === 'transversal' && `Vista transversal X=${section.axisValue} — Origen (0,0) abajo-izq`}
         </span>
-        <span className="text-muted-foreground/60">
-          {hLabel}: {scaleH}mm · {vLabel}: {scaleV}mm
-        </span>
+        <div className="flex items-center gap-1">
+          <span className="text-[9px] text-muted-foreground/60">
+            {hLabel}: {scaleH}mm · {vLabel}: {scaleV}mm
+          </span>
+          <GridPdfExport
+            title={budgetName || 'Presupuesto'}
+            subtitle={`${section.name} (${section.axis}=${section.axisValue})`}
+            containerRef={gridContainerRef}
+            size="sm"
+          />
+        </div>
       </div>
+      <div ref={gridContainerRef} className="overflow-auto border border-border rounded-md bg-muted/20">
       <svg width={totalW} height={totalH} className="block">
         {/* Checkerboard cells */}
         {Array.from({ length: GRID_COUNT }, (_, row) =>

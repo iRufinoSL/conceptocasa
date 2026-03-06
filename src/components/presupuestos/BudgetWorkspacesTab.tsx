@@ -540,7 +540,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
 
           {/* Y axis labels (left) */}
           {Array.from({ length: gridHeight + 1 }).map((_, i) => {
-            const gy = i + gridOffsetY;
+            const gy = originTopLeft ? (i + gridOffsetY) : (i + gridOffsetY);
             const { sy } = toSvg(gridOffsetX, gy);
             return (
               <text key={`yl-${i}`} x={8} y={sy + 3} textAnchor="middle"

@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Pencil, Trash2, Plus, ChevronDown, ChevronRight, Triangle, Pyramid, Cuboid, Grid3x3, MapPin, X, MousePointerClick, List, Layers, Save, RefreshCw } from 'lucide-react';
+import { Pencil, Trash2, Plus, ChevronDown, ChevronRight, ChevronLeft, ChevronUp, Triangle, Pyramid, Cuboid, Grid3x3, MapPin, X, MousePointerClick, List, Layers, Save, RefreshCw, Expand } from 'lucide-react';
 import { GridPdfExport } from './GridPdfExport';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -871,7 +871,9 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
   const formPerimeter = getSectionPerimeter(formSectionId || null);
   const activePerimeter = getSectionPerimeter(activeRoom?.vertical_section_id ?? null) || (showForm ? formPerimeter : undefined);
 
-  const gridBounds = useMemo<GridBounds>(() => {
+  const [gridExtend, setGridExtend] = useState({ left: 0, right: 0, top: 0, bottom: 0 });
+
+  const autoGridBounds = useMemo<GridBounds>(() => {
     // Priority 1: section perimeter polygon
     if (activePerimeter && activePerimeter.length >= 3) {
       const xs = activePerimeter.map(v => v.x);
@@ -900,6 +902,13 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     const defaultRows = Math.max(1, Math.ceil((floorPlan?.length || 10) / cellSizeM));
     return { minCol: 0, maxCol: defaultCols - 1, minRow: 0, maxRow: defaultRows - 1 };
   }, [activePerimeter, allFloorPlanRooms, cellSizeM, floorPlan]);
+
+  const gridBounds: GridBounds = {
+    minCol: autoGridBounds.minCol - gridExtend.left,
+    maxCol: autoGridBounds.maxCol + gridExtend.right,
+    minRow: autoGridBounds.minRow - gridExtend.top,
+    maxRow: autoGridBounds.maxRow + gridExtend.bottom,
+  };
 
   const gridWidth = gridBounds.maxCol - gridBounds.minCol + 1;
   const gridHeight = gridBounds.maxRow - gridBounds.minRow + 1;
@@ -1221,25 +1230,47 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
             {inputMode === 'manual' ? (
               <VertexEditor vertices={formVertices} onChange={setFormVertices} />
             ) : (
-              <GridPolygonDrawer
-                originTopLeft
-                vertices={formVertices}
-                onChange={setFormVertices}
-                gridWidth={gridWidth}
-                gridHeight={gridHeight}
-                gridOffsetX={gridBounds.minCol}
-                gridOffsetY={gridBounds.minRow}
-                placedRooms={allFloorPlanRooms}
-                cellSizeM={cellSizeM}
-                perimeterPolygon={getSectionPerimeter(formSectionId)}
-                activeName={formName || undefined}
-                otherPolygons={rooms
-                  .filter(other => other.id !== editingId && other.vertical_section_id === formSectionId && other.floor_polygon && other.floor_polygon.length >= 3)
-                  .map(other => ({ id: other.id, name: other.name, vertices: other.floor_polygon! }))}
-                onSwitchRoom={editingId ? switchGridEditRoom : undefined}
-                pdfTitle="Espacio de trabajo"
-                pdfSubtitle={formName || 'Nuevo espacio'}
-              />
+              <div className="space-y-1">
+                <div className="flex items-center gap-1 flex-wrap">
+                  <span className="text-[8px] text-muted-foreground font-medium">Ampliar cuadrícula:</span>
+                  <Button variant="outline" size="sm" className="h-5 text-[9px] px-1.5 gap-0.5" onClick={() => setGridExtend(e => ({ ...e, left: e.left + 2 }))}>
+                    <ChevronLeft className="h-3 w-3" />←X
+                  </Button>
+                  <Button variant="outline" size="sm" className="h-5 text-[9px] px-1.5 gap-0.5" onClick={() => setGridExtend(e => ({ ...e, right: e.right + 2 }))}>
+                    X→<ChevronRight className="h-3 w-3" />
+                  </Button>
+                  <Button variant="outline" size="sm" className="h-5 text-[9px] px-1.5 gap-0.5" onClick={() => setGridExtend(e => ({ ...e, top: e.top + 2 }))}>
+                    <ChevronUp className="h-3 w-3" />↑Y
+                  </Button>
+                  <Button variant="outline" size="sm" className="h-5 text-[9px] px-1.5 gap-0.5" onClick={() => setGridExtend(e => ({ ...e, bottom: e.bottom + 2 }))}>
+                    Y↓<ChevronDown className="h-3 w-3" />
+                  </Button>
+                  {(gridExtend.left + gridExtend.right + gridExtend.top + gridExtend.bottom > 0) && (
+                    <Button variant="ghost" size="sm" className="h-5 text-[9px] px-1.5" onClick={() => setGridExtend({ left: 0, right: 0, top: 0, bottom: 0 })}>
+                      Reset
+                    </Button>
+                  )}
+                </div>
+                <GridPolygonDrawer
+                  originTopLeft
+                  vertices={formVertices}
+                  onChange={setFormVertices}
+                  gridWidth={gridWidth}
+                  gridHeight={gridHeight}
+                  gridOffsetX={gridBounds.minCol}
+                  gridOffsetY={gridBounds.minRow}
+                  placedRooms={allFloorPlanRooms}
+                  cellSizeM={cellSizeM}
+                  perimeterPolygon={getSectionPerimeter(formSectionId)}
+                  activeName={formName || undefined}
+                  otherPolygons={rooms
+                    .filter(other => other.id !== editingId && other.vertical_section_id === formSectionId && other.floor_polygon && other.floor_polygon.length >= 3)
+                    .map(other => ({ id: other.id, name: other.name, vertices: other.floor_polygon! }))}
+                  onSwitchRoom={editingId ? switchGridEditRoom : undefined}
+                  pdfTitle="Espacio de trabajo"
+                  pdfSubtitle={formName || 'Nuevo espacio'}
+                />
+              </div>
             )}
           </div>
 
@@ -1351,6 +1382,26 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                         {/* Inline grid editor */}
                         {gridEditId === r.id && (
                           <div className="space-y-2 border rounded-lg p-2 bg-background">
+                            <div className="flex items-center gap-1 flex-wrap">
+                              <span className="text-[8px] text-muted-foreground font-medium">Ampliar cuadrícula:</span>
+                              <Button variant="outline" size="sm" className="h-5 text-[9px] px-1.5 gap-0.5" onClick={() => setGridExtend(e => ({ ...e, left: e.left + 2 }))}>
+                                <ChevronLeft className="h-3 w-3" />←X
+                              </Button>
+                              <Button variant="outline" size="sm" className="h-5 text-[9px] px-1.5 gap-0.5" onClick={() => setGridExtend(e => ({ ...e, right: e.right + 2 }))}>
+                                X→<ChevronRight className="h-3 w-3" />
+                              </Button>
+                              <Button variant="outline" size="sm" className="h-5 text-[9px] px-1.5 gap-0.5" onClick={() => setGridExtend(e => ({ ...e, top: e.top + 2 }))}>
+                                <ChevronUp className="h-3 w-3" />↑Y
+                              </Button>
+                              <Button variant="outline" size="sm" className="h-5 text-[9px] px-1.5 gap-0.5" onClick={() => setGridExtend(e => ({ ...e, bottom: e.bottom + 2 }))}>
+                                Y↓<ChevronDown className="h-3 w-3" />
+                              </Button>
+                              {(gridExtend.left + gridExtend.right + gridExtend.top + gridExtend.bottom > 0) && (
+                                <Button variant="ghost" size="sm" className="h-5 text-[9px] px-1.5" onClick={() => setGridExtend({ left: 0, right: 0, top: 0, bottom: 0 })}>
+                                  Reset
+                                </Button>
+                              )}
+                            </div>
                             <GridPolygonDrawer
                               originTopLeft
                               vertices={gridEditVertices}

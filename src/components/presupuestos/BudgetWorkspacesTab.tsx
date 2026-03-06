@@ -390,7 +390,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
         )}
       </div>
 
-      {/* Zoom controls */}
+      {/* Zoom controls + PDF */}
       <div className="flex items-center gap-1.5">
         <span className="text-[9px] text-muted-foreground">Zoom:</span>
         {[1, 1.5, 2, 2.5].map(z => (
@@ -404,6 +404,14 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             {z === 1 ? '1×' : `${z}×`}
           </Button>
         ))}
+        {pdfTitle && (
+          <GridPdfExport
+            title={pdfTitle}
+            subtitle={pdfSubtitle || activeName || 'Espacio'}
+            containerRef={gridContainerRef}
+            size="sm"
+          />
+        )}
       </div>
 
       {/* Status indicator */}
@@ -439,7 +447,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
         </div>
       )}
 
-      <div className="overflow-auto rounded border bg-background max-h-[400px]">
+      <div ref={gridContainerRef} className="overflow-auto rounded border bg-background max-h-[400px]">
         <svg
           ref={svgRef}
           width={svgW}

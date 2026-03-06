@@ -88,10 +88,13 @@ interface SectionGridProps {
 
 function SectionGrid({ section, scaleConfig, rooms, budgetName }: SectionGridProps) {
   const gridContainerRef = useRef<HTMLDivElement>(null);
+  const [gridMin, setGridMin] = useState(GRID_MIN);
+  const [gridMax, setGridMax] = useState(GRID_MAX);
+  const gridCount = gridMax - gridMin + 1;
   const cellSize = 28;
   const margin = { top: 24, left: 32, right: 12, bottom: 24 };
-  const totalW = margin.left + GRID_COUNT * cellSize + margin.right;
-  const totalH = margin.top + GRID_COUNT * cellSize + margin.bottom;
+  const totalW = margin.left + gridCount * cellSize + margin.right;
+  const totalH = margin.top + gridCount * cellSize + margin.bottom;
 
   // Determine axes labels and orientation based on section type
   // vertical (Z): plan view → hAxis=X, vAxis=Y, origin top-left (Y increases downward)

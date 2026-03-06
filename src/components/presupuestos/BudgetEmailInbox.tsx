@@ -503,19 +503,34 @@ export function BudgetEmailInbox({ budgetId, onComposeReply, onComposeForward }:
         </Card>
       </div>
 
-      {/* Email Detail */}
-      <div>
-        {selectedEmail ? (
-          <EmailDetail email={selectedEmail} />
-        ) : (
-          <Card className="h-full min-h-[400px] flex items-center justify-center">
-            <div className="text-center text-muted-foreground">
-              <Mail className="h-12 w-12 mx-auto mb-4 opacity-20" />
-              <p>Selecciona un email para ver su contenido</p>
+      {/* Email Detail - Sheet on mobile, inline on desktop */}
+      {isMobile ? (
+        <Sheet open={!!selectedEmail} onOpenChange={(open) => { if (!open) setSelectedEmail(null); }}>
+          <SheetContent side="bottom" className="h-[85vh] p-0 flex flex-col">
+            <SheetHeader className="p-4 pb-2 border-b flex-shrink-0">
+              <SheetTitle className="text-base truncate text-left">
+                {selectedEmail?.subject || '(Sin asunto)'}
+              </SheetTitle>
+            </SheetHeader>
+            <div className="flex-1 overflow-auto">
+              {selectedEmail && <EmailDetail email={selectedEmail} />}
             </div>
-          </Card>
-        )}
-      </div>
+          </SheetContent>
+        </Sheet>
+      ) : (
+        <div>
+          {selectedEmail ? (
+            <EmailDetail email={selectedEmail} />
+          ) : (
+            <Card className="h-full min-h-[400px] flex items-center justify-center">
+              <div className="text-center text-muted-foreground">
+                <Mail className="h-12 w-12 mx-auto mb-4 opacity-20" />
+                <p>Selecciona un email para ver su contenido</p>
+              </div>
+            </Card>
+          )}
+        </div>
+      )}
 
       {/* Fullscreen Email Dialog */}
       <Dialog open={isFullscreenOpen} onOpenChange={setIsFullscreenOpen}>

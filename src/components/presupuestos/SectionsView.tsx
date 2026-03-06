@@ -1,48 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Grid3x3, ArrowLeftRight, ArrowUpDown, AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react';
-import { CustomSectionManager, type CustomSection, type ScaleConfig, type SectionWallProjection } from './CustomSectionManager';
+import { CustomSectionManager, type CustomSection, type ScaleConfig } from './CustomSectionManager';
 import type { FloorPlanData, RoomData, FloorLevel, WallType } from '@/lib/floor-plan-calculations';
 import type { CustomCorner, ManualElevation } from '@/hooks/useFloorPlan';
-
-// Error boundary to catch ElevationsGridViewer crashes
-class ElevationErrorBoundary extends React.Component<
-  { children: React.ReactNode; sectionName: string },
-  { hasError: boolean; error: string }
-> {
-  constructor(props: any) {
-    super(props);
-    this.state = { hasError: false, error: '' };
-  }
-  static getDerivedStateFromError(error: Error) {
-    return { hasError: true, error: error.message };
-  }
-  componentDidCatch(error: Error) {
-    console.error(`[ElevationErrorBoundary:${this.props.sectionName}]`, error);
-  }
-  render() {
-    if (this.state.hasError) {
-      return (
-        <Card>
-          <CardContent className="py-8 text-center space-y-3">
-            <AlertTriangle className="h-8 w-8 text-destructive mx-auto" />
-            <p className="text-sm font-medium text-destructive">Error al renderizar: {this.props.sectionName}</p>
-            <p className="text-xs text-muted-foreground max-w-md mx-auto">{this.state.error}</p>
-            <button
-              className="text-xs text-primary underline"
-              onClick={() => this.setState({ hasError: false, error: '' })}
-            >
-              Reintentar
-            </button>
-          </CardContent>
-        </Card>
-      );
-    }
-    return this.props.children;
-  }
-}
 
 interface SectionsViewProps {
   planData: FloorPlanData;
@@ -81,13 +43,12 @@ interface SectionsViewProps {
 }
 
 const SECTION_GROUPS = [
-  { type: 'vertical' as const, label: 'S. Verticales', icon: Grid3x3, color: 'text-blue-600' },
-  { type: 'longitudinal' as const, label: 'S. Longitudinales', icon: ArrowLeftRight, color: 'text-green-600' },
-  { type: 'transversal' as const, label: 'S. Transversales', icon: ArrowUpDown, color: 'text-orange-600' },
+  { type: 'vertical' as const, label: 'S. Verticales (Z)', icon: Grid3x3, color: 'text-blue-600', desc: 'Planos de planta a cada nivel Z' },
+  { type: 'longitudinal' as const, label: 'S. Longitudinales (Y)', icon: ArrowLeftRight, color: 'text-green-600', desc: 'Cortes longitudinales a cada valor Y' },
+  { type: 'transversal' as const, label: 'S. Transversales (X)', icon: ArrowUpDown, color: 'text-orange-600', desc: 'Cortes transversales a cada valor X' },
 ];
 
 export function SectionsView(props: SectionsViewProps) {
-  // All expanded by default
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
     new Set(['vertical', 'longitudinal', 'transversal'])
   );
@@ -100,157 +61,7 @@ export function SectionsView(props: SectionsViewProps) {
     });
   };
 
-  const scaleConfig: ScaleConfig = useMemo(() => {
-    const scaleX = props.planData.blockLengthMm || 625;
-    const scaleY = props.planData.blockLengthMm || 625;
-    const scaleZ = props.planData.blockHeightMm || 250;
-    const csm = scaleX / 1000;
-    const placedRooms = props.rooms.filter(r => r.posX != null && r.posY != null);
-
-    let minX = 0, maxX = 10, minY = 0, maxY = 10, minZ = 0, maxZ = 10;
-    if (placedRooms.length > 0) {
-      minX = Math.min(...placedRooms.map(r => Math.round(r.posX! / csm)));
-      maxX = Math.max(...placedRooms.map(r => Math.round((r.posX! + r.width) / csm)));
-      minY = Math.min(...placedRooms.map(r => Math.round(r.posY! / csm)));
-      maxY = Math.max(...placedRooms.map(r => Math.round((r.posY! + r.length) / csm)));
-      const defaultHMm = (props.planData.defaultHeight || 2.6) * 1000;
-      maxZ = Math.ceil(defaultHMm / scaleZ) * (props.floors.length || 1);
-    }
-    return { scaleX, scaleY, scaleZ, gridRange: { minX, maxX, minY, maxY, minZ, maxZ } };
-  }, [props.planData, props.rooms, props.floors]);
-
-  // Build workspace polygons grouped by vertical_section_id
-  const workspacesBySection = useMemo(() => {
-    const map = new Map<string, Array<{ id: string; name: string; vertices: Array<{ x: number; y: number }>; widthM: number; lengthM: number }>>();
-    for (const room of props.rooms) {
-      if (!room.verticalSectionId || !room.floorPolygon || room.floorPolygon.length < 3) continue;
-      if (!map.has(room.verticalSectionId)) map.set(room.verticalSectionId, []);
-      map.get(room.verticalSectionId)!.push({
-        id: room.id,
-        name: room.name,
-        vertices: room.floorPolygon,
-        widthM: room.width,
-        lengthM: room.length,
-      });
-    }
-    return map;
-  }, [props.rooms]);
-
   const allSections = props.customSections || [];
-
-  // Build wall projections for longitudinal/transversal sections
-  // For each workspace, find edges of its floor_polygon that intersect the section plane
-  const wallProjectionsBySection = useMemo(() => {
-    const map = new Map<string, SectionWallProjection[]>();
-    const scaleZ = scaleConfig.scaleZ;
-    const scaleXmm = scaleConfig.scaleX;
-
-    // Build workspace info: resolve Z level from vertical section
-    const verticalSections = allSections.filter(s => s.sectionType === 'vertical');
-    const workspacesWithZ: Array<{
-      id: string; name: string;
-      vertices: Array<{ x: number; y: number }>;
-      zBase: number; heightGridUnits: number;
-    }> = [];
-
-    for (const room of props.rooms) {
-      if (!room.verticalSectionId || !room.floorPolygon || room.floorPolygon.length < 3) continue;
-      const vs = verticalSections.find(s => s.id === room.verticalSectionId);
-      if (!vs) continue;
-      const zBase = vs.axisValue;
-      const heightM = room.height ?? props.planData.defaultHeight ?? 2.6;
-      const heightGridUnits = (heightM * 1000) / scaleZ;
-      workspacesWithZ.push({
-        id: room.id, name: room.name,
-        vertices: room.floorPolygon,
-        zBase, heightGridUnits,
-      });
-    }
-
-    // For each longitudinal section (Y=const): find polygon edges crossing Y=axisValue
-    const longSections = allSections.filter(s => s.sectionType === 'longitudinal');
-    for (const sec of longSections) {
-      const yVal = sec.axisValue;
-      const projections: SectionWallProjection[] = [];
-
-      for (const ws of workspacesWithZ) {
-        // Find min/max X of polygon where it intersects Y=yVal
-        const intersectionsX: number[] = [];
-        const verts = ws.vertices;
-        for (let i = 0; i < verts.length; i++) {
-          const j = (i + 1) % verts.length;
-          const y1 = verts[i].y, y2 = verts[j].y;
-          const x1 = verts[i].x, x2 = verts[j].x;
-          // Edge crosses Y=yVal
-          if ((y1 <= yVal && y2 > yVal) || (y2 <= yVal && y1 > yVal)) {
-            const t = (yVal - y1) / (y2 - y1);
-            intersectionsX.push(x1 + t * (x2 - x1));
-          }
-          // Edge runs along Y=yVal
-          if (y1 === yVal && y2 === yVal) {
-            intersectionsX.push(x1, x2);
-          }
-        }
-
-        if (intersectionsX.length >= 2) {
-          intersectionsX.sort((a, b) => a - b);
-          // Pair intersections (enter/exit)
-          for (let k = 0; k < intersectionsX.length - 1; k += 2) {
-            projections.push({
-              workspaceId: ws.id,
-              workspaceName: ws.name,
-              hStart: intersectionsX[k],
-              hEnd: intersectionsX[k + 1] ?? intersectionsX[k],
-              zBase: ws.zBase,
-              zTop: ws.zBase + ws.heightGridUnits,
-            });
-          }
-        }
-      }
-      if (projections.length > 0) map.set(sec.id, projections);
-    }
-
-    // For each transversal section (X=const): find polygon edges crossing X=axisValue
-    const transSections = allSections.filter(s => s.sectionType === 'transversal');
-    for (const sec of transSections) {
-      const xVal = sec.axisValue;
-      const projections: SectionWallProjection[] = [];
-
-      for (const ws of workspacesWithZ) {
-        const intersectionsY: number[] = [];
-        const verts = ws.vertices;
-        for (let i = 0; i < verts.length; i++) {
-          const j = (i + 1) % verts.length;
-          const x1 = verts[i].x, x2 = verts[j].x;
-          const y1 = verts[i].y, y2 = verts[j].y;
-          if ((x1 <= xVal && x2 > xVal) || (x2 <= xVal && x1 > xVal)) {
-            const t = (xVal - x1) / (x2 - x1);
-            intersectionsY.push(y1 + t * (y2 - y1));
-          }
-          if (x1 === xVal && x2 === xVal) {
-            intersectionsY.push(y1, y2);
-          }
-        }
-
-        if (intersectionsY.length >= 2) {
-          intersectionsY.sort((a, b) => a - b);
-          for (let k = 0; k < intersectionsY.length - 1; k += 2) {
-            projections.push({
-              workspaceId: ws.id,
-              workspaceName: ws.name,
-              hStart: intersectionsY[k],
-              hEnd: intersectionsY[k + 1] ?? intersectionsY[k],
-              zBase: ws.zBase,
-              zTop: ws.zBase + ws.heightGridUnits,
-            });
-          }
-        }
-      }
-      if (projections.length > 0) map.set(sec.id, projections);
-    }
-
-    return map;
-  }, [props.rooms, allSections, scaleConfig, props.planData]);
 
   return (
     <div className="space-y-2">
@@ -261,7 +72,6 @@ export function SectionsView(props: SectionsViewProps) {
 
         return (
           <div key={group.type} className="border border-border rounded-lg overflow-hidden">
-            {/* Group header */}
             <button
               className="flex items-center justify-between w-full px-3 py-2.5 bg-muted/50 hover:bg-muted/80 transition-colors"
               onClick={() => toggleGroup(group.type)}
@@ -280,16 +90,12 @@ export function SectionsView(props: SectionsViewProps) {
               </Badge>
             </button>
 
-            {/* Group content */}
             {isOpen && (
               <div className="px-3 py-2 bg-background border-t border-border">
                 <CustomSectionManager
                   sectionType={group.type}
                   sections={allSections}
                   onSectionsChange={props.onCustomSectionsChange || (() => {})}
-                  scaleConfig={scaleConfig}
-                  workspacesBySection={group.type === 'vertical' ? workspacesBySection : undefined}
-                  wallProjectionsBySection={group.type !== 'vertical' ? wallProjectionsBySection : undefined}
                 />
               </div>
             )}

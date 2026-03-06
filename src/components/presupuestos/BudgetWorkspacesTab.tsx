@@ -450,14 +450,16 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
           {Array.from({ length: gridHeight }).map((_, row) =>
             Array.from({ length: gridWidth }).map((_, col) => {
               const gx = col + gridOffsetX;
-              const gy = gridOffsetY + gridHeight - row - 1;
+              const gy = originTopLeft
+                ? row + gridOffsetY
+                : gridOffsetY + gridHeight - row - 1;
               const { sx, sy } = toSvg(gx, gy);
               const isEven = (col + row) % 2 === 0;
               return (
                 <rect
                   key={`c-${col}-${row}`}
                   x={sx}
-                  y={sy - cellSize}
+                  y={originTopLeft ? sy : sy - cellSize}
                   width={cellSize}
                   height={cellSize}
                   fill={isEven ? 'hsl(var(--muted))' : 'hsl(var(--background))'}

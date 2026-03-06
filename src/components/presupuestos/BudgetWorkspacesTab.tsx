@@ -501,12 +501,15 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             const startGy = Math.round(pr.pos_y / cellSizeM);
             const spanW = Math.max(1, Math.round(pr.width / cellSizeM));
             const spanH = Math.max(1, Math.round(pr.length / cellSizeM));
-            const { sx: rx, sy: ry } = toSvg(startGx, startGy + spanH);
+            const { sx: rx, sy: ry } = originTopLeft
+              ? toSvg(startGx, startGy)
+              : toSvg(startGx, startGy + spanH);
+            const rectY = originTopLeft ? ry : ry - cellSize;
             return (
               <g key={`pr-${pr.id}`}>
                 <rect
                   x={rx}
-                  y={ry - cellSize}
+                  y={rectY}
                   width={spanW * cellSize}
                   height={spanH * cellSize}
                   fill="hsl(var(--accent) / 0.25)"
@@ -516,7 +519,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                 />
                 <text
                   x={rx + (spanW * cellSize) / 2}
-                  y={ry - cellSize + (spanH * cellSize) / 2}
+                  y={rectY + (spanH * cellSize) / 2}
                   textAnchor="middle"
                   dominantBaseline="central"
                   className="text-[7px] fill-accent-foreground font-medium select-none pointer-events-none"

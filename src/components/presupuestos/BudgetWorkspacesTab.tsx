@@ -266,6 +266,7 @@ interface GridPolygonDrawerProps {
   onSwitchRoom?: (roomId: string) => void;
   perimeterPolygon?: PolygonVertex[];
   activeName?: string;
+  originTopLeft?: boolean;
 }
 
 const POLY_COLORS = [
@@ -279,7 +280,7 @@ const POLY_COLORS = [
   'hsl(280 60% 55%)',
 ];
 
-function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16, gridOffsetX = 0, gridOffsetY = 0, placedRooms = [], cellSizeM = 1, otherPolygons = [], activeRoomId, onSwitchRoom, perimeterPolygon, activeName }: GridPolygonDrawerProps) {
+function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16, gridOffsetX = 0, gridOffsetY = 0, placedRooms = [], cellSizeM = 1, otherPolygons = [], activeRoomId, onSwitchRoom, perimeterPolygon, activeName, originTopLeft = false }: GridPolygonDrawerProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null);
   const [draggingIdx, setDraggingIdx] = useState<number | null>(null);
@@ -296,12 +297,16 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
 
   const toSvg = (gx: number, gy: number) => ({
     sx: pad + (gx - gridOffsetX) * cellSize,
-    sy: pad + (gridHeight - (gy - gridOffsetY)) * cellSize,
+    sy: originTopLeft
+      ? pad + (gy - gridOffsetY) * cellSize
+      : pad + (gridHeight - (gy - gridOffsetY)) * cellSize,
   });
 
   const fromSvg = (sx: number, sy: number) => ({
     gx: Math.round((sx - pad) / cellSize + gridOffsetX),
-    gy: Math.round(gridOffsetY + gridHeight - (sy - pad) / cellSize),
+    gy: originTopLeft
+      ? Math.round((sy - pad) / cellSize + gridOffsetY)
+      : Math.round(gridOffsetY + gridHeight - (sy - pad) / cellSize),
   });
 
   const handleClick = (gx: number, gy: number) => {
@@ -445,14 +450,16 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
           {Array.from({ length: gridHeight }).map((_, row) =>
             Array.from({ length: gridWidth }).map((_, col) => {
               const gx = col + gridOffsetX;
-              const gy = gridOffsetY + gridHeight - row - 1;
+              const gy = originTopLeft
+                ? row + gridOffsetY
+                : gridOffsetY + gridHeight - row - 1;
               const { sx, sy } = toSvg(gx, gy);
               const isEven = (col + row) % 2 === 0;
               return (
                 <rect
                   key={`c-${col}-${row}`}
                   x={sx}
-                  y={sy - cellSize}
+                  y={originTopLeft ? sy : sy - cellSize}
                   width={cellSize}
                   height={cellSize}
                   fill={isEven ? 'hsl(var(--muted))' : 'hsl(var(--background))'}
@@ -494,12 +501,15 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             const startGy = Math.round(pr.pos_y / cellSizeM);
             const spanW = Math.max(1, Math.round(pr.width / cellSizeM));
             const spanH = Math.max(1, Math.round(pr.length / cellSizeM));
-            const { sx: rx, sy: ry } = toSvg(startGx, startGy + spanH);
+            const { sx: rx, sy: ry } = originTopLeft
+              ? toSvg(startGx, startGy)
+              : toSvg(startGx, startGy + spanH);
+            const rectY = originTopLeft ? ry : ry - cellSize;
             return (
               <g key={`pr-${pr.id}`}>
                 <rect
                   x={rx}
-                  y={ry - cellSize}
+                  y={rectY}
                   width={spanW * cellSize}
                   height={spanH * cellSize}
                   fill="hsl(var(--accent) / 0.25)"
@@ -509,7 +519,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                 />
                 <text
                   x={rx + (spanW * cellSize) / 2}
-                  y={ry - cellSize + (spanH * cellSize) / 2}
+                  y={rectY + (spanH * cellSize) / 2}
                   textAnchor="middle"
                   dominantBaseline="central"
                   className="text-[7px] fill-accent-foreground font-medium select-none pointer-events-none"
@@ -535,7 +545,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
 
           {/* Y axis labels (left) */}
           {Array.from({ length: gridHeight + 1 }).map((_, i) => {
-            const gy = i + gridOffsetY;
+            const gy = originTopLeft ? (i + gridOffsetY) : (i + gridOffsetY);
             const { sy } = toSvg(gridOffsetX, gy);
             return (
               <text key={`yl-${i}`} x={8} y={sy + 3} textAnchor="middle"
@@ -1182,6 +1192,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
               <VertexEditor vertices={formVertices} onChange={setFormVertices} />
             ) : (
               <GridPolygonDrawer
+                originTopLeft
                 vertices={formVertices}
                 onChange={setFormVertices}
                 gridWidth={gridWidth}
@@ -1309,6 +1320,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                         {gridEditId === r.id && (
                           <div className="space-y-2 border rounded-lg p-2 bg-background">
                             <GridPolygonDrawer
+                              originTopLeft
                               vertices={gridEditVertices}
                               onChange={setGridEditVertices}
                               gridWidth={gridWidth}

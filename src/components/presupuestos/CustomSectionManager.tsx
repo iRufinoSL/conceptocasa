@@ -107,14 +107,12 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName }: SectionGridPro
   // For elevation views, we flip the vertical axis so 0 is at bottom
   const getVIndex = (val: number) => {
     if (isElevation) {
-      // bottom-left origin: higher values at top
-      return GRID_MAX - val;
+      return gridMax - val;
     }
-    // top-left origin: value maps directly
-    return val - GRID_MIN;
+    return val - gridMin;
   };
 
-  const getHIndex = (val: number) => val - GRID_MIN;
+  const getHIndex = (val: number) => val - gridMin;
 
   // Scale info
   const scaleH = section.sectionType === 'transversal'

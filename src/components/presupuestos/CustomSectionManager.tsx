@@ -127,43 +127,48 @@ function SectionGrid({ section, scaleConfig }: SectionGridProps) {
         </span>
       </div>
       <svg width={totalW} height={totalH} className="block">
+        {/* Checkerboard cells */}
+        {Array.from({ length: GRID_COUNT }, (_, row) =>
+          Array.from({ length: GRID_COUNT }, (_, col) => {
+            const isOdd = (row + col) % 2 === 1;
+            return (
+              <rect
+                key={`cell-${row}-${col}`}
+                x={margin.left + col * cellSize}
+                y={margin.top + row * cellSize}
+                width={cellSize}
+                height={cellSize}
+                fill={isOdd ? 'hsl(var(--border) / 0.18)' : 'transparent'}
+              />
+            );
+          })
+        )}
+
         {/* Grid lines */}
         {Array.from({ length: GRID_COUNT + 1 }, (_, i) => {
           const x = margin.left + i * cellSize;
           const y = margin.top + i * cellSize;
+          const isOriginH = i === getHIndex(0);
+          const isOriginV = i === getVIndex(0);
           return (
             <React.Fragment key={i}>
-              {/* Vertical line */}
               <line
                 x1={x} y1={margin.top}
                 x2={x} y2={margin.top + GRID_COUNT * cellSize}
-                stroke="hsl(var(--border))" strokeWidth={i === getHIndex(0) ? 1.5 : 0.5}
-                strokeDasharray={i === getHIndex(0) ? undefined : '2,2'}
+                stroke={isOriginH ? 'hsl(var(--primary))' : 'hsl(var(--border))'}
+                strokeWidth={isOriginH ? 1.5 : 0.5}
+                opacity={isOriginH ? 0.7 : 0.4}
               />
-              {/* Horizontal line */}
               <line
                 x1={margin.left} y1={y}
                 x2={margin.left + GRID_COUNT * cellSize} y2={y}
-                stroke="hsl(var(--border))" strokeWidth={i === getVIndex(0) ? 1.5 : 0.5}
-                strokeDasharray={i === getVIndex(0) ? undefined : '2,2'}
+                stroke={isOriginV ? 'hsl(var(--primary))' : 'hsl(var(--border))'}
+                strokeWidth={isOriginV ? 1.5 : 0.5}
+                opacity={isOriginV ? 0.7 : 0.4}
               />
             </React.Fragment>
           );
         })}
-
-        {/* Origin axes highlight */}
-        {/* Horizontal axis at origin */}
-        <line
-          x1={margin.left} y1={margin.top + getVIndex(0) * cellSize}
-          x2={margin.left + GRID_COUNT * cellSize} y2={margin.top + getVIndex(0) * cellSize}
-          stroke="hsl(var(--primary))" strokeWidth={1.5} opacity={0.6}
-        />
-        {/* Vertical axis at origin */}
-        <line
-          x1={margin.left + getHIndex(0) * cellSize} y1={margin.top}
-          x2={margin.left + getHIndex(0) * cellSize} y2={margin.top + GRID_COUNT * cellSize}
-          stroke="hsl(var(--primary))" strokeWidth={1.5} opacity={0.6}
-        />
 
         {/* Origin marker */}
         <circle
@@ -174,10 +179,9 @@ function SectionGrid({ section, scaleConfig }: SectionGridProps) {
           opacity={0.8}
         />
 
-        {/* H-axis labels (top) */}
+        {/* H-axis labels (top) — every unit */}
         {Array.from({ length: GRID_COUNT + 1 }, (_, i) => {
           const val = GRID_MIN + i;
-          if (val % 2 !== 0 && val !== 0) return null;
           return (
             <text
               key={`h-${i}`}
@@ -185,18 +189,28 @@ function SectionGrid({ section, scaleConfig }: SectionGridProps) {
               y={margin.top - 6}
               textAnchor="middle"
               className="fill-muted-foreground"
-              fontSize={val === 0 ? 10 : 8}
+              fontSize={val === 0 ? 10 : 7}
               fontWeight={val === 0 ? 700 : 400}
             >
-              {hLabel}{val}
+              {val}
             </text>
           );
         })}
 
-        {/* V-axis labels (left) */}
+        {/* H-axis title */}
+        <text
+          x={margin.left + GRID_COUNT * cellSize + 6}
+          y={margin.top - 6}
+          className="fill-muted-foreground"
+          fontSize={9}
+          fontWeight={600}
+        >
+          {hLabel}
+        </text>
+
+        {/* V-axis labels (left) — every unit */}
         {Array.from({ length: GRID_COUNT + 1 }, (_, i) => {
           const val = isElevation ? (GRID_MAX - i) : (GRID_MIN + i);
-          if (val % 2 !== 0 && val !== 0) return null;
           return (
             <text
               key={`v-${i}`}
@@ -204,13 +218,25 @@ function SectionGrid({ section, scaleConfig }: SectionGridProps) {
               y={margin.top + i * cellSize + 3}
               textAnchor="end"
               className="fill-muted-foreground"
-              fontSize={val === 0 ? 10 : 8}
+              fontSize={val === 0 ? 10 : 7}
               fontWeight={val === 0 ? 700 : 400}
             >
-              {vLabel}{val}
+              {val}
             </text>
           );
         })}
+
+        {/* V-axis title */}
+        <text
+          x={margin.left - 4}
+          y={margin.top - 14}
+          textAnchor="end"
+          className="fill-muted-foreground"
+          fontSize={9}
+          fontWeight={600}
+        >
+          {vLabel}
+        </text>
 
         {/* Axis value indicator label */}
         <text

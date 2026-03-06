@@ -344,12 +344,12 @@ export function BudgetEmailInbox({ budgetId, onComposeReply, onComposeForward }:
             </div>
           </div>
         </CardHeader>
-        <CardContent className="flex-1 overflow-hidden overflow-x-hidden">
-          <ScrollArea className={isFullscreen ? "h-full max-h-[70vh]" : "h-full max-h-[400px]"}>
+        <CardContent className="flex-1 overflow-hidden overflow-x-hidden p-3 sm:p-6">
+          <ScrollArea className={isFullscreen ? "h-full max-h-[70vh]" : "h-full max-h-[50vh] sm:max-h-[400px]"}>
             <div className="pr-4 overflow-x-hidden">
               {(sanitizedHtml || email.body_text) ? (
                 <div 
-                  className="prose prose-sm dark:prose-invert max-w-none break-words overflow-hidden [word-break:break-word] [overflow-wrap:anywhere] [&_*]:max-w-full [&_*]:overflow-hidden [&_*]:break-words [&_img]:max-w-full [&_table]:max-w-full [&_table]:overflow-x-auto [&_table]:block [&_pre]:overflow-x-auto [&_pre]:max-w-full"
+                  className="prose prose-sm dark:prose-invert max-w-none break-words overflow-hidden [word-break:break-word] [overflow-wrap:anywhere] [&_*]:max-w-full [&_*]:overflow-hidden [&_*]:break-words [&_img]:max-w-full [&_img]:h-auto [&_table]:text-xs [&_table]:max-w-full [&_table]:overflow-x-auto [&_table]:block [&_pre]:overflow-x-auto [&_pre]:max-w-full"
                   dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(sanitizedHtml || email.body_text?.replace(/\n/g, '<br>') || '') }}
                 />
               ) : (

@@ -276,7 +276,7 @@ export function BudgetEmailInbox({ budgetId, onComposeReply, onComposeForward }:
 
     return (
       <Card className="flex-1 flex flex-col">
-        <CardHeader className="flex-shrink-0 pb-3">
+        <CardHeader className="flex-shrink-0 pb-3 p-3 sm:p-6 sm:pb-3">
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
               <CardTitle className="text-lg break-words">
@@ -296,7 +296,7 @@ export function BudgetEmailInbox({ budgetId, onComposeReply, onComposeForward }:
                 </p>
               </div>
             </div>
-            <div className="flex gap-1 flex-shrink-0 flex-wrap">
+            <div className="flex gap-1 flex-shrink-0 flex-wrap justify-end">
               {!isFullscreen && (
                 <Button 
                   variant="default" 

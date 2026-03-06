@@ -531,12 +531,12 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             );
           })}
 
-          {/* X axis labels (bottom) */}
+          {/* X axis labels (top for vertical/originTopLeft, bottom otherwise) */}
           {Array.from({ length: gridWidth + 1 }).map((_, i) => {
             const gx = i + gridOffsetX;
             const { sx } = toSvg(gx, gridOffsetY);
             return (
-              <text key={`xl-${i}`} x={sx} y={svgH - 6} textAnchor="middle"
+              <text key={`xl-${i}`} x={sx} y={originTopLeft ? pad - 6 : svgH - 6} textAnchor="middle"
                 className="text-[8px] fill-destructive font-bold select-none">
                 X{gx}
               </text>

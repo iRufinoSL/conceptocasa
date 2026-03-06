@@ -6,6 +6,8 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -34,6 +36,7 @@ interface BudgetEmailInboxProps {
 export function BudgetEmailInbox({ budgetId, onComposeReply, onComposeForward }: BudgetEmailInboxProps) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   const [selectedEmail, setSelectedEmail] = useState<EmailMessage | null>(null);
   const [isInboxExpanded, setIsInboxExpanded] = useState(true);
   const [isOutboxExpanded, setIsOutboxExpanded] = useState(true);
@@ -273,7 +276,7 @@ export function BudgetEmailInbox({ budgetId, onComposeReply, onComposeForward }:
 
     return (
       <Card className="flex-1 flex flex-col">
-        <CardHeader className="flex-shrink-0 pb-3">
+        <CardHeader className="flex-shrink-0 pb-3 p-3 sm:p-6 sm:pb-3">
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
               <CardTitle className="text-lg break-words">
@@ -293,7 +296,7 @@ export function BudgetEmailInbox({ budgetId, onComposeReply, onComposeForward }:
                 </p>
               </div>
             </div>
-            <div className="flex gap-1 flex-shrink-0 flex-wrap">
+            <div className="flex gap-1 flex-shrink-0 flex-wrap justify-end">
               {!isFullscreen && (
                 <Button 
                   variant="default" 
@@ -341,12 +344,12 @@ export function BudgetEmailInbox({ budgetId, onComposeReply, onComposeForward }:
             </div>
           </div>
         </CardHeader>
-        <CardContent className="flex-1 overflow-hidden overflow-x-hidden">
-          <ScrollArea className={isFullscreen ? "h-full max-h-[70vh]" : "h-full max-h-[400px]"}>
+        <CardContent className="flex-1 overflow-hidden overflow-x-hidden p-3 sm:p-6">
+          <ScrollArea className={isFullscreen ? "h-full max-h-[70vh]" : "h-full max-h-[50vh] sm:max-h-[400px]"}>
             <div className="pr-4 overflow-x-hidden">
               {(sanitizedHtml || email.body_text) ? (
                 <div 
-                  className="prose prose-sm dark:prose-invert max-w-none break-words overflow-hidden [word-break:break-word] [overflow-wrap:anywhere] [&_*]:max-w-full [&_*]:overflow-hidden [&_*]:break-words [&_img]:max-w-full [&_table]:max-w-full [&_table]:overflow-x-auto [&_table]:block [&_pre]:overflow-x-auto [&_pre]:max-w-full"
+                  className="prose prose-sm dark:prose-invert max-w-none break-words overflow-hidden [word-break:break-word] [overflow-wrap:anywhere] [&_*]:max-w-full [&_*]:overflow-hidden [&_*]:break-words [&_img]:max-w-full [&_img]:h-auto [&_table]:text-xs [&_table]:max-w-full [&_table]:overflow-x-auto [&_table]:block [&_pre]:overflow-x-auto [&_pre]:max-w-full"
                   dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(sanitizedHtml || email.body_text?.replace(/\n/g, '<br>') || '') }}
                 />
               ) : (
@@ -500,19 +503,34 @@ export function BudgetEmailInbox({ budgetId, onComposeReply, onComposeForward }:
         </Card>
       </div>
 
-      {/* Email Detail */}
-      <div>
-        {selectedEmail ? (
-          <EmailDetail email={selectedEmail} />
-        ) : (
-          <Card className="h-full min-h-[400px] flex items-center justify-center">
-            <div className="text-center text-muted-foreground">
-              <Mail className="h-12 w-12 mx-auto mb-4 opacity-20" />
-              <p>Selecciona un email para ver su contenido</p>
+      {/* Email Detail - Sheet on mobile, inline on desktop */}
+      {isMobile ? (
+        <Sheet open={!!selectedEmail} onOpenChange={(open) => { if (!open) setSelectedEmail(null); }}>
+          <SheetContent side="bottom" className="h-[85vh] p-0 flex flex-col">
+            <SheetHeader className="p-4 pb-2 border-b flex-shrink-0">
+              <SheetTitle className="text-base truncate text-left">
+                {selectedEmail?.subject || '(Sin asunto)'}
+              </SheetTitle>
+            </SheetHeader>
+            <div className="flex-1 overflow-auto">
+              {selectedEmail && <EmailDetail email={selectedEmail} />}
             </div>
-          </Card>
-        )}
-      </div>
+          </SheetContent>
+        </Sheet>
+      ) : (
+        <div>
+          {selectedEmail ? (
+            <EmailDetail email={selectedEmail} />
+          ) : (
+            <Card className="h-full min-h-[400px] flex items-center justify-center">
+              <div className="text-center text-muted-foreground">
+                <Mail className="h-12 w-12 mx-auto mb-4 opacity-20" />
+                <p>Selecciona un email para ver su contenido</p>
+              </div>
+            </Card>
+          )}
+        </div>
+      )}
 
       {/* Fullscreen Email Dialog */}
       <Dialog open={isFullscreenOpen} onOpenChange={setIsFullscreenOpen}>

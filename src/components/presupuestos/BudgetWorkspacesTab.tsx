@@ -267,6 +267,8 @@ interface GridPolygonDrawerProps {
   perimeterPolygon?: PolygonVertex[];
   activeName?: string;
   originTopLeft?: boolean;
+  pdfTitle?: string;
+  pdfSubtitle?: string;
 }
 
 const POLY_COLORS = [

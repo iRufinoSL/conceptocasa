@@ -327,11 +327,12 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName }: SectionGridPro
           })
         }
       </svg>
+      </div>
     </div>
   );
 }
 
-export function CustomSectionManager({ sectionType, sections, onSectionsChange, scaleConfig, rooms }: CustomSectionManagerProps) {
+export function CustomSectionManager({ sectionType, sections, onSectionsChange, scaleConfig, rooms, budgetName }: CustomSectionManagerProps) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState('');
   const [newAxisValue, setNewAxisValue] = useState('0');

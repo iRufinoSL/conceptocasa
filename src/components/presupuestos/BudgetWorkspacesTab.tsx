@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Pencil, Trash2, Plus, ChevronDown, ChevronRight, Triangle, Pyramid, Cuboid, Grid3x3, MapPin, X, MousePointerClick, List, Layers, Save } from 'lucide-react';
+import { Pencil, Trash2, Plus, ChevronDown, ChevronRight, Triangle, Pyramid, Cuboid, Grid3x3, MapPin, X, MousePointerClick, List, Layers, Save, RefreshCw } from 'lucide-react';
 import { GridPdfExport } from './GridPdfExport';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -960,7 +960,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     const { error } = await supabase.from('budget_floor_plans').update({ custom_corners: parsed }).eq('id', floorPlan.id);
     if (error) { toast.error('Error al crear sección vertical'); return null; }
     toast.success(`Sección vertical "${newSection.name}" creada`);
-    queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces'] });
+    queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces', budgetId] });
+    queryClient.invalidateQueries({ queryKey: ['workspace-rooms'] });
     setShowNewSection(false);
     setNewSectionName('');
     setNewSectionAxisValue('');
@@ -1013,6 +1014,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     resetForm();
     await refetch();
     queryClient.invalidateQueries({ queryKey: ['workspace-walls'] });
+    queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces', budgetId] });
   };
 
   const handleEdit = (r: Workspace) => {
@@ -1031,6 +1033,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     await supabase.from('budget_floor_plan_rooms').delete().eq('id', id);
     toast.success('Espacio eliminado');
     refetch();
+    queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces', budgetId] });
   };
 
   const updateWallType = async (wallId: string, newType: string) => {
@@ -1083,6 +1086,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     setGridEditId(null);
     await refetch();
     queryClient.invalidateQueries({ queryKey: ['workspace-walls'] });
+    queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces', budgetId] });
   };
 
   // Group by vertical section
@@ -1100,15 +1104,29 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
 
   const canSave = formName.trim() && formVertices.length >= 3 && (formSectionId || showNewSection);
 
+  const refetchAll = useCallback(async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces', budgetId] }),
+      queryClient.invalidateQueries({ queryKey: ['workspace-rooms'] }),
+      queryClient.invalidateQueries({ queryKey: ['workspace-walls'] }),
+      queryClient.invalidateQueries({ queryKey: ['floor-plan-all-rooms'] }),
+    ]);
+  }, [queryClient, budgetId]);
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold">Espacios de trabajo</h3>
-        {isAdmin && (
-          <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => { resetForm(); setFormHeight(String(floorPlan?.default_height ?? '')); setShowForm(true); }}>
-            <Plus className="h-3 w-3" /> Añadir
+        <div className="flex items-center gap-1">
+          <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={async () => { await refetchAll(); toast.success('Datos actualizados'); }} title="Actualizar datos">
+            <RefreshCw className="h-3 w-3" /> Actualizar
           </Button>
-        )}
+          {isAdmin && (
+            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => { resetForm(); setFormHeight(String(floorPlan?.default_height ?? '')); setShowForm(true); }}>
+              <Plus className="h-3 w-3" /> Añadir
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* ── Creation/Edit form ── */}

@@ -1,7 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Grid3x3, ArrowLeftRight, ArrowUpDown, AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react';
+import { Grid3x3, ArrowLeftRight, ArrowUpDown, AlertTriangle, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
+import { toast } from 'sonner';
 import { CustomSectionManager, type CustomSection, type ScaleConfig } from './CustomSectionManager';
 import type { FloorPlanData, RoomData, FloorLevel, WallType } from '@/lib/floor-plan-calculations';
 import type { CustomCorner, ManualElevation } from '@/hooks/useFloorPlan';
@@ -40,6 +42,7 @@ interface SectionsViewProps {
   customSections?: CustomSection[];
   onCustomSectionsChange?: (sections: CustomSection[]) => void;
   renderSelectedRoom?: () => React.ReactNode;
+  onRefresh?: () => Promise<void>;
 }
 
 const SECTION_GROUPS = [
@@ -65,6 +68,11 @@ export function SectionsView(props: SectionsViewProps) {
 
   return (
     <div className="space-y-2">
+      <div className="flex justify-end">
+        <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={async () => { await props.onRefresh?.(); toast.success('Secciones actualizadas'); }} title="Actualizar secciones">
+          <RefreshCw className="h-3 w-3" /> Actualizar
+        </Button>
+      </div>
       {SECTION_GROUPS.map(group => {
         const Icon = group.icon;
         const count = allSections.filter(s => s.sectionType === group.type).length;

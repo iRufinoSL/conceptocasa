@@ -29,11 +29,21 @@ export interface ScaleConfig {
   gridRange?: { minX: number; maxX: number; minY: number; maxY: number; minZ: number; maxZ: number };
 }
 
+interface WorkspacePolygonData {
+  id: string;
+  name: string;
+  vertices: Array<{ x: number; y: number }>;
+  widthM: number;
+  lengthM: number;
+}
+
 interface CustomSectionManagerProps {
   sectionType: 'vertical' | 'longitudinal' | 'transversal';
   sections: CustomSection[];
   onSectionsChange: (sections: CustomSection[]) => void;
   scaleConfig?: ScaleConfig;
+  /** Workspace polygons grouped by vertical_section_id */
+  workspacesBySection?: Map<string, WorkspacePolygonData[]>;
 }
 
 const AXIS_MAP: Record<string, { axis: 'X' | 'Y' | 'Z'; label: string; placeholder: string }[]> = {
@@ -111,7 +121,7 @@ const POLY_COLORS = [
 const AXIS_COLORS = { X: '#c0392b', Y: '#27ae60', Z: '#2980b9' };
 
 /** Renders an SVG grid for a custom section with its polygons */
-function SectionGrid({ section, scaleConfig }: { section: CustomSection; scaleConfig?: ScaleConfig }) {
+function SectionGrid({ section, scaleConfig, workspaces }: { section: CustomSection; scaleConfig?: ScaleConfig; workspaces?: WorkspacePolygonData[] }) {
   const { sectionType, polygons } = section;
 
   const axisMapping = useMemo(() => {
@@ -291,12 +301,47 @@ function SectionGrid({ section, scaleConfig }: { section: CustomSection; scaleCo
             </g>
           );
         })}
+        {/* Workspace polygons overlay */}
+        {workspaces && workspaces.length > 0 && sectionType === 'vertical' && workspaces.map((ws) => {
+          if (ws.vertices.length < 3) return null;
+          const wsPoints = ws.vertices.map(v => `${toSvgX(v.x)},${toSvgY(v.y)}`).join(' ');
+          const cx = ws.vertices.reduce((s, v) => s + v.x, 0) / ws.vertices.length;
+          const cy = ws.vertices.reduce((s, v) => s + v.y, 0) / ws.vertices.length;
+          // Compute area in m²
+          const hScale = (scaleConfig?.scaleX ?? 625) / 1000;
+          const vScale = (scaleConfig?.scaleY ?? 625) / 1000;
+          let area = 0;
+          for (let i = 0; i < ws.vertices.length; i++) {
+            const j = (i + 1) % ws.vertices.length;
+            area += (ws.vertices[i].x * hScale) * (ws.vertices[j].y * vScale);
+            area -= (ws.vertices[j].x * hScale) * (ws.vertices[i].y * vScale);
+          }
+          area = Math.abs(area) / 2;
+          return (
+            <g key={`ws-${ws.id}`}>
+              <polygon
+                points={wsPoints}
+                fill="hsl(200, 80%, 50%)"
+                fillOpacity={0.15}
+                stroke="hsl(200, 80%, 50%)"
+                strokeWidth={2}
+                strokeDasharray="6 3"
+              />
+              <text x={toSvgX(cx)} y={toSvgY(cy) - 4} textAnchor="middle" fontSize={11} fontWeight="bold" fill="hsl(200, 80%, 50%)" fontFamily="system-ui, sans-serif">
+                {ws.name}
+              </text>
+              <text x={toSvgX(cx)} y={toSvgY(cy) + 10} textAnchor="middle" fontSize={9} fill="hsl(200, 80%, 50%)" fontFamily="system-ui, sans-serif" opacity={0.8}>
+                {area.toFixed(2)} m²
+              </text>
+            </g>
+          );
+        })}
       </svg>
     </div>
   );
 }
 
-export function CustomSectionManager({ sectionType, sections, onSectionsChange, scaleConfig }: CustomSectionManagerProps) {
+export function CustomSectionManager({ sectionType, sections, onSectionsChange, scaleConfig, workspacesBySection }: CustomSectionManagerProps) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState('');
   const [newAxisValue, setNewAxisValue] = useState('0');
@@ -535,7 +580,7 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
             {isExpanded && (
               <div className="px-3 py-2 space-y-2 bg-background">
                 {/* SVG Grid for THIS section only */}
-                <SectionGrid section={section} scaleConfig={scaleConfig} />
+                <SectionGrid section={section} scaleConfig={scaleConfig} workspaces={workspacesBySection?.get(section.id)} />
 
                 {/* Polygons list */}
                 {section.polygons.length === 0 && (

@@ -109,6 +109,8 @@ export interface RoomData {
   floorId?: string;
   groupId?: string;
   groupName?: string;
+  verticalSectionId?: string;
+  floorPolygon?: Array<{ x: number; y: number }>;
   walls: WallData[];
 }
 

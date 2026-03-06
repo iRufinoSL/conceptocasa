@@ -297,6 +297,8 @@ export function useFloorPlan(budgetId: string) {
           floorId: (r as any).floor_id || undefined,
           groupId: (r as any).group_id || undefined,
           groupName: (r as any).group_name || undefined,
+          verticalSectionId: (r as any).vertical_section_id || undefined,
+          floorPolygon: Array.isArray((r as any).floor_polygon) ? (r as any).floor_polygon : undefined,
           walls,
         };
       });

@@ -83,9 +83,11 @@ interface SectionGridProps {
   section: CustomSection;
   scaleConfig?: ScaleConfig;
   rooms?: RoomData[];
+  budgetName?: string;
 }
 
-function SectionGrid({ section, scaleConfig, rooms }: SectionGridProps) {
+function SectionGrid({ section, scaleConfig, rooms, budgetName }: SectionGridProps) {
+  const gridContainerRef = useRef<HTMLDivElement>(null);
   const cellSize = 28;
   const margin = { top: 24, left: 32, right: 12, bottom: 24 };
   const totalW = margin.left + GRID_COUNT * cellSize + margin.right;

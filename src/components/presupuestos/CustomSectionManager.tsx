@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Trash2, ChevronDown, ChevronRight, Pencil, MapPin } from 'lucide-react';
+import { Plus, Trash2, Pencil, MapPin, Eye, EyeOff } from 'lucide-react';
 
 export interface SectionPolygon {
   id: string;
@@ -70,13 +70,172 @@ function generateId() {
   return crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export function CustomSectionManager({ sectionType, sections, onSectionsChange }: CustomSectionManagerProps) {
+// Grid range constants
+const GRID_MIN = -3;
+const GRID_MAX = 20;
+const GRID_COUNT = GRID_MAX - GRID_MIN + 1; // 24 cells
+
+interface SectionGridProps {
+  section: CustomSection;
+  scaleConfig?: ScaleConfig;
+}
+
+function SectionGrid({ section, scaleConfig }: SectionGridProps) {
+  const cellSize = 28;
+  const margin = { top: 24, left: 32, right: 12, bottom: 24 };
+  const totalW = margin.left + GRID_COUNT * cellSize + margin.right;
+  const totalH = margin.top + GRID_COUNT * cellSize + margin.bottom;
+
+  // Determine axes labels and orientation based on section type
+  // vertical (Z): plan view → hAxis=X, vAxis=Y, origin top-left (Y increases downward)
+  // longitudinal (Y): elevation → hAxis=X, vAxis=Z, origin bottom-left (Z increases upward)
+  // transversal (X): elevation → hAxis=Y, vAxis=Z, origin bottom-left (Z increases upward)
+  const isElevation = section.sectionType !== 'vertical';
+  const hLabel = section.sectionType === 'transversal' ? 'Y' : 'X';
+  const vLabel = section.sectionType === 'vertical' ? 'Y' : 'Z';
+
+  // For elevation views, we flip the vertical axis so 0 is at bottom
+  const getVIndex = (val: number) => {
+    if (isElevation) {
+      // bottom-left origin: higher values at top
+      return GRID_MAX - val;
+    }
+    // top-left origin: value maps directly
+    return val - GRID_MIN;
+  };
+
+  const getHIndex = (val: number) => val - GRID_MIN;
+
+  // Scale info
+  const scaleH = section.sectionType === 'transversal'
+    ? (scaleConfig?.scaleY ?? 625)
+    : (scaleConfig?.scaleX ?? 625);
+  const scaleV = isElevation
+    ? (scaleConfig?.scaleZ ?? 250)
+    : (scaleConfig?.scaleY ?? 625);
+
+  return (
+    <div className="mt-2 overflow-auto border border-border rounded-md bg-muted/20">
+      <div className="text-[9px] text-muted-foreground px-2 pt-1 flex items-center justify-between">
+        <span>
+          {section.sectionType === 'vertical' && `Vista planta Z=${section.axisValue} — Origen (0,0) arriba-izq`}
+          {section.sectionType === 'longitudinal' && `Vista longitudinal Y=${section.axisValue} — Origen (0,0) abajo-izq`}
+          {section.sectionType === 'transversal' && `Vista transversal X=${section.axisValue} — Origen (0,0) abajo-izq`}
+        </span>
+        <span className="text-muted-foreground/60">
+          {hLabel}: {scaleH}mm · {vLabel}: {scaleV}mm
+        </span>
+      </div>
+      <svg width={totalW} height={totalH} className="block">
+        {/* Grid lines */}
+        {Array.from({ length: GRID_COUNT + 1 }, (_, i) => {
+          const x = margin.left + i * cellSize;
+          const y = margin.top + i * cellSize;
+          return (
+            <React.Fragment key={i}>
+              {/* Vertical line */}
+              <line
+                x1={x} y1={margin.top}
+                x2={x} y2={margin.top + GRID_COUNT * cellSize}
+                stroke="hsl(var(--border))" strokeWidth={i === getHIndex(0) ? 1.5 : 0.5}
+                strokeDasharray={i === getHIndex(0) ? undefined : '2,2'}
+              />
+              {/* Horizontal line */}
+              <line
+                x1={margin.left} y1={y}
+                x2={margin.left + GRID_COUNT * cellSize} y2={y}
+                stroke="hsl(var(--border))" strokeWidth={i === getVIndex(0) ? 1.5 : 0.5}
+                strokeDasharray={i === getVIndex(0) ? undefined : '2,2'}
+              />
+            </React.Fragment>
+          );
+        })}
+
+        {/* Origin axes highlight */}
+        {/* Horizontal axis at origin */}
+        <line
+          x1={margin.left} y1={margin.top + getVIndex(0) * cellSize}
+          x2={margin.left + GRID_COUNT * cellSize} y2={margin.top + getVIndex(0) * cellSize}
+          stroke="hsl(var(--primary))" strokeWidth={1.5} opacity={0.6}
+        />
+        {/* Vertical axis at origin */}
+        <line
+          x1={margin.left + getHIndex(0) * cellSize} y1={margin.top}
+          x2={margin.left + getHIndex(0) * cellSize} y2={margin.top + GRID_COUNT * cellSize}
+          stroke="hsl(var(--primary))" strokeWidth={1.5} opacity={0.6}
+        />
+
+        {/* Origin marker */}
+        <circle
+          cx={margin.left + getHIndex(0) * cellSize}
+          cy={margin.top + getVIndex(0) * cellSize}
+          r={4}
+          fill="hsl(var(--primary))"
+          opacity={0.8}
+        />
+
+        {/* H-axis labels (top) */}
+        {Array.from({ length: GRID_COUNT + 1 }, (_, i) => {
+          const val = GRID_MIN + i;
+          if (val % 2 !== 0 && val !== 0) return null;
+          return (
+            <text
+              key={`h-${i}`}
+              x={margin.left + i * cellSize}
+              y={margin.top - 6}
+              textAnchor="middle"
+              className="fill-muted-foreground"
+              fontSize={val === 0 ? 10 : 8}
+              fontWeight={val === 0 ? 700 : 400}
+            >
+              {hLabel}{val}
+            </text>
+          );
+        })}
+
+        {/* V-axis labels (left) */}
+        {Array.from({ length: GRID_COUNT + 1 }, (_, i) => {
+          const val = isElevation ? (GRID_MAX - i) : (GRID_MIN + i);
+          if (val % 2 !== 0 && val !== 0) return null;
+          return (
+            <text
+              key={`v-${i}`}
+              x={margin.left - 4}
+              y={margin.top + i * cellSize + 3}
+              textAnchor="end"
+              className="fill-muted-foreground"
+              fontSize={val === 0 ? 10 : 8}
+              fontWeight={val === 0 ? 700 : 400}
+            >
+              {vLabel}{val}
+            </text>
+          );
+        })}
+
+        {/* Axis value indicator label */}
+        <text
+          x={totalW - margin.right}
+          y={totalH - 4}
+          textAnchor="end"
+          className="fill-primary"
+          fontSize={9}
+          fontWeight={600}
+        >
+          {section.axis}={section.axisValue}
+        </text>
+      </svg>
+    </div>
+  );
+}
+
+export function CustomSectionManager({ sectionType, sections, onSectionsChange, scaleConfig }: CustomSectionManagerProps) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState('');
   const [newAxisValue, setNewAxisValue] = useState('0');
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editAxisValue, setEditAxisValue] = useState('0');
+  const [visibleGridId, setVisibleGridId] = useState<string | null>(null);
 
   const axisConfig = AXIS_MAP[sectionType];
   const filtered = sections.filter(s => s.sectionType === sectionType);
@@ -100,6 +259,7 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange }
 
   const handleDelete = (id: string) => {
     onSectionsChange(sections.filter(s => s.id !== id));
+    if (visibleGridId === id) setVisibleGridId(null);
   };
 
   const handleRename = (id: string) => {
@@ -109,6 +269,10 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange }
       s.id === id ? { ...s, name: editName.trim(), axisValue: val } : s
     ));
     setEditingSectionId(null);
+  };
+
+  const toggleGrid = (id: string) => {
+    setVisibleGridId(prev => prev === id ? null : id);
   };
 
   return (
@@ -167,68 +331,83 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange }
 
       {filtered.map(section => {
         const isEditing = editingSectionId === section.id;
+        const gridVisible = visibleGridId === section.id;
 
         return (
-          <div key={section.id} className="flex items-center justify-between px-3 py-2.5 rounded-lg border bg-card hover:bg-accent/30 transition-colors">
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              {isEditing ? (
-                <div className="flex items-center gap-2 flex-1" onClick={e => e.stopPropagation()}>
-                  <Input
-                    className="h-7 text-xs w-36"
-                    value={editName}
-                    onChange={e => setEditName(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') handleRename(section.id);
-                      if (e.key === 'Escape') setEditingSectionId(null);
-                    }}
-                    autoFocus
-                    placeholder="Nombre"
-                  />
-                  <div className="flex items-center gap-1">
-                    <span className="text-[10px] text-muted-foreground">{axisConfig.label}=</span>
+          <div key={section.id}>
+            <div className="flex items-center justify-between px-3 py-2.5 rounded-lg border bg-card hover:bg-accent/30 transition-colors">
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                {isEditing ? (
+                  <div className="flex items-center gap-2 flex-1" onClick={e => e.stopPropagation()}>
                     <Input
-                      className="h-7 text-xs w-16"
-                      type="number"
-                      value={editAxisValue}
-                      onChange={e => setEditAxisValue(e.target.value)}
+                      className="h-7 text-xs w-36"
+                      value={editName}
+                      onChange={e => setEditName(e.target.value)}
                       onKeyDown={e => {
                         if (e.key === 'Enter') handleRename(section.id);
                         if (e.key === 'Escape') setEditingSectionId(null);
                       }}
+                      autoFocus
+                      placeholder="Nombre"
                     />
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] text-muted-foreground">{axisConfig.label}=</span>
+                      <Input
+                        className="h-7 text-xs w-16"
+                        type="number"
+                        value={editAxisValue}
+                        onChange={e => setEditAxisValue(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') handleRename(section.id);
+                          if (e.key === 'Escape') setEditingSectionId(null);
+                        }}
+                      />
+                    </div>
+                    <Button size="sm" className="h-6 text-[10px] px-2" onClick={() => handleRename(section.id)}>Guardar</Button>
+                    <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2" onClick={() => setEditingSectionId(null)}>Cancelar</Button>
                   </div>
-                  <Button size="sm" className="h-6 text-[10px] px-2" onClick={() => handleRename(section.id)}>Guardar</Button>
-                  <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2" onClick={() => setEditingSectionId(null)}>Cancelar</Button>
+                ) : (
+                  <>
+                    <span className="text-xs font-semibold truncate">{section.name}</span>
+                    <Badge variant="secondary" className="text-[9px] h-4 shrink-0">
+                      {section.axis}={section.axisValue}
+                    </Badge>
+                  </>
+                )}
+              </div>
+              {!isEditing && (
+                <div className="flex items-center gap-1 shrink-0">
+                  <Button
+                    variant={gridVisible ? 'default' : 'ghost'}
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    onClick={() => toggleGrid(section.id)}
+                    title={gridVisible ? 'Ocultar cuadrícula' : 'Ver cuadrícula'}
+                  >
+                    {gridVisible ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                  </Button>
+                  <Button
+                    variant="ghost" size="sm" className="h-7 w-7 p-0"
+                    onClick={() => {
+                      setEditingSectionId(section.id);
+                      setEditName(section.name);
+                      setEditAxisValue(String(section.axisValue));
+                    }}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost" size="sm"
+                    className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10"
+                    onClick={() => handleDelete(section.id)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
                 </div>
-              ) : (
-                <>
-                  <span className="text-xs font-semibold truncate">{section.name}</span>
-                  <Badge variant="secondary" className="text-[9px] h-4 shrink-0">
-                    {section.axis}={section.axisValue}
-                  </Badge>
-                </>
               )}
             </div>
-            {!isEditing && (
-              <div className="flex items-center gap-1 shrink-0">
-                <Button
-                  variant="ghost" size="sm" className="h-7 w-7 p-0"
-                  onClick={() => {
-                    setEditingSectionId(section.id);
-                    setEditName(section.name);
-                    setEditAxisValue(String(section.axisValue));
-                  }}
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                </Button>
-                <Button
-                  variant="ghost" size="sm"
-                  className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10"
-                  onClick={() => handleDelete(section.id)}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              </div>
+            {gridVisible && (
+              <SectionGrid section={section} scaleConfig={scaleConfig} />
             )}
           </div>
         );

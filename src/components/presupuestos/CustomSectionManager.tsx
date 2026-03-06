@@ -318,7 +318,7 @@ function SectionGrid({ section, scaleConfig, rooms }: SectionGridProps) {
   );
 }
 
-export function CustomSectionManager({ sectionType, sections, onSectionsChange, scaleConfig }: CustomSectionManagerProps) {
+export function CustomSectionManager({ sectionType, sections, onSectionsChange, scaleConfig, rooms }: CustomSectionManagerProps) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState('');
   const [newAxisValue, setNewAxisValue] = useState('0');

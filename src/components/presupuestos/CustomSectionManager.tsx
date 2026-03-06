@@ -124,13 +124,32 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName }: SectionGridPro
 
   return (
     <div className="mt-2">
-      <div className="flex items-center justify-between px-2 pt-1 pb-0.5">
+      <div className="flex items-center justify-between px-2 pt-1 pb-0.5 flex-wrap gap-1">
         <span className="text-[9px] text-muted-foreground">
           {section.sectionType === 'vertical' && `Vista planta Z=${section.axisValue} — Origen (0,0) arriba-izq`}
           {section.sectionType === 'longitudinal' && `Vista longitudinal Y=${section.axisValue} — Origen (0,0) abajo-izq`}
           {section.sectionType === 'transversal' && `Vista transversal X=${section.axisValue} — Origen (0,0) abajo-izq`}
         </span>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {/* Grid range controls */}
+          <div className="flex items-center gap-0.5 border border-border rounded px-1.5 py-0.5">
+            <span className="text-[8px] text-muted-foreground font-medium">Rango:</span>
+            <Button variant="ghost" size="sm" className="h-4 w-4 p-0" onClick={() => setGridMin(m => m - 3)} title="Ampliar mín −3">
+              <ChevronLeft className="h-3 w-3" />
+            </Button>
+            <span className="text-[8px] font-mono text-muted-foreground">{gridMin}</span>
+            <Button variant="ghost" size="sm" className="h-4 w-4 p-0" onClick={() => setGridMin(m => Math.min(m + 3, -1))} title="Reducir mín +3">
+              <ChevronRight className="h-3 w-3" />
+            </Button>
+            <span className="text-[8px] text-muted-foreground mx-0.5">→</span>
+            <Button variant="ghost" size="sm" className="h-4 w-4 p-0" onClick={() => setGridMax(m => Math.max(m - 3, 1))} title="Reducir máx −3">
+              <ChevronLeft className="h-3 w-3" />
+            </Button>
+            <span className="text-[8px] font-mono text-muted-foreground">{gridMax}</span>
+            <Button variant="ghost" size="sm" className="h-4 w-4 p-0" onClick={() => setGridMax(m => m + 3)} title="Ampliar máx +3">
+              <ChevronRight className="h-3 w-3" />
+            </Button>
+          </div>
           <span className="text-[9px] text-muted-foreground/60">
             {hLabel}: {scaleH}mm · {vLabel}: {scaleV}mm
           </span>
@@ -145,8 +164,8 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName }: SectionGridPro
       <div ref={gridContainerRef} className="overflow-auto border border-border rounded-md bg-muted/20">
       <svg width={totalW} height={totalH} className="block">
         {/* Checkerboard cells */}
-        {Array.from({ length: GRID_COUNT }, (_, row) =>
-          Array.from({ length: GRID_COUNT }, (_, col) => {
+        {Array.from({ length: gridCount }, (_, row) =>
+          Array.from({ length: gridCount }, (_, col) => {
             const isOdd = (row + col) % 2 === 1;
             return (
               <rect
@@ -162,7 +181,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName }: SectionGridPro
         )}
 
         {/* Grid lines */}
-        {Array.from({ length: GRID_COUNT + 1 }, (_, i) => {
+        {Array.from({ length: gridCount + 1 }, (_, i) => {
           const x = margin.left + i * cellSize;
           const y = margin.top + i * cellSize;
           const isOriginH = i === getHIndex(0);
@@ -171,14 +190,14 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName }: SectionGridPro
             <React.Fragment key={i}>
               <line
                 x1={x} y1={margin.top}
-                x2={x} y2={margin.top + GRID_COUNT * cellSize}
+                x2={x} y2={margin.top + gridCount * cellSize}
                 stroke={isOriginH ? 'hsl(var(--primary))' : 'hsl(var(--border))'}
                 strokeWidth={isOriginH ? 1.5 : 0.5}
                 opacity={isOriginH ? 0.7 : 0.4}
               />
               <line
                 x1={margin.left} y1={y}
-                x2={margin.left + GRID_COUNT * cellSize} y2={y}
+                x2={margin.left + gridCount * cellSize} y2={y}
                 stroke={isOriginV ? 'hsl(var(--primary))' : 'hsl(var(--border))'}
                 strokeWidth={isOriginV ? 1.5 : 0.5}
                 opacity={isOriginV ? 0.7 : 0.4}
@@ -188,17 +207,19 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName }: SectionGridPro
         })}
 
         {/* Origin marker */}
-        <circle
-          cx={margin.left + getHIndex(0) * cellSize}
-          cy={margin.top + getVIndex(0) * cellSize}
-          r={4}
-          fill="hsl(var(--primary))"
-          opacity={0.8}
-        />
+        {getHIndex(0) >= 0 && getHIndex(0) <= gridCount && getVIndex(0) >= 0 && getVIndex(0) <= gridCount && (
+          <circle
+            cx={margin.left + getHIndex(0) * cellSize}
+            cy={margin.top + getVIndex(0) * cellSize}
+            r={4}
+            fill="hsl(var(--primary))"
+            opacity={0.8}
+          />
+        )}
 
         {/* H-axis labels (top) — every unit */}
-        {Array.from({ length: GRID_COUNT + 1 }, (_, i) => {
-          const val = GRID_MIN + i;
+        {Array.from({ length: gridCount + 1 }, (_, i) => {
+          const val = gridMin + i;
           return (
             <text
               key={`h-${i}`}
@@ -216,7 +237,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName }: SectionGridPro
 
         {/* H-axis title */}
         <text
-          x={margin.left + GRID_COUNT * cellSize + 6}
+          x={margin.left + gridCount * cellSize + 6}
           y={margin.top - 6}
           className="fill-muted-foreground"
           fontSize={9}
@@ -226,8 +247,8 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName }: SectionGridPro
         </text>
 
         {/* V-axis labels (left) — every unit */}
-        {Array.from({ length: GRID_COUNT + 1 }, (_, i) => {
-          const val = isElevation ? (GRID_MAX - i) : (GRID_MIN + i);
+        {Array.from({ length: gridCount + 1 }, (_, i) => {
+          const val = isElevation ? (gridMax - i) : (gridMin + i);
           return (
             <text
               key={`v-${i}`}
@@ -278,13 +299,11 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName }: SectionGridPro
               return `${margin.left + hIdx * cellSize},${margin.top + vIdx * cellSize}`;
             }).join(' ');
 
-            // Centroid for label
             const cx = poly.reduce((s, p) => s + p.x, 0) / poly.length;
             const cy = poly.reduce((s, p) => s + p.y, 0) / poly.length;
             const cxSvg = margin.left + getHIndex(cx) * cellSize;
             const cySvg = margin.top + getVIndex(cy) * cellSize;
 
-            // Area via shoelace
             let area = 0;
             for (let i = 0; i < poly.length; i++) {
               const j = (i + 1) % poly.length;

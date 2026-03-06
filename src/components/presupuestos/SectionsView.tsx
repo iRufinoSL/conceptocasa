@@ -96,6 +96,7 @@ export function SectionsView(props: SectionsViewProps) {
                   sectionType={group.type}
                   sections={allSections}
                   onSectionsChange={props.onCustomSectionsChange || (() => {})}
+                  rooms={props.rooms}
                 />
               </div>
             )}

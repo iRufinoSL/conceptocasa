@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import type { RoomData } from '@/lib/floor-plan-calculations';
 import { Plus, Trash2, Pencil, MapPin, Eye, EyeOff } from 'lucide-react';
 
 export interface SectionPolygon {
@@ -46,6 +47,7 @@ interface CustomSectionManagerProps {
   scaleConfig?: ScaleConfig;
   workspacesBySection?: Map<string, any[]>;
   wallProjectionsBySection?: Map<string, SectionWallProjection[]>;
+  rooms?: RoomData[];
 }
 
 const AXIS_MAP: Record<string, { axis: 'X' | 'Y' | 'Z'; label: string; placeholder: string }> = {
@@ -78,9 +80,10 @@ const GRID_COUNT = GRID_MAX - GRID_MIN + 1; // 24 cells
 interface SectionGridProps {
   section: CustomSection;
   scaleConfig?: ScaleConfig;
+  rooms?: RoomData[];
 }
 
-function SectionGrid({ section, scaleConfig }: SectionGridProps) {
+function SectionGrid({ section, scaleConfig, rooms }: SectionGridProps) {
   const cellSize = 28;
   const margin = { top: 24, left: 32, right: 12, bottom: 24 };
   const totalW = margin.left + GRID_COUNT * cellSize + margin.right;
@@ -249,12 +252,73 @@ function SectionGrid({ section, scaleConfig }: SectionGridProps) {
         >
           {section.axis}={section.axisValue}
         </text>
+
+        {/* Workspace floor polygons for vertical sections */}
+        {section.sectionType === 'vertical' && rooms && rooms
+          .filter(r => r.verticalSectionId === section.id && r.floorPolygon && r.floorPolygon.length >= 3)
+          .map(room => {
+            const poly = room.floorPolygon!;
+            const points = poly.map(p => {
+              const hIdx = getHIndex(p.x);
+              const vIdx = getVIndex(p.y);
+              return `${margin.left + hIdx * cellSize},${margin.top + vIdx * cellSize}`;
+            }).join(' ');
+
+            // Centroid for label
+            const cx = poly.reduce((s, p) => s + p.x, 0) / poly.length;
+            const cy = poly.reduce((s, p) => s + p.y, 0) / poly.length;
+            const cxSvg = margin.left + getHIndex(cx) * cellSize;
+            const cySvg = margin.top + getVIndex(cy) * cellSize;
+
+            // Area via shoelace
+            let area = 0;
+            for (let i = 0; i < poly.length; i++) {
+              const j = (i + 1) % poly.length;
+              area += poly[i].x * poly[j].y - poly[j].x * poly[i].y;
+            }
+            area = Math.abs(area) / 2;
+            const scaleHm = (scaleConfig?.scaleX ?? 625) / 1000;
+            const scaleVm = (scaleConfig?.scaleY ?? 625) / 1000;
+            const areaM2 = area * scaleHm * scaleVm;
+
+            return (
+              <g key={room.id}>
+                <polygon
+                  points={points}
+                  fill="hsl(200 80% 50% / 0.15)"
+                  stroke="hsl(200 80% 50%)"
+                  strokeWidth={1.5}
+                  strokeDasharray="4 2"
+                />
+                <text
+                  x={cxSvg}
+                  y={cySvg - 4}
+                  textAnchor="middle"
+                  fontSize={8}
+                  fontWeight={600}
+                  fill="hsl(200 80% 50%)"
+                >
+                  {room.name}
+                </text>
+                <text
+                  x={cxSvg}
+                  y={cySvg + 7}
+                  textAnchor="middle"
+                  fontSize={7}
+                  fill="hsl(200 80% 50% / 0.8)"
+                >
+                  {areaM2.toFixed(2)} m²
+                </text>
+              </g>
+            );
+          })
+        }
       </svg>
     </div>
   );
 }
 
-export function CustomSectionManager({ sectionType, sections, onSectionsChange, scaleConfig }: CustomSectionManagerProps) {
+export function CustomSectionManager({ sectionType, sections, onSectionsChange, scaleConfig, rooms }: CustomSectionManagerProps) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState('');
   const [newAxisValue, setNewAxisValue] = useState('0');
@@ -433,7 +497,7 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
               )}
             </div>
             {gridVisible && (
-              <SectionGrid section={section} scaleConfig={scaleConfig} />
+              <SectionGrid section={section} scaleConfig={scaleConfig} rooms={rooms} />
             )}
           </div>
         );

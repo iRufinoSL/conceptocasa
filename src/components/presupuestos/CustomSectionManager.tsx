@@ -138,7 +138,7 @@ function SectionGrid({ section, scaleConfig }: SectionGridProps) {
                 y={margin.top + row * cellSize}
                 width={cellSize}
                 height={cellSize}
-                fill={isOdd ? 'hsl(var(--border) / 0.18)' : 'transparent'}
+                fill={isOdd ? 'hsl(var(--border) / 0.45)' : 'transparent'}
               />
             );
           })

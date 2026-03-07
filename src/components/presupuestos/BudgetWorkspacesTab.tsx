@@ -693,7 +693,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             return (
               <text key={`xl-${i}`} x={sx} y={originTopLeft ? 12 : svgH - 6} textAnchor="middle"
                 fill="hsl(0 84% 60%)" fontSize={9} fontWeight="bold" className="select-none">
-                X{gx}
+                {hAxisLabel}{gx}
               </text>
             );
           })}
@@ -705,7 +705,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             return (
               <text key={`yl-${i}`} x={8} y={sy + 3} textAnchor="middle"
                 className="text-[8px] fill-emerald-600 dark:fill-emerald-400 font-bold select-none">
-                Y{gy}
+                {vAxisLabel}{gy}
               </text>
             );
           })}
@@ -741,7 +741,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                 {opEdges.map(({ a, b }, ei) => {
                   const { sx: ex1, sy: ey1 } = toSvg(a.x, a.y);
                   const { sx: ex2, sy: ey2 } = toSvg(b.x, b.y);
-                  const eLenMm = Math.round(edgeLength(a, b) * cellSizeM * 1000);
+                  const eLenMm = Math.round(Math.sqrt(((b.x - a.x) * hScale) ** 2 + ((b.y - a.y) * vScale) ** 2) * 1000);
                   const emx = (ex1 + ex2) / 2;
                   const emy = (ey1 + ey2) / 2;
                   const edx = ex2 - ex1;
@@ -838,7 +838,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             return allEdges.map(({ a, b, idx }) => {
               const { sx: x1, sy: y1 } = toSvg(a.x, a.y);
               const { sx: x2, sy: y2 } = toSvg(b.x, b.y);
-              const lenMm = Math.round(edgeLength(a, b) * cellSizeM * 1000);
+              const lenMm = Math.round(Math.sqrt(((b.x - a.x) * hScale) ** 2 + ((b.y - a.y) * vScale) ** 2) * 1000);
               const isClosing = idx === 0 && allEdges.length > 1 && a === vertices[vertices.length - 1];
               const mx = (x1 + x2) / 2;
               const my = (y1 + y2) / 2;

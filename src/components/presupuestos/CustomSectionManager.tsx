@@ -1359,7 +1359,134 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
       </svg>
       </div>
 
-      {/* Drawing mode indicator */}
+      {/* ── Wall assignment panel ── */}
+      {wallAssignInfo && section.sectionType === 'vertical' && (() => {
+        const targetType = wallAssignInfo.isHorizontal ? 'longitudinal' : 'transversal';
+        const targetAxis = wallAssignInfo.isHorizontal ? 'Y' : 'X';
+        const candidateSections = (allSections || []).filter(s => s.sectionType === targetType);
+        const colorClass = wallAssignInfo.isHorizontal ? 'border-green-500/50 bg-green-50/50' : 'border-orange-500/50 bg-orange-50/50';
+
+        return (
+          <div className={`mt-1 p-2 border rounded-md ${colorClass} space-y-2`}>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold">
+                Pared {wallAssignInfo.wallIndex + 1} de {wallAssignInfo.roomName} ({wallAssignInfo.wallLenMm} mm)
+                <Badge variant="secondary" className="ml-1.5 text-[9px] h-4">
+                  {wallAssignInfo.isHorizontal ? 'Longitudinal (Y)' : 'Transversal (X)'}
+                </Badge>
+              </span>
+              <Button variant="ghost" size="sm" className="h-5 text-[9px]" onClick={() => setWallAssignInfo(null)}>Cerrar</Button>
+            </div>
+
+            <p className="text-[10px] text-muted-foreground">
+              Selecciona la sección {targetType} ({targetAxis}=?) donde se dibujará esta pared, o crea una nueva.
+            </p>
+
+            {/* Existing sections */}
+            {candidateSections.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {candidateSections.map(cs => (
+                  <Button
+                    key={cs.id}
+                    variant="outline"
+                    size="sm"
+                    className="h-6 text-[10px] gap-1"
+                    onClick={() => assignWallToSection(cs.id)}
+                  >
+                    {cs.name} ({cs.axis}={cs.axisValue})
+                  </Button>
+                ))}
+              </div>
+            )}
+
+            {/* Create new section inline */}
+            <div className="flex items-center gap-1.5">
+              <Input
+                className="h-6 text-[10px] w-28"
+                placeholder={`Nombre sección ${targetType}`}
+                value={wallAssignNewName}
+                onChange={e => setWallAssignNewName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && createSectionAndAssign()}
+              />
+              <div className="flex items-center gap-0.5">
+                <span className="text-[9px] text-muted-foreground">{targetAxis}=</span>
+                <Input
+                  className="h-6 text-[10px] w-14"
+                  type="number"
+                  value={wallAssignNewValue}
+                  onChange={e => setWallAssignNewValue(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && createSectionAndAssign()}
+                />
+              </div>
+              <Button size="sm" className="h-6 text-[10px] gap-0.5" onClick={createSectionAndAssign} disabled={!wallAssignNewName.trim()}>
+                <Plus className="h-3 w-3" /> Crear y asignar
+              </Button>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Ceiling assignment panel ── */}
+      {ceilingAssignRoom && section.sectionType === 'vertical' && (() => {
+        const verticalSections = (allSections || []).filter(s => s.sectionType === 'vertical' && s.id !== section.id);
+
+        return (
+          <div className="mt-1 p-2 border border-blue-500/50 bg-blue-50/50 rounded-md space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold">
+                Techo de {ceilingAssignRoom.roomName}
+                <Badge variant="secondary" className="ml-1.5 text-[9px] h-4">Sección Vertical Z</Badge>
+              </span>
+              <Button variant="ghost" size="sm" className="h-5 text-[9px]" onClick={() => setCeilingAssignRoom(null)}>Cerrar</Button>
+            </div>
+
+            <p className="text-[10px] text-muted-foreground">
+              Selecciona la sección vertical (Z=?) donde se ubicará el techo, o crea una nueva.
+            </p>
+
+            {/* Existing vertical sections */}
+            {verticalSections.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {verticalSections.map(vs => (
+                  <Button
+                    key={vs.id}
+                    variant="outline"
+                    size="sm"
+                    className="h-6 text-[10px] gap-1"
+                    onClick={() => assignCeilingToSection(vs.id)}
+                  >
+                    {vs.name} (Z={vs.axisValue})
+                  </Button>
+                ))}
+              </div>
+            )}
+
+            {/* Create new vertical section inline */}
+            <div className="flex items-center gap-1.5">
+              <Input
+                className="h-6 text-[10px] w-28"
+                placeholder="Nombre sección Z"
+                value={ceilingNewName}
+                onChange={e => setCeilingNewName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && createCeilingSectionAndAssign()}
+              />
+              <div className="flex items-center gap-0.5">
+                <span className="text-[9px] text-muted-foreground">Z=</span>
+                <Input
+                  className="h-6 text-[10px] w-14"
+                  type="number"
+                  value={ceilingNewValue}
+                  onChange={e => setCeilingNewValue(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && createCeilingSectionAndAssign()}
+                />
+              </div>
+              <Button size="sm" className="h-6 text-[10px] gap-0.5" onClick={createCeilingSectionAndAssign} disabled={!ceilingNewName.trim()}>
+                <Plus className="h-3 w-3" /> Crear y asignar
+              </Button>
+            </div>
+          </div>
+        );
+      })()}
       {drawingMode && (
         <div className="mt-1 px-2 py-1.5 bg-primary/10 border border-primary/30 rounded-md flex items-center gap-2">
           <PenTool className="h-3.5 w-3.5 text-primary animate-pulse" />

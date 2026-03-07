@@ -84,9 +84,10 @@ interface SectionGridProps {
   scaleConfig?: ScaleConfig;
   rooms?: RoomData[];
   budgetName?: string;
+  wallProjections?: SectionWallProjection[];
 }
 
-function SectionGrid({ section, scaleConfig, rooms, budgetName }: SectionGridProps) {
+function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections }: SectionGridProps) {
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const [gridMin, setGridMin] = useState(GRID_MIN);
   const [gridMax, setGridMax] = useState(GRID_MAX);
@@ -504,13 +505,108 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName }: SectionGridPro
           );
         })()}
 
+        {/* Wall projections for longitudinal/transversal sections */}
+        {isElevation && wallProjections && wallProjections.length > 0 && (() => {
+          const PROJ_COLORS = [
+            'hsl(210 70% 55%)', 'hsl(150 60% 45%)', 'hsl(30 80% 55%)',
+            'hsl(280 60% 55%)', 'hsl(0 70% 55%)', 'hsl(180 60% 45%)',
+          ];
+
+          return (
+            <>
+              {wallProjections.map((proj, pi) => {
+                const color = PROJ_COLORS[pi % PROJ_COLORS.length];
+                const x1 = margin.left + getHIndex(proj.hStart) * cellSize;
+                const x2 = margin.left + getHIndex(proj.hEnd) * cellSize;
+                const y1 = margin.top + getVIndex(proj.zTop) * cellSize;
+                const y2 = margin.top + getVIndex(proj.zBase) * cellSize;
+
+                const w = Math.abs(x2 - x1);
+                const h = Math.abs(y2 - y1);
+                const rx = Math.min(x1, x2);
+                const ry = Math.min(y1, y2);
+
+                const cx = rx + w / 2;
+                const cy = ry + h / 2;
+
+                // Dimension labels
+                const widthMm = Math.round(Math.abs(proj.hEnd - proj.hStart) * scaleH);
+                const heightMm = Math.round(Math.abs(proj.zTop - proj.zBase) * scaleV);
+                const fontSize = Math.round(7 * Math.max(1, zoomLevel * 0.8));
+
+                return (
+                  <g key={`proj-${proj.workspaceId}-${pi}`}>
+                    {/* Filled rectangle */}
+                    <rect
+                      x={rx} y={ry} width={w} height={h}
+                      fill={`${color} / 0.15`}
+                      stroke={color}
+                      strokeWidth={1.5}
+                      strokeDasharray="4 2"
+                    />
+
+                    {/* Name label */}
+                    <rect
+                      x={cx - 28} y={cy - 10}
+                      width={56} height={20}
+                      rx={3}
+                      fill="hsl(45 100% 50% / 0.85)"
+                    />
+                    <text
+                      x={cx} y={cy - 1}
+                      textAnchor="middle"
+                      fontSize={fontSize}
+                      fontWeight={700}
+                      fill="hsl(0 0% 10%)"
+                    >
+                      {proj.workspaceName}
+                    </text>
+                    <text
+                      x={cx} y={cy + 8}
+                      textAnchor="middle"
+                      fontSize={fontSize - 1}
+                      fontWeight={500}
+                      fill="hsl(0 0% 25%)"
+                    >
+                      {widthMm}×{heightMm}mm
+                    </text>
+
+                    {/* Width dimension (top) */}
+                    <line x1={rx} y1={ry - 8} x2={rx + w} y2={ry - 8} stroke={color} strokeWidth={0.8} />
+                    <line x1={rx} y1={ry} x2={rx} y2={ry - 10} stroke={`${color} / 0.5`} strokeWidth={0.5} />
+                    <line x1={rx + w} y1={ry} x2={rx + w} y2={ry - 10} stroke={`${color} / 0.5`} strokeWidth={0.5} />
+                    <text x={cx} y={ry - 11} textAnchor="middle" fontSize={fontSize - 1} fontWeight={600} fill={color}>
+                      {widthMm} mm
+                    </text>
+
+                    {/* Height dimension (right) */}
+                    <line x1={rx + w + 8} y1={ry} x2={rx + w + 8} y2={ry + h} stroke={color} strokeWidth={0.8} />
+                    <line x1={rx + w} y1={ry} x2={rx + w + 10} y2={ry} stroke={`${color} / 0.5`} strokeWidth={0.5} />
+                    <line x1={rx + w} y1={ry + h} x2={rx + w + 10} y2={ry + h} stroke={`${color} / 0.5`} strokeWidth={0.5} />
+                    <text
+                      x={rx + w + 12} y={cy}
+                      textAnchor="middle"
+                      fontSize={fontSize - 1}
+                      fontWeight={600}
+                      fill={color}
+                      transform={`rotate(-90, ${rx + w + 12}, ${cy})`}
+                    >
+                      {heightMm} mm
+                    </text>
+                  </g>
+                );
+              })}
+            </>
+          );
+        })()}
+
       </svg>
       </div>
     </div>
   );
 }
 
-export function CustomSectionManager({ sectionType, sections, onSectionsChange, scaleConfig, rooms, budgetName }: CustomSectionManagerProps) {
+export function CustomSectionManager({ sectionType, sections, onSectionsChange, scaleConfig, wallProjectionsBySection, rooms, budgetName }: CustomSectionManagerProps) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState('');
   const [newAxisValue, setNewAxisValue] = useState('0');
@@ -689,7 +785,7 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
               )}
             </div>
             {gridVisible && (
-              <SectionGrid section={section} scaleConfig={scaleConfig} rooms={rooms} budgetName={budgetName} />
+              <SectionGrid section={section} scaleConfig={scaleConfig} rooms={rooms} budgetName={budgetName} wallProjections={wallProjectionsBySection?.get(section.id)} />
             )}
           </div>
         );

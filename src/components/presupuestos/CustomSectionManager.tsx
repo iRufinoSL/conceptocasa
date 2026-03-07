@@ -1,12 +1,13 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import type { RoomData } from '@/lib/floor-plan-calculations';
-import { Plus, Trash2, Pencil, MapPin, Eye, EyeOff, ChevronLeft, ChevronRight, ChevronUp, ChevronDown } from 'lucide-react';
+import { Plus, Trash2, Pencil, MapPin, Eye, EyeOff, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Save, RefreshCw } from 'lucide-react';
 import { GridPdfExport } from './GridPdfExport';
+import { toast } from 'sonner';
 
 export interface SectionPolygon {
   id: string;
@@ -77,7 +78,47 @@ function generateId() {
 // Grid range constants
 const GRID_MIN = -3;
 const GRID_MAX = 20;
-const GRID_COUNT = GRID_MAX - GRID_MIN + 1; // 24 cells
+
+const PROJ_COLORS = [
+  'hsl(210 70% 55%)', 'hsl(150 60% 45%)', 'hsl(30 80% 55%)',
+  'hsl(280 60% 55%)', 'hsl(0 70% 55%)', 'hsl(180 60% 45%)',
+  'hsl(60 70% 45%)', 'hsl(330 60% 55%)',
+];
+
+interface PolygonVertex {
+  x: number;
+  y: number;
+}
+
+/** Get the polygon for a workspace in a section: saved or computed default rectangle */
+function getWorkspacePolygon(
+  section: CustomSection,
+  proj: SectionWallProjection,
+): PolygonVertex[] {
+  // Check for saved polygon
+  const saved = section.polygons?.find(p => p.id === proj.workspaceId);
+  if (saved && saved.vertices.length >= 3) {
+    return saved.vertices.map(v => ({ x: v.x, y: v.y }));
+  }
+  // Default rectangular projection
+  return [
+    { x: proj.hStart, y: proj.zBase },
+    { x: proj.hEnd, y: proj.zBase },
+    { x: proj.hEnd, y: proj.zTop },
+    { x: proj.hStart, y: proj.zTop },
+  ];
+}
+
+/** Shoelace polygon area */
+function polygonAreaCalc(vertices: PolygonVertex[]): number {
+  if (vertices.length < 3) return 0;
+  let area = 0;
+  for (let i = 0; i < vertices.length; i++) {
+    const j = (i + 1) % vertices.length;
+    area += vertices[i].x * vertices[j].y - vertices[j].x * vertices[i].y;
+  }
+  return Math.abs(area) / 2;
+}
 
 interface SectionGridProps {
   section: CustomSection;
@@ -85,13 +126,19 @@ interface SectionGridProps {
   rooms?: RoomData[];
   budgetName?: string;
   wallProjections?: SectionWallProjection[];
+  allSections?: CustomSection[];
+  onSectionsChange?: (sections: CustomSection[]) => void;
 }
 
-function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections }: SectionGridProps) {
+function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections, allSections, onSectionsChange }: SectionGridProps) {
   const gridContainerRef = useRef<HTMLDivElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
   const [gridMin, setGridMin] = useState(GRID_MIN);
   const [gridMax, setGridMax] = useState(GRID_MAX);
   const [zoomLevel, setZoomLevel] = useState(1);
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
+  const [editVertices, setEditVertices] = useState<PolygonVertex[]>([]);
+  const [draggingIdx, setDraggingIdx] = useState<number | null>(null);
   const gridCount = gridMax - gridMin + 1;
   const baseCellSize = 28;
   const cellSize = Math.round(baseCellSize * zoomLevel);
@@ -99,25 +146,17 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections 
   const totalW = margin.left + gridCount * cellSize + margin.right;
   const totalH = margin.top + gridCount * cellSize + margin.bottom;
 
-  // Determine axes labels and orientation based on section type
-  // vertical (Z): plan view → hAxis=X, vAxis=Y, origin top-left (Y increases downward)
-  // longitudinal (Y): elevation → hAxis=X, vAxis=Z, origin bottom-left (Z increases upward)
-  // transversal (X): elevation → hAxis=Y, vAxis=Z, origin bottom-left (Z increases upward)
   const isElevation = section.sectionType !== 'vertical';
   const hLabel = section.sectionType === 'transversal' ? 'Y' : 'X';
   const vLabel = section.sectionType === 'vertical' ? 'Y' : 'Z';
 
-  // For elevation views, we flip the vertical axis so 0 is at bottom
   const getVIndex = (val: number) => {
-    if (isElevation) {
-      return gridMax - val;
-    }
+    if (isElevation) return gridMax - val;
     return val - gridMin;
   };
 
   const getHIndex = (val: number) => val - gridMin;
 
-  // Scale info
   const scaleH = section.sectionType === 'transversal'
     ? (scaleConfig?.scaleY ?? 625)
     : (scaleConfig?.scaleX ?? 625);
@@ -125,7 +164,115 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections 
     ? (scaleConfig?.scaleZ ?? 250)
     : (scaleConfig?.scaleY ?? 625);
 
+  const scaleHm = scaleH / 1000;
+  const scaleVm = scaleV / 1000;
+
   const zoomOptions = [1, 1.5, 2, 2.5, 3];
+
+  // Convert grid coords to SVG pixel coords
+  const toSvg = useCallback((gx: number, gy: number) => ({
+    sx: margin.left + getHIndex(gx) * cellSize,
+    sy: margin.top + getVIndex(gy) * cellSize,
+  }), [cellSize, gridMin, gridMax, isElevation]);
+
+  // Convert SVG pixel coords back to grid coords (snapped)
+  const fromSvg = useCallback((px: number, py: number) => {
+    const gx = Math.round((px - margin.left) / cellSize + gridMin);
+    const gy = isElevation
+      ? Math.round(gridMax - (py - margin.top) / cellSize)
+      : Math.round((py - margin.top) / cellSize + gridMin);
+    return { gx, gy };
+  }, [cellSize, gridMin, gridMax, isElevation]);
+
+  // Select a workspace for editing
+  const selectWorkspace = (proj: SectionWallProjection) => {
+    if (selectedWorkspaceId === proj.workspaceId) {
+      setSelectedWorkspaceId(null);
+      setEditVertices([]);
+      return;
+    }
+    setSelectedWorkspaceId(proj.workspaceId);
+    const verts = getWorkspacePolygon(section, proj);
+    setEditVertices(verts);
+  };
+
+  // Drag vertex handling
+  const handleMouseDown = (idx: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setDraggingIdx(idx);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (draggingIdx === null || !svgRef.current) return;
+    const rect = svgRef.current.getBoundingClientRect();
+    const px = e.clientX - rect.left;
+    const py = e.clientY - rect.top;
+    const { gx, gy } = fromSvg(px, py);
+    const snappedX = Math.max(gridMin, Math.min(gridMax, gx));
+    const snappedY = Math.max(gridMin, Math.min(gridMax, gy));
+    if (snappedX !== editVertices[draggingIdx].x || snappedY !== editVertices[draggingIdx].y) {
+      const next = [...editVertices];
+      next[draggingIdx] = { x: snappedX, y: snappedY };
+      setEditVertices(next);
+    }
+  };
+
+  const handleMouseUp = () => setDraggingIdx(null);
+
+  // Add vertex to edited polygon
+  const addVertex = () => {
+    const last = editVertices[editVertices.length - 1];
+    setEditVertices([...editVertices, { x: (last?.x ?? 0) + 1, y: last?.y ?? 0 }]);
+  };
+
+  // Remove vertex
+  const removeVertex = (idx: number) => {
+    if (editVertices.length <= 3) return;
+    setEditVertices(editVertices.filter((_, i) => i !== idx));
+  };
+
+  // Save edited polygon back to section
+  const saveEditedPolygon = () => {
+    if (!selectedWorkspaceId || !allSections || !onSectionsChange) return;
+    if (editVertices.length < 3) { toast.error('Mínimo 3 vértices'); return; }
+
+    const proj = wallProjections?.find(p => p.workspaceId === selectedWorkspaceId);
+    const updatedSections = allSections.map(s => {
+      if (s.id !== section.id) return s;
+      const polys = [...(s.polygons || [])];
+      const existingIdx = polys.findIndex(p => p.id === selectedWorkspaceId);
+      const polyEntry: SectionPolygon = {
+        id: selectedWorkspaceId,
+        name: proj?.workspaceName || 'Espacio',
+        vertices: editVertices.map(v => ({ x: v.x, y: v.y, z: 0 })),
+      };
+      if (existingIdx >= 0) {
+        polys[existingIdx] = polyEntry;
+      } else {
+        polys.push(polyEntry);
+      }
+      return { ...s, polygons: polys };
+    });
+
+    onSectionsChange(updatedSections);
+    toast.success('Polígono de sección guardado');
+    setSelectedWorkspaceId(null);
+    setEditVertices([]);
+  };
+
+  // Reset to default rectangle
+  const resetToDefault = () => {
+    if (!selectedWorkspaceId || !wallProjections) return;
+    const proj = wallProjections.find(p => p.workspaceId === selectedWorkspaceId);
+    if (!proj) return;
+    setEditVertices([
+      { x: proj.hStart, y: proj.zBase },
+      { x: proj.hEnd, y: proj.zBase },
+      { x: proj.hEnd, y: proj.zTop },
+      { x: proj.hStart, y: proj.zTop },
+    ]);
+  };
 
   return (
     <div className="mt-2">
@@ -181,8 +328,41 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections 
           />
         </div>
       </div>
+
+      {/* Legend for workspaces in elevation sections */}
+      {isElevation && wallProjections && wallProjections.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 items-center px-2 py-1">
+          <span className="text-[9px] text-muted-foreground font-medium">Espacios:</span>
+          {wallProjections.map((proj, pi) => {
+            const isActive = selectedWorkspaceId === proj.workspaceId;
+            return (
+              <button
+                key={proj.workspaceId}
+                className={`flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded border transition-colors ${isActive ? 'bg-primary/15 border-primary font-semibold' : 'hover:bg-accent/50'}`}
+                style={{ borderColor: isActive ? undefined : PROJ_COLORS[pi % PROJ_COLORS.length] }}
+                onClick={() => selectWorkspace(proj)}
+                title={isActive ? 'Deseleccionar' : `Editar ${proj.workspaceName}`}
+              >
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: PROJ_COLORS[pi % PROJ_COLORS.length] }} />
+                {proj.workspaceName}
+                {isActive && <span className="text-primary ml-0.5">✎</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       <div ref={gridContainerRef} className="overflow-auto border border-border rounded-md bg-muted/20" style={{ maxHeight: zoomLevel > 1 ? '600px' : undefined }}>
-      <svg width={totalW} height={totalH} className="block">
+      <svg
+        ref={svgRef}
+        width={totalW}
+        height={totalH}
+        className="block"
+        style={{ cursor: draggingIdx !== null ? 'grabbing' : undefined }}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+      >
         {/* Checkerboard cells */}
         {Array.from({ length: gridCount }, (_, row) =>
           Array.from({ length: gridCount }, (_, col) => {
@@ -237,7 +417,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections 
           />
         )}
 
-        {/* H-axis labels (top) — every unit */}
+        {/* H-axis labels (top) */}
         {Array.from({ length: gridCount + 1 }, (_, i) => {
           const val = gridMin + i;
           return (
@@ -250,7 +430,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections 
               fontSize={val === 0 ? 10 : 7}
               fontWeight={val === 0 ? 700 : 400}
             >
-              {val}
+              {hLabel}{val}
             </text>
           );
         })}
@@ -266,7 +446,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections 
           {hLabel}
         </text>
 
-        {/* V-axis labels (left) — every unit */}
+        {/* V-axis labels (left) */}
         {Array.from({ length: gridCount + 1 }, (_, i) => {
           const val = isElevation ? (gridMax - i) : (gridMin + i);
           return (
@@ -279,7 +459,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections 
               fontSize={val === 0 ? 10 : 7}
               fontWeight={val === 0 ? 700 : 400}
             >
-              {val}
+              {vLabel}{val}
             </text>
           );
         })}
@@ -352,9 +532,9 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections 
                   area += poly[i].x * poly[j].y - poly[j].x * poly[i].y;
                 }
                 area = Math.abs(area) / 2;
-                const scaleHm = (scaleConfig?.scaleX ?? 625) / 1000;
-                const scaleVm = (scaleConfig?.scaleY ?? 625) / 1000;
-                const areaM2 = area * scaleHm * scaleVm;
+                const areaScaleHm = (scaleConfig?.scaleX ?? 625) / 1000;
+                const areaScaleVm = (scaleConfig?.scaleY ?? 625) / 1000;
+                const areaM2 = area * areaScaleHm * areaScaleVm;
 
                 const svgPts = poly.map(p => ({
                   x: margin.left + getHIndex(p.x) * cellSize,
@@ -371,7 +551,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections 
                       strokeDasharray="4 2"
                     />
 
-                    {/* Medidas de cada pared SOBRE la línea en azul */}
+                    {/* Wall measurements */}
                     {svgPts.map((pt, i) => {
                       const next = svgPts[(i + 1) % svgPts.length];
                       const currGrid = poly[i];
@@ -409,7 +589,31 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections 
                       );
                     })}
 
-                    {/* Nombre del polígono - color diferenciado */}
+                    {/* Wall numbers (positioned outward) */}
+                    {svgPts.map((pt, i) => {
+                      const next = svgPts[(i + 1) % svgPts.length];
+                      const mx = (pt.x + next.x) / 2;
+                      const my = (pt.y + next.y) / 2;
+                      const dx = next.x - pt.x;
+                      const dy = next.y - pt.y;
+                      const len = Math.sqrt(dx * dx + dy * dy) || 1;
+                      let nx = -dy / len;
+                      let ny = dx / len;
+                      const toCenter = (cxSvg - mx) * nx + (cySvg - my) * ny;
+                      if (toCenter > 0) { nx = -nx; ny = -ny; }
+                      const offX = mx + nx * 12;
+                      const offY = my + ny * 12;
+                      return (
+                        <g key={`wn-${room.id}-${i}`}>
+                          <circle cx={offX} cy={offY} r={6} fill="hsl(var(--muted-foreground))" />
+                          <text x={offX} y={offY} textAnchor="middle" dominantBaseline="central" fill="hsl(var(--primary-foreground))" fontSize="7" fontWeight="bold">
+                            {i + 1}
+                          </text>
+                        </g>
+                      );
+                    })}
+
+                    {/* Name + area label */}
                     <rect
                       x={cxSvg - 30}
                       y={cySvg - 12}
@@ -442,7 +646,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections 
                 );
               })}
 
-              {/* Cotas exteriores globales (arriba, derecha, abajo, izquierda) */}
+              {/* Global perimeter dimensions */}
               {hasGlobalBounds && (() => {
                 const off = 26;
                 const topY = globalTop - off;
@@ -455,19 +659,16 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections 
 
                 return (
                   <g className="pointer-events-none">
-                    {/* Arriba */}
                     <line x1={globalLeft} y1={topY} x2={globalRight} y2={topY} stroke="hsl(0 70% 50%)" strokeWidth={1.2} />
                     <line x1={globalLeft} y1={globalTop} x2={globalLeft} y2={topY} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
                     <line x1={globalRight} y1={globalTop} x2={globalRight} y2={topY} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
                     <text x={midX} y={topY - 5} textAnchor="middle" fontSize={perimFontSize} fontWeight={700} fill="hsl(0 70% 45%)">{globalWidthMm} mm</text>
 
-                    {/* Abajo */}
                     <line x1={globalLeft} y1={bottomY} x2={globalRight} y2={bottomY} stroke="hsl(0 70% 50%)" strokeWidth={1.2} />
                     <line x1={globalLeft} y1={globalBottom} x2={globalLeft} y2={bottomY} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
                     <line x1={globalRight} y1={globalBottom} x2={globalRight} y2={bottomY} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
                     <text x={midX} y={bottomY + 10} textAnchor="middle" fontSize={perimFontSize} fontWeight={700} fill="hsl(0 70% 45%)">{globalWidthMm} mm</text>
 
-                    {/* Izquierda */}
                     <line x1={leftX} y1={globalTop} x2={leftX} y2={globalBottom} stroke="hsl(0 70% 50%)" strokeWidth={1.2} />
                     <line x1={globalLeft} y1={globalTop} x2={leftX} y2={globalTop} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
                     <line x1={globalLeft} y1={globalBottom} x2={leftX} y2={globalBottom} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
@@ -483,7 +684,6 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections 
                       {globalHeightMm} mm
                     </text>
 
-                    {/* Derecha */}
                     <line x1={rightX} y1={globalTop} x2={rightX} y2={globalBottom} stroke="hsl(0 70% 50%)" strokeWidth={1.2} />
                     <line x1={globalRight} y1={globalTop} x2={rightX} y2={globalTop} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
                     <line x1={globalRight} y1={globalBottom} x2={rightX} y2={globalBottom} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
@@ -505,103 +705,301 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections 
           );
         })()}
 
-        {/* Wall projections for longitudinal/transversal sections */}
+        {/* ── Workspace polygons for longitudinal/transversal sections ── */}
         {isElevation && wallProjections && wallProjections.length > 0 && (() => {
-          const PROJ_COLORS = [
-            'hsl(210 70% 55%)', 'hsl(150 60% 45%)', 'hsl(30 80% 55%)',
-            'hsl(280 60% 55%)', 'hsl(0 70% 55%)', 'hsl(180 60% 45%)',
-          ];
-
           return (
             <>
               {wallProjections.map((proj, pi) => {
+                const isEditing = selectedWorkspaceId === proj.workspaceId;
                 const color = PROJ_COLORS[pi % PROJ_COLORS.length];
-                const x1 = margin.left + getHIndex(proj.hStart) * cellSize;
-                const x2 = margin.left + getHIndex(proj.hEnd) * cellSize;
-                const y1 = margin.top + getVIndex(proj.zTop) * cellSize;
-                const y2 = margin.top + getVIndex(proj.zBase) * cellSize;
+                
+                // Use saved polygon or default rectangle
+                const verts = isEditing ? editVertices : getWorkspacePolygon(section, proj);
+                if (verts.length < 3) return null;
 
-                const w = Math.abs(x2 - x1);
-                const h = Math.abs(y2 - y1);
-                const rx = Math.min(x1, x2);
-                const ry = Math.min(y1, y2);
+                const svgPts = verts.map(v => toSvg(v.x, v.y));
+                const points = svgPts.map(p => `${p.sx},${p.sy}`).join(' ');
 
-                const cx = rx + w / 2;
-                const cy = ry + h / 2;
+                // Centroid
+                const cx = verts.reduce((s, v) => s + v.x, 0) / verts.length;
+                const cy = verts.reduce((s, v) => s + v.y, 0) / verts.length;
+                const { sx: cxSvg, sy: cySvg } = toSvg(cx, cy);
 
-                // Dimension labels
-                const widthMm = Math.round(Math.abs(proj.hEnd - proj.hStart) * scaleH);
-                const heightMm = Math.round(Math.abs(proj.zTop - proj.zBase) * scaleV);
+                // Area
+                const areaVal = polygonAreaCalc(verts) * scaleHm * scaleVm;
                 const fontSize = Math.round(7 * Math.max(1, zoomLevel * 0.8));
 
                 return (
                   <g key={`proj-${proj.workspaceId}-${pi}`}>
-                    {/* Filled rectangle */}
-                    <rect
-                      x={rx} y={ry} width={w} height={h}
-                      fill={`${color} / 0.15`}
+                    {/* Filled polygon */}
+                    <polygon
+                      points={points}
+                      fill={`${color} / ${isEditing ? '0.25' : '0.15'}`}
                       stroke={color}
-                      strokeWidth={1.5}
-                      strokeDasharray="4 2"
+                      strokeWidth={isEditing ? 2.5 : 1.5}
+                      strokeDasharray={isEditing ? 'none' : '4 2'}
+                      className={isEditing ? '' : 'cursor-pointer'}
+                      onClick={() => !isEditing && selectWorkspace(proj)}
                     />
+
+                    {/* Edge measurements */}
+                    {verts.map((v, ei) => {
+                      const next = verts[(ei + 1) % verts.length];
+                      const { sx: x1, sy: y1 } = toSvg(v.x, v.y);
+                      const { sx: x2, sy: y2 } = toSvg(next.x, next.y);
+                      const mx = (x1 + x2) / 2;
+                      const my = (y1 + y2) / 2;
+                      const dx = x2 - x1;
+                      const dy = y2 - y1;
+                      const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+                      const rotAngle = (angle > 90 || angle < -90) ? angle + 180 : angle;
+                      const eLenMm = Math.round(Math.sqrt(
+                        ((next.x - v.x) * scaleHm) ** 2 + ((next.y - v.y) * scaleVm) ** 2
+                      ) * 1000);
+
+                      // Outward normal for label positioning
+                      const len = Math.sqrt(dx * dx + dy * dy) || 1;
+                      let nx = -dy / len;
+                      let ny = dx / len;
+                      if ((cxSvg - mx) * nx + (cySvg - my) * ny > 0) { nx = -nx; ny = -ny; }
+                      const offPx = isEditing ? 14 : 10;
+
+                      return (
+                        <text
+                          key={`emm-${proj.workspaceId}-${ei}`}
+                          x={mx + nx * offPx}
+                          y={my + ny * offPx}
+                          textAnchor="middle"
+                          dominantBaseline="central"
+                          transform={`rotate(${rotAngle}, ${mx + nx * offPx}, ${my + ny * offPx})`}
+                          fontSize={fontSize}
+                          fontWeight={700}
+                          fill={color}
+                          className="pointer-events-none select-none"
+                        >
+                          {eLenMm} mm
+                        </text>
+                      );
+                    })}
+
+                    {/* Vertex labels with coordinates */}
+                    {verts.map((v, vi) => {
+                      const { sx, sy } = toSvg(v.x, v.y);
+                      return (
+                        <text
+                          key={`vl-${proj.workspaceId}-${vi}`}
+                          x={sx}
+                          y={sy - (isEditing ? 10 : 7)}
+                          textAnchor="middle"
+                          fontSize={6}
+                          fontWeight={600}
+                          fill={color}
+                          className="pointer-events-none select-none"
+                        >
+                          {hLabel}{v.x},{vLabel}{v.y}
+                        </text>
+                      );
+                    })}
 
                     {/* Name label */}
                     <rect
-                      x={cx - 28} y={cy - 10}
-                      width={56} height={20}
+                      x={cxSvg - 30}
+                      y={cySvg - 10}
+                      width={60}
+                      height={20}
                       rx={3}
                       fill="hsl(45 100% 50% / 0.85)"
+                      className={isEditing ? '' : 'cursor-pointer'}
+                      onClick={() => !isEditing && selectWorkspace(proj)}
                     />
                     <text
-                      x={cx} y={cy - 1}
+                      x={cxSvg} y={cySvg - 1}
                       textAnchor="middle"
                       fontSize={fontSize}
                       fontWeight={700}
                       fill="hsl(0 0% 10%)"
+                      className="pointer-events-none select-none"
                     >
                       {proj.workspaceName}
                     </text>
                     <text
-                      x={cx} y={cy + 8}
+                      x={cxSvg} y={cySvg + 8}
                       textAnchor="middle"
                       fontSize={fontSize - 1}
                       fontWeight={500}
                       fill="hsl(0 0% 25%)"
+                      className="pointer-events-none select-none"
                     >
-                      {widthMm}×{heightMm}mm
+                      {areaVal.toFixed(2)} m²
                     </text>
 
-                    {/* Width dimension (top) */}
-                    <line x1={rx} y1={ry - 8} x2={rx + w} y2={ry - 8} stroke={color} strokeWidth={0.8} />
-                    <line x1={rx} y1={ry} x2={rx} y2={ry - 10} stroke={`${color} / 0.5`} strokeWidth={0.5} />
-                    <line x1={rx + w} y1={ry} x2={rx + w} y2={ry - 10} stroke={`${color} / 0.5`} strokeWidth={0.5} />
-                    <text x={cx} y={ry - 11} textAnchor="middle" fontSize={fontSize - 1} fontWeight={600} fill={color}>
-                      {widthMm} mm
-                    </text>
-
-                    {/* Height dimension (right) */}
-                    <line x1={rx + w + 8} y1={ry} x2={rx + w + 8} y2={ry + h} stroke={color} strokeWidth={0.8} />
-                    <line x1={rx + w} y1={ry} x2={rx + w + 10} y2={ry} stroke={`${color} / 0.5`} strokeWidth={0.5} />
-                    <line x1={rx + w} y1={ry + h} x2={rx + w + 10} y2={ry + h} stroke={`${color} / 0.5`} strokeWidth={0.5} />
-                    <text
-                      x={rx + w + 12} y={cy}
-                      textAnchor="middle"
-                      fontSize={fontSize - 1}
-                      fontWeight={600}
-                      fill={color}
-                      transform={`rotate(-90, ${rx + w + 12}, ${cy})`}
-                    >
-                      {heightMm} mm
-                    </text>
+                    {/* Draggable vertices when editing */}
+                    {isEditing && verts.map((v, vi) => {
+                      const { sx, sy } = toSvg(v.x, v.y);
+                      const isDragging = draggingIdx === vi;
+                      return (
+                        <g key={`dv-${vi}`}>
+                          <circle
+                            cx={sx} cy={sy}
+                            r={isDragging ? 7 : 5}
+                            fill={isDragging ? 'hsl(var(--destructive))' : color}
+                            stroke="white"
+                            strokeWidth={2}
+                            className="cursor-grab"
+                            onMouseDown={(e) => handleMouseDown(vi, e)}
+                          />
+                          <text
+                            x={sx} y={sy + 16}
+                            textAnchor="middle"
+                            fontSize={7}
+                            fontWeight={700}
+                            fill={color}
+                            className="pointer-events-none select-none"
+                          >
+                            V{vi + 1}
+                          </text>
+                        </g>
+                      );
+                    })}
                   </g>
                 );
               })}
+
+              {/* Global bounding dimensions for all projections */}
+              {(() => {
+                const allVerts: PolygonVertex[] = [];
+                for (const proj of wallProjections) {
+                  const verts = selectedWorkspaceId === proj.workspaceId
+                    ? editVertices
+                    : getWorkspacePolygon(section, proj);
+                  allVerts.push(...verts);
+                }
+                if (allVerts.length < 2) return null;
+                const xs = allVerts.map(v => v.x);
+                const ys = allVerts.map(v => v.y);
+                const bMinX = Math.min(...xs), bMaxX = Math.max(...xs);
+                const bMinY = Math.min(...ys), bMaxY = Math.max(...ys);
+                const totalWidthMm = Math.round((bMaxX - bMinX) * scaleH);
+                const totalHeightMm = Math.round((bMaxY - bMinY) * scaleV);
+                if (totalWidthMm <= 0 && totalHeightMm <= 0) return null;
+
+                const { sx: gleft, sy: gtop } = toSvg(bMinX, bMaxY);
+                const { sx: gright, sy: gbottom } = toSvg(bMaxX, bMinY);
+                const off = 26;
+                const perimFontSize = Math.round(8 * Math.max(1, zoomLevel * 0.8));
+                const midX = (gleft + gright) / 2;
+                const midY = (gtop + gbottom) / 2;
+
+                return (
+                  <g className="pointer-events-none">
+                    {totalWidthMm > 0 && (
+                      <>
+                        <line x1={gleft} y1={gtop - off} x2={gright} y2={gtop - off} stroke="hsl(0 70% 50%)" strokeWidth={1.2} />
+                        <line x1={gleft} y1={gtop} x2={gleft} y2={gtop - off - 4} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.5} />
+                        <line x1={gright} y1={gtop} x2={gright} y2={gtop - off - 4} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.5} />
+                        <text x={midX} y={gtop - off - 5} textAnchor="middle" fontSize={perimFontSize} fontWeight={700} fill="hsl(0 70% 45%)">{totalWidthMm} mm</text>
+                      </>
+                    )}
+                    {totalHeightMm > 0 && (
+                      <>
+                        <line x1={gright + off} y1={gtop} x2={gright + off} y2={gbottom} stroke="hsl(0 70% 50%)" strokeWidth={1.2} />
+                        <line x1={gright} y1={gtop} x2={gright + off + 4} y2={gtop} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.5} />
+                        <line x1={gright} y1={gbottom} x2={gright + off + 4} y2={gbottom} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.5} />
+                        <text
+                          x={gright + off + 8} y={midY}
+                          textAnchor="middle" fontSize={perimFontSize} fontWeight={700} fill="hsl(0 70% 45%)"
+                          transform={`rotate(-90, ${gright + off + 8}, ${midY})`}
+                        >{totalHeightMm} mm</text>
+                      </>
+                    )}
+                  </g>
+                );
+              })()}
             </>
           );
         })()}
 
       </svg>
       </div>
+
+      {/* Editing controls */}
+      {isElevation && selectedWorkspaceId && (
+        <div className="mt-2 border rounded-lg p-2 bg-muted/30 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold">
+              Editando: {wallProjections?.find(p => p.workspaceId === selectedWorkspaceId)?.workspaceName}
+            </span>
+            <Badge variant="secondary" className="text-[9px] h-4">
+              {editVertices.length} vértices · {(polygonAreaCalc(editVertices) * scaleHm * scaleVm).toFixed(2)} m²
+            </Badge>
+          </div>
+
+          {/* Vertex list */}
+          <div className="space-y-1">
+            {editVertices.map((v, i) => {
+              const nextV = editVertices[(i + 1) % editVertices.length];
+              const edgeMm = Math.round(Math.sqrt(((nextV.x - v.x) * scaleHm) ** 2 + ((nextV.y - v.y) * scaleVm) ** 2) * 1000);
+              return (
+                <div key={i} className="flex items-center gap-1">
+                  <span className="text-[9px] text-muted-foreground w-5 text-right font-mono">V{i + 1}</span>
+                  <div className="flex items-center gap-0.5">
+                    <span className="text-[9px] text-muted-foreground">{hLabel}=</span>
+                    <Input
+                      className="h-5 text-[10px] w-12"
+                      type="number"
+                      value={v.x}
+                      onChange={e => {
+                        const next = [...editVertices];
+                        next[i] = { ...next[i], x: parseFloat(e.target.value) || 0 };
+                        setEditVertices(next);
+                      }}
+                    />
+                  </div>
+                  <div className="flex items-center gap-0.5">
+                    <span className="text-[9px] text-muted-foreground">{vLabel}=</span>
+                    <Input
+                      className="h-5 text-[10px] w-12"
+                      type="number"
+                      value={v.y}
+                      onChange={e => {
+                        const next = [...editVertices];
+                        next[i] = { ...next[i], y: parseFloat(e.target.value) || 0 };
+                        setEditVertices(next);
+                      }}
+                    />
+                  </div>
+                  <span className="text-[8px] text-muted-foreground">→ {edgeMm}mm</span>
+                  {editVertices.length > 3 && (
+                    <Button variant="ghost" size="icon" className="h-4 w-4" onClick={() => removeVertex(i)}>
+                      <Trash2 className="h-2.5 w-2.5" />
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center gap-1 flex-wrap">
+            <Button variant="outline" size="sm" className="h-6 text-[10px] gap-0.5" onClick={addVertex}>
+              <Plus className="h-3 w-3" /> Vértice
+            </Button>
+            <Button variant="outline" size="sm" className="h-6 text-[10px] gap-0.5" onClick={resetToDefault}>
+              <RefreshCw className="h-3 w-3" /> Resetear
+            </Button>
+            <div className="ml-auto flex gap-1">
+              <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => { setSelectedWorkspaceId(null); setEditVertices([]); }}>
+                Cancelar
+              </Button>
+              <Button size="sm" className="h-6 text-[10px] gap-0.5" onClick={saveEditedPolygon} disabled={editVertices.length < 3}>
+                <Save className="h-3 w-3" /> Guardar
+              </Button>
+            </div>
+          </div>
+          <p className="text-[9px] text-muted-foreground">
+            Arrastra los vértices en la cuadrícula o edita las coordenadas manualmente. Útil para definir caídas de tejado.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -750,6 +1148,15 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
                     <Badge variant="secondary" className="text-[9px] h-4 shrink-0">
                       {section.axis}={section.axisValue}
                     </Badge>
+                    {/* Show count of workspace projections */}
+                    {section.sectionType !== 'vertical' && (() => {
+                      const projCount = wallProjectionsBySection?.get(section.id)?.length || 0;
+                      return projCount > 0 ? (
+                        <Badge variant="outline" className="text-[9px] h-4 shrink-0">
+                          {projCount} espacio{projCount !== 1 ? 's' : ''}
+                        </Badge>
+                      ) : null;
+                    })()}
                   </>
                 )}
               </div>
@@ -785,7 +1192,15 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
               )}
             </div>
             {gridVisible && (
-              <SectionGrid section={section} scaleConfig={scaleConfig} rooms={rooms} budgetName={budgetName} wallProjections={wallProjectionsBySection?.get(section.id)} />
+              <SectionGrid
+                section={section}
+                scaleConfig={scaleConfig}
+                rooms={rooms}
+                budgetName={budgetName}
+                wallProjections={wallProjectionsBySection?.get(section.id)}
+                allSections={sections}
+                onSectionsChange={onSectionsChange}
+              />
             )}
           </div>
         );

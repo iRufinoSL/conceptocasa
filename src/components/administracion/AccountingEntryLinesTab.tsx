@@ -181,6 +181,40 @@ export function AccountingEntryLinesTab({ onNavigateToEntry, onNavigateToAccount
     }
   };
 
+  const startEditing = (line: EntryLine) => {
+    setEditingId(line.id);
+    setEditValues({
+      line_date: line.line_date,
+      account_id: line.account_id,
+      description: line.description || '',
+    });
+  };
+
+  const cancelEditing = () => {
+    setEditingId(null);
+  };
+
+  const saveEditing = async () => {
+    if (!editingId) return;
+    try {
+      const { error } = await supabase
+        .from('accounting_entry_lines')
+        .update({
+          line_date: editValues.line_date,
+          account_id: editValues.account_id,
+          description: editValues.description || null,
+        })
+        .eq('id', editingId);
+      if (error) throw error;
+      toast.success('Apunte actualizado');
+      setEditingId(null);
+      fetchData();
+    } catch (error) {
+      console.error('Error updating line:', error);
+      toast.error('Error al actualizar el apunte');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">

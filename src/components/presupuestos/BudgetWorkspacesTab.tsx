@@ -664,11 +664,17 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             );
           })}
 
-          {/* ── Other rooms' polygons (background, clickable) ── */}
+          {/* ── Other rooms' polygons (background, clickable) with edge measurements ── */}
           {otherPolygons.map((op) => {
             const verts = op.vertices;
             if (verts.length < 3) return null;
             const areaVal = polygonArea(verts) * cellSizeM * cellSizeM;
+            // Build edges for measurements
+            const opEdges: Array<{ a: PolygonVertex; b: PolygonVertex }> = [];
+            for (let i = 1; i < verts.length; i++) opEdges.push({ a: verts[i - 1], b: verts[i] });
+            opEdges.push({ a: verts[verts.length - 1], b: verts[0] });
+            const opCx = verts.reduce((s, v) => s + v.x, 0) / verts.length;
+            const opCy = verts.reduce((s, v) => s + v.y, 0) / verts.length;
             return (
               <g key={`other-${op.id}`} className="cursor-pointer" onClick={() => onSwitchRoom?.(op.id)}>
                 <polygon
@@ -685,9 +691,37 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                       fill="hsl(200 80% 50%)" opacity={0.7} />
                   );
                 })}
+                {/* Edge measurements for other polygons */}
+                {opEdges.map(({ a, b }, ei) => {
+                  const { sx: ex1, sy: ey1 } = toSvg(a.x, a.y);
+                  const { sx: ex2, sy: ey2 } = toSvg(b.x, b.y);
+                  const eLenMm = Math.round(edgeLength(a, b) * cellSizeM * 1000);
+                  const emx = (ex1 + ex2) / 2;
+                  const emy = (ey1 + ey2) / 2;
+                  const edx = ex2 - ex1;
+                  const edy = ey2 - ey1;
+                  const eLen = Math.sqrt(edx * edx + edy * edy) || 1;
+                  let enx = -edy / eLen;
+                  let eny = edx / eLen;
+                  const { sx: ocsx, sy: ocsy } = toSvg(opCx, opCy);
+                  if (((ocsx - emx) * enx + (ocsy - emy) * eny) > 0) { enx = -enx; eny = -eny; }
+                  const eAngle = Math.atan2(edy, edx) * (180 / Math.PI);
+                  const eRot = (eAngle > 90 || eAngle < -90) ? eAngle + 180 : eAngle;
+                  const wallOff = 10;
+                  const wmx = emx + enx * wallOff;
+                  const wmy = emy + eny * wallOff;
+                  return (
+                    <text key={`oe-${op.id}-${ei}`} x={wmx} y={wmy} textAnchor="middle" dominantBaseline="central"
+                      transform={`rotate(${eRot}, ${wmx}, ${wmy})`}
+                      className="text-[6px] font-semibold select-none pointer-events-none"
+                      fill="hsl(200 80% 50% / 0.8)">
+                      {eLenMm} mm
+                    </text>
+                  );
+                })}
                 {(() => {
-                  const cx = verts.reduce((s, v) => s + v.x, 0) / verts.length;
-                  const cy = verts.reduce((s, v) => s + v.y, 0) / verts.length;
+                  const cx = opCx;
+                  const cy = opCy;
                   const { sx, sy } = toSvg(cx, cy);
                   return (
                     <>

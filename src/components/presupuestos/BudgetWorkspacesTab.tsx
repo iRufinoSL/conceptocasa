@@ -1519,6 +1519,12 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                               perimeterPolygon={getSectionPerimeter(r.vertical_section_id)}
                               pdfTitle="Espacio de trabajo"
                               pdfSubtitle={r.name}
+                              onWallClick={(idx) => {
+                                setSelectedWallMap(prev => ({ ...prev, [r.id]: idx }));
+                                if (!expandedIds.has(r.id)) {
+                                  setExpandedIds(prev => { const n = new Set(prev); n.add(r.id); return n; });
+                                }
+                              }}
                             />
                             <div className="flex items-center justify-between">
                               <div className="flex flex-wrap gap-1.5">

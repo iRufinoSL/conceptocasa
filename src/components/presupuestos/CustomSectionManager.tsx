@@ -102,7 +102,7 @@ function getWorkspacePolygon(
 ): PolygonVertex[] {
   // Check for saved polygon
   const saved = section.polygons?.find(p => p.id === proj.workspaceId);
-  if (saved && saved.vertices.length >= 3) {
+  if (saved && saved.vertices.length >= 1) {
     return saved.vertices.map(v => ({ x: v.x, y: v.y }));
   }
   // Default rectangular projection
@@ -112,6 +112,16 @@ function getWorkspacePolygon(
     { x: proj.hEnd, y: proj.zTop },
     { x: proj.hStart, y: proj.zTop },
   ];
+}
+
+/** Geometry type label based on vertex count */
+function geometryTypeLabel(count: number): string {
+  if (count === 0) return '—';
+  if (count === 1) return 'Punto';
+  if (count === 2) return 'Línea';
+  if (count === 3) return 'Triángulo';
+  if (count === 4) return 'Cuadrilátero';
+  return `Polígono (${count}v)`;
 }
 
 /** Shoelace polygon area */

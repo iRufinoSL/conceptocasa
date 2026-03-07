@@ -583,12 +583,34 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
         </div>
       </div>
 
-      {/* Legend for workspaces in elevation sections */}
-      {isElevation && wallProjections && wallProjections.length > 0 && (
+      {/* Placement dialog: auto or manual */}
+      {showPlacementDialog && wallProjections && (() => {
+        const diagProj = wallProjections.find(p => p.workspaceId === showPlacementDialog);
+        if (!diagProj) return null;
+        return (
+          <div className="flex items-center gap-2 px-2 py-2 bg-accent/30 border border-accent rounded-md">
+            <span className="text-xs font-medium">Ubicación de <strong>{diagProj.workspaceName}</strong>:</span>
+            <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1" onClick={() => startAutomatic(showPlacementDialog)}>
+              <MousePointer className="h-3 w-3" /> Automática
+            </Button>
+            <Button variant="default" size="sm" className="h-7 text-[10px] gap-1" onClick={() => startManual(showPlacementDialog)}>
+              <PenTool className="h-3 w-3" /> Manual
+            </Button>
+            <Button variant="ghost" size="sm" className="h-7 text-[10px]" onClick={() => setShowPlacementDialog(null)}>
+              Cancelar
+            </Button>
+          </div>
+        );
+      })()}
+
+      {/* Legend for workspaces */}
+      {wallProjections && wallProjections.length > 0 && (
         <div className="flex flex-wrap gap-1.5 items-center px-2 py-1">
           <span className="text-[9px] text-muted-foreground font-medium">Espacios:</span>
           {wallProjections.map((proj, pi) => {
             const isActive = selectedWorkspaceId === proj.workspaceId;
+            const savedPoly = section.polygons?.find(p => p.id === proj.workspaceId);
+            const vertCount = savedPoly?.vertices.length ?? 4;
             return (
               <button
                 key={proj.workspaceId}
@@ -599,6 +621,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
               >
                 <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: PROJ_COLORS[pi % PROJ_COLORS.length] }} />
                 {proj.workspaceName}
+                <span className="text-muted-foreground ml-0.5">({geometryTypeLabel(vertCount)})</span>
                 {isActive && <span className="text-primary ml-0.5">✎</span>}
               </button>
             );

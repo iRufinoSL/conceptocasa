@@ -740,78 +740,104 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             );
            })()}
 
-          {/* Edges between placed vertices */}
-          {/* Edges between placed vertices with mm dimensions */}
-          {vertices.map((v, i) => {
-            if (i === 0) return null;
-            const { sx: x1, sy: y1 } = toSvg(vertices[i - 1].x, vertices[i - 1].y);
-            const { sx: x2, sy: y2 } = toSvg(v.x, v.y);
-            const lenMm = Math.round(edgeLength(vertices[i - 1], v) * cellSizeM * 1000);
-            return (
-              <g key={`e-${i}`}>
-                <line x1={x1} y1={y1} x2={x2} y2={y2}
-                  stroke="hsl(200 80% 50%)" strokeWidth={2} />
-                <text x={(x1 + x2) / 2} y={(y1 + y2) / 2 - 5} textAnchor="middle"
-                  className="text-[7px] font-semibold select-none pointer-events-none"
-                  fill="hsl(200 80% 50%)">
-                  {lenMm} mm
-                </text>
-              </g>
-            );
-          })}
+          {/* ── Edges + dual dimension system ── */}
+          {(() => {
+            // Build all edges (including closing edge)
+            const allEdges: Array<{ a: PolygonVertex; b: PolygonVertex; idx: number }> = [];
+            for (let i = 1; i < vertices.length; i++) {
+              allEdges.push({ a: vertices[i - 1], b: vertices[i], idx: i });
+            }
+            if (vertices.length >= 3) {
+              allEdges.push({ a: vertices[vertices.length - 1], b: vertices[0], idx: 0 });
+            }
 
-          {/* Closing edge with mm dimension */}
-          {vertices.length >= 3 && (() => {
-            const { sx: x1, sy: y1 } = toSvg(vertices[vertices.length - 1].x, vertices[vertices.length - 1].y);
-            const { sx: x2, sy: y2 } = toSvg(vertices[0].x, vertices[0].y);
-            const closingMm = Math.round(closingLen * 1000);
-            return (
-              <g>
-                <line x1={x1} y1={y1} x2={x2} y2={y2}
-                  stroke={isClosed ? 'hsl(200 80% 50%)' : 'hsl(200 80% 50% / 0.5)'}
-                  strokeWidth={isClosed ? 2 : 1.5}
-                  strokeDasharray={isClosed ? 'none' : '4 3'} />
-                <text x={(x1 + x2) / 2} y={(y1 + y2) / 2 - 5} textAnchor="middle"
-                  className="text-[7px] font-semibold select-none pointer-events-none"
-                  fill="hsl(200 80% 50%)">
-                  {closingMm} mm
-                </text>
-              </g>
-            );
-           })()}
+            // Centroid for outward normal direction
+            const centX = vertices.length > 0 ? vertices.reduce((s, v) => s + v.x, 0) / vertices.length : 0;
+            const centY = vertices.length > 0 ? vertices.reduce((s, v) => s + v.y, 0) / vertices.length : 0;
 
-          {/* Bounding box dimension lines (mm) when polygon is closed */}
-          {isClosed && vertices.length >= 3 && (() => {
-            const bbox = polygonBBox(vertices);
-            const wMm = Math.round(bbox.w * cellSizeM * 1000);
-            const hMm = Math.round(bbox.h * cellSizeM * 1000);
-            const { sx: tlx, sy: tly } = toSvg(bbox.minX, originTopLeft ? bbox.minY : bbox.maxY);
-            const { sx: trx, sy: tryy } = toSvg(bbox.maxX, originTopLeft ? bbox.minY : bbox.maxY);
-            const { sx: blx, sy: bly } = toSvg(bbox.minX, originTopLeft ? bbox.maxY : bbox.minY);
-            const off = 18;
-            return (
-              <>
-                {/* Top horizontal dimension */}
-                <line x1={tlx} y1={tly - off} x2={trx} y2={tryy - off} stroke="hsl(var(--muted-foreground))" strokeWidth={0.8} />
-                <line x1={tlx} y1={tly - off - 4} x2={tlx} y2={tly - 2} stroke="hsl(var(--muted-foreground))" strokeWidth={0.5} />
-                <line x1={trx} y1={tryy - off - 4} x2={trx} y2={tryy - 2} stroke="hsl(var(--muted-foreground))" strokeWidth={0.5} />
-                <text x={(tlx + trx) / 2} y={tly - off - 4} textAnchor="middle"
-                  className="text-[7px] font-bold select-none pointer-events-none"
-                  fill="hsl(var(--muted-foreground))">
-                  {wMm} mm
-                </text>
-                {/* Left vertical dimension */}
-                <line x1={tlx - off} y1={tly} x2={blx - off} y2={bly} stroke="hsl(var(--muted-foreground))" strokeWidth={0.8} />
-                <line x1={tlx - off - 4} y1={tly} x2={tlx - 2} y2={tly} stroke="hsl(var(--muted-foreground))" strokeWidth={0.5} />
-                <line x1={blx - off - 4} y1={bly} x2={blx - 2} y2={bly} stroke="hsl(var(--muted-foreground))" strokeWidth={0.5} />
-                <text x={tlx - off - 4} y={(tly + bly) / 2} textAnchor="middle" dominantBaseline="central"
-                  transform={`rotate(-90, ${tlx - off - 4}, ${(tly + bly) / 2})`}
-                  className="text-[7px] font-bold select-none pointer-events-none"
-                  fill="hsl(var(--muted-foreground))">
-                  {hMm} mm
-                </text>
-              </>
-            );
+            return allEdges.map(({ a, b, idx }) => {
+              const { sx: x1, sy: y1 } = toSvg(a.x, a.y);
+              const { sx: x2, sy: y2 } = toSvg(b.x, b.y);
+              const lenMm = Math.round(edgeLength(a, b) * cellSizeM * 1000);
+              const isClosing = idx === 0 && allEdges.length > 1 && a === vertices[vertices.length - 1];
+              const mx = (x1 + x2) / 2;
+              const my = (y1 + y2) / 2;
+
+              // Outward normal (perpendicular away from centroid)
+              const dx = x2 - x1;
+              const dy = y2 - y1;
+              const len = Math.sqrt(dx * dx + dy * dy) || 1;
+              // Normal candidates: (-dy, dx) or (dy, -dx)
+              let nx = -dy / len;
+              let ny = dx / len;
+              // Check if this normal points outward (away from centroid)
+              const { sx: csx, sy: csy } = toSvg(centX, centY);
+              const toCenter = (csx - mx) * nx + (csy - my) * ny;
+              if (toCenter > 0) { nx = -nx; ny = -ny; }
+
+              // Rotation for labels on non-horizontal edges
+              const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+              const rotAngle = (angle > 90 || angle < -90) ? angle + 180 : angle;
+
+              // Outer dimension line (arista) - further from wall (28px offset)
+              const outerOff = 28;
+              const ox1 = x1 + nx * outerOff;
+              const oy1 = y1 + ny * outerOff;
+              const ox2 = x2 + nx * outerOff;
+              const oy2 = y2 + ny * outerOff;
+              const omx = (ox1 + ox2) / 2;
+              const omy = (oy1 + oy2) / 2;
+
+              // Inner wall label - closer to wall (10px offset)
+              const innerOff = 10;
+              const imx = mx + nx * innerOff;
+              const imy = my + ny * innerOff;
+
+              return (
+                <g key={`edge-${idx}-${a.x}-${a.y}`}>
+                  {/* Edge line */}
+                  <line x1={x1} y1={y1} x2={x2} y2={y2}
+                    stroke={isClosing && !isClosed ? 'hsl(200 80% 50% / 0.5)' : 'hsl(200 80% 50%)'}
+                    strokeWidth={isClosing && !isClosed ? 1.5 : 2}
+                    strokeDasharray={isClosing && !isClosed ? '4 3' : 'none'} />
+
+                  {/* Outer arista dimension line with ticks */}
+                  {isClosed && (
+                    <>
+                      <line x1={ox1} y1={oy1} x2={ox2} y2={oy2}
+                        stroke="hsl(var(--muted-foreground))" strokeWidth={0.7} />
+                      {/* Tick marks */}
+                      <line x1={x1 + nx * (outerOff - 4)} y1={y1 + ny * (outerOff - 4)}
+                        x2={x1 + nx * (outerOff + 4)} y2={y1 + ny * (outerOff + 4)}
+                        stroke="hsl(var(--muted-foreground))" strokeWidth={0.5} />
+                      <line x1={x2 + nx * (outerOff - 4)} y1={y2 + ny * (outerOff - 4)}
+                        x2={x2 + nx * (outerOff + 4)} y2={y2 + ny * (outerOff + 4)}
+                        stroke="hsl(var(--muted-foreground))" strokeWidth={0.5} />
+                      {/* Extension lines */}
+                      <line x1={x1} y1={y1} x2={x1 + nx * (outerOff + 4)} y2={y1 + ny * (outerOff + 4)}
+                        stroke="hsl(var(--muted-foreground) / 0.3)" strokeWidth={0.4} />
+                      <line x1={x2} y1={y2} x2={x2 + nx * (outerOff + 4)} y2={y2 + ny * (outerOff + 4)}
+                        stroke="hsl(var(--muted-foreground) / 0.3)" strokeWidth={0.4} />
+                      {/* Arista label */}
+                      <text x={omx + nx * 6} y={omy + ny * 6} textAnchor="middle" dominantBaseline="central"
+                        transform={`rotate(${rotAngle}, ${omx + nx * 6}, ${omy + ny * 6})`}
+                        className="text-[6px] font-bold select-none pointer-events-none"
+                        fill="hsl(var(--muted-foreground))">
+                        {lenMm} mm
+                      </text>
+                    </>
+                  )}
+
+                  {/* Inner wall label (closer to wall) */}
+                  <text x={imx} y={imy} textAnchor="middle" dominantBaseline="central"
+                    transform={`rotate(${rotAngle}, ${imx}, ${imy})`}
+                    className="text-[7px] font-semibold select-none pointer-events-none"
+                    fill="hsl(200 80% 50%)">
+                    {lenMm} mm
+                  </text>
+                </g>
+              );
+            });
           })()}
 
           {/* Preview line from last vertex to hover (only while drawing) */}

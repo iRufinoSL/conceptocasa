@@ -61,11 +61,12 @@ type GeometryType = 'cube' | 'prism' | 'pyramid';
 type FloorCeilingType = 'normal' | 'invisible' | 'shared';
 
 const WALL_TYPES = [
-  { value: 'external', label: 'Externa' },
-  { value: 'internal', label: 'Interna' },
-  { value: 'invisible', label: 'Invisible' },
-  { value: 'external_shared', label: 'Ext. compartida' },
-  { value: 'internal_shared', label: 'Int. compartida' },
+  { value: 'exterior', label: 'Exterior' },
+  { value: 'interior', label: 'Interior' },
+  { value: 'exterior_invisible', label: 'Ext. invisible' },
+  { value: 'exterior_compartida', label: 'Ext. compartida' },
+  { value: 'interior_compartida', label: 'Int. compartida' },
+  { value: 'interior_invisible', label: 'Int. invisible' },
 ];
 
 const FLOOR_CEILING_TYPES: { value: FloorCeilingType; label: string }[] = [

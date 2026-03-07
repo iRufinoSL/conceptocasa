@@ -370,7 +370,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName }: SectionGridPro
                       strokeDasharray="4 2"
                     />
 
-                    {/* Doble sistema de acotación por pared: exterior + cercana */}
+                    {/* Medidas de cada pared SOBRE la línea en azul */}
                     {svgPts.map((pt, i) => {
                       const next = svgPts[(i + 1) % svgPts.length];
                       const currGrid = poly[i];
@@ -380,15 +380,6 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName }: SectionGridPro
                       const my = (pt.y + next.y) / 2;
                       const dx = next.x - pt.x;
                       const dy = next.y - pt.y;
-                      const edgeLenSvg = Math.sqrt(dx * dx + dy * dy) || 1;
-
-                      let nx = -dy / edgeLenSvg;
-                      let ny = dx / edgeLenSvg;
-                      const toCenter = (cxSvg - mx) * nx + (cySvg - my) * ny;
-                      if (toCenter > 0) {
-                        nx = -nx;
-                        ny = -ny;
-                      }
 
                       const angle = Math.atan2(dy, dx) * (180 / Math.PI);
                       const rotAngle = (angle > 90 || angle < -90) ? angle + 180 : angle;
@@ -397,48 +388,27 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName }: SectionGridPro
                       const dyMm = (nextGrid.y - currGrid.y) * scaleV;
                       const wallLenMm = Math.round(Math.hypot(dxMm, dyMm));
 
-                      const outerOffset = 24;
-                      const innerOffset = 9;
-
-                      const ox1 = pt.x + nx * outerOffset;
-                      const oy1 = pt.y + ny * outerOffset;
-                      const ox2 = next.x + nx * outerOffset;
-                      const oy2 = next.y + ny * outerOffset;
-                      const omx = (ox1 + ox2) / 2;
-                      const omy = (oy1 + oy2) / 2;
-
-                      const imx = mx + nx * innerOffset;
-                      const imy = my + ny * innerOffset;
-
                       return (
                         <g key={`wall-mm-${room.id}-${i}`} className="pointer-events-none">
-                          {/* Cota exterior de la arista */}
-                          <line x1={ox1} y1={oy1} x2={ox2} y2={oy2} stroke="hsl(var(--muted-foreground))" strokeWidth={0.8} />
-                          <line x1={pt.x} y1={pt.y} x2={ox1} y2={oy1} stroke="hsl(var(--muted-foreground) / 0.45)" strokeWidth={0.55} />
-                          <line x1={next.x} y1={next.y} x2={ox2} y2={oy2} stroke="hsl(var(--muted-foreground) / 0.45)" strokeWidth={0.55} />
+                          {/* Fondo semitransparente para legibilidad */}
+                          <rect
+                            x={mx - 18}
+                            y={my - 6}
+                            width={36}
+                            height={12}
+                            rx={2}
+                            fill="hsl(220 90% 20% / 0.75)"
+                            transform={`rotate(${rotAngle}, ${mx}, ${my})`}
+                          />
                           <text
-                            x={omx + nx * 5}
-                            y={omy + ny * 5}
+                            x={mx}
+                            y={my}
                             textAnchor="middle"
                             dominantBaseline="central"
-                            transform={`rotate(${rotAngle}, ${omx + nx * 5}, ${omy + ny * 5})`}
-                            fontSize={7}
+                            transform={`rotate(${rotAngle}, ${mx}, ${my})`}
+                            fontSize={Math.round(7 * Math.max(1, zoomLevel * 0.8))}
                             fontWeight={700}
-                            fill="hsl(var(--muted-foreground))"
-                          >
-                            {wallLenMm} mm
-                          </text>
-
-                          {/* Medida de pared cercana */}
-                          <text
-                            x={imx}
-                            y={imy}
-                            textAnchor="middle"
-                            dominantBaseline="central"
-                            transform={`rotate(${rotAngle}, ${imx}, ${imy})`}
-                            fontSize={8}
-                            fontWeight={700}
-                            fill="hsl(var(--primary))"
+                            fill="hsl(210 100% 70%)"
                           >
                             {wallLenMm} mm
                           </text>
@@ -446,13 +416,22 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName }: SectionGridPro
                       );
                     })}
 
+                    {/* Nombre del polígono - color diferenciado */}
+                    <rect
+                      x={cxSvg - 30}
+                      y={cySvg - 12}
+                      width={60}
+                      height={22}
+                      rx={3}
+                      fill="hsl(45 100% 50% / 0.85)"
+                    />
                     <text
                       x={cxSvg}
-                      y={cySvg - 4}
+                      y={cySvg - 3}
                       textAnchor="middle"
-                      fontSize={8}
-                      fontWeight={600}
-                      fill="hsl(var(--primary))"
+                      fontSize={Math.round(8 * Math.max(1, zoomLevel * 0.7))}
+                      fontWeight={700}
+                      fill="hsl(0 0% 10%)"
                     >
                       {room.name}
                     </text>
@@ -460,8 +439,9 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName }: SectionGridPro
                       x={cxSvg}
                       y={cySvg + 7}
                       textAnchor="middle"
-                      fontSize={7}
-                      fill="hsl(var(--primary) / 0.8)"
+                      fontSize={Math.round(7 * Math.max(1, zoomLevel * 0.7))}
+                      fontWeight={600}
+                      fill="hsl(0 0% 15%)"
                     >
                       {areaM2.toFixed(2)} m²
                     </text>

@@ -675,15 +675,106 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
     const { sx: cxSvg, sy: cySvg } = toSvg(cx, cy);
     const areaVal = polygonAreaCalc(verts) * scaleHm * scaleVm;
 
+    const isVerticalSection = section.sectionType === 'vertical';
+
     return (
       <g key={`proj-${proj.workspaceId}-${pi}`}>
+        {/* Fill polygon — pointer-events-none in vertical sections so edges are clickable */}
         <polygon points={points}
           fill={hslWithAlpha(color, isEditingThis ? 0.25 : 0.12)}
-          stroke={color} strokeWidth={isEditingThis ? 2.5 : 1.5}
-          strokeDasharray={isEditingThis ? 'none' : '4 2'}
-          className={isEditingThis ? '' : 'cursor-pointer'}
-          onClick={() => !isEditingThis && selectWorkspace(proj)}
+          stroke="none"
+          className={isEditingThis || isVerticalSection ? '' : 'cursor-pointer'}
+          style={{ pointerEvents: (isVerticalSection && !isEditingThis) ? 'none' : undefined }}
+          onClick={() => !isEditingThis && !isVerticalSection && selectWorkspace(proj)}
         />
+
+        {/* ── Clickable wall edges for vertical (Z) sections ── */}
+        {isVerticalSection && !isEditingThis && verts.map((v, ei) => {
+          const next = verts[(ei + 1) % verts.length];
+          const { sx: x1, sy: y1 } = svgPts[ei];
+          const { sx: x2, sy: y2 } = svgPts[(ei + 1) % svgPts.length];
+          const emx = (x1 + x2) / 2;
+          const emy = (y1 + y2) / 2;
+          const edx = x2 - x1;
+          const edy = y2 - y1;
+
+          const edgeDxGrid = Math.abs(next.x - v.x);
+          const edgeDyGrid = Math.abs(next.y - v.y);
+          const isHoriz = edgeDxGrid >= edgeDyGrid;
+          const isThisWallSelected = wallAssignInfo?.roomId === proj.workspaceId && wallAssignInfo?.wallIndex === ei;
+
+          const pseudoRoom = { id: proj.workspaceId, name: proj.workspaceName } as RoomData;
+
+          return (
+            <g key={`wall-edge-${proj.workspaceId}-${ei}`}>
+              {/* Invisible thick clickable line */}
+              <line
+                x1={x1} y1={y1} x2={x2} y2={y2}
+                stroke="transparent" strokeWidth={14}
+                className="cursor-pointer"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleWallEdgeClick(pseudoRoom, ei, v, next, emx, emy);
+                }}
+              />
+              {/* Visible edge line — highlight if selected */}
+              <line
+                x1={x1} y1={y1} x2={x2} y2={y2}
+                stroke={isThisWallSelected ? (isHoriz ? 'hsl(150 70% 40%)' : 'hsl(30 80% 50%)') : color}
+                strokeWidth={isThisWallSelected ? 3 : 1.5}
+                strokeDasharray={isThisWallSelected ? 'none' : '4 2'}
+                className="pointer-events-none"
+              />
+              {/* Wall number badge */}
+              {(() => {
+                const len = Math.sqrt(edx * edx + edy * edy) || 1;
+                let wnx = -edy / len;
+                let wny = edx / len;
+                const toCenter = (cxSvg - emx) * wnx + (cySvg - emy) * wny;
+                if (toCenter > 0) { wnx = -wnx; wny = -wny; }
+                const offX = emx + wnx * 12;
+                const offY = emy + wny * 12;
+                return (
+                  <>
+                    <circle cx={offX} cy={offY} r={6}
+                      fill={isThisWallSelected ? (isHoriz ? 'hsl(150 70% 40%)' : 'hsl(30 80% 50%)') : 'hsl(var(--muted-foreground))'}
+                      className="cursor-pointer"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleWallEdgeClick(pseudoRoom, ei, v, next, emx, emy);
+                      }}
+                    />
+                    <text x={offX} y={offY} textAnchor="middle" dominantBaseline="central" fill="hsl(var(--primary-foreground))" fontSize="7" fontWeight="bold" className="pointer-events-none select-none">
+                      {ei + 1}
+                    </text>
+                  </>
+                );
+              })()}
+              {/* Section type hint on selected wall */}
+              {isThisWallSelected && (
+                <text
+                  x={emx} y={emy + 14}
+                  textAnchor="middle" fontSize={7} fontWeight={700}
+                  fill={isHoriz ? 'hsl(150 70% 30%)' : 'hsl(30 80% 40%)'}
+                  className="pointer-events-none select-none"
+                >
+                  {isHoriz ? '→ Longitudinal Y' : '→ Transversal X'}
+                </text>
+              )}
+            </g>
+          );
+        })}
+
+        {/* Non-vertical sections: draw stroke on polygon */}
+        {!isVerticalSection && (
+          <polygon points={points}
+            fill="none"
+            stroke={color} strokeWidth={isEditingThis ? 2.5 : 1.5}
+            strokeDasharray={isEditingThis ? 'none' : '4 2'}
+            className="pointer-events-none"
+          />
+        )}
+
         {/* Edge measurements */}
         {verts.map((v, ei) => {
           const next = verts[(ei + 1) % verts.length];
@@ -720,6 +811,27 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
             className="pointer-events-none select-none"
           >{hLabel}{v.x},{vLabel}{v.y}</text>
         ))}
+
+        {/* Ceiling assignment button (vertical sections only) */}
+        {isVerticalSection && !isEditingThis && (
+          <>
+            <rect
+              x={cxSvg + 22} y={cySvg - 16} width={16} height={16} rx={3}
+              fill="hsl(210 70% 55% / 0.8)" className="cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                setCeilingAssignRoom({ roomId: proj.workspaceId, roomName: proj.workspaceName });
+                setCeilingNewName('');
+                setCeilingNewValue('');
+              }}
+            />
+            <text
+              x={cxSvg + 30} y={cySvg - 8} textAnchor="middle" fontSize={8} fontWeight={700}
+              fill="white" className="pointer-events-none select-none"
+            >T</text>
+          </>
+        )}
+
         {/* Name + area label */}
         <rect x={cxSvg - 30} y={cySvg - 10} width={60} height={20} rx={3}
           fill="hsl(45 100% 50% / 0.85)"

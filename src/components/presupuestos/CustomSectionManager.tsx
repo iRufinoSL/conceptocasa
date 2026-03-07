@@ -135,6 +135,20 @@ function polygonAreaCalc(vertices: PolygonVertex[]): number {
   return Math.abs(area) / 2;
 }
 
+/** Info about which wall edge is being assigned to a section */
+interface WallAssignInfo {
+  roomId: string;
+  roomName: string;
+  wallIndex: number;
+  wallLenMm: number;
+  isHorizontal: boolean; // true = runs along X (constant Y) → longitudinal; false = runs along Y (constant X) → transversal
+  edgeAxisValue: number; // the Y or X value of the wall edge
+  vertexA: { x: number; y: number };
+  vertexB: { x: number; y: number };
+  svgMidX: number;
+  svgMidY: number;
+}
+
 interface SectionGridProps {
   section: CustomSection;
   scaleConfig?: ScaleConfig;
@@ -154,8 +168,14 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
   const [editVertices, setEditVertices] = useState<PolygonVertex[]>([]);
   const [draggingIdx, setDraggingIdx] = useState<number | null>(null);
-  const [drawingMode, setDrawingMode] = useState(false); // interactive click-to-draw
-  const [showPlacementDialog, setShowPlacementDialog] = useState<string | null>(null); // workspaceId asking auto/manual
+  const [drawingMode, setDrawingMode] = useState(false);
+  const [showPlacementDialog, setShowPlacementDialog] = useState<string | null>(null);
+  const [wallAssignInfo, setWallAssignInfo] = useState<WallAssignInfo | null>(null);
+  const [wallAssignNewName, setWallAssignNewName] = useState('');
+  const [wallAssignNewValue, setWallAssignNewValue] = useState('');
+  const [ceilingAssignRoom, setCeilingAssignRoom] = useState<{ roomId: string; roomName: string } | null>(null);
+  const [ceilingNewName, setCeilingNewName] = useState('');
+  const [ceilingNewValue, setCeilingNewValue] = useState('');
   const gridCount = gridMax - gridMin + 1;
   const baseCellSize = 28;
   const cellSize = Math.round(baseCellSize * zoomLevel);
@@ -321,6 +341,210 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
     setEditVertices([]);
     setDrawingMode(false);
   };
+
+  // ── Wall click handler: detect orientation, open assignment panel ──
+  const handleWallEdgeClick = useCallback((
+    room: RoomData,
+    wallIndex: number,
+    vertexA: { x: number; y: number },
+    vertexB: { x: number; y: number },
+    svgMidX: number,
+    svgMidY: number,
+  ) => {
+    const dxGrid = Math.abs(vertexB.x - vertexA.x);
+    const dyGrid = Math.abs(vertexB.y - vertexA.y);
+    const isHorizontal = dxGrid >= dyGrid;
+    const edgeAxisValue = isHorizontal
+      ? Math.round((vertexA.y + vertexB.y) / 2)
+      : Math.round((vertexA.x + vertexB.x) / 2);
+
+    const wallLenMm = Math.round(Math.hypot(
+      (vertexB.x - vertexA.x) * scaleH,
+      (vertexB.y - vertexA.y) * scaleV,
+    ));
+
+    setWallAssignInfo({
+      roomId: room.id,
+      roomName: room.name,
+      wallIndex,
+      wallLenMm,
+      isHorizontal,
+      edgeAxisValue,
+      vertexA,
+      vertexB,
+      svgMidX,
+      svgMidY,
+    });
+    setWallAssignNewName('');
+    setWallAssignNewValue(String(edgeAxisValue));
+  }, [scaleH, scaleV]);
+
+  // Assign wall to an existing section → auto-generate rectangle
+  const assignWallToSection = useCallback((targetSectionId: string) => {
+    if (!wallAssignInfo || !allSections || !onSectionsChange) return;
+    const targetSection = allSections.find(s => s.id === targetSectionId);
+    if (!targetSection) return;
+
+    const room = rooms?.find(r => r.id === wallAssignInfo.roomId);
+    const heightM = room?.height ?? 2.6;
+    const blockHMm = scaleConfig?.scaleZ ?? 250;
+    const heightBlocks = Math.round((heightM * 1000) / blockHMm);
+    const zBase = section.axisValue;
+    const zTop = zBase + heightBlocks;
+
+    const { vertexA, vertexB, isHorizontal } = wallAssignInfo;
+    let hStart: number, hEnd: number;
+    if (isHorizontal) {
+      hStart = Math.min(vertexA.x, vertexB.x);
+      hEnd = Math.max(vertexA.x, vertexB.x);
+    } else {
+      hStart = Math.min(vertexA.y, vertexB.y);
+      hEnd = Math.max(vertexA.y, vertexB.y);
+    }
+
+    const wallPolyEntry: SectionPolygon = {
+      id: `${wallAssignInfo.roomId}_wall${wallAssignInfo.wallIndex}`,
+      name: `${wallAssignInfo.roomName} P${wallAssignInfo.wallIndex + 1}`,
+      vertices: [
+        { x: hStart, y: zBase, z: 0 },
+        { x: hEnd, y: zBase, z: 0 },
+        { x: hEnd, y: zTop, z: 0 },
+        { x: hStart, y: zTop, z: 0 },
+      ],
+    };
+
+    const updatedSections = allSections.map(s => {
+      if (s.id !== targetSectionId) return s;
+      const polys = [...(s.polygons || [])];
+      const existingIdx = polys.findIndex(p => p.id === wallPolyEntry.id);
+      if (existingIdx >= 0) {
+        polys[existingIdx] = wallPolyEntry;
+      } else {
+        polys.push(wallPolyEntry);
+      }
+      return { ...s, polygons: polys };
+    });
+
+    onSectionsChange(updatedSections);
+    toast.success(`Pared ${wallAssignInfo.wallIndex + 1} asignada a ${targetSection.name}`);
+    setWallAssignInfo(null);
+  }, [wallAssignInfo, allSections, onSectionsChange, rooms, scaleConfig, section.axisValue]);
+
+  // Create a new section and assign the wall to it
+  const createSectionAndAssign = useCallback(() => {
+    if (!wallAssignInfo || !allSections || !onSectionsChange) return;
+    const name = wallAssignNewName.trim();
+    if (!name) { toast.error('Introduce un nombre para la sección'); return; }
+    const val = parseFloat(wallAssignNewValue) || wallAssignInfo.edgeAxisValue;
+
+    const sType = wallAssignInfo.isHorizontal ? 'longitudinal' : 'transversal';
+    const axis = wallAssignInfo.isHorizontal ? 'Y' : 'X';
+
+    const newSection: CustomSection = {
+      id: generateId(),
+      name,
+      sectionType: sType as any,
+      axis: axis as any,
+      axisValue: val,
+      polygons: [],
+    };
+
+    const updatedWithNew = [...allSections, newSection];
+
+    // Build wall polygon
+    const room = rooms?.find(r => r.id === wallAssignInfo.roomId);
+    const heightM = room?.height ?? 2.6;
+    const blockHMm = scaleConfig?.scaleZ ?? 250;
+    const heightBlocks = Math.round((heightM * 1000) / blockHMm);
+    const zBase = section.axisValue;
+    const zTop = zBase + heightBlocks;
+    const { vertexA, vertexB, isHorizontal } = wallAssignInfo;
+    let hStart: number, hEnd: number;
+    if (isHorizontal) {
+      hStart = Math.min(vertexA.x, vertexB.x);
+      hEnd = Math.max(vertexA.x, vertexB.x);
+    } else {
+      hStart = Math.min(vertexA.y, vertexB.y);
+      hEnd = Math.max(vertexA.y, vertexB.y);
+    }
+
+    const wallPolyEntry: SectionPolygon = {
+      id: `${wallAssignInfo.roomId}_wall${wallAssignInfo.wallIndex}`,
+      name: `${wallAssignInfo.roomName} P${wallAssignInfo.wallIndex + 1}`,
+      vertices: [
+        { x: hStart, y: zBase, z: 0 },
+        { x: hEnd, y: zBase, z: 0 },
+        { x: hEnd, y: zTop, z: 0 },
+        { x: hStart, y: zTop, z: 0 },
+      ],
+    };
+
+    const finalSections = updatedWithNew.map(s => {
+      if (s.id !== newSection.id) return s;
+      return { ...s, polygons: [wallPolyEntry] };
+    });
+
+    onSectionsChange(finalSections);
+    toast.success(`Pared ${wallAssignInfo.wallIndex + 1} asignada a nueva sección "${name}"`);
+    setWallAssignInfo(null);
+    setWallAssignNewName('');
+  }, [wallAssignInfo, wallAssignNewName, wallAssignNewValue, allSections, onSectionsChange, rooms, scaleConfig, section.axisValue]);
+
+  // ── Ceiling assignment ──
+  const assignCeilingToSection = useCallback((targetSectionId: string) => {
+    if (!ceilingAssignRoom || !allSections || !onSectionsChange) return;
+    const room = rooms?.find(r => r.id === ceilingAssignRoom.roomId);
+    if (!room || !room.floorPolygon || room.floorPolygon.length < 3) return;
+
+    const ceilingPoly: SectionPolygon = {
+      id: `${ceilingAssignRoom.roomId}_ceiling`,
+      name: `${ceilingAssignRoom.roomName} (Techo)`,
+      vertices: room.floorPolygon.map(v => ({ x: v.x, y: v.y, z: 0 })),
+    };
+
+    const updatedSections = allSections.map(s => {
+      if (s.id !== targetSectionId) return s;
+      const polys = [...(s.polygons || [])];
+      const existingIdx = polys.findIndex(p => p.id === ceilingPoly.id);
+      if (existingIdx >= 0) polys[existingIdx] = ceilingPoly;
+      else polys.push(ceilingPoly);
+      return { ...s, polygons: polys };
+    });
+
+    onSectionsChange(updatedSections);
+    toast.success(`Techo de ${ceilingAssignRoom.roomName} asignado`);
+    setCeilingAssignRoom(null);
+  }, [ceilingAssignRoom, allSections, onSectionsChange, rooms]);
+
+  const createCeilingSectionAndAssign = useCallback(() => {
+    if (!ceilingAssignRoom || !allSections || !onSectionsChange) return;
+    const name = ceilingNewName.trim();
+    if (!name) { toast.error('Introduce un nombre'); return; }
+    const val = parseFloat(ceilingNewValue) || 0;
+    const room = rooms?.find(r => r.id === ceilingAssignRoom.roomId);
+    if (!room || !room.floorPolygon) return;
+
+    const newSection: CustomSection = {
+      id: generateId(),
+      name,
+      sectionType: 'vertical',
+      axis: 'Z',
+      axisValue: val,
+      polygons: [],
+    };
+
+    const ceilingPoly: SectionPolygon = {
+      id: `${ceilingAssignRoom.roomId}_ceiling`,
+      name: `${ceilingAssignRoom.roomName} (Techo)`,
+      vertices: room.floorPolygon.map(v => ({ x: v.x, y: v.y, z: 0 })),
+    };
+
+    const finalSections = [...allSections, { ...newSection, polygons: [ceilingPoly] }];
+    onSectionsChange(finalSections);
+    toast.success(`Techo asignado a nueva sección "${name}"`);
+    setCeilingAssignRoom(null);
+    setCeilingNewName('');
+  }, [ceilingAssignRoom, ceilingNewName, ceilingNewValue, allSections, onSectionsChange, rooms]);
 
   // Reset to default rectangle
   const resetToDefault = () => {
@@ -822,15 +1046,14 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
 
                 return (
                   <g key={room.id}>
+                    {/* Fill polygon (no stroke — edges drawn individually below) */}
                     <polygon
                       points={points}
                       fill="hsl(var(--primary) / 0.12)"
-                      stroke="hsl(var(--primary))"
-                      strokeWidth={1.5}
-                      strokeDasharray="4 2"
+                      stroke="none"
                     />
 
-                    {/* Wall measurements */}
+                    {/* Wall edges — CLICKABLE to assign to Y/X section */}
                     {svgPts.map((pt, i) => {
                       const next = svgPts[(i + 1) % svgPts.length];
                       const currGrid = poly[i];
@@ -848,8 +1071,32 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                       const dyMm = (nextGrid.y - currGrid.y) * scaleV;
                       const wallLenMm = Math.round(Math.hypot(dxMm, dyMm));
 
+                      const isThisWallSelected = wallAssignInfo?.roomId === room.id && wallAssignInfo?.wallIndex === i;
+                      const edgeDxGrid = Math.abs(nextGrid.x - currGrid.x);
+                      const edgeDyGrid = Math.abs(nextGrid.y - currGrid.y);
+                      const isHoriz = edgeDxGrid >= edgeDyGrid;
+
                       return (
-                        <g key={`wall-mm-${room.id}-${i}`} className="pointer-events-none">
+                        <g key={`wall-mm-${room.id}-${i}`}>
+                          {/* Invisible thick clickable line */}
+                          <line
+                            x1={pt.x} y1={pt.y} x2={next.x} y2={next.y}
+                            stroke="transparent" strokeWidth={12}
+                            className="cursor-pointer"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleWallEdgeClick(room, i, currGrid, nextGrid, mx, my);
+                            }}
+                          />
+                          {/* Visible wall line — highlight if selected */}
+                          <line
+                            x1={pt.x} y1={pt.y} x2={next.x} y2={next.y}
+                            stroke={isThisWallSelected ? (isHoriz ? 'hsl(150 70% 40%)' : 'hsl(30 80% 50%)') : 'hsl(var(--primary))'}
+                            strokeWidth={isThisWallSelected ? 3 : 1.5}
+                            strokeDasharray={isThisWallSelected ? 'none' : '4 2'}
+                            className="pointer-events-none"
+                          />
+                          {/* Wall length label */}
                           <text
                             x={mx}
                             y={my}
@@ -861,36 +1108,65 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                             fill="hsl(210 100% 45%)"
                             stroke="white"
                             strokeWidth={0.3}
+                            className="pointer-events-none select-none"
                           >
                             {wallLenMm} mm
                           </text>
+                          {/* Wall number */}
+                          {(() => {
+                            const len = Math.sqrt(dx * dx + dy * dy) || 1;
+                            let wnx = -dy / len;
+                            let wny = dx / len;
+                            const toCenter = (cxSvg - mx) * wnx + (cySvg - my) * wny;
+                            if (toCenter > 0) { wnx = -wnx; wny = -wny; }
+                            const offX = mx + wnx * 12;
+                            const offY = my + wny * 12;
+                            return (
+                              <>
+                                <circle cx={offX} cy={offY} r={6}
+                                  fill={isThisWallSelected ? (isHoriz ? 'hsl(150 70% 40%)' : 'hsl(30 80% 50%)') : 'hsl(var(--muted-foreground))'}
+                                  className="cursor-pointer"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleWallEdgeClick(room, i, currGrid, nextGrid, mx, my);
+                                  }}
+                                />
+                                <text x={offX} y={offY} textAnchor="middle" dominantBaseline="central" fill="hsl(var(--primary-foreground))" fontSize="7" fontWeight="bold" className="pointer-events-none select-none">
+                                  {i + 1}
+                                </text>
+                              </>
+                            );
+                          })()}
+                          {/* Section type hint on selected wall */}
+                          {isThisWallSelected && (
+                            <text
+                              x={mx} y={my + 14}
+                              textAnchor="middle" fontSize={7} fontWeight={700}
+                              fill={isHoriz ? 'hsl(150 70% 30%)' : 'hsl(30 80% 40%)'}
+                              className="pointer-events-none select-none"
+                            >
+                              {isHoriz ? '→ Longitudinal Y' : '→ Transversal X'}
+                            </text>
+                          )}
                         </g>
                       );
                     })}
 
-                    {/* Wall numbers (positioned outward) */}
-                    {svgPts.map((pt, i) => {
-                      const next = svgPts[(i + 1) % svgPts.length];
-                      const mx = (pt.x + next.x) / 2;
-                      const my = (pt.y + next.y) / 2;
-                      const dx = next.x - pt.x;
-                      const dy = next.y - pt.y;
-                      const len = Math.sqrt(dx * dx + dy * dy) || 1;
-                      let nx = -dy / len;
-                      let ny = dx / len;
-                      const toCenter = (cxSvg - mx) * nx + (cySvg - my) * ny;
-                      if (toCenter > 0) { nx = -nx; ny = -ny; }
-                      const offX = mx + nx * 12;
-                      const offY = my + ny * 12;
-                      return (
-                        <g key={`wn-${room.id}-${i}`}>
-                          <circle cx={offX} cy={offY} r={6} fill="hsl(var(--muted-foreground))" />
-                          <text x={offX} y={offY} textAnchor="middle" dominantBaseline="central" fill="hsl(var(--primary-foreground))" fontSize="7" fontWeight="bold">
-                            {i + 1}
-                          </text>
-                        </g>
-                      );
-                    })}
+                    {/* Ceiling assignment button (center of polygon) */}
+                    <rect
+                      x={cxSvg + 22} y={cySvg - 16} width={16} height={16} rx={3}
+                      fill="hsl(210 70% 55% / 0.8)" className="cursor-pointer"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setCeilingAssignRoom({ roomId: room.id, roomName: room.name });
+                        setCeilingNewName('');
+                        setCeilingNewValue('');
+                      }}
+                    />
+                    <text
+                      x={cxSvg + 30} y={cySvg - 8} textAnchor="middle" fontSize={8} fontWeight={700}
+                      fill="white" className="pointer-events-none select-none"
+                    >T</text>
 
                     {/* Name + area label */}
                     <rect
@@ -1083,7 +1359,134 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
       </svg>
       </div>
 
-      {/* Drawing mode indicator */}
+      {/* ── Wall assignment panel ── */}
+      {wallAssignInfo && section.sectionType === 'vertical' && (() => {
+        const targetType = wallAssignInfo.isHorizontal ? 'longitudinal' : 'transversal';
+        const targetAxis = wallAssignInfo.isHorizontal ? 'Y' : 'X';
+        const candidateSections = (allSections || []).filter(s => s.sectionType === targetType);
+        const colorClass = wallAssignInfo.isHorizontal ? 'border-green-500/50 bg-green-50/50' : 'border-orange-500/50 bg-orange-50/50';
+
+        return (
+          <div className={`mt-1 p-2 border rounded-md ${colorClass} space-y-2`}>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold">
+                Pared {wallAssignInfo.wallIndex + 1} de {wallAssignInfo.roomName} ({wallAssignInfo.wallLenMm} mm)
+                <Badge variant="secondary" className="ml-1.5 text-[9px] h-4">
+                  {wallAssignInfo.isHorizontal ? 'Longitudinal (Y)' : 'Transversal (X)'}
+                </Badge>
+              </span>
+              <Button variant="ghost" size="sm" className="h-5 text-[9px]" onClick={() => setWallAssignInfo(null)}>Cerrar</Button>
+            </div>
+
+            <p className="text-[10px] text-muted-foreground">
+              Selecciona la sección {targetType} ({targetAxis}=?) donde se dibujará esta pared, o crea una nueva.
+            </p>
+
+            {/* Existing sections */}
+            {candidateSections.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {candidateSections.map(cs => (
+                  <Button
+                    key={cs.id}
+                    variant="outline"
+                    size="sm"
+                    className="h-6 text-[10px] gap-1"
+                    onClick={() => assignWallToSection(cs.id)}
+                  >
+                    {cs.name} ({cs.axis}={cs.axisValue})
+                  </Button>
+                ))}
+              </div>
+            )}
+
+            {/* Create new section inline */}
+            <div className="flex items-center gap-1.5">
+              <Input
+                className="h-6 text-[10px] w-28"
+                placeholder={`Nombre sección ${targetType}`}
+                value={wallAssignNewName}
+                onChange={e => setWallAssignNewName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && createSectionAndAssign()}
+              />
+              <div className="flex items-center gap-0.5">
+                <span className="text-[9px] text-muted-foreground">{targetAxis}=</span>
+                <Input
+                  className="h-6 text-[10px] w-14"
+                  type="number"
+                  value={wallAssignNewValue}
+                  onChange={e => setWallAssignNewValue(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && createSectionAndAssign()}
+                />
+              </div>
+              <Button size="sm" className="h-6 text-[10px] gap-0.5" onClick={createSectionAndAssign} disabled={!wallAssignNewName.trim()}>
+                <Plus className="h-3 w-3" /> Crear y asignar
+              </Button>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Ceiling assignment panel ── */}
+      {ceilingAssignRoom && section.sectionType === 'vertical' && (() => {
+        const verticalSections = (allSections || []).filter(s => s.sectionType === 'vertical' && s.id !== section.id);
+
+        return (
+          <div className="mt-1 p-2 border border-blue-500/50 bg-blue-50/50 rounded-md space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold">
+                Techo de {ceilingAssignRoom.roomName}
+                <Badge variant="secondary" className="ml-1.5 text-[9px] h-4">Sección Vertical Z</Badge>
+              </span>
+              <Button variant="ghost" size="sm" className="h-5 text-[9px]" onClick={() => setCeilingAssignRoom(null)}>Cerrar</Button>
+            </div>
+
+            <p className="text-[10px] text-muted-foreground">
+              Selecciona la sección vertical (Z=?) donde se ubicará el techo, o crea una nueva.
+            </p>
+
+            {/* Existing vertical sections */}
+            {verticalSections.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {verticalSections.map(vs => (
+                  <Button
+                    key={vs.id}
+                    variant="outline"
+                    size="sm"
+                    className="h-6 text-[10px] gap-1"
+                    onClick={() => assignCeilingToSection(vs.id)}
+                  >
+                    {vs.name} (Z={vs.axisValue})
+                  </Button>
+                ))}
+              </div>
+            )}
+
+            {/* Create new vertical section inline */}
+            <div className="flex items-center gap-1.5">
+              <Input
+                className="h-6 text-[10px] w-28"
+                placeholder="Nombre sección Z"
+                value={ceilingNewName}
+                onChange={e => setCeilingNewName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && createCeilingSectionAndAssign()}
+              />
+              <div className="flex items-center gap-0.5">
+                <span className="text-[9px] text-muted-foreground">Z=</span>
+                <Input
+                  className="h-6 text-[10px] w-14"
+                  type="number"
+                  value={ceilingNewValue}
+                  onChange={e => setCeilingNewValue(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && createCeilingSectionAndAssign()}
+                />
+              </div>
+              <Button size="sm" className="h-6 text-[10px] gap-0.5" onClick={createCeilingSectionAndAssign} disabled={!ceilingNewName.trim()}>
+                <Plus className="h-3 w-3" /> Crear y asignar
+              </Button>
+            </div>
+          </div>
+        );
+      })()}
       {drawingMode && (
         <div className="mt-1 px-2 py-1.5 bg-primary/10 border border-primary/30 rounded-md flex items-center gap-2">
           <PenTool className="h-3.5 w-3.5 text-primary animate-pulse" />

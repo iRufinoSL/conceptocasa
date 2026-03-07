@@ -988,7 +988,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                 <text x={sx} y={sy - 9} textAnchor="middle"
                   className="text-[7px] font-bold select-none pointer-events-none"
                   fill="hsl(200 80% 50%)">
-                  {i + 1} ({v.x},{v.y})
+                  {i + 1} ({hAxisLabel}{v.x},{vAxisLabel}{v.y})
                 </text>
               </g>
             );

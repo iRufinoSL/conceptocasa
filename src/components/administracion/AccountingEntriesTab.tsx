@@ -86,9 +86,10 @@ interface Props {
   highlightCode?: string | null;
   onHighlightHandled?: () => void;
   budgetId?: string;
+  onNavigateToAccount?: (accountId: string) => void;
 }
 
-export function AccountingEntriesTab({ highlightCode, onHighlightHandled, budgetId: fixedBudgetId }: Props) {
+export function AccountingEntriesTab({ highlightCode, onHighlightHandled, budgetId: fixedBudgetId, onNavigateToAccount }: Props) {
   const [entries, setEntries] = useState<AccountingEntry[]>([]);
   const [presupuestos, setPresupuestos] = useState<Presupuesto[]>([]);
   const [allPresupuestos, setAllPresupuestos] = useState<Presupuesto[]>([]);
@@ -604,6 +605,7 @@ export function AccountingEntriesTab({ highlightCode, onHighlightHandled, budget
             <AccountingEntryLinesEditor
               entry={entry}
               onUpdate={fetchData}
+              onNavigateToAccount={onNavigateToAccount}
             />
           </CardContent>
         </CollapsibleContent>
@@ -932,6 +934,7 @@ export function AccountingEntriesTab({ highlightCode, onHighlightHandled, budget
                 fetchData();
                 setSelectedEntryForLines(null);
               }}
+              onNavigateToAccount={onNavigateToAccount}
             />
           </DialogContent>
         </Dialog>

@@ -36,9 +36,10 @@ interface EntryLine {
 interface Props {
   entry: AccountingEntry;
   onUpdate: () => void;
+  onNavigateToAccount?: (accountId: string) => void;
 }
 
-export function AccountingEntryLinesEditor({ entry, onUpdate }: Props) {
+export function AccountingEntryLinesEditor({ entry, onUpdate, onNavigateToAccount }: Props) {
   const [lines, setLines] = useState<EntryLine[]>([]);
   const [accounts, setAccounts] = useState<AccountingAccount[]>([]);
   const [loading, setLoading] = useState(true);
@@ -353,7 +354,10 @@ export function AccountingEntryLinesEditor({ entry, onUpdate }: Props) {
               ) : (
                 <>
                   <TableCell>
-                    <div>
+                    <div 
+                      className={onNavigateToAccount ? "cursor-pointer hover:text-primary transition-colors" : ""}
+                      onClick={() => line.account && onNavigateToAccount?.(line.account.id)}
+                    >
                       <div className="font-medium">{line.account?.name}</div>
                       <div className="text-xs text-muted-foreground">{line.account?.account_type}</div>
                     </div>

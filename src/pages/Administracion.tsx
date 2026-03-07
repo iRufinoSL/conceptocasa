@@ -224,6 +224,7 @@ export default function Administracion() {
               key={entriesKey}
               highlightCode={highlightEntryCode}
               onHighlightHandled={() => setHighlightEntryCode(null)}
+              onNavigateToAccount={handleNavigateToAccount}
             />
           </TabsContent>
 

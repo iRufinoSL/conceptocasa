@@ -293,11 +293,15 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
   // Polygon is "closed" when it has >= 3 vertices and was explicitly closed by clicking first vertex
   const [isClosed, setIsClosed] = useState(() => vertices.length >= 3);
 
+  // At x1 the grid fits entirely; at higher zooms it grows and scrolls
   const baseCellSize = 28;
-  const cellSize = Math.round(baseCellSize * zoomLevel);
   const pad = 30;
+  const logicalW = gridWidth * baseCellSize + pad * 2;
+  const logicalH = gridHeight * baseCellSize + pad * 2;
+  const cellSize = Math.round(baseCellSize * zoomLevel);
   const svgW = gridWidth * cellSize + pad * 2;
   const svgH = gridHeight * cellSize + pad * 2;
+  const isZoomed = zoomLevel > 1;
 
   const toSvg = (gx: number, gy: number) => ({
     sx: pad + (gx - gridOffsetX) * cellSize,

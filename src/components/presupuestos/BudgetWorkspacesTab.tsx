@@ -293,11 +293,15 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
   // Polygon is "closed" when it has >= 3 vertices and was explicitly closed by clicking first vertex
   const [isClosed, setIsClosed] = useState(() => vertices.length >= 3);
 
+  // At x1 the grid fits entirely; at higher zooms it grows and scrolls
   const baseCellSize = 28;
-  const cellSize = Math.round(baseCellSize * zoomLevel);
   const pad = 30;
+  const logicalW = gridWidth * baseCellSize + pad * 2;
+  const logicalH = gridHeight * baseCellSize + pad * 2;
+  const cellSize = Math.round(baseCellSize * zoomLevel);
   const svgW = gridWidth * cellSize + pad * 2;
   const svgH = gridHeight * cellSize + pad * 2;
+  const isZoomed = zoomLevel > 1;
 
   const toSvg = (gx: number, gy: number) => ({
     sx: pad + (gx - gridOffsetX) * cellSize,
@@ -306,12 +310,21 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
       : pad + (gridHeight - (gy - gridOffsetY)) * cellSize,
   });
 
-  const fromSvg = (sx: number, sy: number) => ({
-    gx: Math.round((sx - pad) / cellSize + gridOffsetX),
-    gy: originTopLeft
-      ? Math.round((sy - pad) / cellSize + gridOffsetY)
-      : Math.round(gridOffsetY + gridHeight - (sy - pad) / cellSize),
-  });
+  const fromSvg = (screenX: number, screenY: number) => {
+    // When using viewBox (x1), screen coords differ from SVG coords — scale them
+    let sx = screenX, sy = screenY;
+    if (!isZoomed && svgRef.current) {
+      const rect = svgRef.current.getBoundingClientRect();
+      sx = screenX * (logicalW / rect.width);
+      sy = screenY * (logicalH / rect.height);
+    }
+    return {
+      gx: Math.round((sx - pad) / cellSize + gridOffsetX),
+      gy: originTopLeft
+        ? Math.round((sy - pad) / cellSize + gridOffsetY)
+        : Math.round(gridOffsetY + gridHeight - (sy - pad) / cellSize),
+    };
+  };
 
   const handleClick = (gx: number, gy: number) => {
     if (isClosed) return; // In closed/edit mode, no new vertices
@@ -447,13 +460,14 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
         </div>
       )}
 
-      <div ref={gridContainerRef} className="overflow-auto rounded border bg-background max-h-[400px]">
+      <div ref={gridContainerRef} className={`rounded border bg-background ${isZoomed ? 'overflow-auto max-h-[70vh]' : 'overflow-hidden'}`}>
         <svg
           ref={svgRef}
-          width={svgW}
-          height={svgH}
+          {...(isZoomed
+            ? { width: svgW, height: svgH, style: { minWidth: svgW, cursor: draggingIdx !== null ? 'grabbing' : undefined } }
+            : { viewBox: `0 0 ${logicalW} ${logicalH}`, style: { width: '100%', height: 'auto', cursor: draggingIdx !== null ? 'grabbing' : undefined } }
+          )}
           className="block"
-          style={{ minWidth: svgW, cursor: draggingIdx !== null ? 'grabbing' : undefined }}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}

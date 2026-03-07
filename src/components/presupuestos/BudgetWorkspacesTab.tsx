@@ -175,7 +175,7 @@ function PolygonPreviewWithWalls({
   const scale = Math.min((size - pad * 2) / (bbox.w || 1), (size - pad * 2) / (bbox.h || 1));
   const mapped = vertices.map(v => ({
     x: pad + (v.x - bbox.minX) * scale,
-    y: pad + (bbox.maxY - v.y) * scale,
+    y: pad + (v.y - bbox.minY) * scale,
   }));
   const points = mapped.map(p => `${p.x},${p.y}`).join(' ');
 

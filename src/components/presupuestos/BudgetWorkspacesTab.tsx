@@ -1650,14 +1650,15 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
 
                         {/* Walls — one per edge */}
                         {Array.from({ length: edgeCount }).map((_, i) => {
-                          const wall = roomWalls.find(w => w.wall_index === i);
+                          const dbWallIndex = i + 1;
+                          const wall = roomWalls.find(w => w.wall_index === dbWallIndex);
                           const edgeLen = poly ? edgeLength(poly[i], poly[(i + 1) % poly.length]) : null;
                           const isWallSelected = selectedWallMap[r.id] === i;
                           return (
                             <FaceRow
                               key={i}
                               label={`🧱 P${i + 1} ${wallLabel(i, edgeCount)}${edgeLen ? ` (${edgeLen.toFixed(2)}m)` : ''}`}
-                              type={wall?.wall_type || 'external'}
+                              type={normalizeWallType(wall?.wall_type)}
                               options={WALL_TYPES}
                               onChange={(v) => ensureAndUpdateWallType(r.id, i, v, wall?.id)}
                               highlighted={isWallSelected}

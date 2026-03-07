@@ -747,7 +747,35 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                 </text>
               </g>
             );
-          })()}
+           })()}
+
+          {/* ── Wall numbers on each edge (when polygon is closed) ── */}
+          {isClosed && vertices.length >= 3 && vertices.map((v, i) => {
+            const next = vertices[(i + 1) % vertices.length];
+            const { sx: x1, sy: y1 } = toSvg(v.x, v.y);
+            const { sx: x2, sy: y2 } = toSvg(next.x, next.y);
+            const mx = (x1 + x2) / 2;
+            const my = (y1 + y2) / 2;
+            // Offset outward from polygon centroid
+            const cx = vertices.reduce((s, vt) => s + vt.x, 0) / vertices.length;
+            const cy = vertices.reduce((s, vt) => s + vt.y, 0) / vertices.length;
+            const { sx: csx, sy: csy } = toSvg(cx, cy);
+            const dx = mx - csx;
+            const dy = my - csy;
+            const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+            const offX = mx + (dx / dist) * 14;
+            const offY = my + (dy / dist) * 14;
+            return (
+              <g key={`wn-${i}`} className="cursor-pointer" style={{ pointerEvents: 'all' }}
+                onClick={(e) => { e.stopPropagation(); }}>
+                <circle cx={offX} cy={offY} r={9} fill="hsl(200 80% 40%)" stroke="white" strokeWidth={1.5} />
+                <text x={offX} y={offY} textAnchor="middle" dominantBaseline="central"
+                  fontSize={10} fontWeight={700} fill="white" className="select-none pointer-events-none">
+                  {i + 1}
+                </text>
+              </g>
+            );
+          })}
 
           {/* Preview line from last vertex to hover (only while drawing) */}
           {!isClosed && vertices.length > 0 && hoverCell && !vertices.some(v => v.x === hoverCell.x && v.y === hoverCell.y) && (() => {

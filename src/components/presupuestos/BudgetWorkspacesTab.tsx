@@ -955,6 +955,124 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
               </g>
             );
           })}
+
+          {/* ── External perimeter dimension lines (total width & height of all polygons) ── */}
+          {(() => {
+            // Gather all polygon vertices (active + others)
+            const allVerts: PolygonVertex[] = [...vertices];
+            for (const op of otherPolygons) {
+              if (op.vertices.length >= 3) allVerts.push(...op.vertices);
+            }
+            if (allVerts.length < 3) return null;
+
+            const allXs = allVerts.map(v => v.x);
+            const allYs = allVerts.map(v => v.y);
+            const bMinX = Math.min(...allXs);
+            const bMaxX = Math.max(...allXs);
+            const bMinY = Math.min(...allYs);
+            const bMaxY = Math.max(...allYs);
+
+            const totalWidthMm = Math.round((bMaxX - bMinX) * cellSizeM * 1000);
+            const totalHeightMm = Math.round((bMaxY - bMinY) * cellSizeM * 1000);
+
+            if (totalWidthMm <= 0 && totalHeightMm <= 0) return null;
+
+            // SVG coordinates for corners
+            const { sx: tlX, sy: tlY } = toSvg(bMinX, bMinY);
+            const { sx: trX, sy: trY } = toSvg(bMaxX, bMinY);
+            const { sx: blX, sy: blY } = toSvg(bMinX, bMaxY);
+            const { sx: brX, sy: brY } = toSvg(bMaxX, bMaxY);
+
+            const dimOffset = 42; // offset outside the polygon area
+            const tickLen = 5;
+            const dimColor = "hsl(0 70% 50%)";
+
+            return (
+              <g className="pointer-events-none">
+                {/* ── Bottom horizontal dimension (total width) ── */}
+                {totalWidthMm > 0 && (() => {
+                  const y = Math.max(blY, brY) + dimOffset;
+                  return (
+                    <>
+                      {/* Extension lines */}
+                      <line x1={blX} y1={blY} x2={blX} y2={y + tickLen} stroke={dimColor} strokeWidth={0.4} opacity={0.4} />
+                      <line x1={brX} y1={brY} x2={brX} y2={y + tickLen} stroke={dimColor} strokeWidth={0.4} opacity={0.4} />
+                      {/* Dimension line */}
+                      <line x1={blX} y1={y} x2={brX} y2={y} stroke={dimColor} strokeWidth={1} />
+                      {/* Tick marks */}
+                      <line x1={blX} y1={y - tickLen} x2={blX} y2={y + tickLen} stroke={dimColor} strokeWidth={0.7} />
+                      <line x1={brX} y1={y - tickLen} x2={brX} y2={y + tickLen} stroke={dimColor} strokeWidth={0.7} />
+                      {/* Label */}
+                      <text x={(blX + brX) / 2} y={y + 12} textAnchor="middle" dominantBaseline="central"
+                        fontSize={Math.round(9 * Math.max(1, zoomLevel * 0.8))} fontWeight={800} fill={dimColor}>
+                        {totalWidthMm} mm
+                      </text>
+                    </>
+                  );
+                })()}
+
+                {/* ── Right vertical dimension (total height) ── */}
+                {totalHeightMm > 0 && (() => {
+                  const x = Math.max(trX, brX) + dimOffset;
+                  return (
+                    <>
+                      {/* Extension lines */}
+                      <line x1={trX} y1={trY} x2={x + tickLen} y2={trY} stroke={dimColor} strokeWidth={0.4} opacity={0.4} />
+                      <line x1={brX} y1={brY} x2={x + tickLen} y2={brY} stroke={dimColor} strokeWidth={0.4} opacity={0.4} />
+                      {/* Dimension line */}
+                      <line x1={x} y1={trY} x2={x} y2={brY} stroke={dimColor} strokeWidth={1} />
+                      {/* Tick marks */}
+                      <line x1={x - tickLen} y1={trY} x2={x + tickLen} y2={trY} stroke={dimColor} strokeWidth={0.7} />
+                      <line x1={x - tickLen} y1={brY} x2={x + tickLen} y2={brY} stroke={dimColor} strokeWidth={0.7} />
+                      {/* Label */}
+                      <text x={x + 14} y={(trY + brY) / 2} textAnchor="middle" dominantBaseline="central"
+                        transform={`rotate(90, ${x + 14}, ${(trY + brY) / 2})`}
+                        fontSize={Math.round(9 * Math.max(1, zoomLevel * 0.8))} fontWeight={800} fill={dimColor}>
+                        {totalHeightMm} mm
+                      </text>
+                    </>
+                  );
+                })()}
+
+                {/* ── Top horizontal dimension (total width) ── */}
+                {totalWidthMm > 0 && (() => {
+                  const y = Math.min(tlY, trY) - dimOffset;
+                  return (
+                    <>
+                      <line x1={tlX} y1={tlY} x2={tlX} y2={y - tickLen} stroke={dimColor} strokeWidth={0.4} opacity={0.4} />
+                      <line x1={trX} y1={trY} x2={trX} y2={y - tickLen} stroke={dimColor} strokeWidth={0.4} opacity={0.4} />
+                      <line x1={tlX} y1={y} x2={trX} y2={y} stroke={dimColor} strokeWidth={1} />
+                      <line x1={tlX} y1={y - tickLen} x2={tlX} y2={y + tickLen} stroke={dimColor} strokeWidth={0.7} />
+                      <line x1={trX} y1={y - tickLen} x2={trX} y2={y + tickLen} stroke={dimColor} strokeWidth={0.7} />
+                      <text x={(tlX + trX) / 2} y={y - 10} textAnchor="middle" dominantBaseline="central"
+                        fontSize={Math.round(9 * Math.max(1, zoomLevel * 0.8))} fontWeight={800} fill={dimColor}>
+                        {totalWidthMm} mm
+                      </text>
+                    </>
+                  );
+                })()}
+
+                {/* ── Left vertical dimension (total height) ── */}
+                {totalHeightMm > 0 && (() => {
+                  const x = Math.min(tlX, blX) - dimOffset;
+                  return (
+                    <>
+                      <line x1={tlX} y1={tlY} x2={x - tickLen} y2={tlY} stroke={dimColor} strokeWidth={0.4} opacity={0.4} />
+                      <line x1={blX} y1={blY} x2={x - tickLen} y2={blY} stroke={dimColor} strokeWidth={0.4} opacity={0.4} />
+                      <line x1={x} y1={tlY} x2={x} y2={blY} stroke={dimColor} strokeWidth={1} />
+                      <line x1={x - tickLen} y1={tlY} x2={x + tickLen} y2={tlY} stroke={dimColor} strokeWidth={0.7} />
+                      <line x1={x - tickLen} y1={blY} x2={x + tickLen} y2={blY} stroke={dimColor} strokeWidth={0.7} />
+                      <text x={x - 14} y={(tlY + blY) / 2} textAnchor="middle" dominantBaseline="central"
+                        transform={`rotate(-90, ${x - 14}, ${(tlY + blY) / 2})`}
+                        fontSize={Math.round(9 * Math.max(1, zoomLevel * 0.8))} fontWeight={800} fill={dimColor}>
+                        {totalHeightMm} mm
+                      </text>
+                    </>
+                  );
+                })()}
+              </g>
+            );
+          })()}
         </svg>
       </div>
 

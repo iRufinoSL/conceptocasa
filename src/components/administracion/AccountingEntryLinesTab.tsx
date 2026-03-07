@@ -52,6 +52,8 @@ export function AccountingEntryLinesTab({ onNavigateToEntry, onNavigateToAccount
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [viewMode, setViewMode] = useState<'list' | 'grouped'>('list');
   const [searchQuery, setSearchQuery] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValues, setEditValues] = useState<{ line_date: string; account_id: string; description: string }>({ line_date: '', account_id: '', description: '' });
 
   useEffect(() => {
     fetchData();

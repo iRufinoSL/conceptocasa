@@ -168,8 +168,14 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
   const [editVertices, setEditVertices] = useState<PolygonVertex[]>([]);
   const [draggingIdx, setDraggingIdx] = useState<number | null>(null);
-  const [drawingMode, setDrawingMode] = useState(false); // interactive click-to-draw
-  const [showPlacementDialog, setShowPlacementDialog] = useState<string | null>(null); // workspaceId asking auto/manual
+  const [drawingMode, setDrawingMode] = useState(false);
+  const [showPlacementDialog, setShowPlacementDialog] = useState<string | null>(null);
+  const [wallAssignInfo, setWallAssignInfo] = useState<WallAssignInfo | null>(null);
+  const [wallAssignNewName, setWallAssignNewName] = useState('');
+  const [wallAssignNewValue, setWallAssignNewValue] = useState('');
+  const [ceilingAssignRoom, setCeilingAssignRoom] = useState<{ roomId: string; roomName: string } | null>(null);
+  const [ceilingNewName, setCeilingNewName] = useState('');
+  const [ceilingNewValue, setCeilingNewValue] = useState('');
   const gridCount = gridMax - gridMin + 1;
   const baseCellSize = 28;
   const cellSize = Math.round(baseCellSize * zoomLevel);

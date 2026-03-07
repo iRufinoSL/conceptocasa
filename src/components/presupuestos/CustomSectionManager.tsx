@@ -135,6 +135,20 @@ function polygonAreaCalc(vertices: PolygonVertex[]): number {
   return Math.abs(area) / 2;
 }
 
+/** Info about which wall edge is being assigned to a section */
+interface WallAssignInfo {
+  roomId: string;
+  roomName: string;
+  wallIndex: number;
+  wallLenMm: number;
+  isHorizontal: boolean; // true = runs along X (constant Y) → longitudinal; false = runs along Y (constant X) → transversal
+  edgeAxisValue: number; // the Y or X value of the wall edge
+  vertexA: { x: number; y: number };
+  vertexB: { x: number; y: number };
+  svgMidX: number;
+  svgMidY: number;
+}
+
 interface SectionGridProps {
   section: CustomSection;
   scaleConfig?: ScaleConfig;

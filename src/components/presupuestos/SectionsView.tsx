@@ -86,7 +86,7 @@ function computeWallProjections(
     const axisVal = section.axisValue;
 
     for (const room of rooms) {
-      if (!room.floorPolygon || room.floorPolygon.length < 3) continue;
+      if (!room.floorPolygon || room.floorPolygon.length < 2) continue;
 
       const poly = room.floorPolygon;
       const zBase = room.floorId ? (floorBaseZMap.get(room.floorId) ?? 0) : 0;
@@ -96,7 +96,17 @@ function computeWallProjections(
 
       if (section.sectionType === 'longitudinal') {
         // Section cuts at Y=axisVal: find X range of edges on this Y
-        const intersections = findPolygonIntersectionsAtAxis(poly, 'y', axisVal);
+        let intersections: number[];
+        if (poly.length === 2) {
+          // Line segment: check if both points are at Y=axisVal
+          if (poly[0].y === axisVal && poly[1].y === axisVal) {
+            intersections = [poly[0].x, poly[1].x];
+          } else {
+            intersections = findPolygonIntersectionsAtAxis(poly, 'y', axisVal);
+          }
+        } else {
+          intersections = findPolygonIntersectionsAtAxis(poly, 'y', axisVal);
+        }
         if (intersections.length >= 2) {
           const hMin = Math.min(...intersections);
           const hMax = Math.max(...intersections);
@@ -105,6 +115,16 @@ function computeWallProjections(
             workspaceName: room.name,
             hStart: hMin,
             hEnd: hMax,
+            zBase,
+            zTop,
+          });
+        } else if (intersections.length === 1 && poly.length === 2) {
+          // Single point intersection for a line - still show as a point/line
+          projections.push({
+            workspaceId: room.id,
+            workspaceName: room.name,
+            hStart: poly[0].x,
+            hEnd: poly[1].x,
             zBase,
             zTop,
           });

@@ -1,0 +1,1 @@
+ALTER TABLE public.budget_floor_plan_walls DROP CONSTRAINT budget_floor_plan_walls_wall_index_check;

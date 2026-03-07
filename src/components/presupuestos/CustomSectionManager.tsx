@@ -154,6 +154,8 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
   const [editVertices, setEditVertices] = useState<PolygonVertex[]>([]);
   const [draggingIdx, setDraggingIdx] = useState<number | null>(null);
+  const [drawingMode, setDrawingMode] = useState(false); // interactive click-to-draw
+  const [showPlacementDialog, setShowPlacementDialog] = useState<string | null>(null); // workspaceId asking auto/manual
   const gridCount = gridMax - gridMin + 1;
   const baseCellSize = 28;
   const cellSize = Math.round(baseCellSize * zoomLevel);
@@ -199,17 +201,60 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
     return { gx, gy };
   }, [cellSize, gridMin, gridMax, isElevation]);
 
-  // Select a workspace for editing
+  // Select a workspace for editing — show auto/manual dialog
   const selectWorkspace = (proj: SectionWallProjection) => {
     if (selectedWorkspaceId === proj.workspaceId) {
       setSelectedWorkspaceId(null);
       setEditVertices([]);
+      setDrawingMode(false);
       return;
     }
-    setSelectedWorkspaceId(proj.workspaceId);
-    const verts = getWorkspacePolygon(section, proj);
-    setEditVertices(verts);
+    // Show placement dialog
+    setShowPlacementDialog(proj.workspaceId);
   };
+
+  // Start editing with automatic placement (use default polygon)
+  const startAutomatic = (workspaceId: string) => {
+    const proj = wallProjections?.find(p => p.workspaceId === workspaceId);
+    if (!proj) return;
+    setSelectedWorkspaceId(workspaceId);
+    setEditVertices(getWorkspacePolygon(section, proj));
+    setDrawingMode(false);
+    setShowPlacementDialog(null);
+  };
+
+  // Start editing with manual drawing (empty, user clicks to add vertices)
+  const startManual = (workspaceId: string) => {
+    setSelectedWorkspaceId(workspaceId);
+    setEditVertices([]);
+    setDrawingMode(true);
+    setShowPlacementDialog(null);
+    toast.info('Haz clic en la cuadrícula para marcar vértices. Doble clic para cerrar la figura.');
+  };
+
+  // Handle grid click in drawing mode — add vertex
+  const handleGridClick = useCallback((e: React.MouseEvent) => {
+    if (!drawingMode || !svgRef.current) return;
+    const rect = svgRef.current.getBoundingClientRect();
+    const px = e.clientX - rect.left;
+    const py = e.clientY - rect.top;
+    const { gx, gy } = fromSvg(px, py);
+    const snappedX = Math.max(gridMin, Math.min(gridMax, gx));
+    const snappedY = Math.max(gridMin, Math.min(gridMax, gy));
+    setEditVertices(prev => [...prev, { x: snappedX, y: snappedY }]);
+  }, [drawingMode, fromSvg, gridMin, gridMax]);
+
+  // Handle double-click in drawing mode — close the shape
+  const handleGridDblClick = useCallback((e: React.MouseEvent) => {
+    if (!drawingMode) return;
+    e.preventDefault();
+    e.stopPropagation();
+    // If we have at least 1 vertex, close drawing
+    if (editVertices.length >= 1) {
+      setDrawingMode(false);
+      toast.success(`Figura cerrada: ${geometryTypeLabel(editVertices.length)}`);
+    }
+  }, [drawingMode, editVertices.length]);
 
   // Drag vertex handling
   const handleMouseDown = (idx: number, e: React.MouseEvent) => {
@@ -243,14 +288,14 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
 
   // Remove vertex
   const removeVertex = (idx: number) => {
-    if (editVertices.length <= 2) return;
+    if (editVertices.length <= 1) return;
     setEditVertices(editVertices.filter((_, i) => i !== idx));
   };
 
   // Save edited polygon back to section
   const saveEditedPolygon = () => {
     if (!selectedWorkspaceId || !allSections || !onSectionsChange) return;
-    if (editVertices.length < 2) { toast.error('Mínimo 2 vértices'); return; }
+    if (editVertices.length < 1) { toast.error('Mínimo 1 vértice (Punto)'); return; }
 
     const proj = wallProjections?.find(p => p.workspaceId === selectedWorkspaceId);
     const updatedSections = allSections.map(s => {
@@ -271,9 +316,10 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
     });
 
     onSectionsChange(updatedSections);
-    toast.success('Polígono de sección guardado');
+    toast.success(`${geometryTypeLabel(editVertices.length)} guardado`);
     setSelectedWorkspaceId(null);
     setEditVertices([]);
+    setDrawingMode(false);
   };
 
   // Reset to default rectangle
@@ -281,12 +327,205 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
     if (!selectedWorkspaceId || !wallProjections) return;
     const proj = wallProjections.find(p => p.workspaceId === selectedWorkspaceId);
     if (!proj) return;
+    setDrawingMode(false);
     setEditVertices([
       { x: proj.hStart, y: proj.zBase },
       { x: proj.hEnd, y: proj.zBase },
       { x: proj.hEnd, y: proj.zTop },
       { x: proj.hStart, y: proj.zTop },
     ]);
+  };
+
+  /** Render a workspace geometry (point, line, or polygon) */
+  const renderWorkspaceGeometry = (
+    verts: PolygonVertex[],
+    proj: SectionWallProjection,
+    pi: number,
+    isEditingThis: boolean,
+  ) => {
+    if (verts.length === 0) return null;
+
+    const color = PROJ_COLORS[pi % PROJ_COLORS.length];
+    const svgPts = verts.map(v => toSvg(v.x, v.y));
+    const fontSize = Math.round(7 * Math.max(1, zoomLevel * 0.8));
+
+    // ─── POINT (1 vertex) ───
+    if (verts.length === 1) {
+      const { sx, sy } = svgPts[0];
+      return (
+        <g key={`proj-${proj.workspaceId}-${pi}`}>
+          <circle
+            cx={sx} cy={sy} r={isEditingThis ? 8 : 6}
+            fill={hslWithAlpha(color, 0.6)}
+            stroke={color} strokeWidth={2}
+            className={isEditingThis ? '' : 'cursor-pointer'}
+            onClick={() => !isEditingThis && selectWorkspace(proj)}
+          />
+          <text x={sx} y={sy - 12} textAnchor="middle" fontSize={6} fontWeight={600} fill={color}
+            className="pointer-events-none select-none"
+          >
+            {hLabel}{verts[0].x},{vLabel}{verts[0].y}
+          </text>
+          <rect x={sx - 25} y={sy + 10} width={50} height={14} rx={3}
+            fill="hsl(45 100% 50% / 0.85)"
+            className={isEditingThis ? '' : 'cursor-pointer'}
+            onClick={() => !isEditingThis && selectWorkspace(proj)}
+          />
+          <text x={sx} y={sy + 19} textAnchor="middle" fontSize={fontSize} fontWeight={700}
+            fill="hsl(0 0% 10%)" className="pointer-events-none select-none"
+          >
+            {proj.workspaceName}
+          </text>
+          {isEditingThis && (
+            <circle cx={sx} cy={sy} r={draggingIdx === 0 ? 10 : 7}
+              fill={draggingIdx === 0 ? 'hsl(var(--destructive))' : color}
+              stroke="white" strokeWidth={2} className="cursor-grab"
+              onMouseDown={(e) => handleMouseDown(0, e)}
+            />
+          )}
+        </g>
+      );
+    }
+
+    // ─── LINE (2 vertices) ───
+    if (verts.length === 2) {
+      const { sx: x1, sy: y1 } = svgPts[0];
+      const { sx: x2, sy: y2 } = svgPts[1];
+      const mx = (x1 + x2) / 2;
+      const my = (y1 + y2) / 2;
+      const lineLenMm = Math.round(Math.sqrt(
+        ((verts[1].x - verts[0].x) * scaleHm) ** 2 + ((verts[1].y - verts[0].y) * scaleVm) ** 2
+      ) * 1000);
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+      const rotAngle = (angle > 90 || angle < -90) ? angle + 180 : angle;
+
+      return (
+        <g key={`proj-${proj.workspaceId}-${pi}`}>
+          <line x1={x1} y1={y1} x2={x2} y2={y2}
+            stroke={color} strokeWidth={isEditingThis ? 3 : 2} strokeLinecap="round"
+            className={isEditingThis ? '' : 'cursor-pointer'}
+            onClick={() => !isEditingThis && selectWorkspace(proj)}
+          />
+          {verts.map((v, vi) => {
+            const { sx, sy } = svgPts[vi];
+            return (
+              <text key={`vl-${vi}`} x={sx} y={sy - 8}
+                textAnchor="middle" fontSize={6} fontWeight={600} fill={color}
+                className="pointer-events-none select-none"
+              >{hLabel}{v.x},{vLabel}{v.y}</text>
+            );
+          })}
+          <text x={mx} y={my - 8} textAnchor="middle" dominantBaseline="central"
+            transform={`rotate(${rotAngle}, ${mx}, ${my - 8})`}
+            fontSize={fontSize} fontWeight={700} fill={color}
+            className="pointer-events-none select-none"
+          >{lineLenMm} mm</text>
+          <rect x={mx - 25} y={my + 3} width={50} height={14} rx={3}
+            fill="hsl(45 100% 50% / 0.85)"
+            className={isEditingThis ? '' : 'cursor-pointer'}
+            onClick={() => !isEditingThis && selectWorkspace(proj)}
+          />
+          <text x={mx} y={my + 12} textAnchor="middle" fontSize={fontSize} fontWeight={700}
+            fill="hsl(0 0% 10%)" className="pointer-events-none select-none"
+          >{proj.workspaceName}</text>
+          {isEditingThis && verts.map((v, vi) => {
+            const { sx, sy } = svgPts[vi];
+            return (
+              <circle key={`dv-${vi}`} cx={sx} cy={sy} r={draggingIdx === vi ? 7 : 5}
+                fill={draggingIdx === vi ? 'hsl(var(--destructive))' : color}
+                stroke="white" strokeWidth={2} className="cursor-grab"
+                onMouseDown={(e) => handleMouseDown(vi, e)}
+              />
+            );
+          })}
+        </g>
+      );
+    }
+
+    // ─── POLYGON (3+ vertices) ───
+    const points = svgPts.map(p => `${p.sx},${p.sy}`).join(' ');
+    const cx = verts.reduce((s, v) => s + v.x, 0) / verts.length;
+    const cy = verts.reduce((s, v) => s + v.y, 0) / verts.length;
+    const { sx: cxSvg, sy: cySvg } = toSvg(cx, cy);
+    const areaVal = polygonAreaCalc(verts) * scaleHm * scaleVm;
+
+    return (
+      <g key={`proj-${proj.workspaceId}-${pi}`}>
+        <polygon points={points}
+          fill={hslWithAlpha(color, isEditingThis ? 0.25 : 0.12)}
+          stroke={color} strokeWidth={isEditingThis ? 2.5 : 1.5}
+          strokeDasharray={isEditingThis ? 'none' : '4 2'}
+          className={isEditingThis ? '' : 'cursor-pointer'}
+          onClick={() => !isEditingThis && selectWorkspace(proj)}
+        />
+        {/* Edge measurements */}
+        {verts.map((v, ei) => {
+          const next = verts[(ei + 1) % verts.length];
+          const { sx: x1, sy: y1 } = toSvg(v.x, v.y);
+          const { sx: x2, sy: y2 } = toSvg(next.x, next.y);
+          const emx = (x1 + x2) / 2;
+          const emy = (y1 + y2) / 2;
+          const edx = x2 - x1;
+          const edy = y2 - y1;
+          const eAngle = Math.atan2(edy, edx) * (180 / Math.PI);
+          const eRotAngle = (eAngle > 90 || eAngle < -90) ? eAngle + 180 : eAngle;
+          const eLenMm = Math.round(Math.sqrt(
+            ((next.x - v.x) * scaleHm) ** 2 + ((next.y - v.y) * scaleVm) ** 2
+          ) * 1000);
+          const len = Math.sqrt(edx * edx + edy * edy) || 1;
+          let nx = -edy / len;
+          let ny = edx / len;
+          if ((cxSvg - emx) * nx + (cySvg - emy) * ny > 0) { nx = -nx; ny = -ny; }
+          const offPx = isEditingThis ? 14 : 10;
+          return (
+            <text key={`emm-${ei}`}
+              x={emx + nx * offPx} y={emy + ny * offPx}
+              textAnchor="middle" dominantBaseline="central"
+              transform={`rotate(${eRotAngle}, ${emx + nx * offPx}, ${emy + ny * offPx})`}
+              fontSize={fontSize} fontWeight={700} fill={color}
+              className="pointer-events-none select-none"
+            >{eLenMm} mm</text>
+          );
+        })}
+        {/* Vertex labels */}
+        {verts.map((v, vi) => (
+          <text key={`vl-${vi}`} x={toSvg(v.x, v.y).sx} y={toSvg(v.x, v.y).sy - (isEditingThis ? 10 : 7)}
+            textAnchor="middle" fontSize={6} fontWeight={600} fill={color}
+            className="pointer-events-none select-none"
+          >{hLabel}{v.x},{vLabel}{v.y}</text>
+        ))}
+        {/* Name + area label */}
+        <rect x={cxSvg - 30} y={cySvg - 10} width={60} height={20} rx={3}
+          fill="hsl(45 100% 50% / 0.85)"
+          className={isEditingThis ? '' : 'cursor-pointer'}
+          onClick={() => !isEditingThis && selectWorkspace(proj)}
+        />
+        <text x={cxSvg} y={cySvg - 1} textAnchor="middle" fontSize={fontSize} fontWeight={700}
+          fill="hsl(0 0% 10%)" className="pointer-events-none select-none"
+        >{proj.workspaceName}</text>
+        <text x={cxSvg} y={cySvg + 8} textAnchor="middle" fontSize={fontSize - 1} fontWeight={500}
+          fill="hsl(0 0% 25%)" className="pointer-events-none select-none"
+        >{areaVal.toFixed(2)} m²</text>
+        {/* Draggable vertices */}
+        {isEditingThis && verts.map((v, vi) => {
+          const { sx, sy } = toSvg(v.x, v.y);
+          return (
+            <g key={`dv-${vi}`}>
+              <circle cx={sx} cy={sy} r={draggingIdx === vi ? 7 : 5}
+                fill={draggingIdx === vi ? 'hsl(var(--destructive))' : color}
+                stroke="white" strokeWidth={2} className="cursor-grab"
+                onMouseDown={(e) => handleMouseDown(vi, e)}
+              />
+              <text x={sx} y={sy + 16} textAnchor="middle" fontSize={7} fontWeight={700}
+                fill={color} className="pointer-events-none select-none"
+              >V{vi + 1}</text>
+            </g>
+          );
+        })}
+      </g>
+    );
   };
 
   return (

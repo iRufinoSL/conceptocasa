@@ -114,8 +114,14 @@ function computeWallProjections(
       if (section.sectionType === 'longitudinal') {
         // Section cuts at Y=axisVal: find X range of edges on this Y
         let intersections: number[];
-        if (poly.length === 2) {
-          // Line segment: check if both points are at Y=axisVal
+        if (poly.length === 1) {
+          // Point: show if Y matches
+          if (poly[0].y === axisVal) {
+            intersections = [poly[0].x];
+          } else {
+            intersections = [];
+          }
+        } else if (poly.length === 2) {
           if (poly[0].y === axisVal && poly[1].y === axisVal) {
             intersections = [poly[0].x, poly[1].x];
           } else {
@@ -135,13 +141,13 @@ function computeWallProjections(
             zBase,
             zTop,
           });
-        } else if (intersections.length === 1 && poly.length === 2) {
-          // Single point intersection for a line - still show as a point/line
+        } else if (intersections.length === 1) {
+          // Single point
           projections.push({
             workspaceId: room.id,
             workspaceName: room.name,
-            hStart: poly[0].x,
-            hEnd: poly[1].x,
+            hStart: intersections[0],
+            hEnd: intersections[0],
             zBase,
             zTop,
           });

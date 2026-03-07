@@ -1436,6 +1436,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
       : [];
     setGridEditVertices(verts);
     setGridEditId(r.id);
+    setActiveSectionView(prev => ({ ...prev, [r.id]: null }));
     // Ensure the room is expanded
     setExpandedIds(prev => {
       const next = new Set(prev);
@@ -1448,6 +1449,107 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     const target = rooms.find(rm => rm.id === targetRoomId);
     if (!target) return;
     openGridEditor(target);
+  };
+
+  /** Compute the default projected polygon for a workspace on a Y or X section */
+  const computeDefaultProjection = useCallback((room: Workspace, section: CustomSection): PolygonVertex[] => {
+    if (!room.floor_polygon || room.floor_polygon.length < 3) return [];
+    const poly = room.floor_polygon;
+    const blockHMm = floorPlan?.block_length_mm ? 250 : 250; // blockHeightMm
+    const heightM = room.height || floorPlan?.default_height || 2.5;
+    
+    // Find workspace's Z base from its vertical section
+    const vSection = verticalSections.find(s => s.id === room.vertical_section_id);
+    const zBase = vSection ? vSection.axisValue : 0;
+    const heightBlocks = Math.round((heightM * 1000) / 250);
+    const zTop = zBase + heightBlocks;
+
+    const axisVal = section.axisValue;
+
+    if (section.sectionType === 'longitudinal') {
+      // Cut at Y=axisVal: find X intersections, project X vs Z
+      const intersections = findPolygonIntersections(poly, 'y', axisVal);
+      if (intersections.length < 2) return [];
+      const hMin = Math.min(...intersections);
+      const hMax = Math.max(...intersections);
+      // Default rectangular projection
+      return [
+        { x: hMin, y: zBase },
+        { x: hMax, y: zBase },
+        { x: hMax, y: zTop },
+        { x: hMin, y: zTop },
+      ];
+    } else if (section.sectionType === 'transversal') {
+      // Cut at X=axisVal: find Y intersections, project Y vs Z
+      const intersections = findPolygonIntersections(poly, 'x', axisVal);
+      if (intersections.length < 2) return [];
+      const hMin = Math.min(...intersections);
+      const hMax = Math.max(...intersections);
+      return [
+        { x: hMin, y: zBase },
+        { x: hMax, y: zBase },
+        { x: hMax, y: zTop },
+        { x: hMin, y: zTop },
+      ];
+    }
+    return [];
+  }, [floorPlan, verticalSections]);
+
+  /** Open a Y or X section editor for a workspace */
+  const openSectionEditor = (roomId: string, section: CustomSection) => {
+    const room = rooms.find(r => r.id === roomId);
+    if (!room) return;
+    setGridEditId(null); // Close Z editor if open
+    
+    // Check if there's already a stored polygon for this workspace in this section
+    const existingPoly = section.polygons?.find(p => p.id === roomId);
+    const verts = existingPoly && existingPoly.vertices.length >= 3
+      ? existingPoly.vertices.map(v => ({ x: v.x, y: v.y }))
+      : computeDefaultProjection(room, section);
+    
+    setSectionEditVertices(verts);
+    setActiveSectionView(prev => ({ ...prev, [roomId]: { sectionId: section.id, type: section.sectionType } }));
+    setExpandedIds(prev => { const next = new Set(prev); next.add(roomId); return next; });
+  };
+
+  /** Save the edited Y/X section polygon back to custom_corners */
+  const saveSectionPolygon = async (roomId: string) => {
+    const view = activeSectionView[roomId];
+    if (!view || !floorPlan?.id) return;
+    if (sectionEditVertices.length < 3) { toast.error('Mínimo 3 vértices'); return; }
+
+    let parsed: any = {};
+    try {
+      parsed = typeof floorPlan.custom_corners === 'string'
+        ? JSON.parse(floorPlan.custom_corners) : (floorPlan.custom_corners || {});
+    } catch { parsed = {}; }
+
+    const sections: CustomSection[] = parsed.customSections || [];
+    const sIdx = sections.findIndex(s => s.id === view.sectionId);
+    if (sIdx < 0) { toast.error('Sección no encontrada'); return; }
+
+    const room = rooms.find(r => r.id === roomId);
+    const polyEntry = {
+      id: roomId,
+      name: room?.name || 'Espacio',
+      vertices: sectionEditVertices.map(v => ({ x: v.x, y: v.y, z: 0 })),
+    };
+
+    // Upsert polygon in section
+    const existingIdx = sections[sIdx].polygons?.findIndex(p => p.id === roomId) ?? -1;
+    if (!sections[sIdx].polygons) sections[sIdx].polygons = [];
+    if (existingIdx >= 0) {
+      sections[sIdx].polygons[existingIdx] = polyEntry;
+    } else {
+      sections[sIdx].polygons.push(polyEntry);
+    }
+
+    parsed.customSections = sections;
+    const { error } = await supabase.from('budget_floor_plans').update({ custom_corners: parsed }).eq('id', floorPlan.id);
+    if (error) { toast.error('Error al guardar'); return; }
+    toast.success('Polígono de sección guardado');
+    setActiveSectionView(prev => ({ ...prev, [roomId]: null }));
+    queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces', budgetId] });
   };
 
   const saveGridEditorPolygon = async (roomId: string) => {

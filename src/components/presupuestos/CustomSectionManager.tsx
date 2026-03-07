@@ -1016,7 +1016,9 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
               Editando: {wallProjections?.find(p => p.workspaceId === selectedWorkspaceId)?.workspaceName}
             </span>
             <Badge variant="secondary" className="text-[9px] h-4">
-              {editVertices.length} vértices · {(polygonAreaCalc(editVertices) * scaleHm * scaleVm).toFixed(2)} m²
+              {editVertices.length} vértices
+              {editVertices.length >= 3 && ` · ${(polygonAreaCalc(editVertices) * scaleHm * scaleVm).toFixed(2)} m²`}
+              {editVertices.length === 2 && ` · ${Math.round(Math.sqrt(((editVertices[1].x - editVertices[0].x) * scaleHm) ** 2 + ((editVertices[1].y - editVertices[0].y) * scaleVm) ** 2) * 1000)} mm`}
             </Badge>
           </div>
 

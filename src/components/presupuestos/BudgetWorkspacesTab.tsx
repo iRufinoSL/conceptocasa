@@ -398,7 +398,7 @@ const POLY_COLORS = [
   'hsl(280 60% 55%)',
 ];
 
-function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16, gridOffsetX = 0, gridOffsetY = 0, placedRooms = [], cellSizeM = 1, otherPolygons = [], activeRoomId, onSwitchRoom, perimeterPolygon, activeName, originTopLeft = false, pdfTitle, pdfSubtitle, onWallClick }: GridPolygonDrawerProps) {
+function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16, gridOffsetX = 0, gridOffsetY = 0, placedRooms = [], cellSizeM = 1, otherPolygons = [], activeRoomId, onSwitchRoom, perimeterPolygon, activeName, originTopLeft = false, pdfTitle, pdfSubtitle, onWallClick, hAxisLabel = 'X', vAxisLabel = 'Y', hScaleMm, vScaleMm }: GridPolygonDrawerProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null);

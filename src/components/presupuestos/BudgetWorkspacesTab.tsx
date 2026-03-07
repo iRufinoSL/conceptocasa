@@ -157,6 +157,60 @@ function PolygonPreview({ vertices, size = 40 }: { vertices: PolygonVertex[]; si
   );
 }
 
+/** Larger polygon preview with clickable wall numbers on each edge */
+function PolygonPreviewWithWalls({
+  vertices,
+  size = 120,
+  selectedWall,
+  onSelectWall,
+}: {
+  vertices: PolygonVertex[];
+  size?: number;
+  selectedWall: number | null;
+  onSelectWall: (index: number) => void;
+}) {
+  if (vertices.length < 3) return null;
+  const bbox = polygonBBox(vertices);
+  const pad = 18;
+  const scale = Math.min((size - pad * 2) / (bbox.w || 1), (size - pad * 2) / (bbox.h || 1));
+  const mapped = vertices.map(v => ({
+    x: pad + (v.x - bbox.minX) * scale,
+    y: pad + (bbox.maxY - v.y) * scale,
+  }));
+  const points = mapped.map(p => `${p.x},${p.y}`).join(' ');
+
+  return (
+    <svg width={size} height={size} className="shrink-0 cursor-pointer">
+      <polygon points={points} fill="hsl(var(--primary) / 0.08)" stroke="hsl(var(--primary))" strokeWidth="1.5" />
+      {mapped.map((p, i) => {
+        const next = mapped[(i + 1) % mapped.length];
+        const mx = (p.x + next.x) / 2;
+        const my = (p.y + next.y) / 2;
+        // Offset label slightly outward from polygon center
+        const cx = mapped.reduce((s, v) => s + v.x, 0) / mapped.length;
+        const cy = mapped.reduce((s, v) => s + v.y, 0) / mapped.length;
+        const dx = mx - cx;
+        const dy = my - cy;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        const offX = mx + (dx / dist) * 10;
+        const offY = my + (dy / dist) * 10;
+        const isSelected = selectedWall === i;
+        return (
+          <g key={i} onClick={(e) => { e.stopPropagation(); onSelectWall(i); }} style={{ cursor: 'pointer' }}>
+            {isSelected && (
+              <line x1={p.x} y1={p.y} x2={next.x} y2={next.y} stroke="hsl(var(--destructive))" strokeWidth="3" />
+            )}
+            <circle cx={offX} cy={offY} r={7} fill={isSelected ? 'hsl(var(--primary))' : 'hsl(var(--muted-foreground))'} />
+            <text x={offX} y={offY} textAnchor="middle" dominantBaseline="central" fill="hsl(var(--primary-foreground))" fontSize="8" fontWeight="bold">
+              {i + 1}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
 // ─── Vertex Editor ───────────────────────────────────────────────
 
 interface VertexEditorProps {
@@ -799,6 +853,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [selectedWallMap, setSelectedWallMap] = useState<Record<string, number | null>>({});
   const [gridEditId, setGridEditId] = useState<string | null>(null);
   const [gridEditVertices, setGridEditVertices] = useState<PolygonVertex[]>([]);
   const [formName, setFormName] = useState('');
@@ -1457,19 +1512,30 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                           </div>
                         )}
 
-                        {/* Polygon vertices list */}
+                        {/* Polygon with wall numbers + vertices list */}
                         {poly && gridEditId !== r.id && (
-                          <div className="space-y-1">
-                            <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
-                              Polígono base — {poly.length} vértices
-                            </p>
-                            <div className="flex flex-wrap gap-1">
-                              {poly.map((v, i) => (
-                                <Badge key={i} variant="outline" className="text-[9px] h-4 px-1 gap-0.5">
-                                  <MapPin className="h-2.5 w-2.5" />
-                                  ({v.x}, {v.y})
-                                </Badge>
-                              ))}
+                          <div className="space-y-2">
+                            <div className="flex gap-3 items-start">
+                              <PolygonPreviewWithWalls
+                                vertices={poly}
+                                size={140}
+                                selectedWall={selectedWallMap[r.id] ?? null}
+                                onSelectWall={(idx) => setSelectedWallMap(prev => ({ ...prev, [r.id]: prev[r.id] === idx ? null : idx }))}
+                              />
+                              <div className="flex-1 space-y-1">
+                                <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
+                                  Polígono base — {poly.length} vértices
+                                </p>
+                                <div className="flex flex-wrap gap-1">
+                                  {poly.map((v, i) => (
+                                    <Badge key={i} variant="outline" className="text-[9px] h-4 px-1 gap-0.5">
+                                      <MapPin className="h-2.5 w-2.5" />
+                                      ({v.x}, {v.y})
+                                    </Badge>
+                                  ))}
+                                </div>
+                                <p className="text-[9px] text-muted-foreground mt-1">Pulsa un nº de pared para ver/editar sus datos</p>
+                              </div>
                             </div>
                           </div>
                         )}
@@ -1483,7 +1549,6 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                           label="🟫 Suelo"
                           type={floorType}
                           options={FLOOR_CEILING_TYPES}
-                          isAdmin={isAdmin}
                           onChange={(v) => updateFloorCeiling(r.id, 'has_floor', v as FloorCeilingType)}
                         />
 
@@ -1491,14 +1556,16 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                         {Array.from({ length: edgeCount }).map((_, i) => {
                           const wall = roomWalls.find(w => w.wall_index === i);
                           const edgeLen = poly ? edgeLength(poly[i], poly[(i + 1) % poly.length]) : null;
+                          const isWallSelected = selectedWallMap[r.id] === i;
                           return (
                             <FaceRow
                               key={i}
-                              label={`🧱 ${wallLabel(i, edgeCount)}${edgeLen ? ` (${edgeLen.toFixed(2)}m)` : ''}`}
+                              label={`🧱 P${i + 1} ${wallLabel(i, edgeCount)}${edgeLen ? ` (${edgeLen.toFixed(2)}m)` : ''}`}
                               type={wall?.wall_type || 'external'}
                               options={WALL_TYPES}
-                              isAdmin={isAdmin}
                               onChange={(v) => wall && updateWallType(wall.id, v)}
+                              highlighted={isWallSelected}
+                              onLabelClick={() => setSelectedWallMap(prev => ({ ...prev, [r.id]: prev[r.id] === i ? null : i }))}
                             />
                           );
                         })}
@@ -1508,7 +1575,6 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                           label={r.has_roof ? '🏠 Techo (cubierta)' : '⬜ Techo'}
                           type={ceilingType}
                           options={FLOOR_CEILING_TYPES}
-                          isAdmin={isAdmin}
                           onChange={(v) => updateFloorCeiling(r.id, 'has_ceiling', v as FloorCeilingType)}
                         />
                       </div>
@@ -1525,32 +1591,33 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
 }
 
 function FaceRow({
-  label, type, options, isAdmin, onChange,
+  label, type, options, onChange, highlighted, onLabelClick,
 }: {
   label: string;
   type: string;
   options: { value: string; label: string }[];
-  isAdmin: boolean;
   onChange: (value: string) => void;
+  highlighted?: boolean;
+  onLabelClick?: () => void;
 }) {
-  const current = options.find(o => o.value === type);
   return (
-    <div className="flex items-center justify-between gap-2 py-0.5">
-      <span className="text-xs">{label}</span>
-      {isAdmin ? (
-        <Select value={type} onValueChange={onChange}>
-          <SelectTrigger className="h-6 w-[140px] text-[10px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {options.map(o => (
-              <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      ) : (
-        <Badge variant="outline" className="text-[10px] h-5">{current?.label || type}</Badge>
-      )}
+    <div className={`flex items-center justify-between gap-2 py-0.5 px-1 rounded ${highlighted ? 'bg-primary/10 ring-1 ring-primary/30' : ''}`}>
+      <span
+        className={`text-xs ${onLabelClick ? 'cursor-pointer hover:text-primary underline-offset-2 hover:underline' : ''}`}
+        onClick={onLabelClick}
+      >
+        {label}
+      </span>
+      <Select value={type} onValueChange={onChange}>
+        <SelectTrigger className="h-6 w-[140px] text-[10px]">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map(o => (
+            <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 }

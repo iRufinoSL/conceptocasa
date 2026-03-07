@@ -606,7 +606,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections 
   );
 }
 
-export function CustomSectionManager({ sectionType, sections, onSectionsChange, scaleConfig, rooms, budgetName }: CustomSectionManagerProps) {
+export function CustomSectionManager({ sectionType, sections, onSectionsChange, scaleConfig, wallProjectionsBySection, rooms, budgetName }: CustomSectionManagerProps) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState('');
   const [newAxisValue, setNewAxisValue] = useState('0');
@@ -785,7 +785,7 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
               )}
             </div>
             {gridVisible && (
-              <SectionGrid section={section} scaleConfig={scaleConfig} rooms={rooms} budgetName={budgetName} />
+              <SectionGrid section={section} scaleConfig={scaleConfig} rooms={rooms} budgetName={budgetName} wallProjections={wallProjectionsBySection?.get(section.id)} />
             )}
           </div>
         );

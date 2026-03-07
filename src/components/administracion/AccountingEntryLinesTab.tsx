@@ -310,10 +310,28 @@ export function AccountingEntryLinesTab({ onNavigateToEntry, onNavigateToAccount
                     </TableCell>
                   </TableRow>
                 ) : (
-                  sortedLines.map((line) => (
-                    <TableRow key={line.id}>
+                  sortedLines.map((line) => {
+                    const isEditing = editingId === line.id;
+                    return (
+                    <TableRow key={line.id} className={isEditing ? 'bg-muted/30' : ''}>
                       <TableCell className="font-mono text-muted-foreground">{line.code}</TableCell>
-                      <TableCell>{formatDate(line.line_date)}</TableCell>
+                      <TableCell>
+                        {isEditing ? (
+                          <Input
+                            type="date"
+                            value={editValues.line_date}
+                            onChange={(e) => setEditValues(prev => ({ ...prev, line_date: e.target.value }))}
+                            className="h-8 w-[130px]"
+                          />
+                        ) : (
+                          <span
+                            className="cursor-pointer hover:text-primary transition-colors"
+                            onClick={() => startEditing(line)}
+                          >
+                            {formatDate(line.line_date)}
+                          </span>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <Badge 
                           variant="outline" 
@@ -324,25 +342,74 @@ export function AccountingEntryLinesTab({ onNavigateToEntry, onNavigateToAccount
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <div 
-                          className="cursor-pointer hover:text-primary transition-colors"
-                          onClick={() => handleAccountClick(line.account_id)}
-                        >
-                          <div className="font-medium">{line.account?.name}</div>
-                          <div className="text-xs text-muted-foreground">{line.account?.account_type}</div>
-                        </div>
+                        {isEditing ? (
+                          <Select
+                            value={editValues.account_id}
+                            onValueChange={(v) => setEditValues(prev => ({ ...prev, account_id: v }))}
+                          >
+                            <SelectTrigger className="h-8 w-[200px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {accounts.map(acc => (
+                                <SelectItem key={acc.id} value={acc.id}>
+                                  {acc.name} ({acc.account_type})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <div 
+                            className="cursor-pointer hover:text-primary transition-colors"
+                            onClick={() => startEditing(line)}
+                          >
+                            <div className="font-medium">{line.account?.name}</div>
+                            <div className="text-xs text-muted-foreground">{line.account?.account_type}</div>
+                          </div>
+                        )}
                       </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {line.description || line.entry?.description || '-'}
+                      <TableCell>
+                        {isEditing ? (
+                          <Input
+                            value={editValues.description}
+                            onChange={(e) => setEditValues(prev => ({ ...prev, description: e.target.value }))}
+                            placeholder="Descripción..."
+                            className="h-8"
+                          />
+                        ) : (
+                          <span
+                            className="text-muted-foreground cursor-pointer hover:text-primary transition-colors"
+                            onClick={() => startEditing(line)}
+                          >
+                            {line.description || line.entry?.description || '-'}
+                          </span>
+                        )}
                       </TableCell>
                       <TableCell className="text-right font-mono">
                         {Number(line.debit_amount) > 0 ? formatCurrency(Number(line.debit_amount)) : '-'}
                       </TableCell>
                       <TableCell className="text-right font-mono">
-                        {Number(line.credit_amount) > 0 ? formatCurrency(Number(line.credit_amount)) : '-'}
+                        <div className="flex items-center justify-end gap-1">
+                          <span>{Number(line.credit_amount) > 0 ? formatCurrency(Number(line.credit_amount)) : '-'}</span>
+                          {isEditing ? (
+                            <div className="flex gap-1 ml-2">
+                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={saveEditing}>
+                                <Check className="h-3 w-3 text-green-600" />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={cancelEditing}>
+                                <X className="h-3 w-3 text-destructive" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100" onClick={() => startEditing(line)}>
+                              <Pencil className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
-                  ))
+                    );
+                  })
                 )}
                 {sortedLines.length > 0 && (
                   <TableRow className="bg-muted/50 font-semibold">

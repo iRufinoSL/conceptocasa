@@ -679,17 +679,17 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
 
     return (
       <g key={`proj-${proj.workspaceId}-${pi}`}>
-        {/* Fill polygon — pointer-events-none in vertical sections so edges are clickable */}
+        {/* Fill polygon — never captures clicks in vertical sections (walls must stay clickable) */}
         <polygon points={points}
           fill={hslWithAlpha(color, isEditingThis ? 0.25 : 0.12)}
           stroke="none"
           className={isEditingThis || isVerticalSection ? '' : 'cursor-pointer'}
-          style={{ pointerEvents: (isVerticalSection && !isEditingThis) ? 'none' : undefined }}
+          style={{ pointerEvents: isVerticalSection ? 'none' : undefined }}
           onClick={() => !isEditingThis && !isVerticalSection && selectWorkspace(proj)}
         />
 
         {/* ── Clickable wall edges for vertical (Z) sections ── */}
-        {isVerticalSection && !isEditingThis && verts.map((v, ei) => {
+        {isVerticalSection && verts.map((v, ei) => {
           const next = verts[(ei + 1) % verts.length];
           const { sx: x1, sy: y1 } = svgPts[ei];
           const { sx: x2, sy: y2 } = svgPts[(ei + 1) % svgPts.length];
@@ -707,10 +707,13 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
 
           return (
             <g key={`wall-edge-${proj.workspaceId}-${ei}`}>
-              {/* Invisible thick clickable line */}
+              {/* Wide hit area for reliable clicks */}
               <line
                 x1={x1} y1={y1} x2={x2} y2={y2}
-                stroke="transparent" strokeWidth={14}
+                stroke="hsl(var(--primary))"
+                strokeOpacity={0.001}
+                strokeWidth={14}
+                pointerEvents="stroke"
                 className="cursor-pointer"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -723,7 +726,11 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                 stroke={isThisWallSelected ? (isHoriz ? 'hsl(150 70% 40%)' : 'hsl(30 80% 50%)') : color}
                 strokeWidth={isThisWallSelected ? 3 : 1.5}
                 strokeDasharray={isThisWallSelected ? 'none' : '4 2'}
-                className="pointer-events-none"
+                className="cursor-pointer"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleWallEdgeClick(pseudoRoom, ei, v, next, emx, emy);
+                }}
               />
               {/* Wall number badge */}
               {(() => {
@@ -1163,6 +1170,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                       points={points}
                       fill="hsl(var(--primary) / 0.12)"
                       stroke="none"
+                      className="pointer-events-none"
                     />
 
                     {/* Wall edges — CLICKABLE to assign to Y/X section */}
@@ -1190,10 +1198,13 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
 
                       return (
                         <g key={`wall-mm-${room.id}-${i}`}>
-                          {/* Invisible thick clickable line */}
+                          {/* Wide hit area for reliable clicks */}
                           <line
                             x1={pt.x} y1={pt.y} x2={next.x} y2={next.y}
-                            stroke="transparent" strokeWidth={12}
+                            stroke="hsl(var(--primary))"
+                            strokeOpacity={0.001}
+                            strokeWidth={12}
+                            pointerEvents="stroke"
                             className="cursor-pointer"
                             onClick={(e) => {
                               e.stopPropagation();
@@ -1206,7 +1217,11 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                             stroke={isThisWallSelected ? (isHoriz ? 'hsl(150 70% 40%)' : 'hsl(30 80% 50%)') : 'hsl(var(--primary))'}
                             strokeWidth={isThisWallSelected ? 3 : 1.5}
                             strokeDasharray={isThisWallSelected ? 'none' : '4 2'}
-                            className="pointer-events-none"
+                            className="cursor-pointer"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleWallEdgeClick(room, i, currGrid, nextGrid, mx, my);
+                            }}
                           />
                           {/* Wall length label */}
                           <text

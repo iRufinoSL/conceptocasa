@@ -157,6 +157,60 @@ function PolygonPreview({ vertices, size = 40 }: { vertices: PolygonVertex[]; si
   );
 }
 
+/** Larger polygon preview with clickable wall numbers on each edge */
+function PolygonPreviewWithWalls({
+  vertices,
+  size = 120,
+  selectedWall,
+  onSelectWall,
+}: {
+  vertices: PolygonVertex[];
+  size?: number;
+  selectedWall: number | null;
+  onSelectWall: (index: number) => void;
+}) {
+  if (vertices.length < 3) return null;
+  const bbox = polygonBBox(vertices);
+  const pad = 18;
+  const scale = Math.min((size - pad * 2) / (bbox.w || 1), (size - pad * 2) / (bbox.h || 1));
+  const mapped = vertices.map(v => ({
+    x: pad + (v.x - bbox.minX) * scale,
+    y: pad + (bbox.maxY - v.y) * scale,
+  }));
+  const points = mapped.map(p => `${p.x},${p.y}`).join(' ');
+
+  return (
+    <svg width={size} height={size} className="shrink-0 cursor-pointer">
+      <polygon points={points} fill="hsl(var(--primary) / 0.08)" stroke="hsl(var(--primary))" strokeWidth="1.5" />
+      {mapped.map((p, i) => {
+        const next = mapped[(i + 1) % mapped.length];
+        const mx = (p.x + next.x) / 2;
+        const my = (p.y + next.y) / 2;
+        // Offset label slightly outward from polygon center
+        const cx = mapped.reduce((s, v) => s + v.x, 0) / mapped.length;
+        const cy = mapped.reduce((s, v) => s + v.y, 0) / mapped.length;
+        const dx = mx - cx;
+        const dy = my - cy;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        const offX = mx + (dx / dist) * 10;
+        const offY = my + (dy / dist) * 10;
+        const isSelected = selectedWall === i;
+        return (
+          <g key={i} onClick={(e) => { e.stopPropagation(); onSelectWall(i); }} style={{ cursor: 'pointer' }}>
+            {isSelected && (
+              <line x1={p.x} y1={p.y} x2={next.x} y2={next.y} stroke="hsl(var(--destructive))" strokeWidth="3" />
+            )}
+            <circle cx={offX} cy={offY} r={7} fill={isSelected ? 'hsl(var(--primary))' : 'hsl(var(--muted-foreground))'} />
+            <text x={offX} y={offY} textAnchor="middle" dominantBaseline="central" fill="hsl(var(--primary-foreground))" fontSize="8" fontWeight="bold">
+              {i + 1}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
 // ─── Vertex Editor ───────────────────────────────────────────────
 
 interface VertexEditorProps {

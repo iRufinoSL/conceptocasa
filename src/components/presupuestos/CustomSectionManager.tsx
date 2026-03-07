@@ -1046,12 +1046,11 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
 
                 return (
                   <g key={room.id}>
+                    {/* Fill polygon (no stroke — edges drawn individually below) */}
                     <polygon
                       points={points}
                       fill="hsl(var(--primary) / 0.12)"
-                      stroke="hsl(var(--primary))"
-                      strokeWidth={1.5}
-                      strokeDasharray="4 2"
+                      stroke="none"
                     />
 
                     {/* Wall edges — CLICKABLE to assign to Y/X section */}

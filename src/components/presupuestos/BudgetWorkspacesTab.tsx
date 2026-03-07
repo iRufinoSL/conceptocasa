@@ -495,8 +495,16 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
     setDraggingIdx(null);
   };
 
-  const areaM2 = polygonArea(vertices) * cellSizeM * cellSizeM;
-  const closingLen = vertices.length >= 3 ? edgeLength(vertices[vertices.length - 1], vertices[0]) * cellSizeM : 0;
+  // Scale factors: if hScaleMm/vScaleMm are given, use them; otherwise uniform cellSizeM
+  const hScale = hScaleMm ? hScaleMm / 1000 : cellSizeM; // meters per grid unit horizontal
+  const vScale = vScaleMm ? vScaleMm / 1000 : cellSizeM; // meters per grid unit vertical
+  const areaM2 = hScaleMm && vScaleMm
+    ? polygonArea(vertices) * hScale * vScale
+    : polygonArea(vertices) * cellSizeM * cellSizeM;
+  const closingLen = vertices.length >= 3 ? Math.sqrt(
+    ((vertices[vertices.length - 1].x - vertices[0].x) * hScale) ** 2 +
+    ((vertices[vertices.length - 1].y - vertices[0].y) * vScale) ** 2
+  ) : 0;
 
   // Check if hovering near first vertex (for close hint)
   const isNearFirst = !isClosed && vertices.length >= 3 && hoverCell && hoverCell.x === vertices[0].x && hoverCell.y === vertices[0].y;

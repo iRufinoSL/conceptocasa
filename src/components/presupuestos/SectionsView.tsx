@@ -95,7 +95,7 @@ function computeWallProjections(
     const axisVal = section.axisValue;
 
     for (const room of rooms) {
-      if (!room.floorPolygon || room.floorPolygon.length < 2) continue;
+      if (!room.floorPolygon || room.floorPolygon.length < 1) continue;
 
       const poly = room.floorPolygon;
 

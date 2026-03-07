@@ -324,6 +324,7 @@ interface GridPolygonDrawerProps {
   originTopLeft?: boolean;
   pdfTitle?: string;
   pdfSubtitle?: string;
+  onWallClick?: (wallIndex: number) => void;
 }
 
 const POLY_COLORS = [

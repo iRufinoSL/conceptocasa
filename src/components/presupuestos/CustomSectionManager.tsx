@@ -390,25 +390,17 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName }: SectionGridPro
 
                       return (
                         <g key={`wall-mm-${room.id}-${i}`} className="pointer-events-none">
-                          {/* Fondo semitransparente para legibilidad */}
-                          <rect
-                            x={mx - 18}
-                            y={my - 6}
-                            width={36}
-                            height={12}
-                            rx={2}
-                            fill="hsl(220 90% 20% / 0.75)"
-                            transform={`rotate(${rotAngle}, ${mx}, ${my})`}
-                          />
                           <text
                             x={mx}
                             y={my}
                             textAnchor="middle"
                             dominantBaseline="central"
                             transform={`rotate(${rotAngle}, ${mx}, ${my})`}
-                            fontSize={Math.round(7 * Math.max(1, zoomLevel * 0.8))}
-                            fontWeight={700}
-                            fill="hsl(210 100% 70%)"
+                            fontSize={Math.round(8 * Math.max(1, zoomLevel * 0.8))}
+                            fontWeight={900}
+                            fill="hsl(210 100% 45%)"
+                            stroke="white"
+                            strokeWidth={0.3}
                           >
                             {wallLenMm} mm
                           </text>

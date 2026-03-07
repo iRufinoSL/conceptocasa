@@ -381,6 +381,10 @@ interface GridPolygonDrawerProps {
   pdfTitle?: string;
   pdfSubtitle?: string;
   onWallClick?: (wallIndex: number) => void;
+  hAxisLabel?: string;
+  vAxisLabel?: string;
+  hScaleMm?: number;
+  vScaleMm?: number;
 }
 
 const POLY_COLORS = [
@@ -394,7 +398,7 @@ const POLY_COLORS = [
   'hsl(280 60% 55%)',
 ];
 
-function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16, gridOffsetX = 0, gridOffsetY = 0, placedRooms = [], cellSizeM = 1, otherPolygons = [], activeRoomId, onSwitchRoom, perimeterPolygon, activeName, originTopLeft = false, pdfTitle, pdfSubtitle, onWallClick }: GridPolygonDrawerProps) {
+function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16, gridOffsetX = 0, gridOffsetY = 0, placedRooms = [], cellSizeM = 1, otherPolygons = [], activeRoomId, onSwitchRoom, perimeterPolygon, activeName, originTopLeft = false, pdfTitle, pdfSubtitle, onWallClick, hAxisLabel = 'X', vAxisLabel = 'Y', hScaleMm, vScaleMm }: GridPolygonDrawerProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null);
@@ -491,8 +495,16 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
     setDraggingIdx(null);
   };
 
-  const areaM2 = polygonArea(vertices) * cellSizeM * cellSizeM;
-  const closingLen = vertices.length >= 3 ? edgeLength(vertices[vertices.length - 1], vertices[0]) * cellSizeM : 0;
+  // Scale factors: if hScaleMm/vScaleMm are given, use them; otherwise uniform cellSizeM
+  const hScale = hScaleMm ? hScaleMm / 1000 : cellSizeM; // meters per grid unit horizontal
+  const vScale = vScaleMm ? vScaleMm / 1000 : cellSizeM; // meters per grid unit vertical
+  const areaM2 = hScaleMm && vScaleMm
+    ? polygonArea(vertices) * hScale * vScale
+    : polygonArea(vertices) * cellSizeM * cellSizeM;
+  const closingLen = vertices.length >= 3 ? Math.sqrt(
+    ((vertices[vertices.length - 1].x - vertices[0].x) * hScale) ** 2 +
+    ((vertices[vertices.length - 1].y - vertices[0].y) * vScale) ** 2
+  ) : 0;
 
   // Check if hovering near first vertex (for close hint)
   const isNearFirst = !isClosed && vertices.length >= 3 && hoverCell && hoverCell.x === vertices[0].x && hoverCell.y === vertices[0].y;
@@ -681,7 +693,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             return (
               <text key={`xl-${i}`} x={sx} y={originTopLeft ? 12 : svgH - 6} textAnchor="middle"
                 fill="hsl(0 84% 60%)" fontSize={9} fontWeight="bold" className="select-none">
-                X{gx}
+                {hAxisLabel}{gx}
               </text>
             );
           })}
@@ -693,7 +705,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             return (
               <text key={`yl-${i}`} x={8} y={sy + 3} textAnchor="middle"
                 className="text-[8px] fill-emerald-600 dark:fill-emerald-400 font-bold select-none">
-                Y{gy}
+                {vAxisLabel}{gy}
               </text>
             );
           })}
@@ -729,7 +741,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                 {opEdges.map(({ a, b }, ei) => {
                   const { sx: ex1, sy: ey1 } = toSvg(a.x, a.y);
                   const { sx: ex2, sy: ey2 } = toSvg(b.x, b.y);
-                  const eLenMm = Math.round(edgeLength(a, b) * cellSizeM * 1000);
+                  const eLenMm = Math.round(Math.sqrt(((b.x - a.x) * hScale) ** 2 + ((b.y - a.y) * vScale) ** 2) * 1000);
                   const emx = (ex1 + ex2) / 2;
                   const emy = (ey1 + ey2) / 2;
                   const edx = ex2 - ex1;
@@ -826,7 +838,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             return allEdges.map(({ a, b, idx }) => {
               const { sx: x1, sy: y1 } = toSvg(a.x, a.y);
               const { sx: x2, sy: y2 } = toSvg(b.x, b.y);
-              const lenMm = Math.round(edgeLength(a, b) * cellSizeM * 1000);
+              const lenMm = Math.round(Math.sqrt(((b.x - a.x) * hScale) ** 2 + ((b.y - a.y) * vScale) ** 2) * 1000);
               const isClosing = idx === 0 && allEdges.length > 1 && a === vertices[vertices.length - 1];
               const mx = (x1 + x2) / 2;
               const my = (y1 + y2) / 2;
@@ -976,7 +988,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                 <text x={sx} y={sy - 9} textAnchor="middle"
                   className="text-[7px] font-bold select-none pointer-events-none"
                   fill="hsl(200 80% 50%)">
-                  {i + 1} ({v.x},{v.y})
+                  {i + 1} ({hAxisLabel}{v.x},{vAxisLabel}{v.y})
                 </text>
               </g>
             );
@@ -998,8 +1010,8 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             const bMinY = Math.min(...allYs);
             const bMaxY = Math.max(...allYs);
 
-            const totalWidthMm = Math.round((bMaxX - bMinX) * cellSizeM * 1000);
-            const totalHeightMm = Math.round((bMaxY - bMinY) * cellSizeM * 1000);
+            const totalWidthMm = Math.round((bMaxX - bMinX) * hScale * 1000);
+            const totalHeightMm = Math.round((bMaxY - bMinY) * vScale * 1000);
 
             if (totalWidthMm <= 0 && totalHeightMm <= 0) return null;
 
@@ -2033,23 +2045,10 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                           const isLongitudinal = section.sectionType === 'longitudinal';
                           const hLabel = isLongitudinal ? 'X' : 'Y';
                           const vLabel = 'Z';
-                          const scaleH = isLongitudinal
-                            ? (floorPlan?.block_length_mm || 625)
-                            : (floorPlan?.block_length_mm || 625);
+                          const scaleH = floorPlan?.block_length_mm || 625;
                           const scaleV = 250; // blockHeightMm
                           const scaleHm = scaleH / 1000;
                           const scaleVm = scaleV / 1000;
-
-                          // Compute grid bounds from the projection vertices
-                          const projBBox = sectionEditVertices.length >= 3
-                            ? polygonBBox(sectionEditVertices)
-                            : { minX: -3, maxX: 20, minY: -3, maxY: 20 };
-                          const secGridMinCol = Math.floor(projBBox.minX) - 2;
-                          const secGridMaxCol = Math.ceil(projBBox.maxX) + 2;
-                          const secGridMinRow = Math.floor(projBBox.minY) - 2;
-                          const secGridMaxRow = Math.ceil(projBBox.maxY) + 2;
-                          const secGridW = secGridMaxCol - secGridMinCol + 1;
-                          const secGridH = secGridMaxRow - secGridMinRow + 1;
 
                           // Get other workspaces' projections on this section for context
                           const otherProjections: OtherPolygon[] = rooms
@@ -2066,6 +2065,21 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                               return null;
                             })
                             .filter(Boolean) as OtherPolygon[];
+
+                          // Compute grid bounds from ALL projections (active + others)
+                          const allProjVerts: PolygonVertex[] = [...sectionEditVertices];
+                          for (const op of otherProjections) {
+                            allProjVerts.push(...op.vertices);
+                          }
+                          const projBBox = allProjVerts.length >= 2
+                            ? polygonBBox(allProjVerts)
+                            : { minX: -3, maxX: 20, minY: -3, maxY: 20 };
+                          const secGridMinCol = Math.floor(projBBox.minX) - 2;
+                          const secGridMaxCol = Math.ceil(projBBox.maxX) + 2;
+                          const secGridMinRow = Math.floor(projBBox.minY) - 2;
+                          const secGridMaxRow = Math.ceil(projBBox.maxY) + 2;
+                          const secGridW = secGridMaxCol - secGridMinCol + 1;
+                          const secGridH = secGridMaxRow - secGridMinRow + 1;
 
                           return (
                             <div className="space-y-2 border rounded-lg p-2 bg-background">
@@ -2094,6 +2108,10 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                                 }}
                                 pdfTitle={`${section.name} — ${r.name}`}
                                 pdfSubtitle={`${section.axis}=${section.axisValue}`}
+                                hAxisLabel={hLabel}
+                                vAxisLabel={vLabel}
+                                hScaleMm={scaleH}
+                                vScaleMm={scaleV}
                               />
                               <div className="flex items-center justify-between">
                                 <div className="flex flex-wrap gap-1.5">

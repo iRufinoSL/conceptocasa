@@ -84,9 +84,10 @@ interface SectionGridProps {
   scaleConfig?: ScaleConfig;
   rooms?: RoomData[];
   budgetName?: string;
+  wallProjections?: SectionWallProjection[];
 }
 
-function SectionGrid({ section, scaleConfig, rooms, budgetName }: SectionGridProps) {
+function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections }: SectionGridProps) {
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const [gridMin, setGridMin] = useState(GRID_MIN);
   const [gridMax, setGridMax] = useState(GRID_MAX);

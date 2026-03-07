@@ -90,9 +90,11 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName }: SectionGridPro
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const [gridMin, setGridMin] = useState(GRID_MIN);
   const [gridMax, setGridMax] = useState(GRID_MAX);
+  const [zoomLevel, setZoomLevel] = useState(1);
   const gridCount = gridMax - gridMin + 1;
-  const cellSize = 28;
-  const margin = { top: 24, left: 32, right: 12, bottom: 24 };
+  const baseCellSize = 28;
+  const cellSize = Math.round(baseCellSize * zoomLevel);
+  const margin = { top: 28, left: 36, right: 16, bottom: 28 };
   const totalW = margin.left + gridCount * cellSize + margin.right;
   const totalH = margin.top + gridCount * cellSize + margin.bottom;
 
@@ -122,6 +124,8 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName }: SectionGridPro
     ? (scaleConfig?.scaleZ ?? 250)
     : (scaleConfig?.scaleY ?? 625);
 
+  const zoomOptions = [1, 1.5, 2, 2.5, 3];
+
   return (
     <div className="mt-2">
       <div className="flex items-center justify-between px-2 pt-1 pb-0.5 flex-wrap gap-1">
@@ -131,6 +135,21 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName }: SectionGridPro
           {section.sectionType === 'transversal' && `Vista transversal X=${section.axisValue} — Origen (0,0) abajo-izq`}
         </span>
         <div className="flex items-center gap-1.5 flex-wrap">
+          {/* Zoom controls */}
+          <div className="flex items-center gap-0.5 border border-border rounded px-1.5 py-0.5">
+            <span className="text-[8px] text-muted-foreground font-medium">Zoom:</span>
+            {zoomOptions.map(z => (
+              <Button
+                key={z}
+                variant={zoomLevel === z ? 'default' : 'ghost'}
+                size="sm"
+                className="h-4 px-1.5 text-[8px] min-w-0"
+                onClick={() => setZoomLevel(z)}
+              >
+                {z}x
+              </Button>
+            ))}
+          </div>
           {/* Grid range controls */}
           <div className="flex items-center gap-0.5 border border-border rounded px-1.5 py-0.5">
             <span className="text-[8px] text-muted-foreground font-medium">Rango:</span>
@@ -161,7 +180,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName }: SectionGridPro
           />
         </div>
       </div>
-      <div ref={gridContainerRef} className="overflow-auto border border-border rounded-md bg-muted/20">
+      <div ref={gridContainerRef} className="overflow-auto border border-border rounded-md bg-muted/20" style={{ maxHeight: zoomLevel > 1 ? '600px' : undefined }}>
       <svg width={totalW} height={totalH} className="block">
         {/* Checkerboard cells */}
         {Array.from({ length: gridCount }, (_, row) =>
@@ -351,7 +370,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName }: SectionGridPro
                       strokeDasharray="4 2"
                     />
 
-                    {/* Doble sistema de acotación por pared: exterior + cercana */}
+                    {/* Medidas de cada pared SOBRE la línea en azul */}
                     {svgPts.map((pt, i) => {
                       const next = svgPts[(i + 1) % svgPts.length];
                       const currGrid = poly[i];
@@ -361,15 +380,6 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName }: SectionGridPro
                       const my = (pt.y + next.y) / 2;
                       const dx = next.x - pt.x;
                       const dy = next.y - pt.y;
-                      const edgeLenSvg = Math.sqrt(dx * dx + dy * dy) || 1;
-
-                      let nx = -dy / edgeLenSvg;
-                      let ny = dx / edgeLenSvg;
-                      const toCenter = (cxSvg - mx) * nx + (cySvg - my) * ny;
-                      if (toCenter > 0) {
-                        nx = -nx;
-                        ny = -ny;
-                      }
 
                       const angle = Math.atan2(dy, dx) * (180 / Math.PI);
                       const rotAngle = (angle > 90 || angle < -90) ? angle + 180 : angle;
@@ -378,48 +388,27 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName }: SectionGridPro
                       const dyMm = (nextGrid.y - currGrid.y) * scaleV;
                       const wallLenMm = Math.round(Math.hypot(dxMm, dyMm));
 
-                      const outerOffset = 24;
-                      const innerOffset = 9;
-
-                      const ox1 = pt.x + nx * outerOffset;
-                      const oy1 = pt.y + ny * outerOffset;
-                      const ox2 = next.x + nx * outerOffset;
-                      const oy2 = next.y + ny * outerOffset;
-                      const omx = (ox1 + ox2) / 2;
-                      const omy = (oy1 + oy2) / 2;
-
-                      const imx = mx + nx * innerOffset;
-                      const imy = my + ny * innerOffset;
-
                       return (
                         <g key={`wall-mm-${room.id}-${i}`} className="pointer-events-none">
-                          {/* Cota exterior de la arista */}
-                          <line x1={ox1} y1={oy1} x2={ox2} y2={oy2} stroke="hsl(var(--muted-foreground))" strokeWidth={0.8} />
-                          <line x1={pt.x} y1={pt.y} x2={ox1} y2={oy1} stroke="hsl(var(--muted-foreground) / 0.45)" strokeWidth={0.55} />
-                          <line x1={next.x} y1={next.y} x2={ox2} y2={oy2} stroke="hsl(var(--muted-foreground) / 0.45)" strokeWidth={0.55} />
+                          {/* Fondo semitransparente para legibilidad */}
+                          <rect
+                            x={mx - 18}
+                            y={my - 6}
+                            width={36}
+                            height={12}
+                            rx={2}
+                            fill="hsl(220 90% 20% / 0.75)"
+                            transform={`rotate(${rotAngle}, ${mx}, ${my})`}
+                          />
                           <text
-                            x={omx + nx * 5}
-                            y={omy + ny * 5}
+                            x={mx}
+                            y={my}
                             textAnchor="middle"
                             dominantBaseline="central"
-                            transform={`rotate(${rotAngle}, ${omx + nx * 5}, ${omy + ny * 5})`}
-                            fontSize={7}
+                            transform={`rotate(${rotAngle}, ${mx}, ${my})`}
+                            fontSize={Math.round(7 * Math.max(1, zoomLevel * 0.8))}
                             fontWeight={700}
-                            fill="hsl(var(--muted-foreground))"
-                          >
-                            {wallLenMm} mm
-                          </text>
-
-                          {/* Medida de pared cercana */}
-                          <text
-                            x={imx}
-                            y={imy}
-                            textAnchor="middle"
-                            dominantBaseline="central"
-                            transform={`rotate(${rotAngle}, ${imx}, ${imy})`}
-                            fontSize={8}
-                            fontWeight={700}
-                            fill="hsl(var(--primary))"
+                            fill="hsl(210 100% 70%)"
                           >
                             {wallLenMm} mm
                           </text>
@@ -427,13 +416,22 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName }: SectionGridPro
                       );
                     })}
 
+                    {/* Nombre del polígono - color diferenciado */}
+                    <rect
+                      x={cxSvg - 30}
+                      y={cySvg - 12}
+                      width={60}
+                      height={22}
+                      rx={3}
+                      fill="hsl(45 100% 50% / 0.85)"
+                    />
                     <text
                       x={cxSvg}
-                      y={cySvg - 4}
+                      y={cySvg - 3}
                       textAnchor="middle"
-                      fontSize={8}
-                      fontWeight={600}
-                      fill="hsl(var(--primary))"
+                      fontSize={Math.round(8 * Math.max(1, zoomLevel * 0.7))}
+                      fontWeight={700}
+                      fill="hsl(0 0% 10%)"
                     >
                       {room.name}
                     </text>
@@ -441,8 +439,9 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName }: SectionGridPro
                       x={cxSvg}
                       y={cySvg + 7}
                       textAnchor="middle"
-                      fontSize={7}
-                      fill="hsl(var(--primary) / 0.8)"
+                      fontSize={Math.round(7 * Math.max(1, zoomLevel * 0.7))}
+                      fontWeight={600}
+                      fill="hsl(0 0% 15%)"
                     >
                       {areaM2.toFixed(2)} m²
                     </text>
@@ -452,55 +451,56 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName }: SectionGridPro
 
               {/* Cotas exteriores globales (arriba, derecha, abajo, izquierda) */}
               {hasGlobalBounds && (() => {
-                const off = 22;
+                const off = 26;
                 const topY = globalTop - off;
                 const bottomY = globalBottom + off;
                 const leftX = globalLeft - off;
                 const rightX = globalRight + off;
                 const midX = (globalLeft + globalRight) / 2;
                 const midY = (globalTop + globalBottom) / 2;
+                const perimFontSize = Math.round(8 * Math.max(1, zoomLevel * 0.8));
 
                 return (
                   <g className="pointer-events-none">
                     {/* Arriba */}
-                    <line x1={globalLeft} y1={topY} x2={globalRight} y2={topY} stroke="hsl(var(--muted-foreground))" strokeWidth={1} />
-                    <line x1={globalLeft} y1={globalTop} x2={globalLeft} y2={topY} stroke="hsl(var(--muted-foreground) / 0.6)" strokeWidth={0.8} />
-                    <line x1={globalRight} y1={globalTop} x2={globalRight} y2={topY} stroke="hsl(var(--muted-foreground) / 0.6)" strokeWidth={0.8} />
-                    <text x={midX} y={topY - 5} textAnchor="middle" fontSize={8} fontWeight={700} fill="hsl(var(--muted-foreground))">{globalWidthMm} mm</text>
+                    <line x1={globalLeft} y1={topY} x2={globalRight} y2={topY} stroke="hsl(0 70% 50%)" strokeWidth={1.2} />
+                    <line x1={globalLeft} y1={globalTop} x2={globalLeft} y2={topY} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
+                    <line x1={globalRight} y1={globalTop} x2={globalRight} y2={topY} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
+                    <text x={midX} y={topY - 5} textAnchor="middle" fontSize={perimFontSize} fontWeight={700} fill="hsl(0 70% 45%)">{globalWidthMm} mm</text>
 
                     {/* Abajo */}
-                    <line x1={globalLeft} y1={bottomY} x2={globalRight} y2={bottomY} stroke="hsl(var(--muted-foreground))" strokeWidth={1} />
-                    <line x1={globalLeft} y1={globalBottom} x2={globalLeft} y2={bottomY} stroke="hsl(var(--muted-foreground) / 0.6)" strokeWidth={0.8} />
-                    <line x1={globalRight} y1={globalBottom} x2={globalRight} y2={bottomY} stroke="hsl(var(--muted-foreground) / 0.6)" strokeWidth={0.8} />
-                    <text x={midX} y={bottomY + 10} textAnchor="middle" fontSize={8} fontWeight={700} fill="hsl(var(--muted-foreground))">{globalWidthMm} mm</text>
+                    <line x1={globalLeft} y1={bottomY} x2={globalRight} y2={bottomY} stroke="hsl(0 70% 50%)" strokeWidth={1.2} />
+                    <line x1={globalLeft} y1={globalBottom} x2={globalLeft} y2={bottomY} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
+                    <line x1={globalRight} y1={globalBottom} x2={globalRight} y2={bottomY} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
+                    <text x={midX} y={bottomY + 10} textAnchor="middle" fontSize={perimFontSize} fontWeight={700} fill="hsl(0 70% 45%)">{globalWidthMm} mm</text>
 
                     {/* Izquierda */}
-                    <line x1={leftX} y1={globalTop} x2={leftX} y2={globalBottom} stroke="hsl(var(--muted-foreground))" strokeWidth={1} />
-                    <line x1={globalLeft} y1={globalTop} x2={leftX} y2={globalTop} stroke="hsl(var(--muted-foreground) / 0.6)" strokeWidth={0.8} />
-                    <line x1={globalLeft} y1={globalBottom} x2={leftX} y2={globalBottom} stroke="hsl(var(--muted-foreground) / 0.6)" strokeWidth={0.8} />
+                    <line x1={leftX} y1={globalTop} x2={leftX} y2={globalBottom} stroke="hsl(0 70% 50%)" strokeWidth={1.2} />
+                    <line x1={globalLeft} y1={globalTop} x2={leftX} y2={globalTop} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
+                    <line x1={globalLeft} y1={globalBottom} x2={leftX} y2={globalBottom} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
                     <text
                       x={leftX - 6}
                       y={midY}
                       textAnchor="middle"
-                      fontSize={8}
+                      fontSize={perimFontSize}
                       fontWeight={700}
-                      fill="hsl(var(--muted-foreground))"
+                      fill="hsl(0 70% 45%)"
                       transform={`rotate(-90, ${leftX - 6}, ${midY})`}
                     >
                       {globalHeightMm} mm
                     </text>
 
                     {/* Derecha */}
-                    <line x1={rightX} y1={globalTop} x2={rightX} y2={globalBottom} stroke="hsl(var(--muted-foreground))" strokeWidth={1} />
-                    <line x1={globalRight} y1={globalTop} x2={rightX} y2={globalTop} stroke="hsl(var(--muted-foreground) / 0.6)" strokeWidth={0.8} />
-                    <line x1={globalRight} y1={globalBottom} x2={rightX} y2={globalBottom} stroke="hsl(var(--muted-foreground) / 0.6)" strokeWidth={0.8} />
+                    <line x1={rightX} y1={globalTop} x2={rightX} y2={globalBottom} stroke="hsl(0 70% 50%)" strokeWidth={1.2} />
+                    <line x1={globalRight} y1={globalTop} x2={rightX} y2={globalTop} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
+                    <line x1={globalRight} y1={globalBottom} x2={rightX} y2={globalBottom} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
                     <text
                       x={rightX + 6}
                       y={midY}
                       textAnchor="middle"
-                      fontSize={8}
+                      fontSize={perimFontSize}
                       fontWeight={700}
-                      fill="hsl(var(--muted-foreground))"
+                      fill="hsl(0 70% 45%)"
                       transform={`rotate(-90, ${rightX + 6}, ${midY})`}
                     >
                       {globalHeightMm} mm

@@ -984,246 +984,47 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
           );
         })()}
 
-        {/* ── Workspace polygons for longitudinal/transversal sections ── */}
-        {isElevation && wallProjections && wallProjections.length > 0 && (() => {
+        {/* ── Workspace geometries for all section types ── */}
+        {wallProjections && wallProjections.length > 0 && (() => {
           return (
             <>
               {wallProjections.map((proj, pi) => {
                 const isEditingThis = selectedWorkspaceId === proj.workspaceId;
-                const color = PROJ_COLORS[pi % PROJ_COLORS.length];
-                
-                // Use saved polygon or default rectangle
                 const verts = isEditingThis ? editVertices : getWorkspacePolygon(section, proj);
-                
-                // Support 2-vertex lines (e.g. ridge lines, roof start edges)
-                if (verts.length < 2) return null;
-                const isLine = verts.length === 2;
+                return renderWorkspaceGeometry(verts, proj, pi, isEditingThis);
+              })}
 
-                const svgPts = verts.map(v => toSvg(v.x, v.y));
-                const fontSize = Math.round(7 * Math.max(1, zoomLevel * 0.8));
-
-                if (isLine) {
-                  // Render as a line with label
-                  const { sx: x1, sy: y1 } = svgPts[0];
-                  const { sx: x2, sy: y2 } = svgPts[1];
-                  const mx = (x1 + x2) / 2;
-                  const my = (y1 + y2) / 2;
-                  const lineLenMm = Math.round(Math.sqrt(
-                    ((verts[1].x - verts[0].x) * scaleHm) ** 2 + ((verts[1].y - verts[0].y) * scaleVm) ** 2
-                  ) * 1000);
-                  const dx = x2 - x1;
-                  const dy = y2 - y1;
-                  const angle = Math.atan2(dy, dx) * (180 / Math.PI);
-                  const rotAngle = (angle > 90 || angle < -90) ? angle + 180 : angle;
-
-                  return (
-                    <g key={`proj-${proj.workspaceId}-${pi}`}>
-                      <line
-                        x1={x1} y1={y1} x2={x2} y2={y2}
-                        stroke={color}
-                        strokeWidth={isEditingThis ? 3 : 2}
-                        strokeLinecap="round"
-                        className={isEditingThis ? '' : 'cursor-pointer'}
-                        onClick={() => !isEditingThis && selectWorkspace(proj)}
-                      />
-                      {/* Vertex coordinate labels */}
-                      {verts.map((v, vi) => {
-                        const { sx, sy } = svgPts[vi];
-                        return (
-                          <text
-                            key={`vl-${proj.workspaceId}-${vi}`}
-                            x={sx} y={sy - 8}
-                            textAnchor="middle" fontSize={6} fontWeight={600} fill={color}
-                            className="pointer-events-none select-none"
-                          >
-                            {hLabel}{v.x},{vLabel}{v.y}
-                          </text>
-                        );
-                      })}
-                      {/* Length label */}
-                      <text
-                        x={mx} y={my - 8}
-                        textAnchor="middle" dominantBaseline="central"
-                        transform={`rotate(${rotAngle}, ${mx}, ${my - 8})`}
-                        fontSize={fontSize} fontWeight={700} fill={color}
-                        className="pointer-events-none select-none"
-                      >
-                        {lineLenMm} mm
-                      </text>
-                      {/* Name label */}
-                      <rect x={mx - 25} y={my + 3} width={50} height={14} rx={3}
-                        fill="hsl(45 100% 50% / 0.85)"
-                        className={isEditingThis ? '' : 'cursor-pointer'}
-                        onClick={() => !isEditingThis && selectWorkspace(proj)}
-                      />
-                      <text x={mx} y={my + 12} textAnchor="middle" fontSize={fontSize} fontWeight={700}
-                        fill="hsl(0 0% 10%)" className="pointer-events-none select-none"
-                      >
-                        {proj.workspaceName}
-                      </text>
-                      {/* Draggable vertices when editing */}
-                      {isEditingThis && verts.map((v, vi) => {
-                        const { sx, sy } = svgPts[vi];
-                        const isDragging = draggingIdx === vi;
-                        return (
-                          <circle key={`dv-${vi}`}
-                            cx={sx} cy={sy} r={isDragging ? 7 : 5}
-                            fill={isDragging ? 'hsl(var(--destructive))' : color}
-                            stroke="white" strokeWidth={2} className="cursor-grab"
-                            onMouseDown={(e) => handleMouseDown(vi, e)}
-                          />
-                        );
-                      })}
-                    </g>
-                  );
-                }
-
-                // Polygon (3+ vertices) rendering
-                const points = svgPts.map(p => `${p.sx},${p.sy}`).join(' ');
-
-                // Centroid
-                const cx = verts.reduce((s, v) => s + v.x, 0) / verts.length;
-                const cy = verts.reduce((s, v) => s + v.y, 0) / verts.length;
-                const { sx: cxSvg, sy: cySvg } = toSvg(cx, cy);
-
-                // Area
-                const areaVal = polygonAreaCalc(verts) * scaleHm * scaleVm;
-
+              {/* Drawing mode preview: show vertices being placed */}
+              {drawingMode && editVertices.length > 0 && (() => {
+                const drawColor = 'hsl(var(--primary))';
+                const svgPts = editVertices.map(v => toSvg(v.x, v.y));
                 return (
-                  <g key={`proj-${proj.workspaceId}-${pi}`}>
-                    {/* Filled polygon with correct alpha */}
-                    <polygon
-                      points={points}
-                      fill={hslWithAlpha(color, isEditingThis ? 0.25 : 0.12)}
-                      stroke={color}
-                      strokeWidth={isEditingThis ? 2.5 : 1.5}
-                      strokeDasharray={isEditingThis ? 'none' : '4 2'}
-                      className={isEditingThis ? '' : 'cursor-pointer'}
-                      onClick={() => !isEditingThis && selectWorkspace(proj)}
-                    />
-
-                    {/* Edge measurements */}
-                    {verts.map((v, ei) => {
-                      const next = verts[(ei + 1) % verts.length];
-                      const { sx: x1, sy: y1 } = toSvg(v.x, v.y);
-                      const { sx: x2, sy: y2 } = toSvg(next.x, next.y);
-                      const mx = (x1 + x2) / 2;
-                      const my = (y1 + y2) / 2;
-                      const dx = x2 - x1;
-                      const dy = y2 - y1;
-                      const angle = Math.atan2(dy, dx) * (180 / Math.PI);
-                      const rotAngle = (angle > 90 || angle < -90) ? angle + 180 : angle;
-                      const eLenMm = Math.round(Math.sqrt(
-                        ((next.x - v.x) * scaleHm) ** 2 + ((next.y - v.y) * scaleVm) ** 2
-                      ) * 1000);
-
-                      // Outward normal for label positioning
-                      const len = Math.sqrt(dx * dx + dy * dy) || 1;
-                      let nx = -dy / len;
-                      let ny = dx / len;
-                      if ((cxSvg - mx) * nx + (cySvg - my) * ny > 0) { nx = -nx; ny = -ny; }
-                      const offPx = isEditingThis ? 14 : 10;
-
+                  <g>
+                    {/* Lines connecting placed vertices */}
+                    {svgPts.map((pt, i) => {
+                      if (i === 0) return null;
+                      const prev = svgPts[i - 1];
                       return (
-                        <text
-                          key={`emm-${proj.workspaceId}-${ei}`}
-                          x={mx + nx * offPx}
-                          y={my + ny * offPx}
-                          textAnchor="middle"
-                          dominantBaseline="central"
-                          transform={`rotate(${rotAngle}, ${mx + nx * offPx}, ${my + ny * offPx})`}
-                          fontSize={fontSize}
-                          fontWeight={700}
-                          fill={color}
-                          className="pointer-events-none select-none"
-                        >
-                          {eLenMm} mm
-                        </text>
+                        <line key={`draw-line-${i}`}
+                          x1={prev.sx} y1={prev.sy} x2={pt.sx} y2={pt.sy}
+                          stroke={drawColor} strokeWidth={2} strokeDasharray="6 3"
+                        />
                       );
                     })}
-
-                    {/* Vertex labels with coordinates */}
-                    {verts.map((v, vi) => {
-                      const { sx, sy } = toSvg(v.x, v.y);
-                      return (
-                        <text
-                          key={`vl-${proj.workspaceId}-${vi}`}
-                          x={sx}
-                          y={sy - (isEditingThis ? 10 : 7)}
-                          textAnchor="middle"
-                          fontSize={6}
-                          fontWeight={600}
-                          fill={color}
-                          className="pointer-events-none select-none"
-                        >
-                          {hLabel}{v.x},{vLabel}{v.y}
-                        </text>
-                      );
-                    })}
-
-                    {/* Name label */}
-                    <rect
-                      x={cxSvg - 30}
-                      y={cySvg - 10}
-                      width={60}
-                      height={20}
-                      rx={3}
-                      fill="hsl(45 100% 50% / 0.85)"
-                      className={isEditingThis ? '' : 'cursor-pointer'}
-                      onClick={() => !isEditingThis && selectWorkspace(proj)}
-                    />
-                    <text
-                      x={cxSvg} y={cySvg - 1}
-                      textAnchor="middle"
-                      fontSize={fontSize}
-                      fontWeight={700}
-                      fill="hsl(0 0% 10%)"
-                      className="pointer-events-none select-none"
-                    >
-                      {proj.workspaceName}
-                    </text>
-                    <text
-                      x={cxSvg} y={cySvg + 8}
-                      textAnchor="middle"
-                      fontSize={fontSize - 1}
-                      fontWeight={500}
-                      fill="hsl(0 0% 25%)"
-                      className="pointer-events-none select-none"
-                    >
-                      {areaVal.toFixed(2)} m²
-                    </text>
-
-                    {/* Draggable vertices when editing */}
-                    {isEditingThis && verts.map((v, vi) => {
-                      const { sx, sy } = toSvg(v.x, v.y);
-                      const isDragging = draggingIdx === vi;
-                      return (
-                        <g key={`dv-${vi}`}>
-                          <circle
-                            cx={sx} cy={sy}
-                            r={isDragging ? 7 : 5}
-                            fill={isDragging ? 'hsl(var(--destructive))' : color}
-                            stroke="white"
-                            strokeWidth={2}
-                            className="cursor-grab"
-                            onMouseDown={(e) => handleMouseDown(vi, e)}
-                          />
-                          <text
-                            x={sx} y={sy + 16}
-                            textAnchor="middle"
-                            fontSize={7}
-                            fontWeight={700}
-                            fill={color}
-                            className="pointer-events-none select-none"
-                          >
-                            V{vi + 1}
-                          </text>
-                        </g>
-                      );
-                    })}
+                    {/* Vertex dots */}
+                    {svgPts.map((pt, i) => (
+                      <g key={`draw-v-${i}`}>
+                        <circle cx={pt.sx} cy={pt.sy} r={5}
+                          fill={drawColor} stroke="white" strokeWidth={2}
+                        />
+                        <text x={pt.sx} y={pt.sy - 10} textAnchor="middle" fontSize={7} fontWeight={600}
+                          fill={drawColor} className="pointer-events-none select-none"
+                        >{hLabel}{editVertices[i].x},{vLabel}{editVertices[i].y}</text>
+                      </g>
+                    ))}
                   </g>
                 );
-              })}
+              })()}
 
               {/* Global bounding dimensions for all projections */}
               {(() => {
@@ -1243,8 +1044,8 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                 const totalHeightMm = Math.round((bMaxY - bMinY) * scaleV);
                 if (totalWidthMm <= 0 && totalHeightMm <= 0) return null;
 
-                const { sx: gleft, sy: gtop } = toSvg(bMinX, bMaxY);
-                const { sx: gright, sy: gbottom } = toSvg(bMaxX, bMinY);
+                const { sx: gleft, sy: gtop } = toSvg(bMinX, isElevation ? bMaxY : bMinY);
+                const { sx: gright, sy: gbottom } = toSvg(bMaxX, isElevation ? bMinY : bMaxY);
                 const off = 26;
                 const perimFontSize = Math.round(8 * Math.max(1, zoomLevel * 0.8));
                 const midX = (gleft + gright) / 2;
@@ -1282,15 +1083,29 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
       </svg>
       </div>
 
+      {/* Drawing mode indicator */}
+      {drawingMode && (
+        <div className="mt-1 px-2 py-1.5 bg-primary/10 border border-primary/30 rounded-md flex items-center gap-2">
+          <PenTool className="h-3.5 w-3.5 text-primary animate-pulse" />
+          <span className="text-[10px] text-primary font-medium">
+            Modo dibujo manual — Clic en la cuadrícula para añadir vértices ({editVertices.length} colocados: {geometryTypeLabel(editVertices.length)}).
+            <strong> Doble clic para cerrar la figura.</strong>
+          </span>
+          <Button variant="ghost" size="sm" className="h-5 text-[9px] ml-auto" onClick={() => { setDrawingMode(false); }}>
+            Finalizar
+          </Button>
+        </div>
+      )}
+
       {/* Editing controls */}
-      {isElevation && selectedWorkspaceId && (
+      {selectedWorkspaceId && !drawingMode && (
         <div className="mt-2 border rounded-lg p-2 bg-muted/30 space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold">
               Editando: {wallProjections?.find(p => p.workspaceId === selectedWorkspaceId)?.workspaceName}
             </span>
             <Badge variant="secondary" className="text-[9px] h-4">
-              {editVertices.length} vértices
+              {geometryTypeLabel(editVertices.length)}
               {editVertices.length >= 3 && ` · ${(polygonAreaCalc(editVertices) * scaleHm * scaleVm).toFixed(2)} m²`}
               {editVertices.length === 2 && ` · ${Math.round(Math.sqrt(((editVertices[1].x - editVertices[0].x) * scaleHm) ** 2 + ((editVertices[1].y - editVertices[0].y) * scaleVm) ** 2) * 1000)} mm`}
             </Badge>
@@ -1299,8 +1114,10 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
           {/* Vertex list */}
           <div className="space-y-1">
             {editVertices.map((v, i) => {
-              const nextV = editVertices[(i + 1) % editVertices.length];
-              const edgeMm = Math.round(Math.sqrt(((nextV.x - v.x) * scaleHm) ** 2 + ((nextV.y - v.y) * scaleVm) ** 2) * 1000);
+              const nextV = editVertices.length > 1 ? editVertices[(i + 1) % editVertices.length] : v;
+              const edgeMm = editVertices.length > 1
+                ? Math.round(Math.sqrt(((nextV.x - v.x) * scaleHm) ** 2 + ((nextV.y - v.y) * scaleVm) ** 2) * 1000)
+                : 0;
               return (
                 <div key={i} className="flex items-center gap-1">
                   <span className="text-[9px] text-muted-foreground w-5 text-right font-mono">V{i + 1}</span>
@@ -1330,8 +1147,8 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                       }}
                     />
                   </div>
-                  <span className="text-[8px] text-muted-foreground">→ {edgeMm}mm</span>
-                  {editVertices.length > 2 && (
+                  {editVertices.length > 1 && <span className="text-[8px] text-muted-foreground">→ {edgeMm}mm</span>}
+                  {editVertices.length > 1 && (
                     <Button variant="ghost" size="icon" className="h-4 w-4" onClick={() => removeVertex(i)}>
                       <Trash2 className="h-2.5 w-2.5" />
                     </Button>
@@ -1345,20 +1162,23 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
             <Button variant="outline" size="sm" className="h-6 text-[10px] gap-0.5" onClick={addVertex}>
               <Plus className="h-3 w-3" /> Vértice
             </Button>
+            <Button variant="outline" size="sm" className="h-6 text-[10px] gap-0.5" onClick={() => setDrawingMode(true)}>
+              <PenTool className="h-3 w-3" /> Dibujar
+            </Button>
             <Button variant="outline" size="sm" className="h-6 text-[10px] gap-0.5" onClick={resetToDefault}>
               <RefreshCw className="h-3 w-3" /> Resetear
             </Button>
             <div className="ml-auto flex gap-1">
-              <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => { setSelectedWorkspaceId(null); setEditVertices([]); }}>
+              <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => { setSelectedWorkspaceId(null); setEditVertices([]); setDrawingMode(false); }}>
                 Cancelar
               </Button>
-              <Button size="sm" className="h-6 text-[10px] gap-0.5" onClick={saveEditedPolygon} disabled={editVertices.length < 2}>
+              <Button size="sm" className="h-6 text-[10px] gap-0.5" onClick={saveEditedPolygon} disabled={editVertices.length < 1}>
                 <Save className="h-3 w-3" /> Guardar
               </Button>
             </div>
           </div>
           <p className="text-[9px] text-muted-foreground">
-            Arrastra los vértices en la cuadrícula o edita las coordenadas manualmente. Útil para definir caídas de tejado.
+            Punto (1v) · Línea (2v) · Triángulo (3v) · Polígono (N vértices). Arrastra o edita coordenadas. Usa "Dibujar" para marcar vértices haciendo clic.
           </p>
         </div>
       )}

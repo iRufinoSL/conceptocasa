@@ -741,11 +741,12 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
            })()}
 
           {/* Edges between placed vertices */}
+          {/* Edges between placed vertices with mm dimensions */}
           {vertices.map((v, i) => {
             if (i === 0) return null;
             const { sx: x1, sy: y1 } = toSvg(vertices[i - 1].x, vertices[i - 1].y);
             const { sx: x2, sy: y2 } = toSvg(v.x, v.y);
-            const len = edgeLength(vertices[i - 1], v) * cellSizeM;
+            const lenMm = Math.round(edgeLength(vertices[i - 1], v) * cellSizeM * 1000);
             return (
               <g key={`e-${i}`}>
                 <line x1={x1} y1={y1} x2={x2} y2={y2}
@@ -753,16 +754,17 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                 <text x={(x1 + x2) / 2} y={(y1 + y2) / 2 - 5} textAnchor="middle"
                   className="text-[7px] font-semibold select-none pointer-events-none"
                   fill="hsl(200 80% 50%)">
-                  {len.toFixed(2)}m
+                  {lenMm} mm
                 </text>
               </g>
             );
           })}
 
-          {/* Closing edge */}
+          {/* Closing edge with mm dimension */}
           {vertices.length >= 3 && (() => {
             const { sx: x1, sy: y1 } = toSvg(vertices[vertices.length - 1].x, vertices[vertices.length - 1].y);
             const { sx: x2, sy: y2 } = toSvg(vertices[0].x, vertices[0].y);
+            const closingMm = Math.round(closingLen * 1000);
             return (
               <g>
                 <line x1={x1} y1={y1} x2={x2} y2={y2}
@@ -772,39 +774,45 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                 <text x={(x1 + x2) / 2} y={(y1 + y2) / 2 - 5} textAnchor="middle"
                   className="text-[7px] font-semibold select-none pointer-events-none"
                   fill="hsl(200 80% 50%)">
-                  {closingLen.toFixed(2)}m
+                  {closingMm} mm
                 </text>
               </g>
             );
            })()}
 
-          {/* ── Wall numbers on each edge (when polygon is closed) ── */}
-          {isClosed && vertices.length >= 3 && vertices.map((v, i) => {
-            const next = vertices[(i + 1) % vertices.length];
-            const { sx: x1, sy: y1 } = toSvg(v.x, v.y);
-            const { sx: x2, sy: y2 } = toSvg(next.x, next.y);
-            const mx = (x1 + x2) / 2;
-            const my = (y1 + y2) / 2;
-            // Offset outward from polygon centroid
-            const cx = vertices.reduce((s, vt) => s + vt.x, 0) / vertices.length;
-            const cy = vertices.reduce((s, vt) => s + vt.y, 0) / vertices.length;
-            const { sx: csx, sy: csy } = toSvg(cx, cy);
-            const dx = mx - csx;
-            const dy = my - csy;
-            const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-            const offX = mx + (dx / dist) * 14;
-            const offY = my + (dy / dist) * 14;
+          {/* Bounding box dimension lines (mm) when polygon is closed */}
+          {isClosed && vertices.length >= 3 && (() => {
+            const bbox = polygonBBox(vertices);
+            const wMm = Math.round(bbox.w * cellSizeM * 1000);
+            const hMm = Math.round(bbox.h * cellSizeM * 1000);
+            const { sx: tlx, sy: tly } = toSvg(bbox.minX, originTopLeft ? bbox.minY : bbox.maxY);
+            const { sx: trx, sy: tryy } = toSvg(bbox.maxX, originTopLeft ? bbox.minY : bbox.maxY);
+            const { sx: blx, sy: bly } = toSvg(bbox.minX, originTopLeft ? bbox.maxY : bbox.minY);
+            const off = 18;
             return (
-              <g key={`wn-${i}`} className="cursor-pointer" style={{ pointerEvents: 'all' }}
-                onClick={(e) => { e.stopPropagation(); onWallClick?.(i); }}>
-                <circle cx={offX} cy={offY} r={9} fill="hsl(200 80% 40%)" stroke="white" strokeWidth={1.5} />
-                <text x={offX} y={offY} textAnchor="middle" dominantBaseline="central"
-                  fontSize={10} fontWeight={700} fill="white" className="select-none pointer-events-none">
-                  {i + 1}
+              <>
+                {/* Top horizontal dimension */}
+                <line x1={tlx} y1={tly - off} x2={trx} y2={tryy - off} stroke="hsl(var(--muted-foreground))" strokeWidth={0.8} />
+                <line x1={tlx} y1={tly - off - 4} x2={tlx} y2={tly - 2} stroke="hsl(var(--muted-foreground))" strokeWidth={0.5} />
+                <line x1={trx} y1={tryy - off - 4} x2={trx} y2={tryy - 2} stroke="hsl(var(--muted-foreground))" strokeWidth={0.5} />
+                <text x={(tlx + trx) / 2} y={tly - off - 4} textAnchor="middle"
+                  className="text-[7px] font-bold select-none pointer-events-none"
+                  fill="hsl(var(--muted-foreground))">
+                  {wMm} mm
                 </text>
-              </g>
+                {/* Left vertical dimension */}
+                <line x1={tlx - off} y1={tly} x2={blx - off} y2={bly} stroke="hsl(var(--muted-foreground))" strokeWidth={0.8} />
+                <line x1={tlx - off - 4} y1={tly} x2={tlx - 2} y2={tly} stroke="hsl(var(--muted-foreground))" strokeWidth={0.5} />
+                <line x1={blx - off - 4} y1={bly} x2={blx - 2} y2={bly} stroke="hsl(var(--muted-foreground))" strokeWidth={0.5} />
+                <text x={tlx - off - 4} y={(tly + bly) / 2} textAnchor="middle" dominantBaseline="central"
+                  transform={`rotate(-90, ${tlx - off - 4}, ${(tly + bly) / 2})`}
+                  className="text-[7px] font-bold select-none pointer-events-none"
+                  fill="hsl(var(--muted-foreground))">
+                  {hMm} mm
+                </text>
+              </>
             );
-          })}
+          })()}
 
           {/* Preview line from last vertex to hover (only while drawing) */}
           {!isClosed && vertices.length > 0 && hoverCell && !vertices.some(v => v.x === hoverCell.x && v.y === hoverCell.y) && (() => {

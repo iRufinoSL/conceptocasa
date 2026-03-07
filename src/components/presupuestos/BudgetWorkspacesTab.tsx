@@ -1532,20 +1532,29 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
         <p className="text-xs text-muted-foreground text-center py-4">No hay espacios de trabajo definidos</p>
       )}
 
-      {/* ── Grouped list ── */}
+       {/* ── Grouped list ── */}
       <div className="space-y-3">
         {Array.from(grouped.entries()).map(([key, { section, rooms: groupRooms }]) => {
           if (groupRooms.length === 0) return null;
+          const isSectionCollapsed = collapsedSections.has(key);
           return (
             <div key={key} className="space-y-1.5">
-              <div className="flex items-center gap-1.5 px-1">
+              <button
+                onClick={() => setCollapsedSections(prev => {
+                  const next = new Set(prev);
+                  if (next.has(key)) next.delete(key); else next.add(key);
+                  return next;
+                })}
+                className="flex items-center gap-1.5 px-1 w-full text-left hover:bg-accent/30 rounded transition-colors py-1"
+              >
+                {isSectionCollapsed ? <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
                 <Grid3x3 className="h-3.5 w-3.5 text-primary" />
                 <span className="text-xs font-semibold">{section ? section.name : 'Sin sección asignada'}</span>
                 {section && <Badge variant="outline" className="text-[9px] h-4 px-1">Z={section.axisValue}</Badge>}
                 <Badge variant="secondary" className="text-[9px] h-4 px-1">{groupRooms.length}</Badge>
-              </div>
+              </button>
 
-              {groupRooms.map(r => {
+              {!isSectionCollapsed && groupRooms.map(r => {
                 const poly = r.floor_polygon && r.floor_polygon.length >= 3 ? r.floor_polygon : null;
                 const area = poly ? polygonArea(poly) : r.length * r.width;
                 const vol = r.height ? area * r.height : null;

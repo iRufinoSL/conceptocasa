@@ -64,8 +64,9 @@ function computeWallProjections(
 ): Map<string, SectionWallProjection[]> {
   const result = new Map<string, SectionWallProjection[]>();
 
-  // Build floor Z base map
   const blockHMm = planData.blockHeightMm || 250;
+
+  // Build floor Z base map from floors table
   const sortedFloors = [...floors].sort((a, b) => a.orderIndex - b.orderIndex);
   const floorBaseZMap = new Map<string, number>();
   let accZ = 0;
@@ -76,6 +77,14 @@ function computeWallProjections(
     const heightM = firstHeight !== undefined ? firstHeight : planData.defaultHeight;
     const heightMm = Math.round(heightM * 1000);
     accZ += Math.round(heightMm / blockHMm);
+  }
+
+  // Build vertical section Z map: verticalSectionId → axisValue (Z level)
+  const verticalSectionZMap = new Map<string, number>();
+  for (const s of sections) {
+    if (s.sectionType === 'vertical') {
+      verticalSectionZMap.set(s.id, s.axisValue);
+    }
   }
 
   // Only process longitudinal (Y) and transversal (X) sections
@@ -89,7 +98,15 @@ function computeWallProjections(
       if (!room.floorPolygon || room.floorPolygon.length < 2) continue;
 
       const poly = room.floorPolygon;
-      const zBase = room.floorId ? (floorBaseZMap.get(room.floorId) ?? 0) : 0;
+
+      // Determine zBase: 1st priority: floorId → floorBaseZMap, 2nd: verticalSectionId → axisValue
+      let zBase = 0;
+      if (room.floorId && floorBaseZMap.has(room.floorId)) {
+        zBase = floorBaseZMap.get(room.floorId)!;
+      } else if (room.verticalSectionId && verticalSectionZMap.has(room.verticalSectionId)) {
+        zBase = verticalSectionZMap.get(room.verticalSectionId)!;
+      }
+
       const heightM = room.height !== undefined ? room.height : planData.defaultHeight;
       const heightBlocks = Math.round((heightM * 1000) / blockHMm);
       const zTop = zBase + heightBlocks;

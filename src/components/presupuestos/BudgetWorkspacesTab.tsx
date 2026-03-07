@@ -1245,10 +1245,11 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     // Preserve existing wall types when rebuilding walls
     const { data: existingWalls } = await supabase.from('budget_floor_plan_walls')
       .select('wall_index, wall_type').eq('room_id', roomId).order('wall_index');
-    const oldTypeMap = new Map((existingWalls || []).map(w => [w.wall_index, w.wall_type]));
+    const oldTypeMap = new Map((existingWalls || []).map(w => [w.wall_index, normalizeWallType(w.wall_type)]));
     await supabase.from('budget_floor_plan_walls').delete().eq('room_id', roomId);
-    const walls = gridEditVertices.map((_, i) => ({ room_id: roomId, wall_index: i, wall_type: oldTypeMap.get(i) || 'external' }));
-    await supabase.from('budget_floor_plan_walls').insert(walls);
+    const walls = gridEditVertices.map((_, i) => ({ room_id: roomId, wall_index: i + 1, wall_type: oldTypeMap.get(i + 1) || 'exterior' }));
+    const { error: wallsInsertError } = await supabase.from('budget_floor_plan_walls').insert(walls);
+    if (wallsInsertError) { toast.error(`Error al reconstruir paredes: ${wallsInsertError.message}`); return; }
     toast.success('Polígono actualizado');
     setGridEditId(null);
     await refetch();

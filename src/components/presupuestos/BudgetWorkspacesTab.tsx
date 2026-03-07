@@ -451,13 +451,14 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
         </div>
       )}
 
-      <div ref={gridContainerRef} className="overflow-auto rounded border bg-background max-h-[400px]">
+      <div ref={gridContainerRef} className={`rounded border bg-background ${isZoomed ? 'overflow-auto max-h-[70vh]' : 'overflow-hidden'}`}>
         <svg
           ref={svgRef}
-          width={svgW}
-          height={svgH}
+          {...(isZoomed
+            ? { width: svgW, height: svgH, style: { minWidth: svgW, cursor: draggingIdx !== null ? 'grabbing' : undefined } }
+            : { viewBox: `0 0 ${logicalW} ${logicalH}`, style: { width: '100%', height: 'auto', cursor: draggingIdx !== null ? 'grabbing' : undefined } }
+          )}
           className="block"
-          style={{ minWidth: svgW, cursor: draggingIdx !== null ? 'grabbing' : undefined }}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}

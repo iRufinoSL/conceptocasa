@@ -1591,32 +1591,33 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
 }
 
 function FaceRow({
-  label, type, options, isAdmin, onChange,
+  label, type, options, onChange, highlighted, onLabelClick,
 }: {
   label: string;
   type: string;
   options: { value: string; label: string }[];
-  isAdmin: boolean;
   onChange: (value: string) => void;
+  highlighted?: boolean;
+  onLabelClick?: () => void;
 }) {
-  const current = options.find(o => o.value === type);
   return (
-    <div className="flex items-center justify-between gap-2 py-0.5">
-      <span className="text-xs">{label}</span>
-      {isAdmin ? (
-        <Select value={type} onValueChange={onChange}>
-          <SelectTrigger className="h-6 w-[140px] text-[10px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {options.map(o => (
-              <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      ) : (
-        <Badge variant="outline" className="text-[10px] h-5">{current?.label || type}</Badge>
-      )}
+    <div className={`flex items-center justify-between gap-2 py-0.5 px-1 rounded ${highlighted ? 'bg-primary/10 ring-1 ring-primary/30' : ''}`}>
+      <span
+        className={`text-xs ${onLabelClick ? 'cursor-pointer hover:text-primary underline-offset-2 hover:underline' : ''}`}
+        onClick={onLabelClick}
+      >
+        {label}
+      </span>
+      <Select value={type} onValueChange={onChange}>
+        <SelectTrigger className="h-6 w-[140px] text-[10px]">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map(o => (
+            <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 }

@@ -342,6 +342,210 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
     setDrawingMode(false);
   };
 
+  // ── Wall click handler: detect orientation, open assignment panel ──
+  const handleWallEdgeClick = useCallback((
+    room: RoomData,
+    wallIndex: number,
+    vertexA: { x: number; y: number },
+    vertexB: { x: number; y: number },
+    svgMidX: number,
+    svgMidY: number,
+  ) => {
+    const dxGrid = Math.abs(vertexB.x - vertexA.x);
+    const dyGrid = Math.abs(vertexB.y - vertexA.y);
+    const isHorizontal = dxGrid >= dyGrid;
+    const edgeAxisValue = isHorizontal
+      ? Math.round((vertexA.y + vertexB.y) / 2)
+      : Math.round((vertexA.x + vertexB.x) / 2);
+
+    const wallLenMm = Math.round(Math.hypot(
+      (vertexB.x - vertexA.x) * scaleH,
+      (vertexB.y - vertexA.y) * scaleV,
+    ));
+
+    setWallAssignInfo({
+      roomId: room.id,
+      roomName: room.name,
+      wallIndex,
+      wallLenMm,
+      isHorizontal,
+      edgeAxisValue,
+      vertexA,
+      vertexB,
+      svgMidX,
+      svgMidY,
+    });
+    setWallAssignNewName('');
+    setWallAssignNewValue(String(edgeAxisValue));
+  }, [scaleH, scaleV]);
+
+  // Assign wall to an existing section → auto-generate rectangle
+  const assignWallToSection = useCallback((targetSectionId: string) => {
+    if (!wallAssignInfo || !allSections || !onSectionsChange) return;
+    const targetSection = allSections.find(s => s.id === targetSectionId);
+    if (!targetSection) return;
+
+    const room = rooms?.find(r => r.id === wallAssignInfo.roomId);
+    const heightM = room?.height ?? 2.6;
+    const blockHMm = scaleConfig?.scaleZ ?? 250;
+    const heightBlocks = Math.round((heightM * 1000) / blockHMm);
+    const zBase = section.axisValue;
+    const zTop = zBase + heightBlocks;
+
+    const { vertexA, vertexB, isHorizontal } = wallAssignInfo;
+    let hStart: number, hEnd: number;
+    if (isHorizontal) {
+      hStart = Math.min(vertexA.x, vertexB.x);
+      hEnd = Math.max(vertexA.x, vertexB.x);
+    } else {
+      hStart = Math.min(vertexA.y, vertexB.y);
+      hEnd = Math.max(vertexA.y, vertexB.y);
+    }
+
+    const wallPolyEntry: SectionPolygon = {
+      id: `${wallAssignInfo.roomId}_wall${wallAssignInfo.wallIndex}`,
+      name: `${wallAssignInfo.roomName} P${wallAssignInfo.wallIndex + 1}`,
+      vertices: [
+        { x: hStart, y: zBase, z: 0 },
+        { x: hEnd, y: zBase, z: 0 },
+        { x: hEnd, y: zTop, z: 0 },
+        { x: hStart, y: zTop, z: 0 },
+      ],
+    };
+
+    const updatedSections = allSections.map(s => {
+      if (s.id !== targetSectionId) return s;
+      const polys = [...(s.polygons || [])];
+      const existingIdx = polys.findIndex(p => p.id === wallPolyEntry.id);
+      if (existingIdx >= 0) {
+        polys[existingIdx] = wallPolyEntry;
+      } else {
+        polys.push(wallPolyEntry);
+      }
+      return { ...s, polygons: polys };
+    });
+
+    onSectionsChange(updatedSections);
+    toast.success(`Pared ${wallAssignInfo.wallIndex + 1} asignada a ${targetSection.name}`);
+    setWallAssignInfo(null);
+  }, [wallAssignInfo, allSections, onSectionsChange, rooms, scaleConfig, section.axisValue]);
+
+  // Create a new section and assign the wall to it
+  const createSectionAndAssign = useCallback(() => {
+    if (!wallAssignInfo || !allSections || !onSectionsChange) return;
+    const name = wallAssignNewName.trim();
+    if (!name) { toast.error('Introduce un nombre para la sección'); return; }
+    const val = parseFloat(wallAssignNewValue) || wallAssignInfo.edgeAxisValue;
+
+    const sType = wallAssignInfo.isHorizontal ? 'longitudinal' : 'transversal';
+    const axis = wallAssignInfo.isHorizontal ? 'Y' : 'X';
+
+    const newSection: CustomSection = {
+      id: generateId(),
+      name,
+      sectionType: sType as any,
+      axis: axis as any,
+      axisValue: val,
+      polygons: [],
+    };
+
+    const updatedWithNew = [...allSections, newSection];
+
+    // Build wall polygon
+    const room = rooms?.find(r => r.id === wallAssignInfo.roomId);
+    const heightM = room?.height ?? 2.6;
+    const blockHMm = scaleConfig?.scaleZ ?? 250;
+    const heightBlocks = Math.round((heightM * 1000) / blockHMm);
+    const zBase = section.axisValue;
+    const zTop = zBase + heightBlocks;
+    const { vertexA, vertexB, isHorizontal } = wallAssignInfo;
+    let hStart: number, hEnd: number;
+    if (isHorizontal) {
+      hStart = Math.min(vertexA.x, vertexB.x);
+      hEnd = Math.max(vertexA.x, vertexB.x);
+    } else {
+      hStart = Math.min(vertexA.y, vertexB.y);
+      hEnd = Math.max(vertexA.y, vertexB.y);
+    }
+
+    const wallPolyEntry: SectionPolygon = {
+      id: `${wallAssignInfo.roomId}_wall${wallAssignInfo.wallIndex}`,
+      name: `${wallAssignInfo.roomName} P${wallAssignInfo.wallIndex + 1}`,
+      vertices: [
+        { x: hStart, y: zBase, z: 0 },
+        { x: hEnd, y: zBase, z: 0 },
+        { x: hEnd, y: zTop, z: 0 },
+        { x: hStart, y: zTop, z: 0 },
+      ],
+    };
+
+    const finalSections = updatedWithNew.map(s => {
+      if (s.id !== newSection.id) return s;
+      return { ...s, polygons: [wallPolyEntry] };
+    });
+
+    onSectionsChange(finalSections);
+    toast.success(`Pared ${wallAssignInfo.wallIndex + 1} asignada a nueva sección "${name}"`);
+    setWallAssignInfo(null);
+    setWallAssignNewName('');
+  }, [wallAssignInfo, wallAssignNewName, wallAssignNewValue, allSections, onSectionsChange, rooms, scaleConfig, section.axisValue]);
+
+  // ── Ceiling assignment ──
+  const assignCeilingToSection = useCallback((targetSectionId: string) => {
+    if (!ceilingAssignRoom || !allSections || !onSectionsChange) return;
+    const room = rooms?.find(r => r.id === ceilingAssignRoom.roomId);
+    if (!room || !room.floorPolygon || room.floorPolygon.length < 3) return;
+
+    const ceilingPoly: SectionPolygon = {
+      id: `${ceilingAssignRoom.roomId}_ceiling`,
+      name: `${ceilingAssignRoom.roomName} (Techo)`,
+      vertices: room.floorPolygon.map(v => ({ x: v.x, y: v.y, z: 0 })),
+    };
+
+    const updatedSections = allSections.map(s => {
+      if (s.id !== targetSectionId) return s;
+      const polys = [...(s.polygons || [])];
+      const existingIdx = polys.findIndex(p => p.id === ceilingPoly.id);
+      if (existingIdx >= 0) polys[existingIdx] = ceilingPoly;
+      else polys.push(ceilingPoly);
+      return { ...s, polygons: polys };
+    });
+
+    onSectionsChange(updatedSections);
+    toast.success(`Techo de ${ceilingAssignRoom.roomName} asignado`);
+    setCeilingAssignRoom(null);
+  }, [ceilingAssignRoom, allSections, onSectionsChange, rooms]);
+
+  const createCeilingSectionAndAssign = useCallback(() => {
+    if (!ceilingAssignRoom || !allSections || !onSectionsChange) return;
+    const name = ceilingNewName.trim();
+    if (!name) { toast.error('Introduce un nombre'); return; }
+    const val = parseFloat(ceilingNewValue) || 0;
+    const room = rooms?.find(r => r.id === ceilingAssignRoom.roomId);
+    if (!room || !room.floorPolygon) return;
+
+    const newSection: CustomSection = {
+      id: generateId(),
+      name,
+      sectionType: 'vertical',
+      axis: 'Z',
+      axisValue: val,
+      polygons: [],
+    };
+
+    const ceilingPoly: SectionPolygon = {
+      id: `${ceilingAssignRoom.roomId}_ceiling`,
+      name: `${ceilingAssignRoom.roomName} (Techo)`,
+      vertices: room.floorPolygon.map(v => ({ x: v.x, y: v.y, z: 0 })),
+    };
+
+    const finalSections = [...allSections, { ...newSection, polygons: [ceilingPoly] }];
+    onSectionsChange(finalSections);
+    toast.success(`Techo asignado a nueva sección "${name}"`);
+    setCeilingAssignRoom(null);
+    setCeilingNewName('');
+  }, [ceilingAssignRoom, ceilingNewName, ceilingNewValue, allSections, onSectionsChange, rooms]);
+
   // Reset to default rectangle
   const resetToDefault = () => {
     if (!selectedWorkspaceId || !wallProjections) return;

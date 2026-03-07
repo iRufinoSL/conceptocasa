@@ -289,97 +289,229 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName }: SectionGridPro
         </text>
 
         {/* Workspace floor polygons for vertical sections */}
-        {section.sectionType === 'vertical' && rooms && rooms
-          .filter(r => r.verticalSectionId === section.id && r.floorPolygon && r.floorPolygon.length >= 3)
-          .map(room => {
-            const poly = room.floorPolygon!;
-            const points = poly.map(p => {
-              const hIdx = getHIndex(p.x);
-              const vIdx = getVIndex(p.y);
-              return `${margin.left + hIdx * cellSize},${margin.top + vIdx * cellSize}`;
-            }).join(' ');
+        {section.sectionType === 'vertical' && rooms && (() => {
+          const sectionRooms = rooms
+            .filter(r => r.verticalSectionId === section.id && r.floorPolygon && r.floorPolygon.length >= 3);
 
-            const cx = poly.reduce((s, p) => s + p.x, 0) / poly.length;
-            const cy = poly.reduce((s, p) => s + p.y, 0) / poly.length;
-            const cxSvg = margin.left + getHIndex(cx) * cellSize;
-            const cySvg = margin.top + getVIndex(cy) * cellSize;
+          if (sectionRooms.length === 0) return null;
 
-            let area = 0;
-            for (let i = 0; i < poly.length; i++) {
-              const j = (i + 1) % poly.length;
-              area += poly[i].x * poly[j].y - poly[j].x * poly[i].y;
-            }
-            area = Math.abs(area) / 2;
-            const scaleHm = (scaleConfig?.scaleX ?? 625) / 1000;
-            const scaleVm = (scaleConfig?.scaleY ?? 625) / 1000;
-            const areaM2 = area * scaleHm * scaleVm;
+          const allVertices = sectionRooms.flatMap(room => room.floorPolygon ?? []);
+          const hasGlobalBounds = allVertices.length >= 2;
 
-            // Compute SVG coords for each vertex
-            const svgPts = poly.map(p => ({
-              x: margin.left + getHIndex(p.x) * cellSize,
-              y: margin.top + getVIndex(p.y) * cellSize,
-            }));
+          const globalMinX = hasGlobalBounds ? Math.min(...allVertices.map(v => v.x)) : 0;
+          const globalMaxX = hasGlobalBounds ? Math.max(...allVertices.map(v => v.x)) : 0;
+          const globalMinY = hasGlobalBounds ? Math.min(...allVertices.map(v => v.y)) : 0;
+          const globalMaxY = hasGlobalBounds ? Math.max(...allVertices.map(v => v.y)) : 0;
 
-            return (
-              <g key={room.id}>
-                <polygon
-                  points={points}
-                  fill="hsl(200 80% 50% / 0.15)"
-                  stroke="hsl(200 80% 50%)"
-                  strokeWidth={1.5}
-                  strokeDasharray="4 2"
-                />
-                <text
-                  x={cxSvg}
-                  y={cySvg - 4}
-                  textAnchor="middle"
-                  fontSize={8}
-                  fontWeight={600}
-                  fill="hsl(200 80% 50%)"
-                >
-                  {room.name}
-                </text>
-                <text
-                  x={cxSvg}
-                  y={cySvg + 7}
-                  textAnchor="middle"
-                  fontSize={7}
-                  fill="hsl(200 80% 50% / 0.8)"
-                >
-                  {areaM2.toFixed(2)} m²
-                </text>
-                {/* Wall numbers on each edge */}
-                {svgPts.map((pt, i) => {
-                  const next = svgPts[(i + 1) % svgPts.length];
-                  const mx = (pt.x + next.x) / 2;
-                  const my = (pt.y + next.y) / 2;
-                  // offset label outward from polygon centre
-                  const dx = mx - cxSvg;
-                  const dy = my - cySvg;
-                  const len = Math.sqrt(dx * dx + dy * dy) || 1;
-                  const offX = mx + (dx / len) * 10;
-                  const offY = my + (dy / len) * 10;
-                  return (
-                    <g key={i} className="cursor-pointer" style={{ pointerEvents: 'all' }}>
-                      <circle cx={offX} cy={offY} r={8} fill="hsl(200 80% 40%)" stroke="white" strokeWidth={1} />
-                      <text
-                        x={offX}
-                        y={offY + 3}
-                        textAnchor="middle"
-                        fontSize={9}
-                        fontWeight={700}
-                        fill="white"
-                        style={{ pointerEvents: 'none' }}
-                      >
-                        {i + 1}
-                      </text>
-                    </g>
-                  );
-                })}
-              </g>
-            );
-          })
-        }
+          const globalLeft = margin.left + getHIndex(globalMinX) * cellSize;
+          const globalRight = margin.left + getHIndex(globalMaxX) * cellSize;
+          const globalTop = margin.top + getVIndex(globalMinY) * cellSize;
+          const globalBottom = margin.top + getVIndex(globalMaxY) * cellSize;
+
+          const globalWidthMm = Math.round((globalMaxX - globalMinX) * scaleH);
+          const globalHeightMm = Math.round((globalMaxY - globalMinY) * scaleV);
+
+          return (
+            <>
+              {sectionRooms.map(room => {
+                const poly = room.floorPolygon!;
+                const points = poly.map(p => {
+                  const hIdx = getHIndex(p.x);
+                  const vIdx = getVIndex(p.y);
+                  return `${margin.left + hIdx * cellSize},${margin.top + vIdx * cellSize}`;
+                }).join(' ');
+
+                const cx = poly.reduce((s, p) => s + p.x, 0) / poly.length;
+                const cy = poly.reduce((s, p) => s + p.y, 0) / poly.length;
+                const cxSvg = margin.left + getHIndex(cx) * cellSize;
+                const cySvg = margin.top + getVIndex(cy) * cellSize;
+
+                let area = 0;
+                for (let i = 0; i < poly.length; i++) {
+                  const j = (i + 1) % poly.length;
+                  area += poly[i].x * poly[j].y - poly[j].x * poly[i].y;
+                }
+                area = Math.abs(area) / 2;
+                const scaleHm = (scaleConfig?.scaleX ?? 625) / 1000;
+                const scaleVm = (scaleConfig?.scaleY ?? 625) / 1000;
+                const areaM2 = area * scaleHm * scaleVm;
+
+                const svgPts = poly.map(p => ({
+                  x: margin.left + getHIndex(p.x) * cellSize,
+                  y: margin.top + getVIndex(p.y) * cellSize,
+                }));
+
+                return (
+                  <g key={room.id}>
+                    <polygon
+                      points={points}
+                      fill="hsl(var(--primary) / 0.12)"
+                      stroke="hsl(var(--primary))"
+                      strokeWidth={1.5}
+                      strokeDasharray="4 2"
+                    />
+
+                    {/* Doble sistema de acotación por pared: exterior + cercana */}
+                    {svgPts.map((pt, i) => {
+                      const next = svgPts[(i + 1) % svgPts.length];
+                      const currGrid = poly[i];
+                      const nextGrid = poly[(i + 1) % poly.length];
+
+                      const mx = (pt.x + next.x) / 2;
+                      const my = (pt.y + next.y) / 2;
+                      const dx = next.x - pt.x;
+                      const dy = next.y - pt.y;
+                      const edgeLenSvg = Math.sqrt(dx * dx + dy * dy) || 1;
+
+                      let nx = -dy / edgeLenSvg;
+                      let ny = dx / edgeLenSvg;
+                      const toCenter = (cxSvg - mx) * nx + (cySvg - my) * ny;
+                      if (toCenter > 0) {
+                        nx = -nx;
+                        ny = -ny;
+                      }
+
+                      const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+                      const rotAngle = (angle > 90 || angle < -90) ? angle + 180 : angle;
+
+                      const dxMm = (nextGrid.x - currGrid.x) * scaleH;
+                      const dyMm = (nextGrid.y - currGrid.y) * scaleV;
+                      const wallLenMm = Math.round(Math.hypot(dxMm, dyMm));
+
+                      const outerOffset = 24;
+                      const innerOffset = 9;
+
+                      const ox1 = pt.x + nx * outerOffset;
+                      const oy1 = pt.y + ny * outerOffset;
+                      const ox2 = next.x + nx * outerOffset;
+                      const oy2 = next.y + ny * outerOffset;
+                      const omx = (ox1 + ox2) / 2;
+                      const omy = (oy1 + oy2) / 2;
+
+                      const imx = mx + nx * innerOffset;
+                      const imy = my + ny * innerOffset;
+
+                      return (
+                        <g key={`wall-mm-${room.id}-${i}`} className="pointer-events-none">
+                          {/* Cota exterior de la arista */}
+                          <line x1={ox1} y1={oy1} x2={ox2} y2={oy2} stroke="hsl(var(--muted-foreground))" strokeWidth={0.8} />
+                          <line x1={pt.x} y1={pt.y} x2={ox1} y2={oy1} stroke="hsl(var(--muted-foreground) / 0.45)" strokeWidth={0.55} />
+                          <line x1={next.x} y1={next.y} x2={ox2} y2={oy2} stroke="hsl(var(--muted-foreground) / 0.45)" strokeWidth={0.55} />
+                          <text
+                            x={omx + nx * 5}
+                            y={omy + ny * 5}
+                            textAnchor="middle"
+                            dominantBaseline="central"
+                            transform={`rotate(${rotAngle}, ${omx + nx * 5}, ${omy + ny * 5})`}
+                            fontSize={7}
+                            fontWeight={700}
+                            fill="hsl(var(--muted-foreground))"
+                          >
+                            {wallLenMm} mm
+                          </text>
+
+                          {/* Medida de pared cercana */}
+                          <text
+                            x={imx}
+                            y={imy}
+                            textAnchor="middle"
+                            dominantBaseline="central"
+                            transform={`rotate(${rotAngle}, ${imx}, ${imy})`}
+                            fontSize={8}
+                            fontWeight={700}
+                            fill="hsl(var(--primary))"
+                          >
+                            {wallLenMm} mm
+                          </text>
+                        </g>
+                      );
+                    })}
+
+                    <text
+                      x={cxSvg}
+                      y={cySvg - 4}
+                      textAnchor="middle"
+                      fontSize={8}
+                      fontWeight={600}
+                      fill="hsl(var(--primary))"
+                    >
+                      {room.name}
+                    </text>
+                    <text
+                      x={cxSvg}
+                      y={cySvg + 7}
+                      textAnchor="middle"
+                      fontSize={7}
+                      fill="hsl(var(--primary) / 0.8)"
+                    >
+                      {areaM2.toFixed(2)} m²
+                    </text>
+                  </g>
+                );
+              })}
+
+              {/* Cotas exteriores globales (arriba, derecha, abajo, izquierda) */}
+              {hasGlobalBounds && (() => {
+                const off = 22;
+                const topY = globalTop - off;
+                const bottomY = globalBottom + off;
+                const leftX = globalLeft - off;
+                const rightX = globalRight + off;
+                const midX = (globalLeft + globalRight) / 2;
+                const midY = (globalTop + globalBottom) / 2;
+
+                return (
+                  <g className="pointer-events-none">
+                    {/* Arriba */}
+                    <line x1={globalLeft} y1={topY} x2={globalRight} y2={topY} stroke="hsl(var(--muted-foreground))" strokeWidth={1} />
+                    <line x1={globalLeft} y1={globalTop} x2={globalLeft} y2={topY} stroke="hsl(var(--muted-foreground) / 0.6)" strokeWidth={0.8} />
+                    <line x1={globalRight} y1={globalTop} x2={globalRight} y2={topY} stroke="hsl(var(--muted-foreground) / 0.6)" strokeWidth={0.8} />
+                    <text x={midX} y={topY - 5} textAnchor="middle" fontSize={8} fontWeight={700} fill="hsl(var(--muted-foreground))">{globalWidthMm} mm</text>
+
+                    {/* Abajo */}
+                    <line x1={globalLeft} y1={bottomY} x2={globalRight} y2={bottomY} stroke="hsl(var(--muted-foreground))" strokeWidth={1} />
+                    <line x1={globalLeft} y1={globalBottom} x2={globalLeft} y2={bottomY} stroke="hsl(var(--muted-foreground) / 0.6)" strokeWidth={0.8} />
+                    <line x1={globalRight} y1={globalBottom} x2={globalRight} y2={bottomY} stroke="hsl(var(--muted-foreground) / 0.6)" strokeWidth={0.8} />
+                    <text x={midX} y={bottomY + 10} textAnchor="middle" fontSize={8} fontWeight={700} fill="hsl(var(--muted-foreground))">{globalWidthMm} mm</text>
+
+                    {/* Izquierda */}
+                    <line x1={leftX} y1={globalTop} x2={leftX} y2={globalBottom} stroke="hsl(var(--muted-foreground))" strokeWidth={1} />
+                    <line x1={globalLeft} y1={globalTop} x2={leftX} y2={globalTop} stroke="hsl(var(--muted-foreground) / 0.6)" strokeWidth={0.8} />
+                    <line x1={globalLeft} y1={globalBottom} x2={leftX} y2={globalBottom} stroke="hsl(var(--muted-foreground) / 0.6)" strokeWidth={0.8} />
+                    <text
+                      x={leftX - 6}
+                      y={midY}
+                      textAnchor="middle"
+                      fontSize={8}
+                      fontWeight={700}
+                      fill="hsl(var(--muted-foreground))"
+                      transform={`rotate(-90, ${leftX - 6}, ${midY})`}
+                    >
+                      {globalHeightMm} mm
+                    </text>
+
+                    {/* Derecha */}
+                    <line x1={rightX} y1={globalTop} x2={rightX} y2={globalBottom} stroke="hsl(var(--muted-foreground))" strokeWidth={1} />
+                    <line x1={globalRight} y1={globalTop} x2={rightX} y2={globalTop} stroke="hsl(var(--muted-foreground) / 0.6)" strokeWidth={0.8} />
+                    <line x1={globalRight} y1={globalBottom} x2={rightX} y2={globalBottom} stroke="hsl(var(--muted-foreground) / 0.6)" strokeWidth={0.8} />
+                    <text
+                      x={rightX + 6}
+                      y={midY}
+                      textAnchor="middle"
+                      fontSize={8}
+                      fontWeight={700}
+                      fill="hsl(var(--muted-foreground))"
+                      transform={`rotate(-90, ${rightX + 6}, ${midY})`}
+                    >
+                      {globalHeightMm} mm
+                    </text>
+                  </g>
+                );
+              })()}
+            </>
+          );
+        })()}
+
       </svg>
       </div>
     </div>

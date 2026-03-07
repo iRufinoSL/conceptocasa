@@ -2690,6 +2690,56 @@ export type Database = {
         }
         Relationships: []
       }
+      deletion_backups: {
+        Row: {
+          backup_data: Json
+          budget_id: string
+          created_at: string
+          created_by: string | null
+          entity_id: string
+          entity_name: string | null
+          entity_type: string
+          id: string
+          label: string | null
+          module: string
+          restored_at: string | null
+        }
+        Insert: {
+          backup_data: Json
+          budget_id: string
+          created_at?: string
+          created_by?: string | null
+          entity_id: string
+          entity_name?: string | null
+          entity_type: string
+          id?: string
+          label?: string | null
+          module: string
+          restored_at?: string | null
+        }
+        Update: {
+          backup_data?: Json
+          budget_id?: string
+          created_at?: string
+          created_by?: string | null
+          entity_id?: string
+          entity_name?: string | null
+          entity_type?: string
+          id?: string
+          label?: string | null
+          module?: string
+          restored_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deletion_backups_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "presupuestos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       document_template_outputs: {
         Row: {
           created_at: string

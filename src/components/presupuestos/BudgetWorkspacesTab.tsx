@@ -2,6 +2,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Pencil, Trash2, Plus, ChevronDown, ChevronRight, ChevronLeft, ChevronUp, Triangle, Pyramid, Cuboid, Grid3x3, MapPin, X, MousePointerClick, List, Layers, Save, RefreshCw, Expand } from 'lucide-react';
 import { GridPdfExport } from './GridPdfExport';
+import { DeleteWithBackupDialog } from '@/components/DeleteWithBackupDialog';
+import { DeletionBackupsList } from '@/components/DeletionBackupsList';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -1238,9 +1240,25 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     setShowForm(true);
   };
 
-  const handleDelete = async (id: string) => {
-    await supabase.from('budget_floor_plan_rooms').delete().eq('id', id);
+  const [deleteTarget, setDeleteTarget] = useState<Workspace | null>(null);
+
+  const handleDeleteConfirmed = async () => {
+    if (!deleteTarget) return;
+    await supabase.from('budget_floor_plan_rooms').delete().eq('id', deleteTarget.id);
     toast.success('Espacio eliminado');
+    setDeleteTarget(null);
+    refetch();
+    queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces', budgetId] });
+    queryClient.invalidateQueries({ queryKey: ['deletion-backups', budgetId, 'workspaces'] });
+  };
+
+  const handleRestoreBackup = async (backupData: Record<string, any>, _entityType: string) => {
+    const { id, floor_polygon, ...rest } = backupData;
+    const insertData: any = { ...rest };
+    if (floorPlan) insertData.floor_plan_id = floorPlan.id;
+    if (floor_polygon) insertData.floor_polygon = floor_polygon;
+    const { error } = await supabase.from('budget_floor_plan_rooms').insert(insertData);
+    if (error) throw error;
     refetch();
     queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces', budgetId] });
   };
@@ -1567,7 +1585,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                           <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEdit(r)}>
                             <Pencil className="h-3 w-3" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => handleDelete(r.id)}>
+                          <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => setDeleteTarget(r)}>
                             <Trash2 className="h-3 w-3" />
                           </Button>
                         </div>
@@ -1751,6 +1769,39 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
           );
         })}
       </div>
+
+      {/* Backups list */}
+      <DeletionBackupsList
+        budgetId={budgetId}
+        module="workspaces"
+        onRestore={handleRestoreBackup}
+      />
+
+      {/* Delete with backup dialog */}
+      {deleteTarget && (
+        <DeleteWithBackupDialog
+          open={!!deleteTarget}
+          onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+          onConfirmDelete={handleDeleteConfirmed}
+          entityName={deleteTarget.name}
+          entityId={deleteTarget.id}
+          entityType="workspace"
+          module="workspaces"
+          budgetId={budgetId}
+          backupData={{
+            id: deleteTarget.id,
+            name: deleteTarget.name,
+            length: deleteTarget.length,
+            width: deleteTarget.width,
+            height: deleteTarget.height,
+            has_floor: deleteTarget.has_floor,
+            has_ceiling: deleteTarget.has_ceiling,
+            has_roof: deleteTarget.has_roof,
+            vertical_section_id: deleteTarget.vertical_section_id,
+            floor_polygon: deleteTarget.floor_polygon,
+          }}
+        />
+      )}
     </div>
   );
 }

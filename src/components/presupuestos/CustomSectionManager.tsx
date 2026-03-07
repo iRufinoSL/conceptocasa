@@ -85,6 +85,11 @@ const PROJ_COLORS = [
   'hsl(60 70% 45%)', 'hsl(330 60% 55%)',
 ];
 
+/** Convert hsl color to hsl with alpha: hsl(210 70% 55%) → hsl(210 70% 55% / 0.15) */
+function hslWithAlpha(hslColor: string, alpha: number): string {
+  return hslColor.replace(')', ` / ${alpha})`);
+}
+
 interface PolygonVertex {
   x: number;
   y: number;

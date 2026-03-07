@@ -1585,7 +1585,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                           <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEdit(r)}>
                             <Pencil className="h-3 w-3" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => handleDelete(r.id)}>
+                          <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => setDeleteTarget(r)}>
                             <Trash2 className="h-3 w-3" />
                           </Button>
                         </div>

@@ -1129,16 +1129,19 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     },
   });
 
-  const verticalSections = useMemo<CustomSection[]>(() => {
+  const allSections = useMemo<CustomSection[]>(() => {
     if (!floorPlan?.custom_corners) return [];
     try {
       const parsed = typeof floorPlan.custom_corners === 'string'
         ? JSON.parse(floorPlan.custom_corners)
         : floorPlan.custom_corners;
-      const sections: CustomSection[] = parsed?.customSections || [];
-      return sections.filter(s => s.sectionType === 'vertical');
+      return parsed?.customSections || [];
     } catch { return []; }
   }, [floorPlan?.custom_corners]);
+
+  const verticalSections = useMemo(() => allSections.filter(s => s.sectionType === 'vertical'), [allSections]);
+  const longitudinalSections = useMemo(() => allSections.filter(s => s.sectionType === 'longitudinal'), [allSections]);
+  const transversalSections = useMemo(() => allSections.filter(s => s.sectionType === 'transversal'), [allSections]);
 
   /** Get the perimeter polygon (XY) from a vertical section's first polygon */
   const getSectionPerimeter = useCallback((sectionId: string | null): PolygonVertex[] | undefined => {

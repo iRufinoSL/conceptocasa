@@ -768,7 +768,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             const offY = my + (dy / dist) * 14;
             return (
               <g key={`wn-${i}`} className="cursor-pointer" style={{ pointerEvents: 'all' }}
-                onClick={(e) => { e.stopPropagation(); }}>
+                onClick={(e) => { e.stopPropagation(); onWallClick?.(i); }}>
                 <circle cx={offX} cy={offY} r={9} fill="hsl(200 80% 40%)" stroke="white" strokeWidth={1.5} />
                 <text x={offX} y={offY} textAnchor="middle" dominantBaseline="central"
                   fontSize={10} fontWeight={700} fill="white" className="select-none pointer-events-none">

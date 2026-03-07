@@ -1010,8 +1010,8 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             const bMinY = Math.min(...allYs);
             const bMaxY = Math.max(...allYs);
 
-            const totalWidthMm = Math.round((bMaxX - bMinX) * cellSizeM * 1000);
-            const totalHeightMm = Math.round((bMaxY - bMinY) * cellSizeM * 1000);
+            const totalWidthMm = Math.round((bMaxX - bMinX) * hScale * 1000);
+            const totalHeightMm = Math.round((bMaxY - bMinY) * vScale * 1000);
 
             if (totalWidthMm <= 0 && totalHeightMm <= 0) return null;
 

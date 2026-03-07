@@ -314,6 +314,12 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName }: SectionGridPro
             const scaleVm = (scaleConfig?.scaleY ?? 625) / 1000;
             const areaM2 = area * scaleHm * scaleVm;
 
+            // Compute SVG coords for each vertex
+            const svgPts = poly.map(p => ({
+              x: margin.left + getHIndex(p.x) * cellSize,
+              y: margin.top + getVIndex(p.y) * cellSize,
+            }));
+
             return (
               <g key={room.id}>
                 <polygon
@@ -342,6 +348,34 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName }: SectionGridPro
                 >
                   {areaM2.toFixed(2)} m²
                 </text>
+                {/* Wall numbers on each edge */}
+                {svgPts.map((pt, i) => {
+                  const next = svgPts[(i + 1) % svgPts.length];
+                  const mx = (pt.x + next.x) / 2;
+                  const my = (pt.y + next.y) / 2;
+                  // offset label outward from polygon centre
+                  const dx = mx - cxSvg;
+                  const dy = my - cySvg;
+                  const len = Math.sqrt(dx * dx + dy * dy) || 1;
+                  const offX = mx + (dx / len) * 10;
+                  const offY = my + (dy / len) * 10;
+                  return (
+                    <g key={i} className="cursor-pointer" style={{ pointerEvents: 'all' }}>
+                      <circle cx={offX} cy={offY} r={8} fill="hsl(200 80% 40%)" stroke="white" strokeWidth={1} />
+                      <text
+                        x={offX}
+                        y={offY + 3}
+                        textAnchor="middle"
+                        fontSize={9}
+                        fontWeight={700}
+                        fill="white"
+                        style={{ pointerEvents: 'none' }}
+                      >
+                        {i + 1}
+                      </text>
+                    </g>
+                  );
+                })}
               </g>
             );
           })

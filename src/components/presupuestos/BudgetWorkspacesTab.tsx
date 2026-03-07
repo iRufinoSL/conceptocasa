@@ -1769,6 +1769,39 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
           );
         })}
       </div>
+
+      {/* Backups list */}
+      <DeletionBackupsList
+        budgetId={budgetId}
+        module="workspaces"
+        onRestore={handleRestoreBackup}
+      />
+
+      {/* Delete with backup dialog */}
+      {deleteTarget && (
+        <DeleteWithBackupDialog
+          open={!!deleteTarget}
+          onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+          onConfirmDelete={handleDeleteConfirmed}
+          entityName={deleteTarget.name}
+          entityId={deleteTarget.id}
+          entityType="workspace"
+          module="workspaces"
+          budgetId={budgetId}
+          backupData={{
+            id: deleteTarget.id,
+            name: deleteTarget.name,
+            length: deleteTarget.length,
+            width: deleteTarget.width,
+            height: deleteTarget.height,
+            has_floor: deleteTarget.has_floor,
+            has_ceiling: deleteTarget.has_ceiling,
+            has_roof: deleteTarget.has_roof,
+            vertical_section_id: deleteTarget.vertical_section_id,
+            floor_polygon: deleteTarget.floor_polygon,
+          }}
+        />
+      )}
     </div>
   );
 }

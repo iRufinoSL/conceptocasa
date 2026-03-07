@@ -117,6 +117,33 @@ function wallLabel(index: number, total: number): string {
   return `Pared ${index + 1}`;
 }
 
+function normalizeWallType(type?: string | null): string {
+  switch (type) {
+    case 'external':
+    case 'externa':
+    case 'exterior':
+      return 'exterior';
+    case 'internal':
+    case 'interna':
+    case 'interior':
+      return 'interior';
+    case 'external_shared':
+    case 'compartida':
+    case 'exterior_compartida':
+      return 'exterior_compartida';
+    case 'internal_shared':
+    case 'interior_compartida':
+      return 'interior_compartida';
+    case 'invisible':
+    case 'interior_invisible':
+      return 'interior_invisible';
+    case 'exterior_invisible':
+      return 'exterior_invisible';
+    default:
+      return 'exterior';
+  }
+}
+
 function getGeometryType(room: Workspace): GeometryType {
   if (room.has_roof) return 'prism';
   return 'cube';

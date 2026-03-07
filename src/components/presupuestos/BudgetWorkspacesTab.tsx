@@ -1133,17 +1133,23 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
       // Preserve existing wall types when rebuilding walls
       const { data: existingWalls } = await supabase.from('budget_floor_plan_walls')
         .select('wall_index, wall_type').eq('room_id', editingId).order('wall_index');
-      const oldTypeMap = new Map((existingWalls || []).map(w => [w.wall_index, w.wall_type]));
+      const oldTypeMap = new Map((existingWalls || []).map(w => [w.wall_index, normalizeWallType(w.wall_type)]));
       await supabase.from('budget_floor_plan_walls').delete().eq('room_id', editingId);
-      const walls = formVertices.map((_, i) => ({ room_id: editingId, wall_index: i, wall_type: oldTypeMap.get(i) || 'external' }));
-      await supabase.from('budget_floor_plan_walls').insert(walls);
+      const walls = formVertices.map((_, i) => ({
+        room_id: editingId,
+        wall_index: i + 1,
+        wall_type: oldTypeMap.get(i + 1) || 'exterior',
+      }));
+      const { error: wallsInsertError } = await supabase.from('budget_floor_plan_walls').insert(walls);
+      if (wallsInsertError) { toast.error(`Error al reconstruir paredes: ${wallsInsertError.message}`); return; }
       toast.success('Espacio actualizado');
     } else {
       const { data: newRoom, error } = await supabase
         .from('budget_floor_plan_rooms').insert(payload).select('id').single();
       if (error || !newRoom) { toast.error('Error al crear'); return; }
-      const walls = formVertices.map((_, i) => ({ room_id: newRoom.id, wall_index: i, wall_type: 'external' }));
-      await supabase.from('budget_floor_plan_walls').insert(walls);
+      const walls = formVertices.map((_, i) => ({ room_id: newRoom.id, wall_index: i + 1, wall_type: 'exterior' }));
+      const { error: wallsInsertError } = await supabase.from('budget_floor_plan_walls').insert(walls);
+      if (wallsInsertError) { toast.error(`Espacio creado, pero falló la creación de paredes: ${wallsInsertError.message}`); return; }
       toast.success(`Espacio creado con ${formVertices.length} paredes`);
     }
     resetForm();

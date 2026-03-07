@@ -240,7 +240,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
   // Save edited polygon back to section
   const saveEditedPolygon = () => {
     if (!selectedWorkspaceId || !allSections || !onSectionsChange) return;
-    if (editVertices.length < 3) { toast.error('Mínimo 3 vértices'); return; }
+    if (editVertices.length < 2) { toast.error('Mínimo 2 vértices'); return; }
 
     const proj = wallProjections?.find(p => p.workspaceId === selectedWorkspaceId);
     const updatedSections = allSections.map(s => {

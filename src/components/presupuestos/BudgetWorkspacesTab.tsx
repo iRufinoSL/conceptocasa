@@ -95,6 +95,32 @@ function polygonArea(vertices: PolygonVertex[]): number {
   return Math.abs(area) / 2;
 }
 
+/** Find intersections of polygon edges with axis=val, returning the other-axis values */
+function findPolygonIntersections(
+  poly: PolygonVertex[],
+  axis: 'x' | 'y',
+  val: number,
+): number[] {
+  const intersections: number[] = [];
+  const otherAxis = axis === 'y' ? 'x' : 'y';
+  for (let i = 0; i < poly.length; i++) {
+    const j = (i + 1) % poly.length;
+    const a = poly[i];
+    const b = poly[j];
+    const aVal = a[axis];
+    const bVal = b[axis];
+    if ((aVal <= val && bVal >= val) || (aVal >= val && bVal <= val)) {
+      if (aVal === bVal) {
+        intersections.push(a[otherAxis], b[otherAxis]);
+      } else {
+        const t = (val - aVal) / (bVal - aVal);
+        intersections.push(a[otherAxis] + t * (b[otherAxis] - a[otherAxis]));
+      }
+    }
+  }
+  return intersections;
+}
+
 /** Bounding box dimensions */
 function polygonBBox(vertices: PolygonVertex[]) {
   if (vertices.length === 0) return { minX: 0, maxX: 0, minY: 0, maxY: 0, w: 0, h: 0 };

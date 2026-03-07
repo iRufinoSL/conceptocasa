@@ -451,55 +451,56 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName }: SectionGridPro
 
               {/* Cotas exteriores globales (arriba, derecha, abajo, izquierda) */}
               {hasGlobalBounds && (() => {
-                const off = 22;
+                const off = 26;
                 const topY = globalTop - off;
                 const bottomY = globalBottom + off;
                 const leftX = globalLeft - off;
                 const rightX = globalRight + off;
                 const midX = (globalLeft + globalRight) / 2;
                 const midY = (globalTop + globalBottom) / 2;
+                const perimFontSize = Math.round(8 * Math.max(1, zoomLevel * 0.8));
 
                 return (
                   <g className="pointer-events-none">
                     {/* Arriba */}
-                    <line x1={globalLeft} y1={topY} x2={globalRight} y2={topY} stroke="hsl(var(--muted-foreground))" strokeWidth={1} />
-                    <line x1={globalLeft} y1={globalTop} x2={globalLeft} y2={topY} stroke="hsl(var(--muted-foreground) / 0.6)" strokeWidth={0.8} />
-                    <line x1={globalRight} y1={globalTop} x2={globalRight} y2={topY} stroke="hsl(var(--muted-foreground) / 0.6)" strokeWidth={0.8} />
-                    <text x={midX} y={topY - 5} textAnchor="middle" fontSize={8} fontWeight={700} fill="hsl(var(--muted-foreground))">{globalWidthMm} mm</text>
+                    <line x1={globalLeft} y1={topY} x2={globalRight} y2={topY} stroke="hsl(0 70% 50%)" strokeWidth={1.2} />
+                    <line x1={globalLeft} y1={globalTop} x2={globalLeft} y2={topY} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
+                    <line x1={globalRight} y1={globalTop} x2={globalRight} y2={topY} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
+                    <text x={midX} y={topY - 5} textAnchor="middle" fontSize={perimFontSize} fontWeight={700} fill="hsl(0 70% 45%)">{globalWidthMm} mm</text>
 
                     {/* Abajo */}
-                    <line x1={globalLeft} y1={bottomY} x2={globalRight} y2={bottomY} stroke="hsl(var(--muted-foreground))" strokeWidth={1} />
-                    <line x1={globalLeft} y1={globalBottom} x2={globalLeft} y2={bottomY} stroke="hsl(var(--muted-foreground) / 0.6)" strokeWidth={0.8} />
-                    <line x1={globalRight} y1={globalBottom} x2={globalRight} y2={bottomY} stroke="hsl(var(--muted-foreground) / 0.6)" strokeWidth={0.8} />
-                    <text x={midX} y={bottomY + 10} textAnchor="middle" fontSize={8} fontWeight={700} fill="hsl(var(--muted-foreground))">{globalWidthMm} mm</text>
+                    <line x1={globalLeft} y1={bottomY} x2={globalRight} y2={bottomY} stroke="hsl(0 70% 50%)" strokeWidth={1.2} />
+                    <line x1={globalLeft} y1={globalBottom} x2={globalLeft} y2={bottomY} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
+                    <line x1={globalRight} y1={globalBottom} x2={globalRight} y2={bottomY} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
+                    <text x={midX} y={bottomY + 10} textAnchor="middle" fontSize={perimFontSize} fontWeight={700} fill="hsl(0 70% 45%)">{globalWidthMm} mm</text>
 
                     {/* Izquierda */}
-                    <line x1={leftX} y1={globalTop} x2={leftX} y2={globalBottom} stroke="hsl(var(--muted-foreground))" strokeWidth={1} />
-                    <line x1={globalLeft} y1={globalTop} x2={leftX} y2={globalTop} stroke="hsl(var(--muted-foreground) / 0.6)" strokeWidth={0.8} />
-                    <line x1={globalLeft} y1={globalBottom} x2={leftX} y2={globalBottom} stroke="hsl(var(--muted-foreground) / 0.6)" strokeWidth={0.8} />
+                    <line x1={leftX} y1={globalTop} x2={leftX} y2={globalBottom} stroke="hsl(0 70% 50%)" strokeWidth={1.2} />
+                    <line x1={globalLeft} y1={globalTop} x2={leftX} y2={globalTop} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
+                    <line x1={globalLeft} y1={globalBottom} x2={leftX} y2={globalBottom} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
                     <text
                       x={leftX - 6}
                       y={midY}
                       textAnchor="middle"
-                      fontSize={8}
+                      fontSize={perimFontSize}
                       fontWeight={700}
-                      fill="hsl(var(--muted-foreground))"
+                      fill="hsl(0 70% 45%)"
                       transform={`rotate(-90, ${leftX - 6}, ${midY})`}
                     >
                       {globalHeightMm} mm
                     </text>
 
                     {/* Derecha */}
-                    <line x1={rightX} y1={globalTop} x2={rightX} y2={globalBottom} stroke="hsl(var(--muted-foreground))" strokeWidth={1} />
-                    <line x1={globalRight} y1={globalTop} x2={rightX} y2={globalTop} stroke="hsl(var(--muted-foreground) / 0.6)" strokeWidth={0.8} />
-                    <line x1={globalRight} y1={globalBottom} x2={rightX} y2={globalBottom} stroke="hsl(var(--muted-foreground) / 0.6)" strokeWidth={0.8} />
+                    <line x1={rightX} y1={globalTop} x2={rightX} y2={globalBottom} stroke="hsl(0 70% 50%)" strokeWidth={1.2} />
+                    <line x1={globalRight} y1={globalTop} x2={rightX} y2={globalTop} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
+                    <line x1={globalRight} y1={globalBottom} x2={rightX} y2={globalBottom} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
                     <text
                       x={rightX + 6}
                       y={midY}
                       textAnchor="middle"
-                      fontSize={8}
+                      fontSize={perimFontSize}
                       fontWeight={700}
-                      fill="hsl(var(--muted-foreground))"
+                      fill="hsl(0 70% 45%)"
                       transform={`rotate(-90, ${rightX + 6}, ${midY})`}
                     >
                       {globalHeightMm} mm

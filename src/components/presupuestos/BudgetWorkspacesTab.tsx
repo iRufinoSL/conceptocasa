@@ -61,11 +61,12 @@ type GeometryType = 'cube' | 'prism' | 'pyramid';
 type FloorCeilingType = 'normal' | 'invisible' | 'shared';
 
 const WALL_TYPES = [
-  { value: 'external', label: 'Externa' },
-  { value: 'internal', label: 'Interna' },
-  { value: 'invisible', label: 'Invisible' },
-  { value: 'external_shared', label: 'Ext. compartida' },
-  { value: 'internal_shared', label: 'Int. compartida' },
+  { value: 'exterior', label: 'Exterior' },
+  { value: 'interior', label: 'Interior' },
+  { value: 'exterior_invisible', label: 'Ext. invisible' },
+  { value: 'exterior_compartida', label: 'Ext. compartida' },
+  { value: 'interior_compartida', label: 'Int. compartida' },
+  { value: 'interior_invisible', label: 'Int. invisible' },
 ];
 
 const FLOOR_CEILING_TYPES: { value: FloorCeilingType; label: string }[] = [
@@ -114,6 +115,33 @@ function wallLabel(index: number, total: number): string {
     return labels[index] || `Pared ${index + 1}`;
   }
   return `Pared ${index + 1}`;
+}
+
+function normalizeWallType(type?: string | null): string {
+  switch (type) {
+    case 'external':
+    case 'externa':
+    case 'exterior':
+      return 'exterior';
+    case 'internal':
+    case 'interna':
+    case 'interior':
+      return 'interior';
+    case 'external_shared':
+    case 'compartida':
+    case 'exterior_compartida':
+      return 'exterior_compartida';
+    case 'internal_shared':
+    case 'interior_compartida':
+      return 'interior_compartida';
+    case 'invisible':
+    case 'interior_invisible':
+      return 'interior_invisible';
+    case 'exterior_invisible':
+      return 'exterior_invisible';
+    default:
+      return 'exterior';
+  }
 }
 
 function getGeometryType(room: Workspace): GeometryType {
@@ -1105,17 +1133,23 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
       // Preserve existing wall types when rebuilding walls
       const { data: existingWalls } = await supabase.from('budget_floor_plan_walls')
         .select('wall_index, wall_type').eq('room_id', editingId).order('wall_index');
-      const oldTypeMap = new Map((existingWalls || []).map(w => [w.wall_index, w.wall_type]));
+      const oldTypeMap = new Map((existingWalls || []).map(w => [w.wall_index, normalizeWallType(w.wall_type)]));
       await supabase.from('budget_floor_plan_walls').delete().eq('room_id', editingId);
-      const walls = formVertices.map((_, i) => ({ room_id: editingId, wall_index: i, wall_type: oldTypeMap.get(i) || 'external' }));
-      await supabase.from('budget_floor_plan_walls').insert(walls);
+      const walls = formVertices.map((_, i) => ({
+        room_id: editingId,
+        wall_index: i + 1,
+        wall_type: oldTypeMap.get(i + 1) || 'exterior',
+      }));
+      const { error: wallsInsertError } = await supabase.from('budget_floor_plan_walls').insert(walls);
+      if (wallsInsertError) { toast.error(`Error al reconstruir paredes: ${wallsInsertError.message}`); return; }
       toast.success('Espacio actualizado');
     } else {
       const { data: newRoom, error } = await supabase
         .from('budget_floor_plan_rooms').insert(payload).select('id').single();
       if (error || !newRoom) { toast.error('Error al crear'); return; }
-      const walls = formVertices.map((_, i) => ({ room_id: newRoom.id, wall_index: i, wall_type: 'external' }));
-      await supabase.from('budget_floor_plan_walls').insert(walls);
+      const walls = formVertices.map((_, i) => ({ room_id: newRoom.id, wall_index: i + 1, wall_type: 'exterior' }));
+      const { error: wallsInsertError } = await supabase.from('budget_floor_plan_walls').insert(walls);
+      if (wallsInsertError) { toast.error(`Espacio creado, pero falló la creación de paredes: ${wallsInsertError.message}`); return; }
       toast.success(`Espacio creado con ${formVertices.length} paredes`);
     }
     resetForm();
@@ -1144,17 +1178,34 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
   };
 
   const updateWallType = async (wallId: string, newType: string) => {
-    await supabase.from('budget_floor_plan_walls').update({ wall_type: newType }).eq('id', wallId);
+    const normalizedType = normalizeWallType(newType);
+    const { error } = await supabase.from('budget_floor_plan_walls').update({ wall_type: normalizedType }).eq('id', wallId);
+    if (error) {
+      toast.error(`Error al actualizar pared: ${error.message}`);
+      return;
+    }
     queryClient.invalidateQueries({ queryKey: ['workspace-walls'] });
   };
 
   const ensureAndUpdateWallType = async (roomId: string, wallIndex: number, newType: string, existingWallId?: string) => {
+    const normalizedType = normalizeWallType(newType);
+    const dbWallIndex = wallIndex + 1;
+
     if (existingWallId) {
-      await updateWallType(existingWallId, newType);
-    } else {
-      await supabase.from('budget_floor_plan_walls').insert({ room_id: roomId, wall_index: wallIndex, wall_type: newType });
-      queryClient.invalidateQueries({ queryKey: ['workspace-walls'] });
+      await updateWallType(existingWallId, normalizedType);
+      return;
     }
+
+    const { error } = await supabase
+      .from('budget_floor_plan_walls')
+      .insert({ room_id: roomId, wall_index: dbWallIndex, wall_type: normalizedType });
+
+    if (error) {
+      toast.error(`No se pudo guardar el tipo de pared: ${error.message}`);
+      return;
+    }
+
+    queryClient.invalidateQueries({ queryKey: ['workspace-walls'] });
   };
 
   const updateFloorCeiling = async (roomId: string, field: 'has_floor' | 'has_ceiling', value: FloorCeilingType) => {
@@ -1194,10 +1245,11 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     // Preserve existing wall types when rebuilding walls
     const { data: existingWalls } = await supabase.from('budget_floor_plan_walls')
       .select('wall_index, wall_type').eq('room_id', roomId).order('wall_index');
-    const oldTypeMap = new Map((existingWalls || []).map(w => [w.wall_index, w.wall_type]));
+    const oldTypeMap = new Map((existingWalls || []).map(w => [w.wall_index, normalizeWallType(w.wall_type)]));
     await supabase.from('budget_floor_plan_walls').delete().eq('room_id', roomId);
-    const walls = gridEditVertices.map((_, i) => ({ room_id: roomId, wall_index: i, wall_type: oldTypeMap.get(i) || 'external' }));
-    await supabase.from('budget_floor_plan_walls').insert(walls);
+    const walls = gridEditVertices.map((_, i) => ({ room_id: roomId, wall_index: i + 1, wall_type: oldTypeMap.get(i + 1) || 'exterior' }));
+    const { error: wallsInsertError } = await supabase.from('budget_floor_plan_walls').insert(walls);
+    if (wallsInsertError) { toast.error(`Error al reconstruir paredes: ${wallsInsertError.message}`); return; }
     toast.success('Polígono actualizado');
     setGridEditId(null);
     await refetch();
@@ -1598,14 +1650,15 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
 
                         {/* Walls — one per edge */}
                         {Array.from({ length: edgeCount }).map((_, i) => {
-                          const wall = roomWalls.find(w => w.wall_index === i);
+                          const dbWallIndex = i + 1;
+                          const wall = roomWalls.find(w => w.wall_index === dbWallIndex);
                           const edgeLen = poly ? edgeLength(poly[i], poly[(i + 1) % poly.length]) : null;
                           const isWallSelected = selectedWallMap[r.id] === i;
                           return (
                             <FaceRow
                               key={i}
                               label={`🧱 P${i + 1} ${wallLabel(i, edgeCount)}${edgeLen ? ` (${edgeLen.toFixed(2)}m)` : ''}`}
-                              type={wall?.wall_type || 'external'}
+                              type={normalizeWallType(wall?.wall_type)}
                               options={WALL_TYPES}
                               onChange={(v) => ensureAndUpdateWallType(r.id, i, v, wall?.id)}
                               highlighted={isWallSelected}

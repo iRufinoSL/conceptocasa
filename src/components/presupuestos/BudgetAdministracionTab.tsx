@@ -169,6 +169,7 @@ export function BudgetAdministracionTab({ budgetId, isAdmin }: Props) {
             highlightCode={highlightEntryCode}
             onHighlightHandled={() => setHighlightEntryCode(null)}
             budgetId={budgetId}
+            onNavigateToAccount={handleNavigateToAccount}
           />
         </TabsContent>
 

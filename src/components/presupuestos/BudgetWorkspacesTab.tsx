@@ -324,6 +324,7 @@ interface GridPolygonDrawerProps {
   originTopLeft?: boolean;
   pdfTitle?: string;
   pdfSubtitle?: string;
+  onWallClick?: (wallIndex: number) => void;
 }
 
 const POLY_COLORS = [
@@ -337,7 +338,7 @@ const POLY_COLORS = [
   'hsl(280 60% 55%)',
 ];
 
-function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16, gridOffsetX = 0, gridOffsetY = 0, placedRooms = [], cellSizeM = 1, otherPolygons = [], activeRoomId, onSwitchRoom, perimeterPolygon, activeName, originTopLeft = false, pdfTitle, pdfSubtitle }: GridPolygonDrawerProps) {
+function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16, gridOffsetX = 0, gridOffsetY = 0, placedRooms = [], cellSizeM = 1, otherPolygons = [], activeRoomId, onSwitchRoom, perimeterPolygon, activeName, originTopLeft = false, pdfTitle, pdfSubtitle, onWallClick }: GridPolygonDrawerProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null);
@@ -767,7 +768,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             const offY = my + (dy / dist) * 14;
             return (
               <g key={`wn-${i}`} className="cursor-pointer" style={{ pointerEvents: 'all' }}
-                onClick={(e) => { e.stopPropagation(); }}>
+                onClick={(e) => { e.stopPropagation(); onWallClick?.(i); }}>
                 <circle cx={offX} cy={offY} r={9} fill="hsl(200 80% 40%)" stroke="white" strokeWidth={1.5} />
                 <text x={offX} y={offY} textAnchor="middle" dominantBaseline="central"
                   fontSize={10} fontWeight={700} fill="white" className="select-none pointer-events-none">
@@ -1518,6 +1519,12 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                               perimeterPolygon={getSectionPerimeter(r.vertical_section_id)}
                               pdfTitle="Espacio de trabajo"
                               pdfSubtitle={r.name}
+                              onWallClick={(idx) => {
+                                setSelectedWallMap(prev => ({ ...prev, [r.id]: idx }));
+                                if (!expandedIds.has(r.id)) {
+                                  setExpandedIds(prev => { const n = new Set(prev); n.add(r.id); return n; });
+                                }
+                              }}
                             />
                             <div className="flex items-center justify-between">
                               <div className="flex flex-wrap gap-1.5">

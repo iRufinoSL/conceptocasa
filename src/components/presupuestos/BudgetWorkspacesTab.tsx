@@ -310,12 +310,21 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
       : pad + (gridHeight - (gy - gridOffsetY)) * cellSize,
   });
 
-  const fromSvg = (sx: number, sy: number) => ({
-    gx: Math.round((sx - pad) / cellSize + gridOffsetX),
-    gy: originTopLeft
-      ? Math.round((sy - pad) / cellSize + gridOffsetY)
-      : Math.round(gridOffsetY + gridHeight - (sy - pad) / cellSize),
-  });
+  const fromSvg = (screenX: number, screenY: number) => {
+    // When using viewBox (x1), screen coords differ from SVG coords — scale them
+    let sx = screenX, sy = screenY;
+    if (!isZoomed && svgRef.current) {
+      const rect = svgRef.current.getBoundingClientRect();
+      sx = screenX * (logicalW / rect.width);
+      sy = screenY * (logicalH / rect.height);
+    }
+    return {
+      gx: Math.round((sx - pad) / cellSize + gridOffsetX),
+      gy: originTopLeft
+        ? Math.round((sy - pad) / cellSize + gridOffsetY)
+        : Math.round(gridOffsetY + gridHeight - (sy - pad) / cellSize),
+    };
+  };
 
   const handleClick = (gx: number, gy: number) => {
     if (isClosed) return; // In closed/edit mode, no new vertices

@@ -1148,6 +1148,15 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     queryClient.invalidateQueries({ queryKey: ['workspace-walls'] });
   };
 
+  const ensureAndUpdateWallType = async (roomId: string, wallIndex: number, newType: string, existingWallId?: string) => {
+    if (existingWallId) {
+      await updateWallType(existingWallId, newType);
+    } else {
+      await supabase.from('budget_floor_plan_walls').insert({ room_id: roomId, wall_index: wallIndex, wall_type: newType });
+      queryClient.invalidateQueries({ queryKey: ['workspace-walls'] });
+    }
+  };
+
   const updateFloorCeiling = async (roomId: string, field: 'has_floor' | 'has_ceiling', value: FloorCeilingType) => {
     const boolVal = value !== 'invisible';
     await supabase.from('budget_floor_plan_rooms').update({ [field]: boolVal }).eq('id', roomId);
@@ -1598,7 +1607,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                               label={`🧱 P${i + 1} ${wallLabel(i, edgeCount)}${edgeLen ? ` (${edgeLen.toFixed(2)}m)` : ''}`}
                               type={wall?.wall_type || 'external'}
                               options={WALL_TYPES}
-                              onChange={(v) => wall && updateWallType(wall.id, v)}
+                              onChange={(v) => ensureAndUpdateWallType(r.id, i, v, wall?.id)}
                               highlighted={isWallSelected}
                               onLabelClick={() => setSelectedWallMap(prev => ({ ...prev, [r.id]: prev[r.id] === i ? null : i }))}
                             />

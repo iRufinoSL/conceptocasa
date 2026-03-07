@@ -1108,6 +1108,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
   const [selectedWallMap, setSelectedWallMap] = useState<Record<string, number | null>>({});
   const [gridEditId, setGridEditId] = useState<string | null>(null);
   const [gridEditVertices, setGridEditVertices] = useState<PolygonVertex[]>([]);
+  const [activeSectionView, setActiveSectionView] = useState<Record<string, { sectionId: string; type: 'vertical' | 'longitudinal' | 'transversal' } | null>>({});
+  const [sectionEditVertices, setSectionEditVertices] = useState<PolygonVertex[]>([]);
   const [formName, setFormName] = useState('');
   const [formHeight, setFormHeight] = useState('');
   const [formVertices, setFormVertices] = useState<PolygonVertex[]>([]);

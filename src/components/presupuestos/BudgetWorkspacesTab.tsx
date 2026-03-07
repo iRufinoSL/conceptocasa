@@ -2,6 +2,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Pencil, Trash2, Plus, ChevronDown, ChevronRight, ChevronLeft, ChevronUp, Triangle, Pyramid, Cuboid, Grid3x3, MapPin, X, MousePointerClick, List, Layers, Save, RefreshCw, Expand } from 'lucide-react';
 import { GridPdfExport } from './GridPdfExport';
+import { DeleteWithBackupDialog } from '@/components/DeleteWithBackupDialog';
+import { DeletionBackupsList } from '@/components/DeletionBackupsList';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -1238,9 +1240,24 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     setShowForm(true);
   };
 
-  const handleDelete = async (id: string) => {
-    await supabase.from('budget_floor_plan_rooms').delete().eq('id', id);
+  const [deleteTarget, setDeleteTarget] = useState<Workspace | null>(null);
+
+  const handleDeleteConfirmed = async () => {
+    if (!deleteTarget) return;
+    await supabase.from('budget_floor_plan_rooms').delete().eq('id', deleteTarget.id);
     toast.success('Espacio eliminado');
+    setDeleteTarget(null);
+    refetch();
+    queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces', budgetId] });
+    queryClient.invalidateQueries({ queryKey: ['deletion-backups', budgetId, 'workspaces'] });
+  };
+
+  const handleRestoreBackup = async (backupData: Record<string, any>, _entityType: string) => {
+    const { id, floor_polygon, ...rest } = backupData;
+    const insertData: any = { ...rest, floor_plan_id: floorPlanId };
+    if (floor_polygon) insertData.floor_polygon = floor_polygon;
+    const { error } = await supabase.from('budget_floor_plan_rooms').insert(insertData);
+    if (error) throw error;
     refetch();
     queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces', budgetId] });
   };

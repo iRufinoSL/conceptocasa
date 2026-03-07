@@ -381,6 +381,10 @@ interface GridPolygonDrawerProps {
   pdfTitle?: string;
   pdfSubtitle?: string;
   onWallClick?: (wallIndex: number) => void;
+  hAxisLabel?: string;
+  vAxisLabel?: string;
+  hScaleMm?: number;
+  vScaleMm?: number;
 }
 
 const POLY_COLORS = [

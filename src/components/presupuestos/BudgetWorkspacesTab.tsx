@@ -606,8 +606,15 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             );
           })}
 
-          {/* Placed rooms from the floor plan grid (background context) */}
-          {placedRooms.map(pr => {
+          {/* Placed rooms from the floor plan grid (background context) — exclude rooms already shown as polygons */}
+          {placedRooms
+            .filter(pr => {
+              // Skip rooms that are rendered as otherPolygons or active polygon
+              if (activeRoomId === pr.id) return false;
+              if (otherPolygons.some(op => op.id === pr.id)) return false;
+              return true;
+            })
+            .map(pr => {
             const startGx = Math.round(pr.pos_x / cellSizeM);
             const startGy = Math.round(pr.pos_y / cellSizeM);
             const spanW = Math.max(1, Math.round(pr.width / cellSizeM));
@@ -641,7 +648,6 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
               </g>
             );
           })}
-
           {/* X axis labels (top for vertical/originTopLeft, bottom otherwise) */}
           {Array.from({ length: gridWidth + 1 }).map((_, i) => {
             const gx = i + gridOffsetX;

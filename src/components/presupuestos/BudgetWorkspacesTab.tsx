@@ -95,6 +95,32 @@ function polygonArea(vertices: PolygonVertex[]): number {
   return Math.abs(area) / 2;
 }
 
+/** Find intersections of polygon edges with axis=val, returning the other-axis values */
+function findPolygonIntersections(
+  poly: PolygonVertex[],
+  axis: 'x' | 'y',
+  val: number,
+): number[] {
+  const intersections: number[] = [];
+  const otherAxis = axis === 'y' ? 'x' : 'y';
+  for (let i = 0; i < poly.length; i++) {
+    const j = (i + 1) % poly.length;
+    const a = poly[i];
+    const b = poly[j];
+    const aVal = a[axis];
+    const bVal = b[axis];
+    if ((aVal <= val && bVal >= val) || (aVal >= val && bVal <= val)) {
+      if (aVal === bVal) {
+        intersections.push(a[otherAxis], b[otherAxis]);
+      } else {
+        const t = (val - aVal) / (bVal - aVal);
+        intersections.push(a[otherAxis] + t * (b[otherAxis] - a[otherAxis]));
+      }
+    }
+  }
+  return intersections;
+}
+
 /** Bounding box dimensions */
 function polygonBBox(vertices: PolygonVertex[]) {
   if (vertices.length === 0) return { minX: 0, maxX: 0, minY: 0, maxY: 0, w: 0, h: 0 };
@@ -1108,6 +1134,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
   const [selectedWallMap, setSelectedWallMap] = useState<Record<string, number | null>>({});
   const [gridEditId, setGridEditId] = useState<string | null>(null);
   const [gridEditVertices, setGridEditVertices] = useState<PolygonVertex[]>([]);
+  const [activeSectionView, setActiveSectionView] = useState<Record<string, { sectionId: string; type: 'vertical' | 'longitudinal' | 'transversal' } | null>>({});
+  const [sectionEditVertices, setSectionEditVertices] = useState<PolygonVertex[]>([]);
   const [formName, setFormName] = useState('');
   const [formHeight, setFormHeight] = useState('');
   const [formVertices, setFormVertices] = useState<PolygonVertex[]>([]);
@@ -1129,16 +1157,19 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     },
   });
 
-  const verticalSections = useMemo<CustomSection[]>(() => {
+  const allSections = useMemo<CustomSection[]>(() => {
     if (!floorPlan?.custom_corners) return [];
     try {
       const parsed = typeof floorPlan.custom_corners === 'string'
         ? JSON.parse(floorPlan.custom_corners)
         : floorPlan.custom_corners;
-      const sections: CustomSection[] = parsed?.customSections || [];
-      return sections.filter(s => s.sectionType === 'vertical');
+      return parsed?.customSections || [];
     } catch { return []; }
   }, [floorPlan?.custom_corners]);
+
+  const verticalSections = useMemo(() => allSections.filter(s => s.sectionType === 'vertical'), [allSections]);
+  const longitudinalSections = useMemo(() => allSections.filter(s => s.sectionType === 'longitudinal'), [allSections]);
+  const transversalSections = useMemo(() => allSections.filter(s => s.sectionType === 'transversal'), [allSections]);
 
   /** Get the perimeter polygon (XY) from a vertical section's first polygon */
   const getSectionPerimeter = useCallback((sectionId: string | null): PolygonVertex[] | undefined => {
@@ -1431,6 +1462,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
       : [];
     setGridEditVertices(verts);
     setGridEditId(r.id);
+    setActiveSectionView(prev => ({ ...prev, [r.id]: null }));
     // Ensure the room is expanded
     setExpandedIds(prev => {
       const next = new Set(prev);
@@ -1443,6 +1475,107 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     const target = rooms.find(rm => rm.id === targetRoomId);
     if (!target) return;
     openGridEditor(target);
+  };
+
+  /** Compute the default projected polygon for a workspace on a Y or X section */
+  const computeDefaultProjection = useCallback((room: Workspace, section: CustomSection): PolygonVertex[] => {
+    if (!room.floor_polygon || room.floor_polygon.length < 3) return [];
+    const poly = room.floor_polygon;
+    const blockHMm = floorPlan?.block_length_mm ? 250 : 250; // blockHeightMm
+    const heightM = room.height || floorPlan?.default_height || 2.5;
+    
+    // Find workspace's Z base from its vertical section
+    const vSection = verticalSections.find(s => s.id === room.vertical_section_id);
+    const zBase = vSection ? vSection.axisValue : 0;
+    const heightBlocks = Math.round((heightM * 1000) / 250);
+    const zTop = zBase + heightBlocks;
+
+    const axisVal = section.axisValue;
+
+    if (section.sectionType === 'longitudinal') {
+      // Cut at Y=axisVal: find X intersections, project X vs Z
+      const intersections = findPolygonIntersections(poly, 'y', axisVal);
+      if (intersections.length < 2) return [];
+      const hMin = Math.min(...intersections);
+      const hMax = Math.max(...intersections);
+      // Default rectangular projection
+      return [
+        { x: hMin, y: zBase },
+        { x: hMax, y: zBase },
+        { x: hMax, y: zTop },
+        { x: hMin, y: zTop },
+      ];
+    } else if (section.sectionType === 'transversal') {
+      // Cut at X=axisVal: find Y intersections, project Y vs Z
+      const intersections = findPolygonIntersections(poly, 'x', axisVal);
+      if (intersections.length < 2) return [];
+      const hMin = Math.min(...intersections);
+      const hMax = Math.max(...intersections);
+      return [
+        { x: hMin, y: zBase },
+        { x: hMax, y: zBase },
+        { x: hMax, y: zTop },
+        { x: hMin, y: zTop },
+      ];
+    }
+    return [];
+  }, [floorPlan, verticalSections]);
+
+  /** Open a Y or X section editor for a workspace */
+  const openSectionEditor = (roomId: string, section: CustomSection) => {
+    const room = rooms.find(r => r.id === roomId);
+    if (!room) return;
+    setGridEditId(null); // Close Z editor if open
+    
+    // Check if there's already a stored polygon for this workspace in this section
+    const existingPoly = section.polygons?.find(p => p.id === roomId);
+    const verts = existingPoly && existingPoly.vertices.length >= 3
+      ? existingPoly.vertices.map(v => ({ x: v.x, y: v.y }))
+      : computeDefaultProjection(room, section);
+    
+    setSectionEditVertices(verts);
+    setActiveSectionView(prev => ({ ...prev, [roomId]: { sectionId: section.id, type: section.sectionType } }));
+    setExpandedIds(prev => { const next = new Set(prev); next.add(roomId); return next; });
+  };
+
+  /** Save the edited Y/X section polygon back to custom_corners */
+  const saveSectionPolygon = async (roomId: string) => {
+    const view = activeSectionView[roomId];
+    if (!view || !floorPlan?.id) return;
+    if (sectionEditVertices.length < 3) { toast.error('Mínimo 3 vértices'); return; }
+
+    let parsed: any = {};
+    try {
+      parsed = typeof floorPlan.custom_corners === 'string'
+        ? JSON.parse(floorPlan.custom_corners) : (floorPlan.custom_corners || {});
+    } catch { parsed = {}; }
+
+    const sections: CustomSection[] = parsed.customSections || [];
+    const sIdx = sections.findIndex(s => s.id === view.sectionId);
+    if (sIdx < 0) { toast.error('Sección no encontrada'); return; }
+
+    const room = rooms.find(r => r.id === roomId);
+    const polyEntry = {
+      id: roomId,
+      name: room?.name || 'Espacio',
+      vertices: sectionEditVertices.map(v => ({ x: v.x, y: v.y, z: 0 })),
+    };
+
+    // Upsert polygon in section
+    const existingIdx = sections[sIdx].polygons?.findIndex(p => p.id === roomId) ?? -1;
+    if (!sections[sIdx].polygons) sections[sIdx].polygons = [];
+    if (existingIdx >= 0) {
+      sections[sIdx].polygons[existingIdx] = polyEntry;
+    } else {
+      sections[sIdx].polygons.push(polyEntry);
+    }
+
+    parsed.customSections = sections;
+    const { error } = await supabase.from('budget_floor_plans').update({ custom_corners: parsed }).eq('id', floorPlan.id);
+    if (error) { toast.error('Error al guardar'); return; }
+    toast.success('Polígono de sección guardado');
+    setActiveSectionView(prev => ({ ...prev, [roomId]: null }));
+    queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces', budgetId] });
   };
 
   const saveGridEditorPolygon = async (roomId: string) => {
@@ -1738,27 +1871,91 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                           )}
                         </div>
 
-                        {/* Sección Z button */}
+                        {/* Section buttons — Z, Y, X */}
                         {isAdmin && (
-                          <div>
-                            <Button
-                              variant={gridEditId === r.id ? 'default' : 'outline'}
-                              size="sm"
-                              className="h-6 text-[10px] gap-1"
-                              onClick={() => {
-                                if (gridEditId === r.id) {
-                                  setGridEditId(null);
-                                } else {
-                                  openGridEditor(r);
-                                }
-                              }}
-                            >
-                              <Layers className="h-3 w-3" /> Sección Z
-                            </Button>
+                          <div className="space-y-1.5">
+                            <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Secciones disponibles</p>
+                            <div className="flex flex-wrap gap-1">
+                              {/* Z section (vertical) */}
+                              <Button
+                                variant={gridEditId === r.id ? 'default' : 'outline'}
+                                size="sm"
+                                className="h-6 text-[10px] gap-1"
+                                onClick={() => {
+                                  if (gridEditId === r.id) {
+                                    setGridEditId(null);
+                                  } else {
+                                    openGridEditor(r);
+                                  }
+                                }}
+                              >
+                                <Layers className="h-3 w-3" /> Sección Z
+                                {r.vertical_section_id && (() => {
+                                  const vs = verticalSections.find(s => s.id === r.vertical_section_id);
+                                  return vs ? <span className="text-muted-foreground ml-0.5">({vs.name})</span> : null;
+                                })()}
+                              </Button>
+
+                              {/* Y sections (longitudinal) */}
+                              {longitudinalSections.map(ls => {
+                                const isActive = activeSectionView[r.id]?.sectionId === ls.id;
+                                const hasProjection = r.floor_polygon && r.floor_polygon.length >= 3 &&
+                                  findPolygonIntersections(r.floor_polygon, 'y', ls.axisValue).length >= 2;
+                                if (!hasProjection) return null;
+                                return (
+                                  <Button
+                                    key={ls.id}
+                                    variant={isActive ? 'default' : 'outline'}
+                                    size="sm"
+                                    className="h-6 text-[10px] gap-1"
+                                    onClick={() => {
+                                      if (isActive) {
+                                        setActiveSectionView(prev => ({ ...prev, [r.id]: null }));
+                                      } else {
+                                        openSectionEditor(r.id, ls);
+                                      }
+                                    }}
+                                  >
+                                    <span className="text-green-600 font-bold">Y</span> {ls.name} (Y={ls.axisValue})
+                                  </Button>
+                                );
+                              })}
+
+                              {/* X sections (transversal) */}
+                              {transversalSections.map(ts => {
+                                const isActive = activeSectionView[r.id]?.sectionId === ts.id;
+                                const hasProjection = r.floor_polygon && r.floor_polygon.length >= 3 &&
+                                  findPolygonIntersections(r.floor_polygon, 'x', ts.axisValue).length >= 2;
+                                if (!hasProjection) return null;
+                                return (
+                                  <Button
+                                    key={ts.id}
+                                    variant={isActive ? 'default' : 'outline'}
+                                    size="sm"
+                                    className="h-6 text-[10px] gap-1"
+                                    onClick={() => {
+                                      if (isActive) {
+                                        setActiveSectionView(prev => ({ ...prev, [r.id]: null }));
+                                      } else {
+                                        openSectionEditor(r.id, ts);
+                                      }
+                                    }}
+                                  >
+                                    <span className="text-orange-600 font-bold">X</span> {ts.name} (X={ts.axisValue})
+                                  </Button>
+                                );
+                              })}
+
+                              {longitudinalSections.length === 0 && transversalSections.length === 0 && (
+                                <span className="text-[9px] text-muted-foreground italic ml-1">
+                                  Define secciones Y/X en la pestaña Secciones para ver cortes
+                                </span>
+                              )}
+                            </div>
                           </div>
                         )}
 
-                        {/* Inline grid editor */}
+                        {/* Inline Z grid editor */}
                         {gridEditId === r.id && (
                           <div className="space-y-2 border rounded-lg p-2 bg-background">
                             <div className="flex items-center gap-1 flex-wrap">
@@ -1827,6 +2024,104 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                             </div>
                           </div>
                         )}
+
+                        {/* Inline Y/X section editor */}
+                        {activeSectionView[r.id] && (() => {
+                          const view = activeSectionView[r.id]!;
+                          const section = allSections.find(s => s.id === view.sectionId);
+                          if (!section) return null;
+                          const isLongitudinal = section.sectionType === 'longitudinal';
+                          const hLabel = isLongitudinal ? 'X' : 'Y';
+                          const vLabel = 'Z';
+                          const scaleH = isLongitudinal
+                            ? (floorPlan?.block_length_mm || 625)
+                            : (floorPlan?.block_length_mm || 625);
+                          const scaleV = 250; // blockHeightMm
+                          const scaleHm = scaleH / 1000;
+                          const scaleVm = scaleV / 1000;
+
+                          // Compute grid bounds from the projection vertices
+                          const projBBox = sectionEditVertices.length >= 3
+                            ? polygonBBox(sectionEditVertices)
+                            : { minX: -3, maxX: 20, minY: -3, maxY: 20 };
+                          const secGridMinCol = Math.floor(projBBox.minX) - 2;
+                          const secGridMaxCol = Math.ceil(projBBox.maxX) + 2;
+                          const secGridMinRow = Math.floor(projBBox.minY) - 2;
+                          const secGridMaxRow = Math.ceil(projBBox.maxY) + 2;
+                          const secGridW = secGridMaxCol - secGridMinCol + 1;
+                          const secGridH = secGridMaxRow - secGridMinRow + 1;
+
+                          // Get other workspaces' projections on this section for context
+                          const otherProjections: OtherPolygon[] = rooms
+                            .filter(other => other.id !== r.id && other.floor_polygon && other.floor_polygon.length >= 3)
+                            .map(other => {
+                              const existingPoly = section.polygons?.find(p => p.id === other.id);
+                              if (existingPoly && existingPoly.vertices.length >= 3) {
+                                return { id: other.id, name: other.name, vertices: existingPoly.vertices.map(v => ({ x: v.x, y: v.y })) };
+                              }
+                              const defaultProj = computeDefaultProjection(other, section);
+                              if (defaultProj.length >= 3) {
+                                return { id: other.id, name: other.name, vertices: defaultProj };
+                              }
+                              return null;
+                            })
+                            .filter(Boolean) as OtherPolygon[];
+
+                          return (
+                            <div className="space-y-2 border rounded-lg p-2 bg-background">
+                              <div className="flex items-center gap-2">
+                                <Badge variant="secondary" className="text-[10px] h-5">
+                                  {isLongitudinal ? '↔ Longitudinal' : '↕ Transversal'} — {section.name} ({section.axis}={section.axisValue})
+                                </Badge>
+                                <span className="text-[9px] text-muted-foreground">
+                                  {hLabel}: {scaleH}mm · {vLabel}: {scaleV}mm
+                                </span>
+                              </div>
+                              <GridPolygonDrawer
+                                originTopLeft={false}
+                                vertices={sectionEditVertices}
+                                onChange={setSectionEditVertices}
+                                gridWidth={secGridW}
+                                gridHeight={secGridH}
+                                gridOffsetX={secGridMinCol}
+                                gridOffsetY={secGridMinRow}
+                                cellSizeM={1}
+                                activeName={r.name}
+                                otherPolygons={otherProjections}
+                                onSwitchRoom={(targetId) => {
+                                  const targetSection = allSections.find(s => s.id === view.sectionId);
+                                  if (targetSection) openSectionEditor(targetId, targetSection);
+                                }}
+                                pdfTitle={`${section.name} — ${r.name}`}
+                                pdfSubtitle={`${section.axis}=${section.axisValue}`}
+                              />
+                              <div className="flex items-center justify-between">
+                                <div className="flex flex-wrap gap-1.5">
+                                  {sectionEditVertices.length >= 3 && (
+                                    <>
+                                      <Badge variant="secondary" className="text-[10px] h-4">📐 {(polygonArea(sectionEditVertices) * scaleHm * scaleVm).toFixed(2)} m²</Badge>
+                                      <Badge variant="outline" className="text-[10px] h-4">↔ {(polygonBBox(sectionEditVertices).w * scaleHm * 1000).toFixed(0)}mm × ↕ {(polygonBBox(sectionEditVertices).h * scaleVm * 1000).toFixed(0)}mm</Badge>
+                                    </>
+                                  )}
+                                </div>
+                                <div className="flex gap-1">
+                                  <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => setActiveSectionView(prev => ({ ...prev, [r.id]: null }))}>
+                                    Cancelar
+                                  </Button>
+                                  <Button variant="outline" size="sm" className="h-6 text-[10px] gap-1" onClick={() => {
+                                    const defaultVerts = computeDefaultProjection(r, section);
+                                    setSectionEditVertices(defaultVerts);
+                                  }}>
+                                    Resetear
+                                  </Button>
+                                  <Button size="sm" className="h-6 text-[10px] gap-1" onClick={() => saveSectionPolygon(r.id)} disabled={sectionEditVertices.length < 3}>
+                                    <Save className="h-3 w-3" /> Guardar
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
 
                         {/* Polygon with wall numbers + vertices list */}
                         {poly && gridEditId !== r.id && (

@@ -2045,23 +2045,10 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                           const isLongitudinal = section.sectionType === 'longitudinal';
                           const hLabel = isLongitudinal ? 'X' : 'Y';
                           const vLabel = 'Z';
-                          const scaleH = isLongitudinal
-                            ? (floorPlan?.block_length_mm || 625)
-                            : (floorPlan?.block_length_mm || 625);
+                          const scaleH = floorPlan?.block_length_mm || 625;
                           const scaleV = 250; // blockHeightMm
                           const scaleHm = scaleH / 1000;
                           const scaleVm = scaleV / 1000;
-
-                          // Compute grid bounds from the projection vertices
-                          const projBBox = sectionEditVertices.length >= 3
-                            ? polygonBBox(sectionEditVertices)
-                            : { minX: -3, maxX: 20, minY: -3, maxY: 20 };
-                          const secGridMinCol = Math.floor(projBBox.minX) - 2;
-                          const secGridMaxCol = Math.ceil(projBBox.maxX) + 2;
-                          const secGridMinRow = Math.floor(projBBox.minY) - 2;
-                          const secGridMaxRow = Math.ceil(projBBox.maxY) + 2;
-                          const secGridW = secGridMaxCol - secGridMinCol + 1;
-                          const secGridH = secGridMaxRow - secGridMinRow + 1;
 
                           // Get other workspaces' projections on this section for context
                           const otherProjections: OtherPolygon[] = rooms
@@ -2078,6 +2065,21 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                               return null;
                             })
                             .filter(Boolean) as OtherPolygon[];
+
+                          // Compute grid bounds from ALL projections (active + others)
+                          const allProjVerts: PolygonVertex[] = [...sectionEditVertices];
+                          for (const op of otherProjections) {
+                            allProjVerts.push(...op.vertices);
+                          }
+                          const projBBox = allProjVerts.length >= 2
+                            ? polygonBBox(allProjVerts)
+                            : { minX: -3, maxX: 20, minY: -3, maxY: 20 };
+                          const secGridMinCol = Math.floor(projBBox.minX) - 2;
+                          const secGridMaxCol = Math.ceil(projBBox.maxX) + 2;
+                          const secGridMinRow = Math.floor(projBBox.minY) - 2;
+                          const secGridMaxRow = Math.ceil(projBBox.maxY) + 2;
+                          const secGridW = secGridMaxCol - secGridMinCol + 1;
+                          const secGridH = secGridMaxRow - secGridMinRow + 1;
 
                           return (
                             <div className="space-y-2 border rounded-lg p-2 bg-background">
@@ -2106,6 +2108,10 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                                 }}
                                 pdfTitle={`${section.name} — ${r.name}`}
                                 pdfSubtitle={`${section.axis}=${section.axisValue}`}
+                                hAxisLabel={hLabel}
+                                vAxisLabel={vLabel}
+                                hScaleMm={scaleH}
+                                vScaleMm={scaleV}
                               />
                               <div className="flex items-center justify-between">
                                 <div className="flex flex-wrap gap-1.5">

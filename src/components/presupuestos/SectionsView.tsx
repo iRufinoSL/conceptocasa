@@ -155,7 +155,13 @@ function computeWallProjections(
       } else if (section.sectionType === 'transversal') {
         // Section cuts at X=axisVal: find Y range of edges on this X
         let intersections: number[];
-        if (poly.length === 2) {
+        if (poly.length === 1) {
+          if (poly[0].x === axisVal) {
+            intersections = [poly[0].y];
+          } else {
+            intersections = [];
+          }
+        } else if (poly.length === 2) {
           if (poly[0].x === axisVal && poly[1].x === axisVal) {
             intersections = [poly[0].y, poly[1].y];
           } else {
@@ -175,12 +181,12 @@ function computeWallProjections(
             zBase,
             zTop,
           });
-        } else if (intersections.length === 1 && poly.length === 2) {
+        } else if (intersections.length === 1) {
           projections.push({
             workspaceId: room.id,
             workspaceName: room.name,
-            hStart: poly[0].y,
-            hEnd: poly[1].y,
+            hStart: intersections[0],
+            hEnd: intersections[0],
             zBase,
             zTop,
           });

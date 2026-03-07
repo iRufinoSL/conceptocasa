@@ -233,7 +233,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
 
   // Remove vertex
   const removeVertex = (idx: number) => {
-    if (editVertices.length <= 3) return;
+    if (editVertices.length <= 2) return;
     setEditVertices(editVertices.filter((_, i) => i !== idx));
   };
 
@@ -1055,7 +1055,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                     />
                   </div>
                   <span className="text-[8px] text-muted-foreground">→ {edgeMm}mm</span>
-                  {editVertices.length > 3 && (
+                  {editVertices.length > 2 && (
                     <Button variant="ghost" size="icon" className="h-4 w-4" onClick={() => removeVertex(i)}>
                       <Trash2 className="h-2.5 w-2.5" />
                     </Button>
@@ -1076,7 +1076,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
               <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => { setSelectedWorkspaceId(null); setEditVertices([]); }}>
                 Cancelar
               </Button>
-              <Button size="sm" className="h-6 text-[10px] gap-0.5" onClick={saveEditedPolygon} disabled={editVertices.length < 3}>
+              <Button size="sm" className="h-6 text-[10px] gap-0.5" onClick={saveEditedPolygon} disabled={editVertices.length < 2}>
                 <Save className="h-3 w-3" /> Guardar
               </Button>
             </div>

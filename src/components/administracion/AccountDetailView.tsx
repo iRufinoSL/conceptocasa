@@ -285,7 +285,8 @@ export function AccountDetailView({ account, onBack, onNavigateToEntry, onAccoun
               <TableHeader>
                 <TableRow>
                   <TableHead>Fecha</TableHead>
-                  <TableHead>Asiento</TableHead>
+                  <TableHead>Cód. Apunte</TableHead>
+                  <TableHead>Cód. Asiento</TableHead>
                   <TableHead>Descripción</TableHead>
                   <TableHead className="text-right">Debe (€)</TableHead>
                   <TableHead className="text-right">Haber (€)</TableHead>
@@ -296,6 +297,7 @@ export function AccountDetailView({ account, onBack, onNavigateToEntry, onAccoun
                 {linesWithBalance.map((line) => (
                   <TableRow key={line.id}>
                     <TableCell className="text-sm">{formatDate(line.line_date)}</TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">{line.code}</TableCell>
                     <TableCell>
                       <button
                         className="font-mono text-sm text-primary hover:underline cursor-pointer"

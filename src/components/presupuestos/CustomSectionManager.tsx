@@ -635,10 +635,12 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
         width={totalW}
         height={totalH}
         className="block"
-        style={{ cursor: draggingIdx !== null ? 'grabbing' : undefined }}
+        style={{ cursor: drawingMode ? 'crosshair' : draggingIdx !== null ? 'grabbing' : undefined }}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
+        onClick={handleGridClick}
+        onDoubleClick={handleGridDblClick}
       >
         {/* Checkerboard cells */}
         {Array.from({ length: gridCount }, (_, row) =>

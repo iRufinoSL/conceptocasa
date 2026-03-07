@@ -1178,17 +1178,34 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
   };
 
   const updateWallType = async (wallId: string, newType: string) => {
-    await supabase.from('budget_floor_plan_walls').update({ wall_type: newType }).eq('id', wallId);
+    const normalizedType = normalizeWallType(newType);
+    const { error } = await supabase.from('budget_floor_plan_walls').update({ wall_type: normalizedType }).eq('id', wallId);
+    if (error) {
+      toast.error(`Error al actualizar pared: ${error.message}`);
+      return;
+    }
     queryClient.invalidateQueries({ queryKey: ['workspace-walls'] });
   };
 
   const ensureAndUpdateWallType = async (roomId: string, wallIndex: number, newType: string, existingWallId?: string) => {
+    const normalizedType = normalizeWallType(newType);
+    const dbWallIndex = wallIndex + 1;
+
     if (existingWallId) {
-      await updateWallType(existingWallId, newType);
-    } else {
-      await supabase.from('budget_floor_plan_walls').insert({ room_id: roomId, wall_index: wallIndex, wall_type: newType });
-      queryClient.invalidateQueries({ queryKey: ['workspace-walls'] });
+      await updateWallType(existingWallId, normalizedType);
+      return;
     }
+
+    const { error } = await supabase
+      .from('budget_floor_plan_walls')
+      .insert({ room_id: roomId, wall_index: dbWallIndex, wall_type: normalizedType });
+
+    if (error) {
+      toast.error(`No se pudo guardar el tipo de pared: ${error.message}`);
+      return;
+    }
+
+    queryClient.invalidateQueries({ queryKey: ['workspace-walls'] });
   };
 
   const updateFloorCeiling = async (roomId: string, field: 'has_floor' | 'has_ceiling', value: FloorCeilingType) => {

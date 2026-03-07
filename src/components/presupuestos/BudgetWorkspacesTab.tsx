@@ -1512,19 +1512,30 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                           </div>
                         )}
 
-                        {/* Polygon vertices list */}
+                        {/* Polygon with wall numbers + vertices list */}
                         {poly && gridEditId !== r.id && (
-                          <div className="space-y-1">
-                            <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
-                              Polígono base — {poly.length} vértices
-                            </p>
-                            <div className="flex flex-wrap gap-1">
-                              {poly.map((v, i) => (
-                                <Badge key={i} variant="outline" className="text-[9px] h-4 px-1 gap-0.5">
-                                  <MapPin className="h-2.5 w-2.5" />
-                                  ({v.x}, {v.y})
-                                </Badge>
-                              ))}
+                          <div className="space-y-2">
+                            <div className="flex gap-3 items-start">
+                              <PolygonPreviewWithWalls
+                                vertices={poly}
+                                size={140}
+                                selectedWall={selectedWallMap[r.id] ?? null}
+                                onSelectWall={(idx) => setSelectedWallMap(prev => ({ ...prev, [r.id]: prev[r.id] === idx ? null : idx }))}
+                              />
+                              <div className="flex-1 space-y-1">
+                                <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
+                                  Polígono base — {poly.length} vértices
+                                </p>
+                                <div className="flex flex-wrap gap-1">
+                                  {poly.map((v, i) => (
+                                    <Badge key={i} variant="outline" className="text-[9px] h-4 px-1 gap-0.5">
+                                      <MapPin className="h-2.5 w-2.5" />
+                                      ({v.x}, {v.y})
+                                    </Badge>
+                                  ))}
+                                </div>
+                                <p className="text-[9px] text-muted-foreground mt-1">Pulsa un nº de pared para ver/editar sus datos</p>
+                              </div>
                             </div>
                           </div>
                         )}
@@ -1538,7 +1549,6 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                           label="🟫 Suelo"
                           type={floorType}
                           options={FLOOR_CEILING_TYPES}
-                          isAdmin={isAdmin}
                           onChange={(v) => updateFloorCeiling(r.id, 'has_floor', v as FloorCeilingType)}
                         />
 
@@ -1546,14 +1556,16 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                         {Array.from({ length: edgeCount }).map((_, i) => {
                           const wall = roomWalls.find(w => w.wall_index === i);
                           const edgeLen = poly ? edgeLength(poly[i], poly[(i + 1) % poly.length]) : null;
+                          const isWallSelected = selectedWallMap[r.id] === i;
                           return (
                             <FaceRow
                               key={i}
-                              label={`🧱 ${wallLabel(i, edgeCount)}${edgeLen ? ` (${edgeLen.toFixed(2)}m)` : ''}`}
+                              label={`🧱 P${i + 1} ${wallLabel(i, edgeCount)}${edgeLen ? ` (${edgeLen.toFixed(2)}m)` : ''}`}
                               type={wall?.wall_type || 'external'}
                               options={WALL_TYPES}
-                              isAdmin={isAdmin}
                               onChange={(v) => wall && updateWallType(wall.id, v)}
+                              highlighted={isWallSelected}
+                              onLabelClick={() => setSelectedWallMap(prev => ({ ...prev, [r.id]: prev[r.id] === i ? null : i }))}
                             />
                           );
                         })}
@@ -1563,7 +1575,6 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                           label={r.has_roof ? '🏠 Techo (cubierta)' : '⬜ Techo'}
                           type={ceilingType}
                           options={FLOOR_CEILING_TYPES}
-                          isAdmin={isAdmin}
                           onChange={(v) => updateFloorCeiling(r.id, 'has_ceiling', v as FloorCeilingType)}
                         />
                       </div>

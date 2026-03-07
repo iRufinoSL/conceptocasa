@@ -124,6 +124,8 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName }: SectionGridPro
     ? (scaleConfig?.scaleZ ?? 250)
     : (scaleConfig?.scaleY ?? 625);
 
+  const zoomOptions = [1, 1.5, 2, 2.5, 3];
+
   return (
     <div className="mt-2">
       <div className="flex items-center justify-between px-2 pt-1 pb-0.5 flex-wrap gap-1">
@@ -133,6 +135,21 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName }: SectionGridPro
           {section.sectionType === 'transversal' && `Vista transversal X=${section.axisValue} — Origen (0,0) abajo-izq`}
         </span>
         <div className="flex items-center gap-1.5 flex-wrap">
+          {/* Zoom controls */}
+          <div className="flex items-center gap-0.5 border border-border rounded px-1.5 py-0.5">
+            <span className="text-[8px] text-muted-foreground font-medium">Zoom:</span>
+            {zoomOptions.map(z => (
+              <Button
+                key={z}
+                variant={zoomLevel === z ? 'default' : 'ghost'}
+                size="sm"
+                className="h-4 px-1.5 text-[8px] min-w-0"
+                onClick={() => setZoomLevel(z)}
+              >
+                {z}x
+              </Button>
+            ))}
+          </div>
           {/* Grid range controls */}
           <div className="flex items-center gap-0.5 border border-border rounded px-1.5 py-0.5">
             <span className="text-[8px] text-muted-foreground font-medium">Rango:</span>
@@ -163,7 +180,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName }: SectionGridPro
           />
         </div>
       </div>
-      <div ref={gridContainerRef} className="overflow-auto border border-border rounded-md bg-muted/20">
+      <div ref={gridContainerRef} className="overflow-auto border border-border rounded-md bg-muted/20" style={{ maxHeight: zoomLevel > 1 ? '600px' : undefined }}>
       <svg width={totalW} height={totalH} className="block">
         {/* Checkerboard cells */}
         {Array.from({ length: gridCount }, (_, row) =>

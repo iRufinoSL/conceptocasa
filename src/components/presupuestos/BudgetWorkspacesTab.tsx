@@ -1254,7 +1254,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
 
   const handleRestoreBackup = async (backupData: Record<string, any>, _entityType: string) => {
     const { id, floor_polygon, ...rest } = backupData;
-    const insertData: any = { ...rest, floor_plan_id: floorPlanId };
+    const insertData: any = { ...rest };
+    if (floorPlan) insertData.floor_plan_id = floorPlan.id;
     if (floor_polygon) insertData.floor_polygon = floor_polygon;
     const { error } = await supabase.from('budget_floor_plan_rooms').insert(insertData);
     if (error) throw error;

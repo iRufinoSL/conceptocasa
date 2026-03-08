@@ -518,6 +518,101 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
             onRowClick={(row) => handleFaceClick(row.face)}
           />
         </TabsContent>
+
+        {/* Recursos tab */}
+        <TabsContent value="recursos" className="mt-2 space-y-2">
+          <div className="flex gap-1">
+            <Button
+              variant={resourcesView === 'alpha' ? 'default' : 'outline'}
+              size="sm"
+              className="h-7 text-xs gap-1"
+              onClick={() => setResourcesView('alpha')}
+            >
+              <List className="h-3 w-3" /> Alfabético
+            </Button>
+            <Button
+              variant={resourcesView === 'workspace' ? 'default' : 'outline'}
+              size="sm"
+              className="h-7 text-xs gap-1"
+              onClick={() => setResourcesView('workspace')}
+            >
+              <Layers className="h-3 w-3" /> Por espacio
+            </Button>
+          </div>
+
+          {filteredObjects.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">No hay objetos/capas definidos aún</p>
+          ) : resourcesView === 'alpha' ? (
+            <ResizableTable
+              columns={[
+                { key: 'order', header: '#', defaultWidth: 36, minWidth: 30 },
+                { key: 'name', header: 'Objeto / Recurso', defaultWidth: 160, minWidth: 80 },
+                { key: 'face', header: 'Cara', defaultWidth: 90, minWidth: 50 },
+                { key: 'workspace', header: 'Espacio', defaultWidth: 120, minWidth: 60 },
+                { key: 'type', header: 'Tipo', defaultWidth: 90, minWidth: 50 },
+                { key: 'thickness', header: 'Espesor', defaultWidth: 70, minWidth: 45 },
+                { key: 'm2', header: 'm²', defaultWidth: 70, minWidth: 45 },
+                { key: 'm3', header: 'm³', defaultWidth: 70, minWidth: 45 },
+              ]}
+              rows={objectsAlpha.map((o: any) => ({
+                face: { workspace: o.workspace, roomId: '', faceName: o.faceName, m2: o.surface_m2, m3: o.volume_m3, sortKey: 0, wallIndex: 0 } as AutoFace,
+                cells: {
+                  order: String(o.layer_order),
+                  name: o.layer_order === 0 ? `⭐ ${o.name}` : o.name,
+                  face: o.faceName,
+                  workspace: o.workspace,
+                  type: o.object_type || '',
+                  thickness: o.thickness_mm ? `${o.thickness_mm} mm` : '',
+                  m2: o.surface_m2 != null ? o.surface_m2.toFixed(2) : '',
+                  m3: o.volume_m3 != null ? o.volume_m3.toFixed(3) : '',
+                },
+              }))}
+              onRowClick={() => {}}
+            />
+          ) : (
+            <div className="space-y-1.5">
+              {objectsByWorkspace.map(group => {
+                const isOpen = resourceOpenGroups.has(group.name);
+                return (
+                  <Collapsible key={group.name} open={isOpen} onOpenChange={() => toggleResourceGroup(group.name)}>
+                    <CollapsibleTrigger className="flex items-center gap-2 w-full rounded-md px-2 py-1.5 bg-accent/30 hover:bg-accent/50 transition-colors text-left">
+                      <ChevronRight className={cn('h-4 w-4 text-muted-foreground transition-transform duration-200', isOpen && 'rotate-90')} />
+                      <span className="text-sm font-semibold flex-1">{group.name}</span>
+                      <Badge variant="outline" className="text-[10px] h-5">{group.objects.length}</Badge>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <ResizableTable
+                        columns={[
+                          { key: 'order', header: '#', defaultWidth: 36, minWidth: 30 },
+                          { key: 'name', header: 'Objeto / Recurso', defaultWidth: 160, minWidth: 80 },
+                          { key: 'face', header: 'Cara', defaultWidth: 90, minWidth: 50 },
+                          { key: 'type', header: 'Tipo', defaultWidth: 90, minWidth: 50 },
+                          { key: 'thickness', header: 'Espesor', defaultWidth: 70, minWidth: 45 },
+                          { key: 'm2', header: 'm²', defaultWidth: 70, minWidth: 45 },
+                          { key: 'm3', header: 'm³', defaultWidth: 70, minWidth: 45 },
+                        ]}
+                        rows={group.objects.map((o: any) => ({
+                          face: { workspace: o.workspace, roomId: '', faceName: o.faceName, m2: o.surface_m2, m3: o.volume_m3, sortKey: 0, wallIndex: 0 } as AutoFace,
+                          cells: {
+                            order: String(o.layer_order),
+                            name: o.layer_order === 0 ? `⭐ ${o.name}` : o.name,
+                            face: o.faceName,
+                            type: o.object_type || '',
+                            thickness: o.thickness_mm ? `${o.thickness_mm} mm` : '',
+                            m2: o.surface_m2 != null ? o.surface_m2.toFixed(2) : '',
+                            m3: o.volume_m3 != null ? o.volume_m3.toFixed(3) : '',
+                          },
+                        }))}
+                        onRowClick={() => {}}
+                        className="ml-6 mt-1"
+                      />
+                    </CollapsibleContent>
+                  </Collapsible>
+                );
+              })}
+            </div>
+          )}
+        </TabsContent>
       </Tabs>
 
       {/* Panel for editing wall objects */}

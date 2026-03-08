@@ -1936,12 +1936,20 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
         <div className="mt-1 px-2 py-1.5 bg-primary/10 border border-primary/30 rounded-md flex items-center gap-2">
           <PenTool className="h-3.5 w-3.5 text-primary animate-pulse" />
           <span className="text-[10px] text-primary font-medium">
-            Modo dibujo manual — Clic en la cuadrícula para añadir vértices ({editVertices.length} colocados: {geometryTypeLabel(editVertices.length)}).
+            {editingPolygonId && !selectedWorkspaceId
+              ? `Dibujando "${editingPolygonName}" — `
+              : 'Modo dibujo manual — '}
+            Clic en la cuadrícula para añadir vértices ({editVertices.length} colocados: {geometryTypeLabel(editVertices.length)}).
             <strong> Doble clic para cerrar la figura.</strong>
           </span>
           <Button variant="ghost" size="sm" className="h-5 text-[9px] ml-auto" onClick={() => { setDrawingMode(false); }}>
             Finalizar
           </Button>
+          {editingPolygonId && !selectedWorkspaceId && (
+            <Button variant="ghost" size="sm" className="h-5 text-[9px] text-destructive" onClick={cancelNewWorkspace}>
+              Cancelar
+            </Button>
+          )}
         </div>
       )}
 

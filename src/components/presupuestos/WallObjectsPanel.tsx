@@ -107,6 +107,11 @@ export function WallObjectsPanel({
     },
   });
 
+  // The face's base surface comes from the auto Superficie object (order 0)
+  const superficieObj = objects.find(o => o.layer_order === 0);
+  const faceSurfaceM2 = superficieObj?.surface_m2 ?? 0;
+  const faceVolumeM3 = superficieObj?.volume_m3 ?? null;
+
   const resetForm = () => {
     setFormName('');
     setFormDescription('');

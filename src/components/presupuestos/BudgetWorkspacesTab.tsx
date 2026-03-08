@@ -1255,14 +1255,26 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             const pRot = (pAngle > 90 || pAngle < -90) ? pAngle + 180 : pAngle;
             return (
               <>
+                {/* Magnifier lens on ruler start point */}
+                <circle cx={sx} cy={sy} r={18} fill="none" stroke={RULER_COLOR} strokeWidth={1} opacity={0.4} className="pointer-events-none" />
                 <circle cx={sx} cy={sy} r={5} fill={RULER_COLOR} stroke="hsl(var(--background))" strokeWidth={2} />
+                <text x={sx} y={sy - 22} textAnchor="middle" dominantBaseline="central"
+                  fill={RULER_COLOR} fontSize={7} fontWeight="bold" className="select-none pointer-events-none">
+                  ({hAxisLabel}{rulerStart.x}, {vAxisLabel}{rulerStart.y})
+                </text>
                 {hEnd && (
                   <>
                     <line
                       x1={sx} y1={sy}
                       x2={hEnd.sx} y2={hEnd.sy}
                       stroke={RULER_COLOR} strokeWidth={1.5} strokeDasharray="4 3" opacity={0.7} />
+                    {/* Magnifier lens on hover/destination point */}
+                    <circle cx={hEnd.sx} cy={hEnd.sy} r={18} fill="none" stroke={RULER_COLOR} strokeWidth={1} opacity={0.3} className="pointer-events-none" />
                     <circle cx={hEnd.sx} cy={hEnd.sy} r={3} fill={RULER_COLOR} opacity={0.5} />
+                    <text x={hEnd.sx} y={hEnd.sy - 22} textAnchor="middle" dominantBaseline="central"
+                      fill={RULER_COLOR} fontSize={7} fontWeight="bold" opacity={0.7} className="select-none pointer-events-none">
+                      ({hAxisLabel}{hoverCell!.x}, {vAxisLabel}{hoverCell!.y})
+                    </text>
                     {previewLenMm > 0 && (
                       <text x={pmx} y={pmy - 8} textAnchor="middle" dominantBaseline="central"
                         transform={`rotate(${pRot}, ${pmx}, ${pmy - 8})`}

@@ -15,7 +15,7 @@ import {
   ArrowUp, ArrowDown, ArrowLeft, ArrowRight, List, LayoutGrid, ShoppingCart, Eye,
   ArrowLeftCircle
 } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { TolosaCardView } from './TolosaCardView';
 import { BudgetUrbanismTab } from './BudgetUrbanismTab';
 import { BudgetMeasurementsTab } from './BudgetMeasurementsTab';

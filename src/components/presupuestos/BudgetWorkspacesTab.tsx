@@ -815,7 +815,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             const { sx: rx, sy: ry } = originTopLeft
               ? toSvg(startGx, startGy)
               : toSvg(startGx, startGy + spanH);
-            const rectY = originTopLeft ? ry : ry - cellSize;
+            const rectY = originTopLeft ? ry : ry - cellH;
             return (
               <g key={`pr-${pr.id}`}>
                 <rect

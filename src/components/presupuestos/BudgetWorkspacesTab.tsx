@@ -713,14 +713,26 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
           🎯 Libre
         </Button>
         {rulerLines.length > 0 && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-5 text-[10px] px-2"
-            onClick={() => { setRulerLines([]); setRulerStart(null); }}
-          >
-            Borrar reglas ({rulerLines.length})
-          </Button>
+          <>
+            {onSaveRulerLines && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-5 text-[10px] px-2 text-green-600 hover:text-green-700"
+                onClick={() => { onSaveRulerLines(rulerLines); toast.success(`${rulerLines.length} regla(s) guardada(s)`); }}
+              >
+                💾 Guardar reglas
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-5 text-[10px] px-2"
+              onClick={() => { setRulerLines([]); setRulerStart(null); }}
+            >
+              Borrar reglas ({rulerLines.length})
+            </Button>
+          </>
         )}
         <span className="text-[9px] text-muted-foreground ml-2">Cotas:</span>
         <Button

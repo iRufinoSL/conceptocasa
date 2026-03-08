@@ -417,6 +417,13 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
   // Polygon is "closed" when it has >= 3 vertices and was explicitly closed by clicking first vertex
   const [isClosed, setIsClosed] = useState(() => vertices.length >= 3);
 
+  // Ruler tool state
+  const [rulerMode, setRulerMode] = useState(false);
+  const [rulerLines, setRulerLines] = useState<RulerLine[]>([]);
+  const [rulerStart, setRulerStart] = useState<PolygonVertex | null>(null);
+  // Free vertex mode — allows non-node placement
+  const [freeMode, setFreeMode] = useState(false);
+
   // At x1 the grid fits entirely; at higher zooms it grows and scrolls
   const baseCellSize = 28;
   const pad = 30;

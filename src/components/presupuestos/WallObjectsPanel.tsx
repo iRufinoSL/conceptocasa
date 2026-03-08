@@ -32,6 +32,18 @@ const WALL_TYPES = [
   { value: 'interior_invisible', label: 'Int. invisible' },
 ];
 
+const FLOOR_TYPES = [
+  { value: 'suelo_basico', label: 'Suelo básico' },
+  { value: 'suelo_compartido', label: 'Suelo compartido' },
+  { value: 'suelo_invisible', label: 'Suelo invisible' },
+];
+
+const CEILING_TYPES = [
+  { value: 'techo_basico', label: 'Techo básico' },
+  { value: 'techo_compartido', label: 'Techo compartido' },
+  { value: 'techo_invisible', label: 'Techo invisible' },
+];
+
 const OBJECT_TYPES = [
   { value: 'material', label: 'Material' },
   { value: 'bloque', label: 'Bloque' },

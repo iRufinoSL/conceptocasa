@@ -558,10 +558,9 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
           setSelectedVertexIdx(bestVIdx);
           return;
         }
-        // Then check edges — click inserts a new vertex (splits edge)
+        // Then check edges — click selects the wall (opens wall panel)
         let bestDist = Infinity;
         let bestIdx = -1;
-        let bestT = 0;
         for (let i = 0; i < vertices.length; i++) {
           const j = (i + 1) % vertices.length;
           const a = vertices[i], b = vertices[j];
@@ -571,20 +570,15 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
           t = Math.max(0, Math.min(1, t));
           const px = a.x + t * dx, py = a.y + t * dy;
           const dist = Math.sqrt((gx - px) ** 2 + (gy - py) ** 2);
-          if (dist < bestDist) { bestDist = dist; bestIdx = i; bestT = t; }
+          if (dist < bestDist) { bestDist = dist; bestIdx = i; }
         }
         if (bestIdx >= 0 && bestDist < 2) {
-          // Insert vertex at click point on the edge
-          const a = vertices[bestIdx];
-          const b = vertices[(bestIdx + 1) % vertices.length];
-          const newX = freeMode ? Math.round((a.x + bestT * (b.x - a.x)) * 10) / 10 : Math.round(a.x + bestT * (b.x - a.x));
-          const newY = freeMode ? Math.round((a.y + bestT * (b.y - a.y)) * 10) / 10 : Math.round(a.y + bestT * (b.y - a.y));
-          const insertIdx = bestIdx + 1;
-          const next = [...vertices];
-          next.splice(insertIdx, 0, { x: newX, y: newY });
-          onChange(next);
-          setSelectedVertexIdx(insertIdx);
-          toast.success(`Vértice insertado en arista ${bestIdx + 1}`);
+          // Select this wall — open wall panel
+          const wallDbIdx = bestIdx === vertices.length - 1 ? vertices.length : bestIdx + 1;
+          if (onWallSelect) {
+            onWallSelect(wallDbIdx);
+          }
+          setSelectedVertexIdx(null);
         } else {
           setSelectedVertexIdx(null);
         }
@@ -1286,6 +1280,33 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                     fill={activeWs.color}>
                     {lenMm} mm{(() => { const s = edgeSlopeInfo(a, b, hScale, vScale, showDegrees, showPercent); return s ? ` · ${s}` : ''; })()}
                   </text>
+
+                  {/* Wall number badge on edge midpoint */}
+                  {isClosed && (() => {
+                    const badgeR = 8;
+                    // Position badge slightly inward from the edge center
+                    const badgeOff = -6;
+                    const bx = mx + nx * badgeOff;
+                    const by = my + ny * badgeOff;
+                    const wallTypeLabel = WALL_TYPES.find(t => t.value === activeWt)?.label || activeWt;
+                    return (
+                      <g className={selectMode ? 'cursor-pointer' : 'pointer-events-none'}
+                        onClick={selectMode && onWallSelect ? (e) => { e.stopPropagation(); onWallSelect(wallDbIdx); } : undefined}>
+                        <circle cx={bx} cy={by} r={badgeR}
+                          fill={activeWs.color} opacity={0.9}
+                          stroke="hsl(var(--background))" strokeWidth={1.5} />
+                        <text x={bx} y={by} textAnchor="middle" dominantBaseline="central"
+                          className="text-[7px] font-bold select-none"
+                          fill="hsl(var(--background))">
+                          {wallDbIdx}
+                        </text>
+                        {/* Invisible larger hitbox for easier clicking */}
+                        {selectMode && (
+                          <circle cx={bx} cy={by} r={badgeR + 6} fill="transparent" />
+                        )}
+                      </g>
+                    );
+                  })()}
                 </g>
               );
             });

@@ -1742,13 +1742,17 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                 );
               })}
 
-              {/* Global perimeter dimensions */}
+              {/* Global perimeter dimensions — between axes and polygons */}
               {hasGlobalBounds && (() => {
-                const off = 26;
-                const topY = globalTop - off;
-                const bottomY = globalBottom + off;
-                const leftX = globalLeft - off;
-                const rightX = globalRight + off;
+                const gridTopEdge = margin.top;
+                const gridLeftEdge = margin.left;
+                const gridBottomEdge = margin.top + gridCount * cellSize;
+                const gridRightEdge = margin.left + gridCount * cellSize;
+                // Position red lines between axis labels and polygon bounds
+                const topY = Math.max(gridTopEdge + 4, globalTop - 18);
+                const bottomY = Math.min(gridBottomEdge - 4, globalBottom + 18);
+                const leftX = Math.max(gridLeftEdge + 4, globalLeft - 18);
+                const rightX = Math.min(gridRightEdge - 4, globalRight + 18);
                 const midX = (globalLeft + globalRight) / 2;
                 const midY = (globalTop + globalBottom) / 2;
                 const perimFontSize = Math.round(8 * Math.max(1, zoomLevel * 0.8));
@@ -1758,7 +1762,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                     <line x1={globalLeft} y1={topY} x2={globalRight} y2={topY} stroke="hsl(0 70% 50%)" strokeWidth={1.2} />
                     <line x1={globalLeft} y1={globalTop} x2={globalLeft} y2={topY} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
                     <line x1={globalRight} y1={globalTop} x2={globalRight} y2={topY} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
-                    <text x={midX} y={topY - 5} textAnchor="middle" fontSize={perimFontSize} fontWeight={700} fill="hsl(0 70% 45%)">{globalWidthMm} mm</text>
+                    <text x={midX} y={topY - 4} textAnchor="middle" fontSize={perimFontSize} fontWeight={700} fill="hsl(0 70% 45%)">{globalWidthMm} mm</text>
 
                     <line x1={globalLeft} y1={bottomY} x2={globalRight} y2={bottomY} stroke="hsl(0 70% 50%)" strokeWidth={1.2} />
                     <line x1={globalLeft} y1={globalBottom} x2={globalLeft} y2={bottomY} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
@@ -1769,13 +1773,13 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                     <line x1={globalLeft} y1={globalTop} x2={leftX} y2={globalTop} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
                     <line x1={globalLeft} y1={globalBottom} x2={leftX} y2={globalBottom} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
                     <text
-                      x={leftX - 6}
+                      x={leftX + 5}
                       y={midY}
                       textAnchor="middle"
                       fontSize={perimFontSize}
                       fontWeight={700}
                       fill="hsl(0 70% 45%)"
-                      transform={`rotate(-90, ${leftX - 6}, ${midY})`}
+                      transform={`rotate(-90, ${leftX + 5}, ${midY})`}
                     >
                       {globalHeightMm} mm
                     </text>
@@ -1784,13 +1788,13 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                     <line x1={globalRight} y1={globalTop} x2={rightX} y2={globalTop} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
                     <line x1={globalRight} y1={globalBottom} x2={rightX} y2={globalBottom} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
                     <text
-                      x={rightX + 6}
+                      x={rightX - 5}
                       y={midY}
                       textAnchor="middle"
                       fontSize={perimFontSize}
                       fontWeight={700}
                       fill="hsl(0 70% 45%)"
-                      transform={`rotate(-90, ${rightX + 6}, ${midY})`}
+                      transform={`rotate(-90, ${rightX - 5}, ${midY})`}
                     >
                       {globalHeightMm} mm
                     </text>

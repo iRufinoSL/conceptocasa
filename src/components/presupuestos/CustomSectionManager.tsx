@@ -51,7 +51,7 @@ export interface SectionWallProjection {
 }
 
 interface CustomSectionManagerProps {
-  sectionType: 'vertical' | 'longitudinal' | 'transversal';
+  sectionType: 'vertical' | 'longitudinal' | 'transversal' | 'inclined';
   sections: CustomSection[];
   onSectionsChange: (sections: CustomSection[]) => void;
   scaleConfig?: ScaleConfig;

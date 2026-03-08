@@ -428,6 +428,7 @@ interface GridPolygonDrawerProps {
   pdfTitle?: string;
   pdfSubtitle?: string;
   onWallClick?: (wallIndex: number) => void;
+  onWallSelect?: (wallIndex: number) => void;
   hAxisLabel?: string;
   vAxisLabel?: string;
   hScaleMm?: number;

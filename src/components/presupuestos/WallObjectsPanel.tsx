@@ -278,8 +278,15 @@ export function WallObjectsPanel({
                   return (
                   <div
                     key={obj.id}
-                    className={`flex items-start gap-2 p-2 rounded border text-xs transition-colors cursor-pointer ${isAutoSuperficie ? 'border-accent bg-accent/10' : obj.is_core ? 'border-primary/30 bg-primary/5' : 'hover:bg-accent/30'}`}
-                    onClick={() => !isAutoSuperficie && startEdit(obj)}
+                    className={`flex items-start gap-2 p-2 rounded border text-xs transition-colors cursor-pointer ${isAutoSuperficie ? 'border-accent bg-accent/10 hover:bg-accent/20' : obj.is_core ? 'border-primary/30 bg-primary/5' : 'hover:bg-accent/30'}`}
+                    onClick={() => {
+                      if (isAutoSuperficie) {
+                        // Allow editing pattern on Superficie
+                        setEditingSuperficiePattern(obj.id);
+                      } else {
+                        startEdit(obj);
+                      }
+                    }}
                   >
                     <span className="text-muted-foreground font-mono w-5 text-center shrink-0 mt-0.5">
                       {obj.layer_order}

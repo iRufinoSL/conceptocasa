@@ -1393,6 +1393,10 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
           recalculating={saving}
         />
       )}
+
+      {viewTab === 'objetos' && (
+        <WallObjectsList budgetId={budgetId} />
+      )}
     </div>
   );
 }

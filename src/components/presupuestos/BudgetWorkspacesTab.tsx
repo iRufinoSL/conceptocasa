@@ -468,6 +468,9 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
   const [rulerMode, setRulerMode] = useState(false);
   const [rulerLines, setRulerLines] = useState<RulerLine[]>([]);
   const [rulerStart, setRulerStart] = useState<PolygonVertex | null>(null);
+  // Ruler editing: dragging endpoint of existing ruler
+  const [draggingRulerIdx, setDraggingRulerIdx] = useState<number | null>(null);
+  const [draggingRulerEnd, setDraggingRulerEnd] = useState<'start' | 'end' | null>(null);
   // Free vertex mode — allows non-node placement
   const [freeMode, setFreeMode] = useState(false);
   // Annotation display toggles: always show mm, optionally degrees and/or %
@@ -571,7 +574,8 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
   const handleMouseMove = (e: React.MouseEvent) => {
     const activeIdx = draggingIdx !== null ? draggingIdx : null;
     const otherIdx = draggingOtherIdx !== null ? draggingOtherIdx : null;
-    if (activeIdx === null && otherIdx === null) return;
+    const rulerDrag = draggingRulerIdx !== null;
+    if (activeIdx === null && otherIdx === null && !rulerDrag) return;
     if (!svgRef.current) return;
     const rect = svgRef.current.getBoundingClientRect();
     const sx = e.clientX - rect.left;
@@ -580,8 +584,17 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
     // Clamp to grid bounds; in free mode allow fractional
     const clampX = (v: number) => Math.max(gridOffsetX, Math.min(gridOffsetX + gridWidth, v));
     const clampY = (v: number) => Math.max(gridOffsetY, Math.min(gridOffsetY + gridHeight, v));
-    const snappedX = freeMode ? clampX(Math.round(gx * 10) / 10) : clampX(gx);
-    const snappedY = freeMode ? clampY(Math.round(gy * 10) / 10) : clampY(gy);
+    const snappedX = (freeMode || rulerDrag) ? clampX(Math.round(gx * 10) / 10) : clampX(gx);
+    const snappedY = (freeMode || rulerDrag) ? clampY(Math.round(gy * 10) / 10) : clampY(gy);
+    if (rulerDrag && draggingRulerEnd) {
+      setRulerLines(prev => prev.map((rl, i) => {
+        if (i !== draggingRulerIdx) return rl;
+        return draggingRulerEnd === 'start'
+          ? { ...rl, start: { x: snappedX, y: snappedY } }
+          : { ...rl, end: { x: snappedX, y: snappedY } };
+      }));
+      return;
+    }
     if (activeIdx !== null) {
       if (snappedX !== vertices[activeIdx].x || snappedY !== vertices[activeIdx].y) {
         const next = [...vertices];
@@ -604,6 +617,8 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
     }
     setDraggingIdx(null);
     setDraggingOtherIdx(null);
+    setDraggingRulerIdx(null);
+    setDraggingRulerEnd(null);
   };
 
   // Select another polygon for inline editing
@@ -895,46 +910,46 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
               </g>
             );
           })}
-          {/* X axis labels — TOP */}
+          {/* X axis labels — TOP (outside grid) */}
           {Array.from({ length: gridWidth + 1 }).map((_, i) => {
             const gx = i + gridOffsetX;
             const { sx } = toSvg(gx, gridOffsetY);
             return (
-              <text key={`xt-${i}`} x={sx} y={12} textAnchor="middle"
+              <text key={`xt-${i}`} x={sx} y={pad - 6} textAnchor="middle"
                 fill="rgba(192,57,43,0.85)" fontSize={9} fontWeight="bold" className="select-none">
                 {hAxisLabel}{gx}
               </text>
             );
           })}
-          {/* X axis labels — BOTTOM */}
+          {/* X axis labels — BOTTOM (outside grid) */}
           {Array.from({ length: gridWidth + 1 }).map((_, i) => {
             const gx = i + gridOffsetX;
             const { sx } = toSvg(gx, gridOffsetY);
             return (
-              <text key={`xb-${i}`} x={sx} y={svgH - 4} textAnchor="middle"
+              <text key={`xb-${i}`} x={sx} y={pad + gridHeight * cellH + 14} textAnchor="middle"
                 fill="rgba(192,57,43,0.85)" fontSize={9} fontWeight="bold" className="select-none">
                 {hAxisLabel}{gx}
               </text>
             );
           })}
 
-          {/* Y axis labels — LEFT */}
+          {/* Y axis labels — LEFT (outside grid) */}
           {Array.from({ length: gridHeight + 1 }).map((_, i) => {
             const gy = i + gridOffsetY;
             const { sy } = toSvg(gridOffsetX, gy);
             return (
-              <text key={`yl-${i}`} x={8} y={sy + 3} textAnchor="middle"
+              <text key={`yl-${i}`} x={pad - 8} y={sy + 3} textAnchor="end"
                 fill="rgba(39,174,96,0.85)" fontSize={8} fontWeight="bold" className="select-none">
                 {vAxisLabel}{gy}
               </text>
             );
           })}
-          {/* Y axis labels — RIGHT */}
+          {/* Y axis labels — RIGHT (outside grid) */}
           {Array.from({ length: gridHeight + 1 }).map((_, i) => {
             const gy = i + gridOffsetY;
             const { sy } = toSvg(gridOffsetX, gy);
             return (
-              <text key={`yr-${i}`} x={svgW - 8} y={sy + 3} textAnchor="middle"
+              <text key={`yr-${i}`} x={pad + gridWidth * cellW + 8} y={sy + 3} textAnchor="start"
                 fill="rgba(39,174,96,0.85)" fontSize={8} fontWeight="bold" className="select-none">
                 {vAxisLabel}{gy}
               </text>
@@ -1204,14 +1219,26 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             const rAngle = Math.atan2(rdy, rdx) * (180 / Math.PI);
             const rRot = (rAngle > 90 || rAngle < -90) ? rAngle + 180 : rAngle;
             return (
-              <g key={`ruler-${ri}`} className="pointer-events-none">
+              <g key={`ruler-${ri}`}>
                 <line x1={rx1} y1={ry1} x2={rx2} y2={ry2}
-                  stroke={RULER_COLOR} strokeWidth={1.5} strokeDasharray="6 3" />
-                <circle cx={rx1} cy={ry1} r={3.5} fill={RULER_COLOR} />
-                <circle cx={rx2} cy={ry2} r={3.5} fill={RULER_COLOR} />
+                  stroke={RULER_COLOR} strokeWidth={1.5} strokeDasharray="6 3" className="pointer-events-none" />
+                {/* Draggable start endpoint */}
+                <circle cx={rx1} cy={ry1} r={5} fill={RULER_COLOR} stroke="hsl(var(--background))" strokeWidth={1.5}
+                  className="cursor-grab active:cursor-grabbing"
+                  onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); setDraggingRulerIdx(ri); setDraggingRulerEnd('start'); }} />
+                {/* Draggable end endpoint */}
+                <circle cx={rx2} cy={ry2} r={5} fill={RULER_COLOR} stroke="hsl(var(--background))" strokeWidth={1.5}
+                  className="cursor-grab active:cursor-grabbing"
+                  onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); setDraggingRulerIdx(ri); setDraggingRulerEnd('end'); }} />
+                {/* Delete ruler button */}
+                <g className="cursor-pointer" onClick={(e) => { e.stopPropagation(); setRulerLines(prev => prev.filter((_, i) => i !== ri)); }}>
+                  <circle cx={rmx} cy={rmy + 12} r={6} fill="hsl(var(--destructive))" opacity={0.8} />
+                  <text x={rmx} y={rmy + 12} textAnchor="middle" dominantBaseline="central"
+                    fill="hsl(var(--destructive-foreground))" fontSize={8} fontWeight="bold" className="select-none">✕</text>
+                </g>
                 <text x={rmx} y={rmy - 8} textAnchor="middle" dominantBaseline="central"
                   transform={`rotate(${rRot}, ${rmx}, ${rmy - 8})`}
-                  fill={RULER_COLOR} fontSize={8} fontWeight="bold" className="select-none">
+                  fill={RULER_COLOR} fontSize={8} fontWeight="bold" className="select-none pointer-events-none">
                   {rLenMm} mm{(() => { const s = edgeSlopeInfo(rl.start, rl.end, hScale, vScale, showDegrees, showPercent); return s ? ` · ${s}` : ''; })()}
                 </text>
               </g>
@@ -1228,14 +1255,26 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             const pRot = (pAngle > 90 || pAngle < -90) ? pAngle + 180 : pAngle;
             return (
               <>
+                {/* Magnifier lens on ruler start point */}
+                <circle cx={sx} cy={sy} r={18} fill="none" stroke={RULER_COLOR} strokeWidth={1} opacity={0.4} className="pointer-events-none" />
                 <circle cx={sx} cy={sy} r={5} fill={RULER_COLOR} stroke="hsl(var(--background))" strokeWidth={2} />
+                <text x={sx} y={sy - 22} textAnchor="middle" dominantBaseline="central"
+                  fill={RULER_COLOR} fontSize={7} fontWeight="bold" className="select-none pointer-events-none">
+                  ({hAxisLabel}{rulerStart.x}, {vAxisLabel}{rulerStart.y})
+                </text>
                 {hEnd && (
                   <>
                     <line
                       x1={sx} y1={sy}
                       x2={hEnd.sx} y2={hEnd.sy}
                       stroke={RULER_COLOR} strokeWidth={1.5} strokeDasharray="4 3" opacity={0.7} />
+                    {/* Magnifier lens on hover/destination point */}
+                    <circle cx={hEnd.sx} cy={hEnd.sy} r={18} fill="none" stroke={RULER_COLOR} strokeWidth={1} opacity={0.3} className="pointer-events-none" />
                     <circle cx={hEnd.sx} cy={hEnd.sy} r={3} fill={RULER_COLOR} opacity={0.5} />
+                    <text x={hEnd.sx} y={hEnd.sy - 22} textAnchor="middle" dominantBaseline="central"
+                      fill={RULER_COLOR} fontSize={7} fontWeight="bold" opacity={0.7} className="select-none pointer-events-none">
+                      ({hAxisLabel}{hoverCell!.x}, {vAxisLabel}{hoverCell!.y})
+                    </text>
                     {previewLenMm > 0 && (
                       <text x={pmx} y={pmy - 8} textAnchor="middle" dominantBaseline="central"
                         transform={`rotate(${pRot}, ${pmx}, ${pmy - 8})`}

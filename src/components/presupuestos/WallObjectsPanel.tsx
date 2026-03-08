@@ -334,6 +334,58 @@ export function WallObjectsPanel({
                           <Badge variant="secondary" className="text-[8px] h-3.5 px-1">📏 {obj.length_ml} ml</Badge>
                         )}
                       </div>
+                      {/* Inline pattern selector for Superficie */}
+                      {isAutoSuperficie && editingSuperficiePattern === obj.id && (
+                        <div className="mt-1" onClick={e => e.stopPropagation()}>
+                          <Select
+                            value={obj.visual_pattern || '_none'}
+                            onValueChange={async (v) => {
+                              const pat = v === '_none' ? null : v;
+                              await supabase.from('budget_wall_objects').update({ visual_pattern: pat }).eq('id', obj.id);
+                              queryClient.invalidateQueries({ queryKey: ['wall-objects', wallId] });
+                              setEditingSuperficiePattern(null);
+                              toast.success('Patrón actualizado');
+                            }}
+                          >
+                            <SelectTrigger className="h-7 text-xs">
+                              <div className="flex items-center gap-1.5">
+                                {obj.visual_pattern && getPatternById(obj.visual_pattern) ? (
+                                  <>
+                                    <img src={patternPreviewDataUri(getPatternById(obj.visual_pattern)!)} className="w-4 h-4 rounded border" alt="" />
+                                    <span>{getPatternById(obj.visual_pattern)!.label}</span>
+                                  </>
+                                ) : (
+                                  <span className="text-muted-foreground">Sin patrón — elegir</span>
+                                )}
+                              </div>
+                            </SelectTrigger>
+                            <SelectContent className="max-h-64">
+                              <SelectItem value="_none" className="text-xs">Sin patrón</SelectItem>
+                              {PATTERN_CATEGORIES.map(cat => (
+                                <div key={cat.id}>
+                                  <div className="px-2 py-1 text-[9px] font-bold uppercase text-muted-foreground tracking-wider">{cat.label}</div>
+                                  {VISUAL_PATTERNS.filter(p => p.category === cat.id).map(p => (
+                                    <SelectItem key={p.id} value={p.id} className="text-xs">
+                                      <div className="flex items-center gap-2">
+                                        <img src={patternPreviewDataUri(p)} className="w-4 h-4 rounded border" alt="" />
+                                        <span>{p.label}</span>
+                                      </div>
+                                    </SelectItem>
+                                  ))}
+                                </div>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                      {isAutoSuperficie && editingSuperficiePattern !== obj.id && (
+                        <p className="text-[9px] text-muted-foreground mt-0.5 flex items-center gap-1">
+                          <Paintbrush className="h-2.5 w-2.5" />
+                          {obj.visual_pattern && getPatternById(obj.visual_pattern)
+                            ? `Patrón: ${getPatternById(obj.visual_pattern)!.label}`
+                            : 'Clic para asignar patrón visual'}
+                        </p>
+                      )}
                     </div>
                     {!isAutoSuperficie && (
                     <Button

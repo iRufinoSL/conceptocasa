@@ -2141,7 +2141,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     queryFn: async () => {
       const { data } = await supabase
         .from('budget_floor_plan_walls')
-        .select('id, room_id, wall_index, wall_type')
+        .select('id, room_id, wall_index, wall_type, height')
         .in('room_id', roomIds)
         .order('wall_index', { ascending: true });
       return (data || []) as WallData[];

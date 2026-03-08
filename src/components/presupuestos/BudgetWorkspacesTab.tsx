@@ -468,6 +468,9 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
   const [rulerMode, setRulerMode] = useState(false);
   const [rulerLines, setRulerLines] = useState<RulerLine[]>([]);
   const [rulerStart, setRulerStart] = useState<PolygonVertex | null>(null);
+  // Ruler editing: dragging endpoint of existing ruler
+  const [draggingRulerIdx, setDraggingRulerIdx] = useState<number | null>(null);
+  const [draggingRulerEnd, setDraggingRulerEnd] = useState<'start' | 'end' | null>(null);
   // Free vertex mode — allows non-node placement
   const [freeMode, setFreeMode] = useState(false);
   // Annotation display toggles: always show mm, optionally degrees and/or %

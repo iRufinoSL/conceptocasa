@@ -630,9 +630,6 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
     return `ws_${sanitized}_pared${idx}`;
   };
 
-  // ── State for face type selection ──
-  const [selectedFaceType, setSelectedFaceType] = useState(getDefaultFaceType());
-  const [selectedExistingWorkspace, setSelectedExistingWorkspace] = useState('');
 
   // ── Start drawing a face for a workspace ──
   const startNewWorkspaceDrawing = () => {

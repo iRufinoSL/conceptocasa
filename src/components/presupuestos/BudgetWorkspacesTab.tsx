@@ -760,7 +760,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             })
           )}
 
-          {/* Perimeter polygon from the section */}
+          {/* Perimeter polygon from the section — outline only, no vertex labels */}
           {perimeterPolygon && perimeterPolygon.length >= 3 && (
             <polygon
               points={perimeterPolygon.map(v => { const { sx, sy } = toSvg(v.x, v.y); return `${sx},${sy}`; }).join(' ')}
@@ -771,17 +771,11 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
               className="pointer-events-none"
             />
           )}
-          {/* Perimeter vertex markers */}
+          {/* Perimeter vertex dots only (no coordinate labels to avoid visual clutter) */}
           {perimeterPolygon && perimeterPolygon.map((v, i) => {
             const { sx, sy } = toSvg(v.x, v.y);
             return (
-              <g key={`pv-${i}`}>
-                <circle cx={sx} cy={sy} r={4} fill="hsl(var(--primary))" opacity={0.6} className="pointer-events-none" />
-                <text x={sx} y={sy - 8} textAnchor="middle"
-                  className="text-[7px] fill-primary font-bold select-none pointer-events-none">
-                  ({v.x},{v.y})
-                </text>
-              </g>
+              <circle key={`pv-${i}`} cx={sx} cy={sy} r={3} fill="hsl(var(--primary))" opacity={0.4} className="pointer-events-none" />
             );
           })}
 

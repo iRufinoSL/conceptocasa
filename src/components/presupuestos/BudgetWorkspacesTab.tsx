@@ -1392,6 +1392,26 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             })
           )}
 
+          {/* Select/pointer mode: transparent overlay for clicking on walls */}
+          {selectMode && isClosed && vertices.length >= 3 && (
+            <rect
+              x={pad}
+              y={pad}
+              width={gridWidth * cellW}
+              height={gridHeight * cellH}
+              fill="transparent"
+              className="cursor-pointer"
+              onClick={(e) => {
+                if (!svgRef.current) return;
+                const rct = svgRef.current.getBoundingClientRect();
+                const sx = e.clientX - rct.left;
+                const sy = e.clientY - rct.top;
+                const { gx, gy } = fromSvg(sx, sy);
+                handleClick(gx, gy);
+              }}
+            />
+          )}
+
           {/* Free mode / Ruler mode: transparent overlay for clicking anywhere */}
           {((freeMode && !isClosed) || rulerMode) && (
             <rect

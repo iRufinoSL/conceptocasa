@@ -568,22 +568,97 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
     ]);
   };
 
-  // ── NEW: Start creating a new workspace directly on the section ──
+  // ── Face types ──
+  const FACE_OPTIONS_BY_SECTION: Record<string, string[]> = {
+    vertical: ['Suelo', 'Techo'],
+    longitudinal: ['Pared'],
+    transversal: ['Pared'],
+  };
+
+  const getDefaultFaceType = () => {
+    return section.sectionType === 'vertical' ? 'Suelo' : 'Pared';
+  };
+
+  // Collect all unique workspace names across ALL sections
+  const allWorkspaceNames = (() => {
+    const names = new Set<string>();
+    // From rooms (existing workspace system)
+    rooms?.forEach(r => names.add(r.name));
+    // From wallProjections
+    wallProjections?.forEach(wp => names.add(wp.workspaceName));
+    // From all section polygons — extract workspace name from polygon name
+    allSections?.forEach(s => {
+      s.polygons?.forEach(p => {
+        // Extract workspace name: "Cocina (Suelo)" → "Cocina", "Cocina P1" → "Cocina"
+        const wsName = p.name.replace(/\s*\((?:Suelo|Techo|Pared\s*\d*)\)\s*$/, '').replace(/\s+P\d+$/, '').trim();
+        if (wsName) names.add(wsName);
+      });
+    });
+    return Array.from(names).sort();
+  })();
+
+  // Count existing faces for a workspace to auto-number walls
+  const getNextWallIndex = (workspaceName: string) => {
+    let maxIdx = 0;
+    allSections?.forEach(s => {
+      s.polygons?.forEach(p => {
+        const match = p.name.match(new RegExp(`^${workspaceName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s+P(\\d+)$`));
+        if (match) maxIdx = Math.max(maxIdx, parseInt(match[1]));
+        if (p.name === `${workspaceName} (Pared)`) maxIdx = Math.max(maxIdx, 1);
+      });
+    });
+    return maxIdx + 1;
+  };
+
+  // Build the full polygon display name
+  const buildPolygonName = (workspaceName: string, faceType: string, wallIndex?: number) => {
+    if (faceType === 'Pared') {
+      const idx = wallIndex ?? getNextWallIndex(workspaceName);
+      return `${workspaceName} P${idx}`;
+    }
+    return `${workspaceName} (${faceType})`;
+  };
+
+  // Build polygon ID
+  const buildPolygonId = (workspaceName: string, faceType: string, wallIndex?: number) => {
+    const sanitized = workspaceName.replace(/\s+/g, '_').toLowerCase();
+    if (faceType === 'Suelo') return `ws_${sanitized}_suelo`;
+    if (faceType === 'Techo') return `ws_${sanitized}_techo`;
+    const idx = wallIndex ?? getNextWallIndex(workspaceName);
+    return `ws_${sanitized}_pared${idx}`;
+  };
+
+  // ── State for face type selection ──
+  const [selectedFaceType, setSelectedFaceType] = useState(getDefaultFaceType());
+  const [selectedExistingWorkspace, setSelectedExistingWorkspace] = useState('');
+
+  // ── Start drawing a face for a workspace ──
   const startNewWorkspaceDrawing = () => {
-    const name = newWorkspaceName.trim();
-    if (!name) { toast.error('Introduce un nombre para el Espacio'); return; }
-    const newId = `section_poly_${generateId()}`;
+    const wsName = newWorkspaceName.trim() || selectedExistingWorkspace;
+    if (!wsName) { toast.error('Selecciona o crea un Espacio de trabajo'); return; }
+
+    const wallIdx = selectedFaceType === 'Pared' ? getNextWallIndex(wsName) : undefined;
+    const polyId = buildPolygonId(wsName, selectedFaceType, wallIdx);
+    const polyName = buildPolygonName(wsName, selectedFaceType, wallIdx);
+
+    // Check if this face already exists
+    const existing = section.polygons?.find(p => p.id === polyId);
+    if (existing && selectedFaceType !== 'Pared') {
+      toast.error(`"${polyName}" ya existe en esta sección. Edítalo desde la lista.`);
+      return;
+    }
+
     setIsCreatingWorkspace(true);
     setSelectedWorkspaceId(null);
-    setEditingPolygonId(newId);
-    setEditingPolygonName(name);
+    setEditingPolygonId(polyId);
+    setEditingPolygonName(polyName);
     setEditVertices([]);
     setDrawingMode(true);
     setShowNewWorkspaceInput(false);
-    toast.info(`Dibuja "${name}" — Clic para añadir vértices, doble clic para cerrar.`);
+    toast.info(`Dibuja "${polyName}" — Clic para añadir vértices, doble clic para cerrar.`);
   };
 
-  // Save a newly drawn or edited standalone polygon
+  // Save a newly drawn or edited polygon
   const saveStandalonePolygon = () => {
     if (!editingPolygonId || !allSections || !onSectionsChange) return;
     if (editVertices.length < 1) { toast.error('Mínimo 1 vértice'); return; }
@@ -614,6 +689,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
     setDrawingMode(false);
     setIsCreatingWorkspace(false);
     setNewWorkspaceName('');
+    setSelectedExistingWorkspace('');
   };
 
   const cancelNewWorkspace = () => {
@@ -624,6 +700,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
     setIsCreatingWorkspace(false);
     setShowNewWorkspaceInput(false);
     setNewWorkspaceName('');
+    setSelectedExistingWorkspace('');
   };
 
   const selectSectionPolygon = (poly: SectionPolygon) => {
@@ -647,28 +724,25 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
     });
     onSectionsChange(updatedSections);
     if (editingPolygonId === polyId) cancelNewWorkspace();
-    toast.success('Espacio eliminado');
+    toast.success('Cara eliminada');
   };
 
-  const renameSectionPolygon = (polyId: string, newName: string) => {
-    if (!allSections || !onSectionsChange || !newName.trim()) return;
-    const updatedSections = allSections.map(s => {
-      if (s.id !== section.id) return s;
-      return {
-        ...s,
-        polygons: (s.polygons || []).map(p =>
-          p.id === polyId ? { ...p, name: newName.trim() } : p
-        ),
-      };
-    });
-    onSectionsChange(updatedSections);
-  };
-
-  // Get standalone polygons (not tied to existing wallProjections)
+  // Get all section polygons (excluding wallProjection-bound ones)
   const standalonePolygons = (section.polygons || []).filter(p => {
     if (wallProjections?.some(wp => wp.workspaceId === p.id)) return false;
     return true;
   });
+
+  // Group standalone polygons by workspace name
+  const groupedPolygons = (() => {
+    const groups: Record<string, SectionPolygon[]> = {};
+    standalonePolygons.forEach(p => {
+      const wsName = p.name.replace(/\s*\((?:Suelo|Techo|Pared\s*\d*)\)\s*$/, '').replace(/\s+P\d+$/, '').trim();
+      if (!groups[wsName]) groups[wsName] = [];
+      groups[wsName].push(p);
+    });
+    return groups;
+  })();
 
 
   const renderWorkspaceGeometry = (

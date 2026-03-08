@@ -1,27 +1,26 @@
 # Memory: features/budget/wall-objects-system
 Updated: now
 
-El listado de Objetos muestra un desglose **automático** de todas las caras/ámbitos de cada Espacio de trabajo (Prisma), sin necesidad de alta manual. Cada espacio genera automáticamente:
-- **Suelo**: superficie m² (polígono Shoelace × cellSizeM²)
-- **Pared 1..N**: superficie m² (longitud arista × altura)
-- **Techo**: superficie m² (igual al suelo)
-- **Espacio**: volumen m³ (área suelo × altura)
+El sistema de objetos de pared gestiona las capas constructivas (budget_wall_objects) y genera automáticamente entradas de medición para cada uno de los 7+ ámbitos de un espacio de trabajo (Suelo, Paredes P1-PN, Techo y Espacio).
+
+### Capa automática Superficie (Orden 0)
+Cada cara/ámbito tiene un objeto automático obligatorio con `layer_order = 0` y `name = 'Superficie'`. Este objeto:
+- Se crea automáticamente al acceder por primera vez a cualquier cara
+- Contiene la medición calculada (m² para suelos/paredes/techos, m³ para Espacio)
+- Su `description` contiene el identificador único: `{faceName}/{workspaceName}` (ej: "Suelo/Baño 1", "Pared 3/Cocina")
+- No se puede eliminar ni editar desde el panel
+- Se muestra con badge "Auto" y estilo diferenciado
+
+### Tipos de superficie
+- **Paredes**: exterior, interior, ext. invisible, ext. compartida, int. compartida, int. invisible
+- **Suelos**: suelo_basico, suelo_compartido, suelo_invisible
+- **Techos**: techo_basico, techo_compartido, techo_invisible
 
 ### Dos vistas de listado
-1. **Por espacio**: Agrupa por workspace (Baño 1, Cocina, etc.) mostrando sus ámbitos ordenados (Suelo → Paredes → Techo → Espacio) con totales.
-2. **Alfabético**: Lista plana ordenada alfabéticamente por nombre de ámbito, con columna de Espacio al que pertenece y medición.
-
-Ambas vistas incluyen búsqueda por nombre de espacio o ámbito.
+1. **Por espacio**: Agrupa por workspace colapsable con tabla redimensionable
+2. **Alfabético**: Lista plana ordenada con tabla redimensionable
 
 ### Objetos adicionales (capas constructivas)
-Además de las mediciones automáticas de Superficie, cada pared/cara puede contener múltiples **objetos/capas** almacenados en `budget_wall_objects` (vinculada a `budget_floor_plan_walls` via `wall_id`). Los objetos tienen:
-- `layer_order`, `name`, `description`, `object_type`, `is_core`, `surface_m2`, `volume_m3`, `length_ml`, `visual_pattern`
-
-### Acceso al panel de objetos
-- **Panel lateral (Sheet)**: Se abre al seleccionar una pared con el Puntero (🔍) en la cuadrícula.
-- **Detección de pared**: En modo Puntero, clic cerca de una arista (distancia < 2 unidades) identifica la pared más cercana.
-
-### Números de pared en cuadrículas
-Los badges con el número de pared se muestran en todos los polígonos visibles (activo y hermanos) en las tres vistas (Z, Y, X). Los polígonos base (perímetro) no muestran badges.
+Cada pared/cara puede contener múltiples objetos/capas (order >= 1) en `budget_wall_objects`. Campos: `layer_order`, `name`, `description`, `object_type`, `is_core`, `surface_m2`, `volume_m3`, `length_ml`, `visual_pattern`.
 
 RLS: Acceso controlado mediante cadena `wall → room → floor_plan → budget` usando `has_presupuesto_access()`.

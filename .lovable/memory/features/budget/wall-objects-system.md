@@ -8,14 +8,23 @@ Cada pared de un Espacio de trabajo puede contener múltiples **objetos/capas** 
 - `surface_m2`, `volume_m3`, `length_ml`: Mediciones
 - `visual_pattern`: Patrón visual (ej. 'blocks_625x250')
 
+### Registro de nuevos objetos
+Se pueden crear objetos de dos formas:
+1. **Panel lateral (Sheet)**: Al seleccionar una pared con el Puntero (🔍) en la cuadrícula, se abre el panel donde se pueden añadir objetos con el botón +.
+2. **Listado global de Objetos**: Botón "+Añadir objeto" disponible en todas las pestañas, permite seleccionar la pared destino y completar todos los campos del objeto.
+
 ### Acceso
 - **Panel lateral (Sheet)**: Se abre al seleccionar una pared con el **Puntero (🔍)** en la cuadrícula. Permite editar el tipo de pared y gestionar objetos/capas (CRUD completo).
 - **Detección de pared**: En modo Puntero, al hacer clic cerca de una arista del polígono (distancia < 2 unidades), se identifica la pared más cercana mediante distancia punto-segmento.
 
 ### Listado global (Objetos tab en Planos)
 El componente `WallObjectsList` muestra todos los objetos del presupuesto con tres agrupaciones:
-- **Por tipo**: Agrupa por `object_type` con totales de m², m³, ml
-- **Por pared**: Agrupa por espacio + nº de pared
+- **Por espacio de trabajo**: Agrupa por workspace/room con totales de m², m³, ml
 - **Por sección**: Agrupa por sección vertical del espacio
+- **Por objeto**: Agrupa alfabéticamente por nombre del objeto, consolidando cantidades
+Todas las pestañas incluyen el botón "+Añadir objeto" para crear objetos directamente.
+
+### Números de pared en cuadrículas
+Los badges con el número de pared (1, 2, 3...) se muestran tanto en el polígono activo como en todos los polígonos hermanos (siblings) visibles en la cuadrícula, para que siempre sea posible identificar cada lado en cualquier vista (Z, Y, X). Los polígonos base (perímetro) no muestran badges.
 
 RLS: Acceso controlado mediante cadena `wall → room → floor_plan → budget` usando `has_presupuesto_access()`.

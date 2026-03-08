@@ -2870,6 +2870,21 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                      </div>
                    );
                  })()}
+                 {/* Inline face editor near Z grid */}
+                 {gridEditVertices.length >= 3 && (
+                   <div className="border rounded p-2 space-y-1 bg-muted/20">
+                     <p className="text-[9px] text-muted-foreground font-medium uppercase tracking-wider">Caras del volumen — {r.name}</p>
+                     <FaceRow label="🟫 Suelo" type={getFloorType(r)} options={FLOOR_CEILING_TYPES} onChange={(v) => updateFloorCeiling(r.id, 'has_floor', v as FloorCeilingType)} />
+                     {Array.from({ length: gridEditVertices.length }).map((_, i) => {
+                       const dbWallIndex = i + 1;
+                       const wall = roomWalls.find(w => w.wall_index === dbWallIndex);
+                       return (
+                         <FaceRow key={i} label={`🧱 P${i + 1} ${wallLabel(i, gridEditVertices.length, 'z')}`} type={normalizeWallType(wall?.wall_type)} options={WALL_TYPES} onChange={(v) => ensureAndUpdateWallType(r.id, i, v, wall?.id)} />
+                       );
+                     })}
+                     <FaceRow label={r.has_roof ? '🏠 Techo (cubierta)' : '⬜ Techo'} type={getCeilingType(r)} options={FLOOR_CEILING_TYPES} onChange={(v) => updateFloorCeiling(r.id, 'has_ceiling', v as FloorCeilingType)} />
+                   </div>
+                 )}
                 <div className="flex items-center justify-between">
                   <div className="flex flex-wrap gap-1.5">
                     {gridEditVertices.length >= 3 && (

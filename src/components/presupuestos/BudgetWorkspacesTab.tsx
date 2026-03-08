@@ -2138,6 +2138,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                       const targetSection = allSections.find(s => s.id === view.sectionId);
                       if (targetSection) openSectionEditor(targetId, targetSection);
                     }}
+                    onOtherPolygonChange={(otherId, newVerts) => handleOtherPolygonChangeSection(otherId, newVerts, view.sectionId)}
+                    onOtherPolygonRename={handleOtherPolygonRename}
                     pdfTitle={`${section.name} — ${r.name}`}
                     pdfSubtitle={`${section.axis}=${section.axisValue}`}
                     hAxisLabel={hLabel}

@@ -2310,7 +2310,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
   };
 
   /** Open the wall objects panel for a specific wall */
-  const openWallPanel = (roomId: string, wallDbIndex: number) => {
+  const openWallPanel = (roomId: string, wallDbIndex: number, sectionType: 'z' | 'xy' = 'z') => {
     const room = rooms.find(r => r.id === roomId);
     if (!room) return;
     const wall = allWalls.find(w => w.room_id === roomId && w.wall_index === wallDbIndex);
@@ -2319,7 +2319,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     setWallPanelWallId(wall?.id || null);
     setWallPanelWallIndex(wallDbIndex);
     setWallPanelWallType(normalizeWallType(wall?.wall_type));
-    setWallPanelLabel(`P${wallDbIndex} ${wallLabel(wallDbIndex - 1, edgeCount)}`);
+    setWallPanelLabel(`P${wallDbIndex} ${wallLabel(wallDbIndex - 1, edgeCount, sectionType)}`);
     setWallPanelRoomName(room.name);
     setWallPanelRoomId(roomId);
     setWallPanelOpen(true);

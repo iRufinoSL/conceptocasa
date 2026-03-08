@@ -829,25 +829,47 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
               </g>
             );
           })}
-          {/* X axis labels (top for vertical/originTopLeft, bottom otherwise) */}
+          {/* X axis labels — TOP */}
           {Array.from({ length: gridWidth + 1 }).map((_, i) => {
             const gx = i + gridOffsetX;
             const { sx } = toSvg(gx, gridOffsetY);
             return (
-              <text key={`xl-${i}`} x={sx} y={originTopLeft ? 12 : svgH - 6} textAnchor="middle"
-                fill="hsl(0 84% 60%)" fontSize={9} fontWeight="bold" className="select-none">
+              <text key={`xt-${i}`} x={sx} y={12} textAnchor="middle"
+                fill="rgba(192,57,43,0.85)" fontSize={9} fontWeight="bold" className="select-none">
+                {hAxisLabel}{gx}
+              </text>
+            );
+          })}
+          {/* X axis labels — BOTTOM */}
+          {Array.from({ length: gridWidth + 1 }).map((_, i) => {
+            const gx = i + gridOffsetX;
+            const { sx } = toSvg(gx, gridOffsetY);
+            return (
+              <text key={`xb-${i}`} x={sx} y={svgH - 4} textAnchor="middle"
+                fill="rgba(192,57,43,0.85)" fontSize={9} fontWeight="bold" className="select-none">
                 {hAxisLabel}{gx}
               </text>
             );
           })}
 
-          {/* Y axis labels (left) */}
+          {/* Y axis labels — LEFT */}
           {Array.from({ length: gridHeight + 1 }).map((_, i) => {
-            const gy = originTopLeft ? (i + gridOffsetY) : (i + gridOffsetY);
+            const gy = i + gridOffsetY;
             const { sy } = toSvg(gridOffsetX, gy);
             return (
               <text key={`yl-${i}`} x={8} y={sy + 3} textAnchor="middle"
-                className="text-[8px] fill-emerald-600 dark:fill-emerald-400 font-bold select-none">
+                fill="rgba(39,174,96,0.85)" fontSize={8} fontWeight="bold" className="select-none">
+                {vAxisLabel}{gy}
+              </text>
+            );
+          })}
+          {/* Y axis labels — RIGHT */}
+          {Array.from({ length: gridHeight + 1 }).map((_, i) => {
+            const gy = i + gridOffsetY;
+            const { sy } = toSvg(gridOffsetX, gy);
+            return (
+              <text key={`yr-${i}`} x={svgW - 8} y={sy + 3} textAnchor="middle"
+                fill="rgba(39,174,96,0.85)" fontSize={8} fontWeight="bold" className="select-none">
                 {vAxisLabel}{gy}
               </text>
             );

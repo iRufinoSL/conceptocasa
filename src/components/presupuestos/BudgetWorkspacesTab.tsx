@@ -750,7 +750,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
       {/* Status indicator */}
       <div className="flex items-center gap-1.5">
         <Badge variant={isClosed ? 'default' : 'outline'} className="text-[9px] h-4 gap-0.5">
-          {isClosed ? '✅ Cerrado' : rulerMode ? '📏 Regla' : '⏳ Abierto'}
+          {isClosed ? '✅ Cerrado' : selectMode ? '🔍 Puntero' : rulerMode ? '📏 Regla' : '⏳ Abierto'}
         </Badge>
         <span className="text-[9px] text-muted-foreground">
           {vertices.length} vértice{vertices.length !== 1 ? 's' : ''}

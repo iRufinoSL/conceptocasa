@@ -59,6 +59,7 @@ interface WallData {
   room_id: string;
   wall_index: number;
   wall_type: string;
+  height: number | null;
 }
 
 type GeometryType = 'cube' | 'prism' | 'pyramid';

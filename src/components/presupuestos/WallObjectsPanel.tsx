@@ -9,7 +9,8 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Trash2, Save, GripVertical, Star } from 'lucide-react';
+import { Plus, Trash2, Save, GripVertical, Star, Paintbrush } from 'lucide-react';
+import { VISUAL_PATTERNS, PATTERN_CATEGORIES, getPatternById, patternPreviewDataUri } from '@/lib/visual-patterns';
 import { toast } from 'sonner';
 
 interface WallObjectsPanelProps {
@@ -81,6 +82,7 @@ export function WallObjectsPanel({
   const queryClient = useQueryClient();
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingObj, setEditingObj] = useState<string | null>(null);
+  const [editingSuperficiePattern, setEditingSuperficiePattern] = useState<string | null>(null);
 
   // Form state
   const [formName, setFormName] = useState('');
@@ -277,8 +279,15 @@ export function WallObjectsPanel({
                   return (
                   <div
                     key={obj.id}
-                    className={`flex items-start gap-2 p-2 rounded border text-xs transition-colors cursor-pointer ${isAutoSuperficie ? 'border-accent bg-accent/10' : obj.is_core ? 'border-primary/30 bg-primary/5' : 'hover:bg-accent/30'}`}
-                    onClick={() => !isAutoSuperficie && startEdit(obj)}
+                    className={`flex items-start gap-2 p-2 rounded border text-xs transition-colors cursor-pointer ${isAutoSuperficie ? 'border-accent bg-accent/10 hover:bg-accent/20' : obj.is_core ? 'border-primary/30 bg-primary/5' : 'hover:bg-accent/30'}`}
+                    onClick={() => {
+                      if (isAutoSuperficie) {
+                        // Allow editing pattern on Superficie
+                        setEditingSuperficiePattern(obj.id);
+                      } else {
+                        startEdit(obj);
+                      }
+                    }}
                   >
                     <span className="text-muted-foreground font-mono w-5 text-center shrink-0 mt-0.5">
                       {obj.layer_order}
@@ -306,6 +315,12 @@ export function WallObjectsPanel({
                         <p className="text-[10px] text-muted-foreground truncate">{obj.description}</p>
                       )}
                       <div className="flex flex-wrap gap-1">
+                        {obj.visual_pattern && getPatternById(obj.visual_pattern) && (
+                          <Badge variant="outline" className="text-[8px] h-4 px-1 gap-0.5">
+                            <img src={patternPreviewDataUri(getPatternById(obj.visual_pattern)!)} className="w-3 h-3 rounded" alt="" />
+                            {getPatternById(obj.visual_pattern)!.label}
+                          </Badge>
+                        )}
                         {(obj as any).thickness_mm != null && (
                           <Badge variant="secondary" className="text-[8px] h-3.5 px-1">🧱 {(obj as any).thickness_mm} mm</Badge>
                         )}
@@ -319,6 +334,58 @@ export function WallObjectsPanel({
                           <Badge variant="secondary" className="text-[8px] h-3.5 px-1">📏 {obj.length_ml} ml</Badge>
                         )}
                       </div>
+                      {/* Inline pattern selector for Superficie */}
+                      {isAutoSuperficie && editingSuperficiePattern === obj.id && (
+                        <div className="mt-1" onClick={e => e.stopPropagation()}>
+                          <Select
+                            value={obj.visual_pattern || '_none'}
+                            onValueChange={async (v) => {
+                              const pat = v === '_none' ? null : v;
+                              await supabase.from('budget_wall_objects').update({ visual_pattern: pat }).eq('id', obj.id);
+                              queryClient.invalidateQueries({ queryKey: ['wall-objects', wallId] });
+                              setEditingSuperficiePattern(null);
+                              toast.success('Patrón actualizado');
+                            }}
+                          >
+                            <SelectTrigger className="h-7 text-xs">
+                              <div className="flex items-center gap-1.5">
+                                {obj.visual_pattern && getPatternById(obj.visual_pattern) ? (
+                                  <>
+                                    <img src={patternPreviewDataUri(getPatternById(obj.visual_pattern)!)} className="w-4 h-4 rounded border" alt="" />
+                                    <span>{getPatternById(obj.visual_pattern)!.label}</span>
+                                  </>
+                                ) : (
+                                  <span className="text-muted-foreground">Sin patrón — elegir</span>
+                                )}
+                              </div>
+                            </SelectTrigger>
+                            <SelectContent className="max-h-64">
+                              <SelectItem value="_none" className="text-xs">Sin patrón</SelectItem>
+                              {PATTERN_CATEGORIES.map(cat => (
+                                <div key={cat.id}>
+                                  <div className="px-2 py-1 text-[9px] font-bold uppercase text-muted-foreground tracking-wider">{cat.label}</div>
+                                  {VISUAL_PATTERNS.filter(p => p.category === cat.id).map(p => (
+                                    <SelectItem key={p.id} value={p.id} className="text-xs">
+                                      <div className="flex items-center gap-2">
+                                        <img src={patternPreviewDataUri(p)} className="w-4 h-4 rounded border" alt="" />
+                                        <span>{p.label}</span>
+                                      </div>
+                                    </SelectItem>
+                                  ))}
+                                </div>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                      {isAutoSuperficie && editingSuperficiePattern !== obj.id && (
+                        <p className="text-[9px] text-muted-foreground mt-0.5 flex items-center gap-1">
+                          <Paintbrush className="h-2.5 w-2.5" />
+                          {obj.visual_pattern && getPatternById(obj.visual_pattern)
+                            ? `Patrón: ${getPatternById(obj.visual_pattern)!.label}`
+                            : 'Clic para asignar patrón visual'}
+                        </p>
+                      )}
                     </div>
                     {!isAutoSuperficie && (
                     <Button
@@ -405,9 +472,40 @@ export function WallObjectsPanel({
                       <Input className="h-7 text-xs" type="number" step="0.001" value={formVolumeM3} onChange={e => setFormVolumeM3(e.target.value)} />
                     )}
                   </div>
-                  <div>
+                  <div className="col-span-2">
                     <Label className="text-[10px]">Patrón visual</Label>
-                    <Input className="h-7 text-xs" value={formVisualPattern} onChange={e => setFormVisualPattern(e.target.value)} placeholder="Ej: blocks_625x250" />
+                    <Select value={formVisualPattern || '_none'} onValueChange={v => setFormVisualPattern(v === '_none' ? '' : v)}>
+                      <SelectTrigger className="h-8 text-xs">
+                        <div className="flex items-center gap-2">
+                          {formVisualPattern && getPatternById(formVisualPattern) ? (
+                            <>
+                              <img src={patternPreviewDataUri(getPatternById(formVisualPattern)!)} className="w-5 h-5 rounded border" alt="" />
+                              <span>{getPatternById(formVisualPattern)!.label}</span>
+                            </>
+                          ) : (
+                            <span className="text-muted-foreground">Sin patrón</span>
+                          )}
+                        </div>
+                      </SelectTrigger>
+                      <SelectContent className="max-h-64">
+                        <SelectItem value="_none" className="text-xs">
+                          <span className="text-muted-foreground">Sin patrón</span>
+                        </SelectItem>
+                        {PATTERN_CATEGORIES.map(cat => (
+                          <div key={cat.id}>
+                            <div className="px-2 py-1 text-[9px] font-bold uppercase text-muted-foreground tracking-wider">{cat.label}</div>
+                            {VISUAL_PATTERNS.filter(p => p.category === cat.id).map(p => (
+                              <SelectItem key={p.id} value={p.id} className="text-xs">
+                                <div className="flex items-center gap-2">
+                                  <img src={patternPreviewDataUri(p)} className="w-5 h-5 rounded border" alt="" />
+                                  <span>{p.label}</span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </div>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="col-span-2">
                     <Label className="text-[10px]">Descripción</Label>

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,6 +8,8 @@ import type { RoomData } from '@/lib/floor-plan-calculations';
 import { Plus, Trash2, Pencil, MapPin, Eye, EyeOff, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Save, RefreshCw, MousePointer, PenTool } from 'lucide-react';
 import { GridPdfExport } from './GridPdfExport';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
+import { VISUAL_PATTERNS, getPatternById } from '@/lib/visual-patterns';
 
 export interface SectionPolygon {
   id: string;
@@ -194,6 +196,36 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
   const [showPolygonsList, setShowPolygonsList] = useState(false);
   const [selectedFaceType, setSelectedFaceType] = useState('Suelo');
   const [selectedExistingWorkspace, setSelectedExistingWorkspace] = useState('');
+  // ── Wall visual patterns: roomId → patternId (from Superficie layer 0) ──
+  const [wallPatterns, setWallPatterns] = useState<Map<string, string>>(new Map());
+  useEffect(() => {
+    if (!rooms?.length) return;
+    const roomIds = rooms.map(r => r.id);
+    if (!roomIds.length) return;
+    (async () => {
+      const { data: walls } = await supabase
+        .from('budget_floor_plan_walls')
+        .select('id, room_id, wall_index')
+        .in('room_id', roomIds);
+      if (!walls?.length) return;
+      const wallIds = walls.map(w => w.id);
+      const { data: objs } = await supabase
+        .from('budget_wall_objects')
+        .select('wall_id, visual_pattern, layer_order')
+        .in('wall_id', wallIds)
+        .eq('layer_order', 0)
+        .not('visual_pattern', 'is', null);
+      if (!objs?.length) { setWallPatterns(new Map()); return; }
+      const wallRoomMap = new Map(walls.map(w => [w.id, w.room_id]));
+      const pMap = new Map<string, string>();
+      for (const o of objs) {
+        const roomId = wallRoomMap.get(o.wall_id);
+        if (roomId && o.visual_pattern) pMap.set(roomId, o.visual_pattern);
+      }
+      setWallPatterns(pMap);
+    })();
+  }, [rooms]);
+
   const gridCount = gridMax - gridMin + 1;
   const baseCellSize = 28;
   const cellSize = Math.round(baseCellSize * zoomLevel);
@@ -871,13 +903,19 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
     return (
       <g key={`proj-${proj.workspaceId}-${pi}`}>
         {/* Fill polygon — never captures clicks in vertical sections (walls must stay clickable) */}
-        <polygon points={points}
-          fill={hslWithAlpha(color, isEditingThis ? 0.25 : 0.12)}
-          stroke="none"
-          className={isEditingThis || isVerticalSection ? '' : 'cursor-pointer'}
-          style={{ pointerEvents: isVerticalSection ? 'none' : undefined }}
-          onClick={() => !isEditingThis && !isVerticalSection && selectWorkspace(proj)}
-        />
+        {(() => {
+          const patId = wallPatterns.get(proj.workspaceId);
+          const pat = patId ? getPatternById(patId) : undefined;
+          return (
+            <polygon points={points}
+              fill={pat ? `url(#wall-pattern-${pat.id})` : hslWithAlpha(color, isEditingThis ? 0.25 : 0.12)}
+              stroke="none"
+              className={isEditingThis || isVerticalSection ? '' : 'cursor-pointer'}
+              style={{ pointerEvents: isVerticalSection ? 'none' : undefined }}
+              onClick={() => !isEditingThis && !isVerticalSection && selectWorkspace(proj)}
+            />
+          );
+        })()}
 
         {/* ── Clickable wall edges for vertical (Z) sections ── */}
         {isVerticalSection && verts.map((v, ei) => {
@@ -1331,6 +1369,19 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
         onClick={handleGridClick}
         onDoubleClick={handleGridDblClick}
       >
+        {/* SVG pattern definitions for wall visual patterns */}
+        <defs>
+          {VISUAL_PATTERNS.map(p => (
+            <pattern
+              key={`pat-${p.id}`}
+              id={`wall-pattern-${p.id}`}
+              patternUnits="userSpaceOnUse"
+              width={p.width}
+              height={p.height}
+              dangerouslySetInnerHTML={{ __html: p.svgContent }}
+            />
+          ))}
+        </defs>
         {/* Checkerboard cells */}
         {Array.from({ length: gridCount }, (_, row) =>
           Array.from({ length: gridCount }, (_, col) => {
@@ -1516,12 +1567,18 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                 return (
                   <g key={room.id}>
                     {/* Fill polygon (no stroke — edges drawn individually below) */}
-                    <polygon
-                      points={points}
-                      fill="hsl(var(--primary) / 0.12)"
-                      stroke="none"
-                      className="pointer-events-none"
-                    />
+                    {(() => {
+                      const patId = wallPatterns.get(room.id);
+                      const pat = patId ? getPatternById(patId) : undefined;
+                      return (
+                        <polygon
+                          points={points}
+                          fill={pat ? `url(#wall-pattern-${pat.id})` : 'hsl(var(--primary) / 0.12)'}
+                          stroke="none"
+                          className="pointer-events-none"
+                        />
+                      );
+                    })()}
 
                     {/* Wall edges — CLICKABLE to assign to Y/X section */}
                     {svgPts.map((pt, i) => {

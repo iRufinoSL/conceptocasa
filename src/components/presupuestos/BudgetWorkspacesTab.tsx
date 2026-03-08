@@ -2301,6 +2301,26 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     queryClient.invalidateQueries({ queryKey: ['workspace-walls'] });
   };
 
+  /** Update the custom height for a specific wall */
+  const updateWallHeight = async (roomId: string, wallIndex: number, heightMm: number | null, existingWallId?: string) => {
+    const dbWallIndex = wallIndex + 1;
+    const heightM = heightMm !== null ? heightMm / 1000 : null;
+
+    if (existingWallId) {
+      const { error } = await supabase.from('budget_floor_plan_walls').update({ height: heightM }).eq('id', existingWallId);
+      if (error) { toast.error(`Error: ${error.message}`); return; }
+    } else {
+      const { error } = await supabase.from('budget_floor_plan_walls')
+        .insert({ room_id: roomId, wall_index: dbWallIndex, wall_type: 'exterior', height: heightM });
+      if (error) { toast.error(`Error: ${error.message}`); return; }
+    }
+    queryClient.invalidateQueries({ queryKey: ['workspace-walls'] });
+    toast.success(`Altura P${dbWallIndex} actualizada`);
+
+    // Auto-generate inclined sections if height differences detected
+    autoGenerateInclinedSections(roomId);
+  };
+
   const ensureAndUpdateWallType = async (roomId: string, wallIndex: number, newType: string, existingWallId?: string) => {
     const normalizedType = normalizeWallType(newType);
     const dbWallIndex = wallIndex + 1;

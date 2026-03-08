@@ -453,6 +453,9 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
           <TabsTrigger value="alpha" className="text-xs h-7 gap-1">
             <List className="h-3.5 w-3.5" /> Alfabético
           </TabsTrigger>
+          <TabsTrigger value="recursos" className="text-xs h-7 gap-1">
+            <Package className="h-3.5 w-3.5" /> Recursos
+          </TabsTrigger>
         </TabsList>
 
         {/* By Workspace — collapsible with resizable columns */}

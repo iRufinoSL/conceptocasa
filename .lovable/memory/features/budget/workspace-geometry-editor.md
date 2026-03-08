@@ -24,6 +24,14 @@ Junto a cada medida en mm de los lados de polígonos y líneas de regla, se pued
 - **Porcentaje (%)**: Pendiente como ratio vertical/horizontal × 100
 Los toggles `📐 º` y `📊 %` en la barra de herramientas controlan la visibilidad. Las medidas en mm siempre se muestran.
 
+### Estilos visuales de pared por tipo
+Cada arista del polígono se dibuja con color, grosor y trazo según su tipo de pared (`wall_type` en `budget_floor_plan_walls`):
+- **Exterior** / **Ext. compartida**: Verde intenso (`hsl(145 70% 35%)`), grosor 3.5px, trazo continuo
+- **Interior** / **Int. compartida**: Naranja (`hsl(30 85% 50%)`), grosor 2px, trazo continuo
+- **Ext. invisible**: Gris (`hsl(0 0% 65%)`), grosor 2.5px, trazo discontinuo
+- **Int. invisible**: Gris (`hsl(0 0% 65%)`), grosor 1.5px, trazo discontinuo
+Los datos de `allWalls` se pasan como `activeWalls` (polígono activo) y `walls` en cada `OtherPolygon` (hermanos).
+
 ### Ejes y Escalas por tipo de sección
 - **Sección Z (Planta)**: Fijo Z, dibuja (X,Y). Eje horizontal = X (625mm/bloque), Eje vertical = Y (625mm/bloque) → celdas cuadradas
 - **Sección Y (Longitudinal)**: Fijo Y, dibuja (X,Z). Eje horizontal = X (625mm/bloque), Eje vertical = Z (250mm/bloque) → celdas rectangulares

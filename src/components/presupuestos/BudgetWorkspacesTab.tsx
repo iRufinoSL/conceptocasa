@@ -72,6 +72,17 @@ const WALL_TYPES = [
   { value: 'interior_invisible', label: 'Int. invisible' },
 ];
 
+/** Visual styles per wall type for grid edge rendering */
+const WALL_EDGE_STYLES: Record<string, { color: string; width: number; dash: string }> = {
+  exterior:             { color: 'hsl(145 70% 35%)',  width: 3.5, dash: 'none' },
+  exterior_compartida:  { color: 'hsl(145 70% 35%)',  width: 3.5, dash: 'none' },
+  exterior_invisible:   { color: 'hsl(0 0% 65%)',     width: 2.5, dash: '4 3' },
+  interior:             { color: 'hsl(30 85% 50%)',   width: 2,   dash: 'none' },
+  interior_compartida:  { color: 'hsl(30 85% 50%)',   width: 2,   dash: 'none' },
+  interior_invisible:   { color: 'hsl(0 0% 65%)',     width: 1.5, dash: '3 2' },
+};
+const WALL_EDGE_DEFAULT = { color: 'hsl(200 80% 50%)', width: 2, dash: 'none' };
+
 const FLOOR_CEILING_TYPES: { value: FloorCeilingType; label: string }[] = [
   { value: 'normal', label: 'Normal' },
   { value: 'invisible', label: 'Invisible' },
@@ -387,6 +398,7 @@ interface OtherPolygon {
   name: string;
   vertices: PolygonVertex[];
   isBase?: boolean;
+  walls?: WallData[];
 }
 
 interface RulerLine {
@@ -419,6 +431,7 @@ interface GridPolygonDrawerProps {
   vAxisLabel?: string;
   hScaleMm?: number;
   vScaleMm?: number;
+  activeWalls?: WallData[];
 }
 
 const RULER_COLOR = 'hsl(30 90% 50%)';
@@ -434,7 +447,7 @@ const POLY_COLORS = [
   'hsl(280 60% 55%)',
 ];
 
-function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16, gridOffsetX = 0, gridOffsetY = 0, placedRooms = [], cellSizeM = 1, otherPolygons = [], activeRoomId, onSwitchRoom, onOtherPolygonChange, onOtherPolygonRename, onSelectOtherWorkspace, perimeterPolygon, activeName, originTopLeft = false, pdfTitle, pdfSubtitle, onWallClick, hAxisLabel = 'X', vAxisLabel = 'Y', hScaleMm, vScaleMm }: GridPolygonDrawerProps) {
+function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16, gridOffsetX = 0, gridOffsetY = 0, placedRooms = [], cellSizeM = 1, otherPolygons = [], activeRoomId, onSwitchRoom, onOtherPolygonChange, onOtherPolygonRename, onSelectOtherWorkspace, perimeterPolygon, activeName, originTopLeft = false, pdfTitle, pdfSubtitle, onWallClick, hAxisLabel = 'X', vAxisLabel = 'Y', hScaleMm, vScaleMm, activeWalls = [] }: GridPolygonDrawerProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null);
@@ -942,15 +955,27 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             const isBaseWs = !!op.isBase;
             const strokeColor = isBaseWs ? 'hsl(var(--muted-foreground) / 0.25)' : isSelected ? 'hsl(var(--primary))' : 'hsl(200 80% 50%)';
             const fillColor = isBaseWs ? 'hsl(var(--muted-foreground) / 0.06)' : isSelected ? 'hsl(var(--primary) / 0.18)' : 'hsl(200 80% 50% / 0.12)';
+            const opWalls = op.walls || [];
             return (
               <g key={`other-${op.id}`} className="cursor-pointer" onClick={() => handleSelectOther(op)}>
                 <polygon
                   points={verts.map(v => { const { sx, sy } = toSvg(v.x, v.y); return `${sx},${sy}`; }).join(' ')}
                   fill={fillColor}
-                  stroke={strokeColor}
-                  strokeWidth={isSelected ? 2.5 : 1.5}
-                  strokeDasharray={isSelected ? 'none' : '4 2'}
+                  stroke="none"
                 />
+                {/* Per-edge wall-type styled lines */}
+                {opEdges.map(({ a: ea, b: eb }, ei) => {
+                  const { sx: lx1, sy: ly1 } = toSvg(ea.x, ea.y);
+                  const { sx: lx2, sy: ly2 } = toSvg(eb.x, eb.y);
+                  const dbIdx = ei + 1;
+                  const wt = normalizeWallType(opWalls.find(w => w.wall_index === dbIdx)?.wall_type);
+                  const ws = WALL_EDGE_STYLES[wt] || WALL_EDGE_DEFAULT;
+                  const edgeColor = isBaseWs ? 'hsl(var(--muted-foreground) / 0.25)' : isSelected ? 'hsl(var(--primary))' : ws.color;
+                  const edgeWidth = isBaseWs ? 1 : isSelected ? 2.5 : ws.width;
+                  const edgeDash = isBaseWs ? '4 2' : isSelected ? 'none' : ws.dash;
+                  return <line key={`oe-line-${op.id}-${ei}`} x1={lx1} y1={ly1} x2={lx2} y2={ly2}
+                    stroke={edgeColor} strokeWidth={edgeWidth} strokeDasharray={edgeDash} />;
+                })}
                 {/* Vertices: draggable when selected, static otherwise */}
                 {verts.map((v, i) => {
                   const { sx, sy } = toSvg(v.x, v.y);
@@ -1040,9 +1065,8 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
               <>
                 <polygon
                   points={vertices.map(v => { const { sx, sy } = toSvg(v.x, v.y); return `${sx},${sy}`; }).join(' ')}
-                  fill={isClosed ? 'hsl(200 80% 50% / 0.18)' : 'hsl(200 80% 50% / 0.08)'}
-                  stroke={isClosed ? 'hsl(200 80% 50%)' : 'none'}
-                  strokeWidth={isClosed ? 2 : 0}
+                  fill={isClosed ? 'hsl(200 80% 50% / 0.10)' : 'hsl(200 80% 50% / 0.05)'}
+                  stroke="none"
                   className="pointer-events-none"
                 />
                 {activeName && (
@@ -1116,13 +1140,18 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
               const imx = mx + nx * innerOff;
               const imy = my + ny * innerOff;
 
+              // Wall type style
+              const wallDbIdx = idx === 0 ? vertices.length : idx;
+              const activeWt = normalizeWallType(activeWalls.find(w => w.wall_index === wallDbIdx)?.wall_type);
+              const activeWs = WALL_EDGE_STYLES[activeWt] || WALL_EDGE_DEFAULT;
+
               return (
                 <g key={`edge-${idx}-${a.x}-${a.y}`}>
-                  {/* Edge line */}
+                  {/* Edge line — styled by wall type */}
                   <line x1={x1} y1={y1} x2={x2} y2={y2}
-                    stroke={isClosing && !isClosed ? 'hsl(200 80% 50% / 0.5)' : 'hsl(200 80% 50%)'}
-                    strokeWidth={isClosing && !isClosed ? 1.5 : 2}
-                    strokeDasharray={isClosing && !isClosed ? '4 3' : 'none'} />
+                    stroke={isClosing && !isClosed ? 'hsl(200 80% 50% / 0.5)' : activeWs.color}
+                    strokeWidth={isClosing && !isClosed ? 1.5 : activeWs.width}
+                    strokeDasharray={isClosing && !isClosed ? '4 3' : activeWs.dash} />
 
                   {/* Outer arista dimension line with ticks */}
                   {isClosed && (
@@ -1151,11 +1180,11 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                     </>
                   )}
 
-                  {/* Inner wall label (closer to wall) */}
+                  {/* Inner wall label (closer to wall) — color matches wall type */}
                   <text x={imx} y={imy} textAnchor="middle" dominantBaseline="central"
                     transform={`rotate(${rotAngle}, ${imx}, ${imy})`}
                     className="text-[7px] font-semibold select-none pointer-events-none"
-                    fill="hsl(200 80% 50%)">
+                    fill={activeWs.color}>
                     {lenMm} mm{(() => { const s = edgeSlopeInfo(a, b, hScale, vScale, showDegrees, showPercent); return s ? ` · ${s}` : ''; })()}
                   </text>
                 </g>
@@ -2320,7 +2349,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                   activeName={r.name}
                   otherPolygons={rooms
                     .filter(other => other.id !== r.id && other.vertical_section_id === r.vertical_section_id && other.floor_polygon && other.floor_polygon.length >= 3)
-                    .map(other => ({ id: other.id, name: other.name, vertices: other.floor_polygon!, isBase: other.is_base }))}
+                    .map(other => ({ id: other.id, name: other.name, vertices: other.floor_polygon!, isBase: other.is_base, walls: allWalls.filter(w => w.room_id === other.id) }))}
+                  activeWalls={allWalls.filter(w => w.room_id === r.id)}
                   onSwitchRoom={switchGridEditRoom}
                   onOtherPolygonChange={handleOtherPolygonChangeZ}
                    onOtherPolygonRename={handleOtherPolygonRename}
@@ -2399,11 +2429,11 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                 .map(other => {
                   const existingPoly = section.polygons?.find(p => p.id === other.id);
                   if (existingPoly && existingPoly.vertices.length >= 3) {
-                    return { id: other.id, name: other.name, vertices: existingPoly.vertices.map(v => ({ x: v.x, y: v.y })), isBase: other.is_base };
+                    return { id: other.id, name: other.name, vertices: existingPoly.vertices.map(v => ({ x: v.x, y: v.y })), isBase: other.is_base, walls: allWalls.filter(w => w.room_id === other.id) };
                   }
                   const defaultProj = computeDefaultProjection(other, section);
                   if (defaultProj.length >= 3) {
-                    return { id: other.id, name: other.name, vertices: defaultProj, isBase: other.is_base };
+                    return { id: other.id, name: other.name, vertices: defaultProj, isBase: other.is_base, walls: allWalls.filter(w => w.room_id === other.id) };
                   }
                   return null;
                 })
@@ -2453,6 +2483,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                      vAxisLabel={vLabel}
                      hScaleMm={scaleH}
                      vScaleMm={scaleV}
+                     activeWalls={allWalls.filter(w => w.room_id === r.id)}
                    />
                    {/* Sibling workspace inline property editor (Y/X) */}
                    {selectedOtherWorkspaceId && (() => {
@@ -2546,7 +2577,6 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
               options={FLOOR_CEILING_TYPES}
               onChange={(v) => updateFloorCeiling(r.id, 'has_floor', v as FloorCeilingType)}
             />
-
             {/* Walls — one per edge */}
             {Array.from({ length: edgeCount }).map((_, i) => {
               const dbWallIndex = i + 1;
@@ -2733,7 +2763,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                   activeName={formName || undefined}
                   otherPolygons={rooms
                     .filter(other => other.id !== editingId && other.vertical_section_id === formSectionId && other.floor_polygon && other.floor_polygon.length >= 3)
-                    .map(other => ({ id: other.id, name: other.name, vertices: other.floor_polygon!, isBase: other.is_base }))}
+                    .map(other => ({ id: other.id, name: other.name, vertices: other.floor_polygon!, isBase: other.is_base, walls: allWalls.filter(w => w.room_id === other.id) }))}
+                  activeWalls={editingId ? allWalls.filter(w => w.room_id === editingId) : []}
                   onSwitchRoom={editingId ? switchGridEditRoom : undefined}
                   onOtherPolygonChange={handleOtherPolygonChangeZ}
                   onOtherPolygonRename={handleOtherPolygonRename}
@@ -2829,7 +2860,6 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
         module="workspaces"
         onRestore={handleRestoreBackup}
       />
-
       {/* Delete with backup dialog */}
       {deleteTarget && (
         <DeleteWithBackupDialog

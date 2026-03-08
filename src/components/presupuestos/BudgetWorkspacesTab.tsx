@@ -2039,6 +2039,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
   const verticalSections = useMemo(() => allSections.filter(s => s.sectionType === 'vertical'), [allSections]);
   const longitudinalSections = useMemo(() => allSections.filter(s => s.sectionType === 'longitudinal'), [allSections]);
   const transversalSections = useMemo(() => allSections.filter(s => s.sectionType === 'transversal'), [allSections]);
+  const inclinedSections = useMemo(() => allSections.filter(s => s.sectionType === 'inclined'), [allSections]);
 
   /** Get the perimeter polygon (XY) from a vertical section's first polygon */
   const getSectionPerimeter = useCallback((sectionId: string | null): PolygonVertex[] | undefined => {

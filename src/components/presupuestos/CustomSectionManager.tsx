@@ -20,10 +20,18 @@ export interface SectionPolygon {
 export interface CustomSection {
   id: string;
   name: string;
-  sectionType: 'vertical' | 'longitudinal' | 'transversal';
+  sectionType: 'vertical' | 'longitudinal' | 'transversal' | 'inclined';
   axis: 'X' | 'Y' | 'Z';
   axisValue: number;
   polygons: SectionPolygon[];
+  /** For inclined sections: reference workspace and wall height data */
+  inclinedMeta?: {
+    workspaceId: string;
+    workspaceName: string;
+    wallHeights: { wallIndex: number; heightMm: number }[];
+    realLengthMm: number;
+    slopeAngleDeg: number;
+  };
 }
 
 export interface ScaleConfig {

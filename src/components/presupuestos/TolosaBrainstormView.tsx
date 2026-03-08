@@ -15,7 +15,7 @@ import {
   ArrowUp, ArrowDown, ArrowLeft, ArrowRight, List, LayoutGrid, ShoppingCart, Eye,
   ArrowLeftCircle
 } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { TolosaCardView } from './TolosaCardView';
 import { BudgetUrbanismTab } from './BudgetUrbanismTab';
 import { BudgetMeasurementsTab } from './BudgetMeasurementsTab';
@@ -152,9 +152,11 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
   const [showOnlyExecuted, setShowOnlyExecuted] = useState(true);
   const [graphEntryItemId, setGraphEntryItemId] = useState<string | null>(null); // tracks item opened from graph card ✏️
   const [measurementVersions, setMeasurementVersions] = useState<Record<string, number>>({});
-  const [fullDetailItemId, setFullDetailItemId] = useState<string | null>(null); // item shown in full-detail dialog from graph
-  const [lastWorkedItemId, setLastWorkedItemId] = useState<string | null>(null); // last item the user interacted with
-  const [previousViewMode, setPreviousViewMode] = useState<'list' | 'cards' | null>(null); // for back navigation
+  const [fullDetailItemId, setFullDetailItemId] = useState<string | null>(null);
+  const [lastWorkedItemId, setLastWorkedItemId] = useState<string | null>(null);
+  const [previousViewMode, setPreviousViewMode] = useState<'list' | 'cards' | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ item: TolosItem; descendants: TolosItem[] } | null>(null);
+  const [graphAddName, setGraphAddName] = useState('');
 
   const bumpMeasurementVersion = useCallback((itemId: string) => {
     setMeasurementVersions(prev => ({ ...prev, [itemId]: (prev[itemId] || 0) + 1 }));
@@ -494,10 +496,19 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
     }
   };
 
+  // Collect all descendants recursively
+  const getAllDescendants = useCallback((parentId: string): TolosItem[] => {
+    const children = items.filter(i => i.parent_id === parentId);
+    const all: TolosItem[] = [...children];
+    children.forEach(c => { all.push(...getAllDescendants(c.id)); });
+    return all;
+  }, [items]);
+
   const handleDelete = async (item: TolosItem) => {
-    const children = getChildren(item.id);
-    if (children.length > 0) {
-      toast.error('Elimina primero los sub-QUÉ?');
+    const descendants = getAllDescendants(item.id);
+    if (descendants.length > 0) {
+      // Show confirmation dialog
+      setDeleteConfirm({ item, descendants });
       return;
     }
     const { error } = await supabase.from('tolosa_items').delete().eq('id', item.id);
@@ -505,6 +516,65 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
       toast.error('Error al eliminar');
     } else {
       toast.success('Eliminado');
+      fetchItems();
+    }
+  };
+
+  const handleDeleteWithDescendants = async () => {
+    if (!deleteConfirm) return;
+    const { item, descendants } = deleteConfirm;
+    // Delete deepest first (reverse by code length)
+    const sorted = [...descendants].sort((a, b) => b.code.length - a.code.length);
+    for (const d of sorted) {
+      await supabase.from('tolosa_items').delete().eq('id', d.id);
+    }
+    const { error } = await supabase.from('tolosa_items').delete().eq('id', item.id);
+    if (error) {
+      toast.error('Error al eliminar');
+    } else {
+      toast.success(`Eliminado "${item.name}" y ${descendants.length} descendientes`);
+      fetchItems();
+    }
+    setDeleteConfirm(null);
+  };
+
+  const handleDeleteById = async (itemId: string) => {
+    const item = items.find(i => i.id === itemId);
+    if (item) handleDelete(item);
+  };
+
+  const handleUpdateItemFromGraph = async (itemId: string, fields: { name?: string; code?: string }) => {
+    const updateFields: Record<string, unknown> = {};
+    if (fields.name) updateFields.name = fields.name;
+    if (fields.code) updateFields.code = fields.code;
+    const { error } = await supabase.from('tolosa_items').update(updateFields).eq('id', itemId);
+    if (error) {
+      toast.error('Error al actualizar');
+    } else {
+      fetchItems();
+    }
+  };
+
+  const handleAddFromGraph = async (parentId: string | null, name?: string) => {
+    const itemName = name || graphAddName.trim();
+    if (!itemName) return;
+    const code = getNextCode(parentId);
+    const siblings = parentId ? getChildren(parentId) : rootItems;
+    const { error } = await supabase
+      .from('tolosa_items')
+      .insert({
+        budget_id: budgetId,
+        parent_id: parentId,
+        code,
+        name: itemName,
+        order_index: siblings.length,
+      });
+    if (error) {
+      toast.error('Error al añadir');
+    } else {
+      toast.success('QUÉ? añadido');
+      setGraphAddName('');
+      if (parentId) setExpandedIds(prev => new Set(prev).add(parentId));
       fetchItems();
     }
   };
@@ -2056,10 +2126,17 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
             });
           }}
           onOpenFullDetail={(itemId) => {
-            // Open full-detail dialog from graph without leaving graph mode
             setFullDetailItemId(itemId);
             setLastWorkedItemId(itemId);
           }}
+          onUpdateItem={handleUpdateItemFromGraph}
+          onAddSibling={(parentId, name) => {
+            handleAddFromGraph(parentId, name);
+          }}
+          onAddChild={(parentId, name) => {
+            handleAddFromGraph(parentId, name);
+          }}
+          onDeleteItem={handleDeleteById}
         />
       ) : (
         <div className="space-y-1">
@@ -2161,6 +2238,37 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
           <span>{rootItems.length} QUÉ? raíz</span>
           <span>{items.length - rootItems.length} sub-QUÉ?</span>
         </div>
+      )}
+
+      {/* Delete confirmation dialog for items with descendants */}
+      {deleteConfirm && (
+        <Dialog open={true} onOpenChange={(open) => { if (!open) setDeleteConfirm(null); }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Eliminar "{deleteConfirm.item.name}"</DialogTitle>
+              <DialogDescription>
+                Este ítem tiene <strong>{deleteConfirm.descendants.length}</strong> descendiente{deleteConfirm.descendants.length > 1 ? 's' : ''}.
+                ¿Qué deseas hacer?
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2 max-h-40 overflow-y-auto border rounded p-2 bg-muted/30">
+              {deleteConfirm.descendants.map(d => (
+                <div key={d.id} className="flex items-center gap-2 text-xs">
+                  <Badge variant="outline" className="font-mono text-[10px] shrink-0">{d.code}</Badge>
+                  <span className="truncate">{d.name}</span>
+                </div>
+              ))}
+            </div>
+            <DialogFooter className="flex flex-col sm:flex-row gap-2">
+              <Button variant="outline" onClick={() => setDeleteConfirm(null)}>
+                Cancelar
+              </Button>
+              <Button variant="destructive" onClick={handleDeleteWithDescendants}>
+                <Trash2 className="h-4 w-4 mr-1" /> Eliminar todo ({deleteConfirm.descendants.length + 1})
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

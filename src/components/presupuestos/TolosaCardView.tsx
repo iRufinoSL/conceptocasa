@@ -1,7 +1,8 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ChevronDown, ChevronRight, Ruler, Users, MapPin, Minus, Plus, Edit2, Maximize2, Home } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { ChevronDown, ChevronRight, Ruler, Users, MapPin, Minus, Plus, Edit2, Maximize2, Home, Check, X, ArrowRight, ArrowDown, Trash2 } from 'lucide-react';
 import { formatCurrency, formatNumber } from '@/lib/format-utils';
 
 interface TolosItem {
@@ -44,6 +45,10 @@ interface TolosaCardViewProps {
   onItemDoubleClick?: (itemId: string) => void;
   onEditItem?: (itemId: string) => void;
   onOpenFullDetail?: (itemId: string) => void;
+  onUpdateItem?: (itemId: string, fields: { name?: string; code?: string }) => Promise<void>;
+  onAddSibling?: (parentId: string | null, name: string) => void;
+  onAddChild?: (parentId: string, name: string) => void;
+  onDeleteItem?: (itemId: string) => void;
   initialFocusId?: string | null;
 }
 
@@ -68,13 +73,25 @@ export function TolosaCardView({
   onItemDoubleClick,
   onEditItem,
   onOpenFullDetail,
+  onUpdateItem,
+  onAddSibling,
+  onAddChild,
+  onDeleteItem,
   initialFocusId,
 }: TolosaCardViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [focusedId, setFocusedId] = useState<string | null>(null);
-  // Drill-down: when set, only show this item as root
   const [drillRootId, setDrillRootId] = useState<string | null>(null);
+
+  // Inline editing state
+  const [editingCardId, setEditingCardId] = useState<string | null>(null);
+  const [editCardName, setEditCardName] = useState('');
+  const [editCardCode, setEditCardCode] = useState('');
+
+  // Inline add state
+  const [addingContext, setAddingContext] = useState<{ parentId: string | null; type: 'sibling' | 'child'; afterItemId?: string } | null>(null);
+  const [addName, setAddName] = useState('');
 
   const getChildren = useCallback((parentId: string | null) => {
     return items
@@ -82,7 +99,6 @@ export function TolosaCardView({
       .sort((a, b) => a.order_index - b.order_index);
   }, [items]);
 
-  // Build ancestor path for breadcrumb
   const getAncestorChain = useCallback((itemId: string): TolosItem[] => {
     const chain: TolosItem[] = [];
     let current = items.find(i => i.id === itemId);
@@ -93,7 +109,6 @@ export function TolosaCardView({
     return chain;
   }, [items]);
 
-  // Effective roots: either drilled-down item or actual roots
   const effectiveRoots = useMemo(() => {
     if (drillRootId) {
       const item = items.find(i => i.id === drillRootId);
@@ -102,7 +117,6 @@ export function TolosaCardView({
     return getChildren(null);
   }, [drillRootId, items, getChildren]);
 
-  // Compute depth of each item relative to effective roots
   const itemDepth = useMemo(() => {
     const map: Record<string, number> = {};
     const computeDepth = (parentId: string | null, depth: number) => {
@@ -133,7 +147,6 @@ export function TolosaCardView({
     return expanded;
   });
 
-  // When drill root changes, expand all direct children
   useEffect(() => {
     if (drillRootId) {
       setExpandedIds(prev => {
@@ -144,19 +157,15 @@ export function TolosaCardView({
         });
         return next;
       });
-      // Scroll to top
       setTimeout(() => containerRef.current?.scrollTo({ top: 0, left: 0, behavior: 'smooth' }), 50);
     }
   }, [drillRootId, getChildren]);
 
-  // Auto-focus on initialFocusId when it changes
   useEffect(() => {
     if (initialFocusId) {
       setFocusedId(initialFocusId);
-      // If the item has a parent, drill into the parent so the item is visible
       const item = items.find(i => i.id === initialFocusId);
       if (item?.parent_id) {
-        // Expand ancestors
         setExpandedIds(prev => {
           const next = new Set(prev);
           let current = item;
@@ -170,7 +179,6 @@ export function TolosaCardView({
     }
   }, [initialFocusId, items]);
 
-  // Color assignment based on root ancestor
   const parentColorMap = useMemo(() => {
     const map: Record<string, number> = {};
     const allRoots = getChildren(null);
@@ -201,7 +209,6 @@ export function TolosaCardView({
     });
   }, []);
 
-  // Auto-scroll focused card into view
   useEffect(() => {
     if (!focusedId || !containerRef.current) return;
     const el = cardRefs.current[focusedId];
@@ -212,18 +219,29 @@ export function TolosaCardView({
     }
   }, [focusedId, expandedIds, drillRootId]);
 
-  // Handle click on card body → drill-down
   const handleCardClick = useCallback((e: React.MouseEvent, item: TolosItem) => {
     const children = getChildren(item.id);
     if (children.length > 0) {
-      // Drill-down: show this item as root with its children
       setDrillRootId(item.id);
       setFocusedId(item.id);
     } else {
-      // Leaf node: open full detail
       onOpenFullDetail?.(item.id);
     }
   }, [getChildren, onOpenFullDetail]);
+
+  const startEditing = (item: TolosItem) => {
+    setEditingCardId(item.id);
+    setEditCardName(item.name);
+    setEditCardCode(item.code);
+  };
+
+  const saveEditing = async () => {
+    if (!editingCardId || !editCardName.trim()) return;
+    if (onUpdateItem) {
+      await onUpdateItem(editingCardId, { name: editCardName.trim(), code: editCardCode.trim() });
+    }
+    setEditingCardId(null);
+  };
 
   const renderCard = (item: TolosItem) => {
     const children = getChildren(item.id);
@@ -235,6 +253,7 @@ export function TolosaCardView({
     const clientName = item.client_contact_id ? contactCache[item.client_contact_id] : null;
     const hasLocation = !!(item.address_city || item.address_street);
     const isFocused = focusedId === item.id;
+    const isEditing = editingCardId === item.id;
 
     return (
       <div
@@ -244,14 +263,51 @@ export function TolosaCardView({
       >
         {/* The card itself */}
         <div
-          className={`rounded-xl border-2 ${palette.border} ${palette.bg} min-w-[200px] max-w-[280px] cursor-pointer hover:shadow-lg transition-all relative select-none ${isFocused ? 'ring-2 ring-primary shadow-lg' : ''}`}
-          onClick={(e) => handleCardClick(e, item)}
+          className={`rounded-xl border-2 ${palette.border} ${palette.bg} min-w-[200px] max-w-[280px] cursor-pointer hover:shadow-lg transition-all relative select-none group/card ${isFocused ? 'ring-2 ring-primary shadow-lg' : ''}`}
+          onClick={(e) => { if (!isEditing) handleCardClick(e, item); }}
         >
-          {/* Header with code + expand/collapse + action buttons */}
+          {/* Header */}
           <div className={`flex items-center justify-between gap-1 px-2.5 py-1.5 rounded-t-[10px] ${palette.header}`}>
-            <Badge variant="outline" className="font-mono text-[10px] shrink-0 px-1.5 bg-background/50">{item.code}</Badge>
+            {isEditing ? (
+              <Input
+                value={editCardCode}
+                onChange={e => setEditCardCode(e.target.value)}
+                className="h-5 text-[10px] font-mono w-16 px-1 py-0"
+                onClick={e => e.stopPropagation()}
+              />
+            ) : (
+              <Badge variant="outline" className="font-mono text-[10px] shrink-0 px-1.5 bg-background/50">{item.code}</Badge>
+            )}
             <div className="flex items-center gap-0.5 ml-auto">
-              {/* Full detail button */}
+              {/* Quick-add sibling → */}
+              {onAddSibling && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setAddingContext({ parentId: item.parent_id, type: 'sibling', afterItemId: item.id });
+                    setAddName('');
+                  }}
+                  className="flex items-center px-1 py-0.5 rounded text-[10px] font-medium hover:bg-black/10 dark:hover:bg-white/10 transition-colors opacity-0 group-hover/card:opacity-60 hover:!opacity-100"
+                  title="Crear hermano →"
+                >
+                  <ArrowRight className="h-3 w-3" />
+                </button>
+              )}
+              {/* Quick-add child ↓ */}
+              {onAddChild && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setAddingContext({ parentId: item.id, type: 'child' });
+                    setAddName('');
+                    setExpandedIds(prev => new Set(prev).add(item.id));
+                  }}
+                  className="flex items-center px-1 py-0.5 rounded text-[10px] font-medium hover:bg-black/10 dark:hover:bg-white/10 transition-colors opacity-0 group-hover/card:opacity-60 hover:!opacity-100"
+                  title="Crear hijo ↓"
+                >
+                  <ArrowDown className="h-3 w-3" />
+                </button>
+              )}
               {onOpenFullDetail && (
                 <button
                   onClick={(e) => { e.stopPropagation(); onOpenFullDetail(item.id); }}
@@ -261,13 +317,23 @@ export function TolosaCardView({
                   <Maximize2 className="h-3 w-3" />
                 </button>
               )}
-              {onEditItem && (
+              {onEditItem && !isEditing && (
                 <button
-                  onClick={(e) => { e.stopPropagation(); onEditItem(item.id); }}
+                  onClick={(e) => { e.stopPropagation(); startEditing(item); }}
                   className="flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] font-medium hover:bg-black/10 dark:hover:bg-white/10 transition-colors opacity-60 hover:opacity-100"
-                  title="Editar nombre"
+                  title="Editar ActividadID"
                 >
                   <Edit2 className="h-3 w-3" />
+                </button>
+              )}
+              {/* Delete */}
+              {onDeleteItem && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onDeleteItem(item.id); }}
+                  className="flex items-center px-1 py-0.5 rounded text-[10px] font-medium hover:bg-red-200 dark:hover:bg-red-900/40 transition-colors opacity-0 group-hover/card:opacity-60 hover:!opacity-100 text-destructive"
+                  title="Eliminar"
+                >
+                  <Trash2 className="h-3 w-3" />
                 </button>
               )}
               {hasChildren && (
@@ -285,42 +351,66 @@ export function TolosaCardView({
 
           {/* Body */}
           <div className="px-2.5 py-2">
-            <h4 className="text-xs font-semibold text-foreground leading-tight line-clamp-2">{item.name}</h4>
-            {item.description && (
-              <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">{item.description}</p>
+            {isEditing ? (
+              <div className="space-y-1" onClick={e => e.stopPropagation()}>
+                <Input
+                  value={editCardName}
+                  onChange={e => setEditCardName(e.target.value)}
+                  className="h-7 text-xs"
+                  autoFocus
+                  onKeyDown={e => { if (e.key === 'Enter') saveEditing(); if (e.key === 'Escape') setEditingCardId(null); }}
+                />
+                <div className="flex gap-1 justify-end">
+                  <Button size="sm" variant="ghost" className="h-5 px-1.5 text-[10px]" onClick={() => setEditingCardId(null)}>
+                    <X className="h-2.5 w-2.5" />
+                  </Button>
+                  <Button size="sm" className="h-5 px-1.5 text-[10px]" onClick={saveEditing}>
+                    <Check className="h-2.5 w-2.5" />
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <h4 className="text-xs font-semibold text-foreground leading-tight line-clamp-2">{item.name}</h4>
+                {item.description && (
+                  <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">{item.description}</p>
+                )}
+              </>
             )}
 
             {/* Badges */}
-            <div className="flex flex-wrap gap-0.5 mt-1.5">
-              {summary && summary.measurementUnits > 0 && (
-                <Badge variant="outline" className="text-[8px] font-mono gap-0.5 px-1 py-0">
-                  <Ruler className="h-2 w-2" />
-                  {formatNumber(summary.measurementUnits)} {summary.measurementUnit}
-                </Badge>
-              )}
-              {summary && summary.resourceSubtotal > 0 && (
-                <Badge variant="secondary" className="text-[8px] font-mono gap-0.5 px-1 py-0">
-                  {formatCurrency(summary.resourceSubtotal)}
-                </Badge>
-              )}
-              {cuanto > 0 && cuanto !== (summary?.resourceSubtotal || 0) && (
-                <Badge className="text-[8px] font-mono gap-0.5 px-1 py-0 bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-300 border-rose-300 dark:border-rose-700" variant="outline">
-                  {formatCurrency(cuanto)}
-                </Badge>
-              )}
-              {clientName && (
-                <Badge variant="outline" className="text-[8px] gap-0.5 px-1 py-0">
-                  <Users className="h-2 w-2" />
-                  {clientName}
-                </Badge>
-              )}
-              {hasLocation && (
-                <Badge variant="outline" className="text-[8px] gap-0.5 px-1 py-0">
-                  <MapPin className="h-2 w-2" />
-                  {item.address_city || 'Loc'}
-                </Badge>
-              )}
-            </div>
+            {!isEditing && (
+              <div className="flex flex-wrap gap-0.5 mt-1.5">
+                {summary && summary.measurementUnits > 0 && (
+                  <Badge variant="outline" className="text-[8px] font-mono gap-0.5 px-1 py-0">
+                    <Ruler className="h-2 w-2" />
+                    {formatNumber(summary.measurementUnits)} {summary.measurementUnit}
+                  </Badge>
+                )}
+                {summary && summary.resourceSubtotal > 0 && (
+                  <Badge variant="secondary" className="text-[8px] font-mono gap-0.5 px-1 py-0">
+                    {formatCurrency(summary.resourceSubtotal)}
+                  </Badge>
+                )}
+                {cuanto > 0 && cuanto !== (summary?.resourceSubtotal || 0) && (
+                  <Badge className="text-[8px] font-mono gap-0.5 px-1 py-0 bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-300 border-rose-300 dark:border-rose-700" variant="outline">
+                    {formatCurrency(cuanto)}
+                  </Badge>
+                )}
+                {clientName && (
+                  <Badge variant="outline" className="text-[8px] gap-0.5 px-1 py-0">
+                    <Users className="h-2 w-2" />
+                    {clientName}
+                  </Badge>
+                )}
+                {hasLocation && (
+                  <Badge variant="outline" className="text-[8px] gap-0.5 px-1 py-0">
+                    <MapPin className="h-2 w-2" />
+                    {item.address_city || 'Loc'}
+                  </Badge>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -355,7 +445,6 @@ export function TolosaCardView({
 
   if (items.length === 0) return null;
 
-  // Breadcrumb for drill-down navigation
   const breadcrumb = drillRootId ? getAncestorChain(drillRootId) : [];
 
   return (
@@ -389,6 +478,54 @@ export function TolosaCardView({
               </span>
             );
           })}
+        </div>
+      )}
+
+      {/* Inline add form */}
+      {addingContext && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-muted/50 rounded-lg border">
+          <span className="text-xs text-muted-foreground shrink-0">
+            {addingContext.type === 'sibling' ? 'Nuevo hermano →' : 'Nuevo hijo ↓'}
+          </span>
+          <Input
+            value={addName}
+            onChange={e => setAddName(e.target.value)}
+            placeholder="Nombre del nuevo QUÉ?"
+            className="h-7 text-xs flex-1"
+            autoFocus
+            onKeyDown={e => {
+              if (e.key === 'Enter' && addName.trim()) {
+                if (addingContext.type === 'sibling') {
+                  onAddSibling?.(addingContext.parentId, addName.trim());
+                } else {
+                  onAddChild?.(addingContext.parentId!, addName.trim());
+                }
+                setAddName('');
+                setAddingContext(null);
+              }
+              if (e.key === 'Escape') setAddingContext(null);
+            }}
+          />
+          <Button
+            size="sm"
+            className="h-7 text-xs"
+            disabled={!addName.trim()}
+            onClick={() => {
+              if (!addName.trim()) return;
+              if (addingContext.type === 'sibling') {
+                onAddSibling?.(addingContext.parentId, addName.trim());
+              } else {
+                onAddChild?.(addingContext.parentId!, addName.trim());
+              }
+              setAddName('');
+              setAddingContext(null);
+            }}
+          >
+            <Plus className="h-3 w-3 mr-1" /> Añadir
+          </Button>
+          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setAddingContext(null)}>
+            <X className="h-3 w-3" />
+          </Button>
         </div>
       )}
 

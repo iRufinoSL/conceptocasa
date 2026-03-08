@@ -911,12 +911,11 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
               fill={pat ? `url(#wall-pattern-${pat.id})` : hslWithAlpha(color, isEditingThis ? 0.25 : 0.12)}
               stroke="none"
               className={isEditingThis || isVerticalSection ? '' : 'cursor-pointer'}
+              style={{ pointerEvents: isVerticalSection ? 'none' : undefined }}
+              onClick={() => !isEditingThis && !isVerticalSection && selectWorkspace(proj)}
             />
           );
         })()}
-          style={{ pointerEvents: isVerticalSection ? 'none' : undefined }}
-          onClick={() => !isEditingThis && !isVerticalSection && selectWorkspace(proj)}
-        />
 
         {/* ── Clickable wall edges for vertical (Z) sections ── */}
         {isVerticalSection && verts.map((v, ei) => {

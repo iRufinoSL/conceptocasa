@@ -1138,15 +1138,30 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
           {/* Ruler start point preview */}
           {rulerMode && rulerStart && (() => {
             const { sx, sy } = toSvg(rulerStart.x, rulerStart.y);
+            const hEnd = hoverCell ? toSvg(hoverCell.x, hoverCell.y) : null;
+            const previewLenMm = hEnd ? Math.round(Math.sqrt(((hoverCell!.x - rulerStart.x) * hScale) ** 2 + ((hoverCell!.y - rulerStart.y) * vScale) ** 2) * 1000) : 0;
+            const pmx = hEnd ? (sx + hEnd.sx) / 2 : 0;
+            const pmy = hEnd ? (sy + hEnd.sy) / 2 : 0;
+            const pAngle = hEnd ? Math.atan2(hEnd.sy - sy, hEnd.sx - sx) * (180 / Math.PI) : 0;
+            const pRot = (pAngle > 90 || pAngle < -90) ? pAngle + 180 : pAngle;
             return (
               <>
                 <circle cx={sx} cy={sy} r={5} fill={RULER_COLOR} stroke="hsl(var(--background))" strokeWidth={2} />
-                {hoverCell && (
-                  <line
-                    x1={sx} y1={sy}
-                    x2={toSvg(hoverCell.x, hoverCell.y).sx}
-                    y2={toSvg(hoverCell.x, hoverCell.y).sy}
-                    stroke={RULER_COLOR} strokeWidth={1} strokeDasharray="3 3" opacity={0.6} />
+                {hEnd && (
+                  <>
+                    <line
+                      x1={sx} y1={sy}
+                      x2={hEnd.sx} y2={hEnd.sy}
+                      stroke={RULER_COLOR} strokeWidth={1.5} strokeDasharray="4 3" opacity={0.7} />
+                    <circle cx={hEnd.sx} cy={hEnd.sy} r={3} fill={RULER_COLOR} opacity={0.5} />
+                    {previewLenMm > 0 && (
+                      <text x={pmx} y={pmy - 8} textAnchor="middle" dominantBaseline="central"
+                        transform={`rotate(${pRot}, ${pmx}, ${pmy - 8})`}
+                        fill={RULER_COLOR} fontSize={8} fontWeight="bold" opacity={0.7} className="select-none pointer-events-none">
+                        {previewLenMm} mm
+                      </text>
+                    )}
+                  </>
                 )}
               </>
             );

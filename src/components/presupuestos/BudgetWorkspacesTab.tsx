@@ -1235,7 +1235,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             />
           )}
           {/* Free mode: show placed vertex markers */}
-          {(freeMode || rulerMode) && !isClosed && vertices.map((v, vi) => {
+          {freeMode && !isClosed && vertices.map((v, vi) => {
             const { sx, sy } = toSvg(v.x, v.y);
             return (
               <g key={`fv-${vi}`}>

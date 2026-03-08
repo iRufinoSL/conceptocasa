@@ -1211,7 +1211,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                       <text x={pmx} y={pmy - 8} textAnchor="middle" dominantBaseline="central"
                         transform={`rotate(${pRot}, ${pmx}, ${pmy - 8})`}
                         fill={RULER_COLOR} fontSize={8} fontWeight="bold" opacity={0.7} className="select-none pointer-events-none">
-                        {previewLenMm} mm
+                        {previewLenMm} mm{(() => { const s = edgeSlopeInfo(rulerStart, hoverCell!, hScale, vScale, showDegrees, showPercent); return s ? ` · ${s}` : ''; })()}
                       </text>
                     )}
                   </>

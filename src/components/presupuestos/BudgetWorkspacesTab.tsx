@@ -2309,7 +2309,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     setWallPanelWallId(wall?.id || null);
     setWallPanelWallIndex(wallDbIndex);
     setWallPanelWallType(normalizeWallType(wall?.wall_type));
-    setWallPanelLabel(`P${wallDbIndex} ${wallLabel(wallDbIndex - 1, edgeCount, sectionType)}`);
+    setWallPanelLabel(`P${wallDbIndex}`);
     setWallPanelRoomName(room.name);
     setWallPanelRoomId(roomId);
     setWallPanelOpen(true);

@@ -59,6 +59,7 @@ interface WallData {
   room_id: string;
   wall_index: number;
   wall_type: string;
+  height: number | null;
 }
 
 type GeometryType = 'cube' | 'prism' | 'pyramid';
@@ -1990,7 +1991,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
   const [selectedWallMap, setSelectedWallMap] = useState<Record<string, number | null>>({});
   const [gridEditId, setGridEditId] = useState<string | null>(null);
   const [gridEditVertices, setGridEditVertices] = useState<PolygonVertex[]>([]);
-  const [activeSectionView, setActiveSectionView] = useState<Record<string, { sectionId: string; type: 'vertical' | 'longitudinal' | 'transversal' } | null>>({});
+  const [activeSectionView, setActiveSectionView] = useState<Record<string, { sectionId: string; type: 'vertical' | 'longitudinal' | 'transversal' | 'inclined' } | null>>({});
   const [sectionEditVertices, setSectionEditVertices] = useState<PolygonVertex[]>([]);
   const [formName, setFormName] = useState('');
   const [formHeight, setFormHeight] = useState('');
@@ -2038,6 +2039,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
   const verticalSections = useMemo(() => allSections.filter(s => s.sectionType === 'vertical'), [allSections]);
   const longitudinalSections = useMemo(() => allSections.filter(s => s.sectionType === 'longitudinal'), [allSections]);
   const transversalSections = useMemo(() => allSections.filter(s => s.sectionType === 'transversal'), [allSections]);
+  const inclinedSections = useMemo(() => allSections.filter(s => s.sectionType === 'inclined'), [allSections]);
 
   /** Get the perimeter polygon (XY) from a vertical section's first polygon */
   const getSectionPerimeter = useCallback((sectionId: string | null): PolygonVertex[] | undefined => {
@@ -2140,7 +2142,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     queryFn: async () => {
       const { data } = await supabase
         .from('budget_floor_plan_walls')
-        .select('id, room_id, wall_index, wall_type')
+        .select('id, room_id, wall_index, wall_type, height')
         .in('room_id', roomIds)
         .order('wall_index', { ascending: true });
       return (data || []) as WallData[];
@@ -2300,6 +2302,26 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     queryClient.invalidateQueries({ queryKey: ['workspace-walls'] });
   };
 
+  /** Update the custom height for a specific wall */
+  const updateWallHeight = async (roomId: string, wallIndex: number, heightMm: number | null, existingWallId?: string) => {
+    const dbWallIndex = wallIndex + 1;
+    const heightM = heightMm !== null ? heightMm / 1000 : null;
+
+    if (existingWallId) {
+      const { error } = await supabase.from('budget_floor_plan_walls').update({ height: heightM }).eq('id', existingWallId);
+      if (error) { toast.error(`Error: ${error.message}`); return; }
+    } else {
+      const { error } = await supabase.from('budget_floor_plan_walls')
+        .insert({ room_id: roomId, wall_index: dbWallIndex, wall_type: 'exterior', height: heightM });
+      if (error) { toast.error(`Error: ${error.message}`); return; }
+    }
+    queryClient.invalidateQueries({ queryKey: ['workspace-walls'] });
+    toast.success(`Altura P${dbWallIndex} actualizada`);
+
+    // Auto-generate inclined sections if height differences detected
+    autoGenerateInclinedSections(roomId);
+  };
+
   const ensureAndUpdateWallType = async (roomId: string, wallIndex: number, newType: string, existingWallId?: string) => {
     const normalizedType = normalizeWallType(newType);
     const dbWallIndex = wallIndex + 1;
@@ -2408,49 +2430,210 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     openGridEditor(target);
   };
 
+  /** Get the effective height (in Z blocks) for a specific wall of a workspace */
+  const getWallZTop = useCallback((room: Workspace, wallIndex: number, zBase: number, defaultZTop: number): number => {
+    const wall = allWalls.find(w => w.room_id === room.id && w.wall_index === wallIndex);
+    if (wall?.height != null && wall.height > 0) {
+      return zBase + Math.round((wall.height * 1000) / 250);
+    }
+    return defaultZTop;
+  }, [allWalls]);
+
+  /** Check if a workspace has non-uniform wall heights */
+  const getWallHeightsMap = useCallback((roomId: string): Map<number, number | null> => {
+    const map = new Map<number, number | null>();
+    allWalls.filter(w => w.room_id === roomId && w.wall_index > 0).forEach(w => {
+      map.set(w.wall_index, w.height);
+    });
+    return map;
+  }, [allWalls]);
+
+  /** Auto-generate inclined sections when height differences are detected */
+  const autoGenerateInclinedSections = async (roomId: string) => {
+    if (!floorPlan?.id) return;
+    const room = rooms.find(r => r.id === roomId);
+    if (!room || !room.floor_polygon || room.floor_polygon.length < 3) return;
+
+    const poly = room.floor_polygon;
+    const heightM = room.height || floorPlan?.default_height || 2.5;
+    const vSection = verticalSections.find(s => s.id === room.vertical_section_id);
+    const zBase = vSection ? vSection.axisValue : 0;
+    const defaultHeightMm = heightM * 1000;
+
+    // Get per-wall heights
+    const wallHeights = allWalls.filter(w => w.room_id === roomId && w.wall_index > 0);
+    const edgeCount = poly.length;
+    
+    // Build height array for each wall (mm)
+    const heights: number[] = [];
+    for (let i = 0; i < edgeCount; i++) {
+      const wall = wallHeights.find(w => w.wall_index === i + 1);
+      heights.push(wall?.height != null ? wall.height * 1000 : defaultHeightMm);
+    }
+
+    // Check if any heights differ → needs inclined section
+    const uniqueHeights = new Set(heights);
+    if (uniqueHeights.size <= 1) return; // All same height, no inclined sections needed
+
+    let parsed: any = {};
+    try {
+      parsed = typeof floorPlan.custom_corners === 'string'
+        ? JSON.parse(floorPlan.custom_corners) : (floorPlan.custom_corners || {});
+    } catch { parsed = {}; }
+    const sections: CustomSection[] = parsed.customSections || [];
+
+    // Remove existing auto-generated inclined sections for this workspace
+    const filteredSections = sections.filter(s => 
+      !(s.sectionType === 'inclined' && s.inclinedMeta?.workspaceId === roomId)
+    );
+
+    // Find pairs of adjacent walls with different heights → these form inclined planes
+    for (let i = 0; i < edgeCount; i++) {
+      const nextI = (i + 1) % edgeCount;
+      const h1 = heights[i];
+      const h2 = heights[nextI];
+      if (Math.abs(h1 - h2) < 1) continue; // Same height, skip
+
+      // The wall between vertex[nextI] and vertex[(nextI+1)%n] connects these two corners
+      // Actually the inclined plane spans between the two walls at different heights
+      // Calculate real length of the inclined surface
+      const v1 = poly[i];
+      const v2 = poly[nextI];
+      const cellMm = (floorPlan.block_length_mm || 625);
+      const edgeLenMm = Math.sqrt(
+        ((v2.x - v1.x) * cellMm) ** 2 + ((v2.y - v1.y) * cellMm) ** 2
+      );
+      const dH = Math.abs(h2 - h1);
+      const realLengthMm = Math.sqrt(edgeLenMm ** 2 + dH ** 2);
+      const slopeAngleDeg = Math.atan2(dH, edgeLenMm) * (180 / Math.PI);
+
+      const inclinedSection: CustomSection = {
+        id: `inclined_${roomId}_p${i + 1}_p${nextI + 1}`,
+        name: `${room.name} Inclinada P${i + 1}→P${nextI + 1}`,
+        sectionType: 'inclined',
+        axis: 'Z',
+        axisValue: zBase,
+        polygons: [],
+        inclinedMeta: {
+          workspaceId: roomId,
+          workspaceName: room.name,
+          wallHeights: [
+            { wallIndex: i + 1, heightMm: h1 },
+            { wallIndex: nextI + 1, heightMm: h2 },
+          ],
+          realLengthMm,
+          slopeAngleDeg,
+        },
+      };
+
+      filteredSections.push(inclinedSection);
+    }
+
+    parsed.customSections = filteredSections;
+    await supabase.from('budget_floor_plans').update({ custom_corners: parsed }).eq('id', floorPlan.id);
+    queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces', budgetId] });
+  };
+
   /** Compute the default projected polygon for a workspace on a Y or X section */
   const computeDefaultProjection = useCallback((room: Workspace, section: CustomSection): PolygonVertex[] => {
     if (!room.floor_polygon || room.floor_polygon.length < 3) return [];
     const poly = room.floor_polygon;
-    const blockHMm = floorPlan?.block_length_mm ? 250 : 250; // blockHeightMm
     const heightM = room.height || floorPlan?.default_height || 2.5;
     
     // Find workspace's Z base from its vertical section
     const vSection = verticalSections.find(s => s.id === room.vertical_section_id);
     const zBase = vSection ? vSection.axisValue : 0;
-    const heightBlocks = Math.round((heightM * 1000) / 250);
-    const zTop = zBase + heightBlocks;
+    const defaultZTop = zBase + Math.round((heightM * 1000) / 250);
 
     const axisVal = section.axisValue;
 
     if (section.sectionType === 'longitudinal') {
-      // Cut at Y=axisVal: find X intersections, project X vs Z
+      // Cut at Y=axisVal: find which edges intersect this line
       const intersections = findPolygonIntersections(poly, 'y', axisVal);
       if (intersections.length < 2) return [];
       const hMin = Math.min(...intersections);
       const hMax = Math.max(...intersections);
-      // Default rectangular projection
+
+      // Find wall indices at hMin and hMax to determine their heights
+      const zTopLeft = getWallTopAtIntersection(room, poly, 'y', axisVal, hMin, zBase, defaultZTop);
+      const zTopRight = getWallTopAtIntersection(room, poly, 'y', axisVal, hMax, zBase, defaultZTop);
+
+      if (zTopLeft === zTopRight) {
+        return [
+          { x: hMin, y: zBase },
+          { x: hMax, y: zBase },
+          { x: hMax, y: zTopRight },
+          { x: hMin, y: zTopLeft },
+        ];
+      }
+      // Non-uniform top → diagonal ceiling line
       return [
         { x: hMin, y: zBase },
         { x: hMax, y: zBase },
-        { x: hMax, y: zTop },
-        { x: hMin, y: zTop },
+        { x: hMax, y: zTopRight },
+        { x: hMin, y: zTopLeft },
       ];
     } else if (section.sectionType === 'transversal') {
-      // Cut at X=axisVal: find Y intersections, project Y vs Z
       const intersections = findPolygonIntersections(poly, 'x', axisVal);
       if (intersections.length < 2) return [];
       const hMin = Math.min(...intersections);
       const hMax = Math.max(...intersections);
+
+      const zTopLeft = getWallTopAtIntersection(room, poly, 'x', axisVal, hMin, zBase, defaultZTop);
+      const zTopRight = getWallTopAtIntersection(room, poly, 'x', axisVal, hMax, zBase, defaultZTop);
+
       return [
         { x: hMin, y: zBase },
         { x: hMax, y: zBase },
-        { x: hMax, y: zTop },
-        { x: hMin, y: zTop },
+        { x: hMax, y: zTopRight },
+        { x: hMin, y: zTopLeft },
       ];
     }
     return [];
-  }, [floorPlan, verticalSections]);
+  }, [floorPlan, verticalSections, allWalls]);
+
+  /** Find the Z-top at a specific intersection point by identifying which wall edge it falls on */
+  const getWallTopAtIntersection = useCallback((
+    room: Workspace,
+    poly: PolygonVertex[],
+    cutAxis: 'x' | 'y',
+    cutVal: number,
+    hVal: number,
+    zBase: number,
+    defaultZTop: number
+  ): number => {
+    const otherAxis = cutAxis === 'y' ? 'x' : 'y';
+    const heightM = room.height || floorPlan?.default_height || 2.5;
+
+    // Find which edge contains this intersection
+    for (let i = 0; i < poly.length; i++) {
+      const j = (i + 1) % poly.length;
+      const a = poly[i];
+      const b = poly[j];
+      const aVal = a[cutAxis], bVal = b[cutAxis];
+
+      if ((aVal <= cutVal && bVal >= cutVal) || (aVal >= cutVal && bVal <= cutVal)) {
+        if (Math.abs(aVal - bVal) < 0.001 && Math.abs(aVal - cutVal) < 0.001) {
+          // Edge is along the cut line
+          if (Math.min(a[otherAxis], b[otherAxis]) <= hVal && Math.max(a[otherAxis], b[otherAxis]) >= hVal) {
+            const wallIdx = i + 1;
+            return getWallZTop(room, wallIdx, zBase, defaultZTop);
+          }
+        } else {
+          const t = (cutVal - aVal) / (bVal - aVal);
+          const intersectH = a[otherAxis] + t * (b[otherAxis] - a[otherAxis]);
+          if (Math.abs(intersectH - hVal) < 0.5) {
+            // This intersection is on edge i→j
+            // The "top height" at this point interpolates between wall i+1 and wall j+1 heights
+            const zTopI = getWallZTop(room, i + 1, zBase, defaultZTop);
+            const zTopJ = getWallZTop(room, j + 1, zBase, defaultZTop);
+            return Math.round(zTopI + t * (zTopJ - zTopI));
+          }
+        }
+      }
+    }
+    return defaultZTop;
+  }, [floorPlan, getWallZTop]);
 
   /** Open a Y or X section editor for a workspace */
   const openSectionEditor = (roomId: string, section: CustomSection) => {
@@ -2622,6 +2805,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
       { type: 'vertical' as const, label: 'Secciones Verticales (Z)', sections: verticalSections },
       { type: 'longitudinal' as const, label: 'Secciones Longitudinales (Y)', sections: longitudinalSections },
       { type: 'transversal' as const, label: 'Secciones Transversales (X)', sections: transversalSections },
+      { type: 'inclined' as const, label: 'Secciones Inclinadas', sections: inclinedSections },
     ];
 
     return sectionTypes.map(({ type, label, sections }) => {
@@ -2631,6 +2815,11 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
         let sectionRooms: Workspace[];
         if (type === 'vertical') {
           sectionRooms = rooms.filter(r => r.vertical_section_id === section.id);
+        } else if (type === 'inclined') {
+          // For inclined sections, match by workspace ID from inclinedMeta
+          sectionRooms = section.inclinedMeta
+            ? rooms.filter(r => r.id === section.inclinedMeta!.workspaceId)
+            : [];
         } else {
           const axis = type === 'longitudinal' ? 'y' : 'x';
           sectionRooms = rooms.filter(r => {
@@ -3165,6 +3354,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
               const wall = roomWalls.find(w => w.wall_index === dbWallIndex);
               const edgeLen = poly ? edgeLength(poly[i], poly[(i + 1) % poly.length]) : null;
               const isWallSelected = selectedWallMap[r.id] === i;
+              const defaultHMm = (r.height || floorPlan?.default_height || 2.5) * 1000;
               return (
                 <FaceRow
                   key={i}
@@ -3174,6 +3364,9 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                   onChange={(v) => ensureAndUpdateWallType(r.id, i, v, wall?.id)}
                   highlighted={isWallSelected}
                   onLabelClick={() => setSelectedWallMap(prev => ({ ...prev, [r.id]: prev[r.id] === i ? null : i }))}
+                  heightMm={wall?.height != null ? wall.height * 1000 : null}
+                  defaultHeightMm={defaultHMm}
+                  onHeightChange={(mm) => updateWallHeight(r.id, i, mm, wall?.id)}
                 />
               );
             })}
@@ -3490,7 +3683,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
 }
 
 function FaceRow({
-  label, type, options, onChange, highlighted, onLabelClick,
+  label, type, options, onChange, highlighted, onLabelClick, heightMm, onHeightChange, defaultHeightMm,
 }: {
   label: string;
   type: string;
@@ -3498,25 +3691,76 @@ function FaceRow({
   onChange: (value: string) => void;
   highlighted?: boolean;
   onLabelClick?: () => void;
+  heightMm?: number | null;
+  onHeightChange?: (mm: number | null) => void;
+  defaultHeightMm?: number;
 }) {
+  const [editingHeight, setEditingHeight] = useState(false);
+  const [tempHeight, setTempHeight] = useState('');
+
+  const isCustomHeight = heightMm != null && heightMm > 0;
+  const displayHeight = isCustomHeight ? heightMm : defaultHeightMm;
+
   return (
     <div className={`flex items-center justify-between gap-2 py-0.5 px-1 rounded ${highlighted ? 'bg-primary/10 ring-1 ring-primary/30' : ''}`}>
       <span
-        className={`text-xs ${onLabelClick ? 'cursor-pointer hover:text-primary underline-offset-2 hover:underline' : ''}`}
+        className={`text-xs flex-shrink-0 ${onLabelClick ? 'cursor-pointer hover:text-primary underline-offset-2 hover:underline' : ''}`}
         onClick={onLabelClick}
       >
         {label}
       </span>
-      <Select value={type} onValueChange={onChange}>
-        <SelectTrigger className="h-6 w-[140px] text-[10px]">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {options.map(o => (
-            <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <div className="flex items-center gap-1 flex-1 justify-end">
+        {onHeightChange && (
+          editingHeight ? (
+            <div className="flex items-center gap-0.5">
+              <Input
+                className="h-5 w-16 text-[9px] px-1"
+                type="number"
+                placeholder={String(defaultHeightMm || '')}
+                value={tempHeight}
+                onChange={e => setTempHeight(e.target.value)}
+                autoFocus
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    const val = tempHeight.trim() ? parseFloat(tempHeight) : null;
+                    onHeightChange(val === 0 ? 0 : val);
+                    setEditingHeight(false);
+                  }
+                  if (e.key === 'Escape') setEditingHeight(false);
+                }}
+                onBlur={() => {
+                  const val = tempHeight.trim() ? parseFloat(tempHeight) : null;
+                  onHeightChange(val === 0 ? 0 : val);
+                  setEditingHeight(false);
+                }}
+              />
+              <span className="text-[8px] text-muted-foreground">mm</span>
+            </div>
+          ) : (
+            <Badge
+              variant={isCustomHeight ? 'default' : 'outline'}
+              className={`text-[8px] h-4 px-1 cursor-pointer ${isCustomHeight ? 'bg-amber-500/20 text-amber-700 border-amber-300 hover:bg-amber-500/30' : 'hover:bg-accent/50'}`}
+              onClick={() => {
+                setTempHeight(isCustomHeight ? String(heightMm) : '');
+                setEditingHeight(true);
+              }}
+              title="Altura personalizada de esta pared (mm). Click para editar."
+            >
+              ↕ {displayHeight != null ? `${displayHeight}mm` : 'Auto'}
+            </Badge>
+          )
+        )}
+        <Select value={type} onValueChange={onChange}>
+          <SelectTrigger className="h-6 w-[120px] text-[10px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {options.map(o => (
+              <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
     </div>
   );
 }

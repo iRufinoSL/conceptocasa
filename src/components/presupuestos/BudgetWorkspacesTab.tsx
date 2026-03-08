@@ -1622,6 +1622,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     setNewSectionName('');
     setNewSectionAxisValue('');
     setInputMode('manual');
+    setFormIsBase(false);
   };
 
   const createVerticalSection = async (): Promise<string | null> => {

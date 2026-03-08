@@ -307,6 +307,12 @@ export function WallObjectsPanel({
                         <p className="text-[10px] text-muted-foreground truncate">{obj.description}</p>
                       )}
                       <div className="flex flex-wrap gap-1">
+                        {obj.visual_pattern && getPatternById(obj.visual_pattern) && (
+                          <Badge variant="outline" className="text-[8px] h-4 px-1 gap-0.5">
+                            <img src={patternPreviewDataUri(getPatternById(obj.visual_pattern)!)} className="w-3 h-3 rounded" alt="" />
+                            {getPatternById(obj.visual_pattern)!.label}
+                          </Badge>
+                        )}
                         {(obj as any).thickness_mm != null && (
                           <Badge variant="secondary" className="text-[8px] h-3.5 px-1">🧱 {(obj as any).thickness_mm} mm</Badge>
                         )}

@@ -2815,6 +2815,11 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
         let sectionRooms: Workspace[];
         if (type === 'vertical') {
           sectionRooms = rooms.filter(r => r.vertical_section_id === section.id);
+        } else if (type === 'inclined') {
+          // For inclined sections, match by workspace ID from inclinedMeta
+          sectionRooms = section.inclinedMeta
+            ? rooms.filter(r => r.id === section.inclinedMeta!.workspaceId)
+            : [];
         } else {
           const axis = type === 'longitudinal' ? 'y' : 'x';
           sectionRooms = rooms.filter(r => {

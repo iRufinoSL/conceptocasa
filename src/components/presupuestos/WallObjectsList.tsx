@@ -240,6 +240,78 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
     },
   });
 
+  /* ── Recursos: all wall objects across the budget ── */
+  const { data: allObjects = [] } = useQuery({
+    queryKey: ['budget-wall-objects-all', budgetId],
+    queryFn: async () => {
+      const { data: fp } = await supabase
+        .from('budget_floor_plans')
+        .select('id')
+        .eq('budget_id', budgetId)
+        .maybeSingle();
+      if (!fp) return [];
+      const { data: rooms } = await supabase
+        .from('budget_floor_plan_rooms')
+        .select('id, name')
+        .eq('floor_plan_id', fp.id);
+      if (!rooms?.length) return [];
+      const roomMap = new Map(rooms.map(r => [r.id, r.name]));
+      const { data: walls } = await supabase
+        .from('budget_floor_plan_walls')
+        .select('id, room_id, wall_index')
+        .in('room_id', rooms.map(r => r.id));
+      if (!walls?.length) return [];
+      const wallRoomMap = new Map(walls.map(w => [w.id, { roomId: w.room_id, wallIndex: w.wall_index }]));
+      const { data: objects } = await supabase
+        .from('budget_wall_objects')
+        .select('*')
+        .in('wall_id', walls.map(w => w.id))
+        .order('layer_order', { ascending: true });
+      if (!objects?.length) return [];
+      return objects.map((obj: any) => {
+        const wallInfo = wallRoomMap.get(obj.wall_id);
+        const workspace = wallInfo ? (roomMap.get(wallInfo.roomId) || '—') : '—';
+        const wi = wallInfo?.wallIndex ?? 0;
+        const faceName = wi === 0 ? 'Espacio' : wi === -1 ? 'Suelo' : wi === -2 ? 'Techo' : `Pared ${wi}`;
+        return { ...obj, workspace, faceName };
+      });
+    },
+  });
+
+  const [resourcesView, setResourcesView] = useState<'alpha' | 'workspace'>('alpha');
+  const [resourceOpenGroups, setResourceOpenGroups] = useState<Set<string>>(new Set());
+
+  const toggleResourceGroup = (name: string) => {
+    setResourceOpenGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  };
+
+  const filteredObjects = useMemo(() => {
+    if (!search.trim()) return allObjects;
+    const q = search.toLowerCase();
+    return allObjects.filter((o: any) =>
+      o.name.toLowerCase().includes(q) || o.workspace.toLowerCase().includes(q) || (o.description || '').toLowerCase().includes(q)
+    );
+  }, [allObjects, search]);
+
+  const objectsAlpha = useMemo(() =>
+    [...filteredObjects].sort((a: any, b: any) => a.name.localeCompare(b.name, 'es')),
+  [filteredObjects]);
+
+  const objectsByWorkspace = useMemo(() => {
+    const groups = new Map<string, any[]>();
+    for (const o of filteredObjects) {
+      if (!groups.has(o.workspace)) groups.set(o.workspace, []);
+      groups.get(o.workspace)!.push(o);
+    }
+    return Array.from(groups.entries())
+      .sort(([a], [b]) => a.localeCompare(b, 'es'))
+      .map(([name, objs]) => ({ name, objects: objs.sort((a: any, b: any) => a.layer_order - b.layer_order) }));
+  }, [filteredObjects]);
   const ensureSuperficieObject = async (wallId: string, face: AutoFace) => {
     // Check if order-0 Superficie already exists
     const { data: existing } = await supabase

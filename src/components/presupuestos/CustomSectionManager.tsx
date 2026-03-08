@@ -196,6 +196,36 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
   const [showPolygonsList, setShowPolygonsList] = useState(false);
   const [selectedFaceType, setSelectedFaceType] = useState('Suelo');
   const [selectedExistingWorkspace, setSelectedExistingWorkspace] = useState('');
+  // ── Wall visual patterns: roomId → patternId (from Superficie layer 0) ──
+  const [wallPatterns, setWallPatterns] = useState<Map<string, string>>(new Map());
+  useEffect(() => {
+    if (!rooms?.length) return;
+    const roomIds = rooms.filter(r => !r.isBase).map(r => r.id);
+    if (!roomIds.length) return;
+    (async () => {
+      const { data: walls } = await supabase
+        .from('budget_floor_plan_walls')
+        .select('id, room_id, wall_index')
+        .in('room_id', roomIds);
+      if (!walls?.length) return;
+      const wallIds = walls.map(w => w.id);
+      const { data: objs } = await supabase
+        .from('budget_wall_objects')
+        .select('wall_id, visual_pattern, layer_order')
+        .in('wall_id', wallIds)
+        .eq('layer_order', 0)
+        .not('visual_pattern', 'is', null);
+      if (!objs?.length) { setWallPatterns(new Map()); return; }
+      const wallRoomMap = new Map(walls.map(w => [w.id, w.room_id]));
+      const pMap = new Map<string, string>();
+      for (const o of objs) {
+        const roomId = wallRoomMap.get(o.wall_id);
+        if (roomId && o.visual_pattern) pMap.set(roomId, o.visual_pattern);
+      }
+      setWallPatterns(pMap);
+    })();
+  }, [rooms]);
+
   const gridCount = gridMax - gridMin + 1;
   const baseCellSize = 28;
   const cellSize = Math.round(baseCellSize * zoomLevel);

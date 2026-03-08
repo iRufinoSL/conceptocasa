@@ -2920,6 +2920,10 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                          );
                        })}
                        <FaceRow label="⬜ Techo" type={getCeilingType(sibRoom)} options={FLOOR_CEILING_TYPES} onChange={(v) => updateFloorCeiling(sibRoom.id, 'has_ceiling', v as FloorCeilingType)} />
+                       <div className="flex items-center justify-between gap-2 py-0.5 px-1 rounded cursor-pointer hover:bg-accent/30" onClick={() => openEspacioPanel(sibRoom.id)}>
+                         <span className="text-xs">🔷 Espacio (volumen interior)</span>
+                         <Badge variant="outline" className="text-[9px] h-4">Objetos →</Badge>
+                       </div>
                      </div>
                    );
                  })()}

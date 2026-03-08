@@ -172,34 +172,43 @@ export function WallObjectsPanel({
   const isExterior = wallType.startsWith('exterior');
   const isInvisible = wallType.includes('invisible');
   const isEspacio = wallType === 'espacio';
+  const isSuelo = wallIndex === -1;
+  const isTecho = wallIndex === -2;
+  const isWall = !isEspacio && !isSuelo && !isTecho;
+
+  // Pick the right type list and label
+  const typeOptions = isSuelo ? FLOOR_TYPES : isTecho ? CEILING_TYPES : WALL_TYPES;
+  const typeLabel = isSuelo ? 'Tipo de suelo' : isTecho ? 'Tipo de techo' : 'Tipo de pared';
+  const faceIcon = isEspacio ? '🔷' : isSuelo ? '⬛' : isTecho ? '⬜' : '🧱';
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-[380px] sm:w-[420px] overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="text-sm">
-            {isEspacio ? '🔷' : '🧱'} {wallLabel} — {roomName}
+            {faceIcon} {wallLabel} — {roomName}
           </SheetTitle>
         </SheetHeader>
 
         <div className="space-y-4 mt-4">
-          {/* Wall type selector — hidden for Espacio */}
+          {/* Type selector — shown for walls, floors and ceilings; hidden for Espacio */}
           {!isEspacio && (
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Tipo de pared</Label>
+              <Label className="text-xs font-semibold">{typeLabel}</Label>
               <Select value={wallType} onValueChange={onWallTypeChange}>
                 <SelectTrigger className="h-8 text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {WALL_TYPES.map(t => (
+                  {typeOptions.map(t => (
                     <SelectItem key={t.value} value={t.value} className="text-xs">{t.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
               <div className="flex gap-1.5">
-                <Badge variant="outline" className="text-[9px] h-4">{isExterior ? 'Exterior' : 'Interior'}</Badge>
+                {isWall && <Badge variant="outline" className="text-[9px] h-4">{isExterior ? 'Exterior' : 'Interior'}</Badge>}
                 {isInvisible && <Badge variant="secondary" className="text-[9px] h-4">Invisible — sin representación</Badge>}
+                {wallType.includes('compartid') && <Badge variant="secondary" className="text-[9px] h-4">Compartido con otro espacio</Badge>}
               </div>
             </div>
           )}

@@ -1653,6 +1653,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                       height={22}
                       rx={3}
                       fill="hsl(45 100% 50% / 0.85)"
+                      data-pdf-workspace-name=""
                     />
                     <text
                       x={cxSvg}
@@ -1661,6 +1662,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                       fontSize={Math.round(8 * Math.max(1, zoomLevel * 0.7))}
                       fontWeight={700}
                       fill="hsl(0 0% 10%)"
+                      data-pdf-workspace-name=""
                     >
                       {room.name}
                     </text>
@@ -1671,6 +1673,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                       fontSize={Math.round(7 * Math.max(1, zoomLevel * 0.7))}
                       fontWeight={600}
                       fill="hsl(0 0% 15%)"
+                      data-pdf-workspace-name=""
                     >
                       {areaM2.toFixed(2)} m²
                     </text>

@@ -3042,6 +3042,18 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
           }}
         />
       )}
+
+      {/* Wall Objects Panel */}
+      <WallObjectsPanel
+        open={wallPanelOpen}
+        onOpenChange={setWallPanelOpen}
+        wallId={wallPanelWallId}
+        wallIndex={wallPanelWallIndex}
+        wallType={wallPanelWallType}
+        wallLabel={wallPanelLabel}
+        roomName={wallPanelRoomName}
+        onWallTypeChange={handleWallPanelTypeChange}
+      />
     </div>
   );
 }

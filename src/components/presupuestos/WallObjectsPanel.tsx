@@ -82,6 +82,7 @@ export function WallObjectsPanel({
   const queryClient = useQueryClient();
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingObj, setEditingObj] = useState<string | null>(null);
+  const [editingSuperficiePattern, setEditingSuperficiePattern] = useState<string | null>(null);
 
   // Form state
   const [formName, setFormName] = useState('');

@@ -2483,6 +2483,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                      vAxisLabel={vLabel}
                      hScaleMm={scaleH}
                      vScaleMm={scaleV}
+                     activeWalls={allWalls.filter(w => w.room_id === r.id)}
                    />
                    {/* Sibling workspace inline property editor (Y/X) */}
                    {selectedOtherWorkspaceId && (() => {

@@ -1219,14 +1219,26 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             const rAngle = Math.atan2(rdy, rdx) * (180 / Math.PI);
             const rRot = (rAngle > 90 || rAngle < -90) ? rAngle + 180 : rAngle;
             return (
-              <g key={`ruler-${ri}`} className="pointer-events-none">
+              <g key={`ruler-${ri}`}>
                 <line x1={rx1} y1={ry1} x2={rx2} y2={ry2}
-                  stroke={RULER_COLOR} strokeWidth={1.5} strokeDasharray="6 3" />
-                <circle cx={rx1} cy={ry1} r={3.5} fill={RULER_COLOR} />
-                <circle cx={rx2} cy={ry2} r={3.5} fill={RULER_COLOR} />
+                  stroke={RULER_COLOR} strokeWidth={1.5} strokeDasharray="6 3" className="pointer-events-none" />
+                {/* Draggable start endpoint */}
+                <circle cx={rx1} cy={ry1} r={5} fill={RULER_COLOR} stroke="hsl(var(--background))" strokeWidth={1.5}
+                  className="cursor-grab active:cursor-grabbing"
+                  onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); setDraggingRulerIdx(ri); setDraggingRulerEnd('start'); }} />
+                {/* Draggable end endpoint */}
+                <circle cx={rx2} cy={ry2} r={5} fill={RULER_COLOR} stroke="hsl(var(--background))" strokeWidth={1.5}
+                  className="cursor-grab active:cursor-grabbing"
+                  onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); setDraggingRulerIdx(ri); setDraggingRulerEnd('end'); }} />
+                {/* Delete ruler button */}
+                <g className="cursor-pointer" onClick={(e) => { e.stopPropagation(); setRulerLines(prev => prev.filter((_, i) => i !== ri)); }}>
+                  <circle cx={rmx} cy={rmy + 12} r={6} fill="hsl(var(--destructive))" opacity={0.8} />
+                  <text x={rmx} y={rmy + 12} textAnchor="middle" dominantBaseline="central"
+                    fill="hsl(var(--destructive-foreground))" fontSize={8} fontWeight="bold" className="select-none">✕</text>
+                </g>
                 <text x={rmx} y={rmy - 8} textAnchor="middle" dominantBaseline="central"
                   transform={`rotate(${rRot}, ${rmx}, ${rmy - 8})`}
-                  fill={RULER_COLOR} fontSize={8} fontWeight="bold" className="select-none">
+                  fill={RULER_COLOR} fontSize={8} fontWeight="bold" className="select-none pointer-events-none">
                   {rLenMm} mm{(() => { const s = edgeSlopeInfo(rl.start, rl.end, hScale, vScale, showDegrees, showPercent); return s ? ` · ${s}` : ''; })()}
                 </text>
               </g>

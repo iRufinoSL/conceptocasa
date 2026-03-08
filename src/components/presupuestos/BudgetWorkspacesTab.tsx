@@ -769,9 +769,9 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                 <rect
                   key={`c-${col}-${row}`}
                   x={sx}
-                  y={originTopLeft ? sy : sy - cellSize}
-                  width={cellSize}
-                  height={cellSize}
+                  y={originTopLeft ? sy : sy - cellH}
+                  width={cellW}
+                  height={cellH}
                   fill={isEven ? 'hsl(var(--muted))' : 'hsl(var(--background))'}
                   stroke="hsl(var(--border))"
                   strokeWidth={0.5}

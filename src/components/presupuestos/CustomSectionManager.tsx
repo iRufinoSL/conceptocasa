@@ -1039,13 +1039,16 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
         <rect x={cxSvg - 30} y={cySvg - 10} width={60} height={20} rx={3}
           fill="hsl(45 100% 50% / 0.85)"
           className={isEditingThis ? '' : 'cursor-pointer'}
+          data-pdf-workspace-name=""
           onClick={() => !isEditingThis && selectWorkspace(proj)}
         />
         <text x={cxSvg} y={cySvg - 1} textAnchor="middle" fontSize={fontSize} fontWeight={700}
           fill="hsl(0 0% 10%)" className="pointer-events-none select-none"
+          data-pdf-workspace-name=""
         >{proj.workspaceName}</text>
         <text x={cxSvg} y={cySvg + 8} textAnchor="middle" fontSize={fontSize - 1} fontWeight={500}
           fill="hsl(0 0% 25%)" className="pointer-events-none select-none"
+          data-pdf-workspace-name=""
         >{areaVal.toFixed(2)} m²</text>
         {/* Draggable vertices */}
         {isEditingThis && verts.map((v, vi) => {

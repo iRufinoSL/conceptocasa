@@ -2592,6 +2592,17 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
               <Label className="text-[10px]">Alto Z (m)</Label>
               <Input className="h-7 text-xs" type="number" step="0.01" placeholder="2.6" value={formHeight} onChange={e => setFormHeight(e.target.value)} />
             </div>
+            <div className="flex items-end pb-1">
+              <label className="flex items-center gap-1.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formIsBase}
+                  onChange={e => setFormIsBase(e.target.checked)}
+                  className="h-3.5 w-3.5 rounded border-input accent-primary"
+                />
+                <span className="text-[10px] font-medium text-muted-foreground">Base (fondo de sección)</span>
+              </label>
+            </div>
           </div>
 
           {/* Input mode toggle + editor */}

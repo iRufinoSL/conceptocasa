@@ -2129,11 +2129,11 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
             setLastWorkedItemId(itemId);
           }}
           onUpdateItem={handleUpdateItemFromGraph}
-          onAddSibling={(parentId) => {
-            handleAddFromGraph(parentId);
+          onAddSibling={(parentId, name) => {
+            handleAddFromGraph(parentId, name);
           }}
-          onAddChild={(parentId) => {
-            handleAddFromGraph(parentId);
+          onAddChild={(parentId, name) => {
+            handleAddFromGraph(parentId, name);
           }}
           onDeleteItem={handleDeleteById}
         />

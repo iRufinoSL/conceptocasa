@@ -496,10 +496,19 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
     }
   };
 
+  // Collect all descendants recursively
+  const getAllDescendants = useCallback((parentId: string): TolosItem[] => {
+    const children = items.filter(i => i.parent_id === parentId);
+    const all: TolosItem[] = [...children];
+    children.forEach(c => { all.push(...getAllDescendants(c.id)); });
+    return all;
+  }, [items]);
+
   const handleDelete = async (item: TolosItem) => {
-    const children = getChildren(item.id);
-    if (children.length > 0) {
-      toast.error('Elimina primero los sub-QUÉ?');
+    const descendants = getAllDescendants(item.id);
+    if (descendants.length > 0) {
+      // Show confirmation dialog
+      setDeleteConfirm({ item, descendants });
       return;
     }
     const { error } = await supabase.from('tolosa_items').delete().eq('id', item.id);
@@ -507,6 +516,64 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
       toast.error('Error al eliminar');
     } else {
       toast.success('Eliminado');
+      fetchItems();
+    }
+  };
+
+  const handleDeleteWithDescendants = async () => {
+    if (!deleteConfirm) return;
+    const { item, descendants } = deleteConfirm;
+    // Delete deepest first (reverse by code length)
+    const sorted = [...descendants].sort((a, b) => b.code.length - a.code.length);
+    for (const d of sorted) {
+      await supabase.from('tolosa_items').delete().eq('id', d.id);
+    }
+    const { error } = await supabase.from('tolosa_items').delete().eq('id', item.id);
+    if (error) {
+      toast.error('Error al eliminar');
+    } else {
+      toast.success(`Eliminado "${item.name}" y ${descendants.length} descendientes`);
+      fetchItems();
+    }
+    setDeleteConfirm(null);
+  };
+
+  const handleDeleteById = async (itemId: string) => {
+    const item = items.find(i => i.id === itemId);
+    if (item) handleDelete(item);
+  };
+
+  const handleUpdateItemFromGraph = async (itemId: string, fields: { name?: string; code?: string }) => {
+    const updateFields: Record<string, unknown> = {};
+    if (fields.name) updateFields.name = fields.name;
+    if (fields.code) updateFields.code = fields.code;
+    const { error } = await supabase.from('tolosa_items').update(updateFields).eq('id', itemId);
+    if (error) {
+      toast.error('Error al actualizar');
+    } else {
+      fetchItems();
+    }
+  };
+
+  const handleAddFromGraph = async (parentId: string | null) => {
+    if (!graphAddName.trim()) return;
+    const code = getNextCode(parentId);
+    const siblings = parentId ? getChildren(parentId) : rootItems;
+    const { error } = await supabase
+      .from('tolosa_items')
+      .insert({
+        budget_id: budgetId,
+        parent_id: parentId,
+        code,
+        name: graphAddName.trim(),
+        order_index: siblings.length,
+      });
+    if (error) {
+      toast.error('Error al añadir');
+    } else {
+      toast.success('QUÉ? añadido');
+      setGraphAddName('');
+      if (parentId) setExpandedIds(prev => new Set(prev).add(parentId));
       fetchItems();
     }
   };

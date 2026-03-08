@@ -144,6 +144,18 @@ export function WallObjectsPanel({
 
   const handleSave = async () => {
     if (!formName.trim() || !wallId) return;
+    // Auto-calculate surface and volume when no manual length
+    const hasManualLength = !!formLengthMl;
+    const effectiveSurface = hasManualLength
+      ? (formSurfaceM2 ? parseFloat(formSurfaceM2) : null)
+      : faceSurfaceM2 || null;
+    const effectiveThickness = formThicknessMm ? parseFloat(formThicknessMm) : null;
+    const effectiveVolume = hasManualLength
+      ? (formVolumeM3 ? parseFloat(formVolumeM3) : null)
+      : (effectiveSurface && effectiveThickness
+          ? Math.round(effectiveSurface * effectiveThickness / 1000 * 1000) / 1000
+          : null);
+
     const payload = {
       wall_id: wallId,
       name: formName.trim(),
@@ -151,10 +163,10 @@ export function WallObjectsPanel({
       object_type: formObjectType,
       is_core: formIsCore,
       layer_order: formLayerOrder,
-      surface_m2: formSurfaceM2 ? parseFloat(formSurfaceM2) : null,
-      volume_m3: formVolumeM3 ? parseFloat(formVolumeM3) : null,
+      surface_m2: effectiveSurface,
+      volume_m3: effectiveVolume,
       length_ml: formLengthMl ? parseFloat(formLengthMl) : null,
-      thickness_mm: formThicknessMm ? parseFloat(formThicknessMm) : null,
+      thickness_mm: effectiveThickness,
       visual_pattern: formVisualPattern.trim() || null,
     };
 

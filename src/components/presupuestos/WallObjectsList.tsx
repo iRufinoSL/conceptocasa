@@ -1,421 +1,252 @@
 import { useMemo, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Star, Layers, Box, Ruler, Plus, Save, Trash2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { Layers, List, Search, Plus, Box } from 'lucide-react';
 
 interface WallObjectsListProps {
   budgetId: string;
 }
 
-interface WallObjectRow {
-  id: string;
-  wall_id: string;
-  layer_order: number;
-  name: string;
-  description: string | null;
-  object_type: string;
-  is_core: boolean;
-  surface_m2: number | null;
-  volume_m3: number | null;
-  length_ml: number | null;
-  // Joined data
-  wall_index: number;
-  wall_type: string;
-  room_name: string;
-  room_id: string;
-  section_id: string | null;
+interface PolygonVertex { x: number; y: number }
+
+/** Shoelace formula */
+function polygonArea(vertices: PolygonVertex[]): number {
+  if (vertices.length < 3) return 0;
+  let area = 0;
+  for (let i = 0; i < vertices.length; i++) {
+    const j = (i + 1) % vertices.length;
+    area += vertices[i].x * vertices[j].y;
+    area -= vertices[j].x * vertices[i].y;
+  }
+  return Math.abs(area) / 2;
 }
 
-interface WallInfo {
-  id: string;
-  room_id: string;
-  wall_index: number;
-  wall_type: string;
-  room_name: string;
+function edgeLength(a: PolygonVertex, b: PolygonVertex): number {
+  return Math.sqrt((b.x - a.x) ** 2 + (b.y - a.y) ** 2);
 }
 
-const OBJECT_TYPE_LABELS: Record<string, string> = {
-  material: 'Material',
-  bloque: 'Bloque',
-  aislamiento: 'Aislamiento',
-  revestimiento: 'Revestimiento',
-  estructura: 'Estructura',
-  instalacion: 'Instalación',
-  otro: 'Otro',
-};
-
-const OBJECT_TYPES = [
-  { value: 'material', label: 'Material' },
-  { value: 'bloque', label: 'Bloque' },
-  { value: 'aislamiento', label: 'Aislamiento' },
-  { value: 'revestimiento', label: 'Revestimiento' },
-  { value: 'estructura', label: 'Estructura' },
-  { value: 'instalacion', label: 'Instalación' },
-  { value: 'otro', label: 'Otro' },
-];
-
-function ObjectRow({ obj }: { obj: WallObjectRow }) {
-  return (
-    <div className="flex items-start gap-2 p-1.5 rounded border text-xs hover:bg-accent/20 transition-colors">
-      <span className="text-muted-foreground font-mono w-4 text-center shrink-0 mt-0.5">{obj.layer_order}</span>
-      <div className="flex-1 min-w-0 space-y-0.5">
-        <div className="flex items-center gap-1 flex-wrap">
-          <span className="font-medium">{obj.name}</span>
-          {obj.is_core && (
-            <Badge variant="default" className="text-[8px] h-3.5 px-1 gap-0.5">
-              <Star className="h-2 w-2" /> Núcleo
-            </Badge>
-          )}
-        </div>
-        {obj.description && <p className="text-[9px] text-muted-foreground truncate">{obj.description}</p>}
-        <div className="flex gap-1 flex-wrap">
-          {obj.surface_m2 != null && <Badge variant="secondary" className="text-[8px] h-3.5 px-1">📐 {obj.surface_m2} m²</Badge>}
-          {obj.volume_m3 != null && <Badge variant="secondary" className="text-[8px] h-3.5 px-1">📦 {obj.volume_m3} m³</Badge>}
-          {obj.length_ml != null && <Badge variant="secondary" className="text-[8px] h-3.5 px-1">📏 {obj.length_ml} ml</Badge>}
-          <Badge variant="outline" className="text-[8px] h-3.5 px-1">P{obj.wall_index} · {obj.room_name}</Badge>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/** Inline add object form */
-function AddObjectForm({ walls, onSave, onCancel }: {
-  walls: WallInfo[];
-  onSave: (data: { wall_id: string; name: string; object_type: string; is_core: boolean; layer_order: number; surface_m2: number | null; volume_m3: number | null; length_ml: number | null }) => void;
-  onCancel: () => void;
-}) {
-  const [wallId, setWallId] = useState(walls[0]?.id || '');
-  const [name, setName] = useState('');
-  const [objectType, setObjectType] = useState('material');
-  const [isCore, setIsCore] = useState(false);
-  const [layerOrder, setLayerOrder] = useState(1);
-  const [surfaceM2, setSurfaceM2] = useState('');
-  const [volumeM3, setVolumeM3] = useState('');
-  const [lengthMl, setLengthMl] = useState('');
-
-  const selectedWall = walls.find(w => w.id === wallId);
-
-  return (
-    <div className="border rounded p-2 space-y-2 bg-accent/10">
-      <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">Nuevo objeto</p>
-      <div className="grid grid-cols-2 gap-1.5">
-        <div className="col-span-2">
-          <Label className="text-[9px]">Pared</Label>
-          <Select value={wallId} onValueChange={setWallId}>
-            <SelectTrigger className="h-6 text-[10px]"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {walls.map(w => (
-                <SelectItem key={w.id} value={w.id} className="text-[10px]">
-                  {w.room_name} — P{w.wall_index} ({w.wall_type})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="col-span-2">
-          <Label className="text-[9px]">Nombre</Label>
-          <Input className="h-6 text-[10px]" value={name} onChange={e => setName(e.target.value)} placeholder="Ej: Bloque 20cm" />
-        </div>
-        <div>
-          <Label className="text-[9px]">Tipo</Label>
-          <Select value={objectType} onValueChange={setObjectType}>
-            <SelectTrigger className="h-6 text-[10px]"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {OBJECT_TYPES.map(t => <SelectItem key={t.value} value={t.value} className="text-[10px]">{t.label}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label className="text-[9px]">Nº orden</Label>
-          <Input className="h-6 text-[10px]" type="number" min={1} value={layerOrder} onChange={e => setLayerOrder(parseInt(e.target.value) || 1)} />
-        </div>
-        <div className="col-span-2 flex items-center gap-1.5">
-          <Checkbox id="add-core" checked={isCore} onCheckedChange={(v) => setIsCore(!!v)} className="h-3 w-3" />
-          <Label htmlFor="add-core" className="text-[9px]">Núcleo estructural</Label>
-        </div>
-        <div>
-          <Label className="text-[9px]">m²</Label>
-          <Input className="h-6 text-[10px]" type="number" step="0.01" value={surfaceM2} onChange={e => setSurfaceM2(e.target.value)} />
-        </div>
-        <div>
-          <Label className="text-[9px]">m³</Label>
-          <Input className="h-6 text-[10px]" type="number" step="0.001" value={volumeM3} onChange={e => setVolumeM3(e.target.value)} />
-        </div>
-        <div>
-          <Label className="text-[9px]">ml</Label>
-          <Input className="h-6 text-[10px]" type="number" step="0.01" value={lengthMl} onChange={e => setLengthMl(e.target.value)} />
-        </div>
-      </div>
-      <div className="flex gap-1 justify-end">
-        <Button variant="ghost" size="sm" className="h-5 text-[9px]" onClick={onCancel}>Cancelar</Button>
-        <Button size="sm" className="h-5 text-[9px] gap-0.5" disabled={!name.trim() || !wallId}
-          onClick={() => onSave({
-            wall_id: wallId,
-            name: name.trim(),
-            object_type: objectType,
-            is_core: isCore,
-            layer_order: layerOrder,
-            surface_m2: surfaceM2 ? parseFloat(surfaceM2) : null,
-            volume_m3: volumeM3 ? parseFloat(volumeM3) : null,
-            length_ml: lengthMl ? parseFloat(lengthMl) : null,
-          })}>
-          <Save className="h-2.5 w-2.5" /> Guardar
-        </Button>
-      </div>
-    </div>
-  );
+interface AutoFace {
+  workspace: string;
+  faceName: string; // Suelo, Pared 1, ..., Techo, Espacio
+  m2: number | null;
+  m3: number | null;
+  sortKey: number; // 0=suelo, 1..N=paredes, N+1=techo, N+2=espacio
 }
 
 export function WallObjectsList({ budgetId }: WallObjectsListProps) {
-  const queryClient = useQueryClient();
-  const [showAddForm, setShowAddForm] = useState(false);
+  const [search, setSearch] = useState('');
 
-  // Fetch all wall objects for this budget through the chain
-  const { data: rawObjects = [], isLoading } = useQuery({
-    queryKey: ['budget-all-wall-objects', budgetId],
+  // Fetch rooms + floor plan data to auto-compute surfaces
+  const { data: autoFaces = [], isLoading } = useQuery({
+    queryKey: ['budget-auto-faces', budgetId],
     queryFn: async () => {
       const { data: fp } = await supabase
         .from('budget_floor_plans')
-        .select('id')
+        .select('id, scale_mode, block_length_mm')
         .eq('budget_id', budgetId)
         .maybeSingle();
       if (!fp) return [];
 
+      const cellSizeM = fp.scale_mode === 'bloque' ? (fp.block_length_mm || 625) / 1000 : 1;
+
       const { data: rooms } = await supabase
         .from('budget_floor_plan_rooms')
-        .select('id, name, vertical_section_id')
-        .eq('floor_plan_id', fp.id);
-      if (!rooms || rooms.length === 0) return [];
+        .select('id, name, length, width, height, floor_polygon, is_base, has_floor, has_ceiling')
+        .eq('floor_plan_id', fp.id)
+        .order('name', { ascending: true });
+      if (!rooms) return [];
 
-      const roomMap = new Map(rooms.map(r => [r.id, r]));
+      const faces: AutoFace[] = [];
 
-      const { data: walls } = await supabase
-        .from('budget_floor_plan_walls')
-        .select('id, room_id, wall_index, wall_type')
-        .in('room_id', rooms.map(r => r.id));
-      if (!walls || walls.length === 0) return [];
+      for (const room of rooms) {
+        if (room.is_base) continue; // skip perimeter polygons
 
-      const wallMap = new Map(walls.map(w => [w.id, w]));
+        const poly = Array.isArray(room.floor_polygon) ? (room.floor_polygon as PolygonVertex[]) : null;
+        const heightM = room.height || 2.5;
 
-      const { data: objects } = await supabase
-        .from('budget_wall_objects')
-        .select('*')
-        .in('wall_id', walls.map(w => w.id))
-        .order('layer_order', { ascending: true });
-      if (!objects) return [];
+        // Floor area
+        let floorArea: number;
+        if (poly && poly.length >= 3) {
+          floorArea = polygonArea(poly) * cellSizeM * cellSizeM;
+        } else {
+          floorArea = (room.length || 0) * (room.width || 0);
+        }
 
-      return objects.map(obj => {
-        const wall = wallMap.get(obj.wall_id);
-        const room = wall ? roomMap.get(wall.room_id) : null;
-        return {
-          ...obj,
-          wall_index: wall?.wall_index || 0,
-          wall_type: wall?.wall_type || 'exterior',
-          room_name: room?.name || '',
-          room_id: room?.id || '',
-          section_id: room?.vertical_section_id || null,
-        } as WallObjectRow;
-      });
+        // Suelo
+        faces.push({ workspace: room.name, faceName: 'Suelo', m2: Math.round(floorArea * 100) / 100, m3: null, sortKey: 0 });
+
+        // Walls
+        const edgeCount = poly && poly.length >= 3 ? poly.length : 4;
+        for (let i = 0; i < edgeCount; i++) {
+          let wallLengthM: number;
+          if (poly && poly.length >= 3) {
+            const a = poly[i];
+            const b = poly[(i + 1) % poly.length];
+            wallLengthM = edgeLength(a, b) * cellSizeM;
+          } else {
+            // Rectangular fallback
+            wallLengthM = i % 2 === 0 ? (room.length || 0) : (room.width || 0);
+          }
+          const wallArea = Math.round(wallLengthM * heightM * 100) / 100;
+          faces.push({ workspace: room.name, faceName: `Pared ${i + 1}`, m2: wallArea, m3: null, sortKey: i + 1 });
+        }
+
+        // Techo
+        faces.push({ workspace: room.name, faceName: 'Techo', m2: Math.round(floorArea * 100) / 100, m3: null, sortKey: edgeCount + 1 });
+
+        // Espacio (volumen)
+        const vol = Math.round(floorArea * heightM * 1000) / 1000;
+        faces.push({ workspace: room.name, faceName: 'Espacio', m2: null, m3: vol, sortKey: edgeCount + 2 });
+      }
+
+      return faces;
     },
   });
 
-  // Fetch all walls for the "add" form
-  const { data: allWalls = [] } = useQuery({
-    queryKey: ['budget-all-walls-for-add', budgetId],
-    queryFn: async () => {
-      const { data: fp } = await supabase
-        .from('budget_floor_plans')
-        .select('id')
-        .eq('budget_id', budgetId)
-        .maybeSingle();
-      if (!fp) return [];
-      const { data: rooms } = await supabase
-        .from('budget_floor_plan_rooms')
-        .select('id, name')
-        .eq('floor_plan_id', fp.id);
-      if (!rooms || rooms.length === 0) return [];
-      const { data: walls } = await supabase
-        .from('budget_floor_plan_walls')
-        .select('id, room_id, wall_index, wall_type')
-        .in('room_id', rooms.map(r => r.id))
-        .order('wall_index', { ascending: true });
-      if (!walls) return [];
-      const roomMap = new Map(rooms.map(r => [r.id, r]));
-      return walls.map(w => ({
-        id: w.id,
-        room_id: w.room_id,
-        wall_index: w.wall_index,
-        wall_type: w.wall_type,
-        room_name: roomMap.get(w.room_id)?.name || '',
-      })) as WallInfo[];
-    },
-  });
+  // Filter by search
+  const filtered = useMemo(() => {
+    if (!search.trim()) return autoFaces;
+    const q = search.toLowerCase();
+    return autoFaces.filter(f =>
+      f.workspace.toLowerCase().includes(q) || f.faceName.toLowerCase().includes(q)
+    );
+  }, [autoFaces, search]);
 
-  const handleAddObject = async (data: { wall_id: string; name: string; object_type: string; is_core: boolean; layer_order: number; surface_m2: number | null; volume_m3: number | null; length_ml: number | null }) => {
-    const { error } = await supabase.from('budget_wall_objects').insert(data);
-    if (error) { toast.error('Error al crear objeto'); return; }
-    toast.success('Objeto creado');
-    setShowAddForm(false);
-    queryClient.invalidateQueries({ queryKey: ['budget-all-wall-objects', budgetId] });
-  };
-
-  // Group by workspace (room)
+  // View: By workspace
   const byWorkspace = useMemo(() => {
-    const groups = new Map<string, { roomId: string; roomName: string; objects: WallObjectRow[]; totalM2: number; totalM3: number; totalMl: number }>();
-    for (const obj of rawObjects) {
-      const key = obj.room_id;
-      if (!groups.has(key)) groups.set(key, { roomId: key, roomName: obj.room_name, objects: [], totalM2: 0, totalM3: 0, totalMl: 0 });
-      const g = groups.get(key)!;
-      g.objects.push(obj);
-      if (obj.surface_m2) g.totalM2 += obj.surface_m2;
-      if (obj.volume_m3) g.totalM3 += obj.volume_m3;
-      if (obj.length_ml) g.totalMl += obj.length_ml;
+    const groups = new Map<string, AutoFace[]>();
+    for (const f of filtered) {
+      if (!groups.has(f.workspace)) groups.set(f.workspace, []);
+      groups.get(f.workspace)!.push(f);
     }
-    return Array.from(groups.values()).sort((a, b) => a.roomName.localeCompare(b.roomName, 'es'));
-  }, [rawObjects]);
+    return Array.from(groups.entries())
+      .sort(([a], [b]) => a.localeCompare(b, 'es'))
+      .map(([name, faces]) => ({ name, faces: faces.sort((a, b) => a.sortKey - b.sortKey) }));
+  }, [filtered]);
 
-  // Group by section
-  const bySection = useMemo(() => {
-    const groups = new Map<string, { sectionId: string; objects: WallObjectRow[]; totalM2: number; totalM3: number; totalMl: number }>();
-    for (const obj of rawObjects) {
-      const key = obj.section_id || 'sin_seccion';
-      if (!groups.has(key)) groups.set(key, { sectionId: key, objects: [], totalM2: 0, totalM3: 0, totalMl: 0 });
-      const g = groups.get(key)!;
-      g.objects.push(obj);
-      if (obj.surface_m2) g.totalM2 += obj.surface_m2;
-      if (obj.volume_m3) g.totalM3 += obj.volume_m3;
-      if (obj.length_ml) g.totalMl += obj.length_ml;
-    }
-    return Array.from(groups.values());
-  }, [rawObjects]);
-
-  // Group by object name (alphabetical)
-  const byObject = useMemo(() => {
-    const groups = new Map<string, { objectName: string; objects: WallObjectRow[]; totalM2: number; totalM3: number; totalMl: number }>();
-    for (const obj of rawObjects) {
-      const key = obj.name.toLowerCase().trim();
-      if (!groups.has(key)) groups.set(key, { objectName: obj.name, objects: [], totalM2: 0, totalM3: 0, totalMl: 0 });
-      const g = groups.get(key)!;
-      g.objects.push(obj);
-      if (obj.surface_m2) g.totalM2 += obj.surface_m2;
-      if (obj.volume_m3) g.totalM3 += obj.volume_m3;
-      if (obj.length_ml) g.totalMl += obj.length_ml;
-    }
-    return Array.from(groups.values()).sort((a, b) => a.objectName.localeCompare(b.objectName, 'es'));
-  }, [rawObjects]);
+  // View: Alphabetical by face
+  const alphabetical = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      const cmp = a.faceName.localeCompare(b.faceName, 'es');
+      return cmp !== 0 ? cmp : a.workspace.localeCompare(b.workspace, 'es');
+    });
+  }, [filtered]);
 
   // Totals
-  const totalM2 = rawObjects.reduce((s, o) => s + (o.surface_m2 || 0), 0);
-  const totalM3 = rawObjects.reduce((s, o) => s + (o.volume_m3 || 0), 0);
-  const totalMl = rawObjects.reduce((s, o) => s + (o.length_ml || 0), 0);
-
-  const addButton = (
-    <Button variant="outline" size="sm" className="h-6 text-[10px] gap-1" onClick={() => setShowAddForm(true)} disabled={allWalls.length === 0}>
-      <Plus className="h-3 w-3" /> Añadir objeto
-    </Button>
-  );
+  const totalM2 = filtered.reduce((s, f) => s + (f.m2 || 0), 0);
+  const totalM3 = filtered.reduce((s, f) => s + (f.m3 || 0), 0);
+  const workspaceCount = new Set(filtered.map(f => f.workspace)).size;
 
   if (isLoading) return <p className="text-xs text-muted-foreground py-2">Cargando objetos...</p>;
 
+  if (autoFaces.length === 0) {
+    return (
+      <div className="text-center py-6 text-muted-foreground">
+        <Box className="h-8 w-8 mx-auto mb-2 opacity-40" />
+        <p className="text-xs">No hay Espacios de trabajo definidos</p>
+        <p className="text-[10px]">Crea espacios en la cuadrícula para ver su desglose automático</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3">
-      {/* Summary badges */}
+      {/* Summary */}
       <div className="flex flex-wrap gap-1.5 items-center">
         <Badge variant="secondary" className="text-[10px] h-5 gap-1">
-          <Box className="h-3 w-3" /> {rawObjects.length} objetos
+          <Layers className="h-3 w-3" /> {workspaceCount} espacios
         </Badge>
-        {totalM2 > 0 && <Badge variant="secondary" className="text-[10px] h-5">📐 {totalM2.toFixed(2)} m² total</Badge>}
-        {totalM3 > 0 && <Badge variant="secondary" className="text-[10px] h-5">📦 {totalM3.toFixed(3)} m³ total</Badge>}
-        {totalMl > 0 && <Badge variant="secondary" className="text-[10px] h-5">📏 {totalMl.toFixed(2)} ml total</Badge>}
+        <Badge variant="secondary" className="text-[10px] h-5 gap-1">
+          <Box className="h-3 w-3" /> {autoFaces.length} ámbitos
+        </Badge>
+        {totalM2 > 0 && <Badge variant="secondary" className="text-[10px] h-5">📐 {totalM2.toFixed(2)} m²</Badge>}
+        {totalM3 > 0 && <Badge variant="secondary" className="text-[10px] h-5">📦 {totalM3.toFixed(3)} m³</Badge>}
       </div>
 
-      {showAddForm && allWalls.length > 0 && (
-        <AddObjectForm walls={allWalls} onSave={handleAddObject} onCancel={() => setShowAddForm(false)} />
-      )}
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+        <Input
+          className="h-7 text-[11px] pl-7"
+          placeholder="Buscar espacio o ámbito..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
+      </div>
 
-      {rawObjects.length === 0 && !showAddForm && (
-        <div className="text-center py-6 text-muted-foreground">
-          <Box className="h-8 w-8 mx-auto mb-2 opacity-40" />
-          <p className="text-xs">No hay objetos definidos en las paredes</p>
-          <p className="text-[10px] mb-2">Añade objetos/capas desde el editor de cada pared o desde aquí</p>
-          {addButton}
-        </div>
-      )}
+      <Tabs defaultValue="workspace" className="w-full">
+        <TabsList className="h-7">
+          <TabsTrigger value="workspace" className="text-[10px] h-6 gap-1">
+            <Layers className="h-3 w-3" /> Por espacio
+          </TabsTrigger>
+          <TabsTrigger value="alpha" className="text-[10px] h-6 gap-1">
+            <List className="h-3 w-3" /> Alfabético
+          </TabsTrigger>
+        </TabsList>
 
-      {(rawObjects.length > 0 || showAddForm) && (
-        <Tabs defaultValue="espacio" className="w-full">
-          <TabsList className="h-7">
-            <TabsTrigger value="espacio" className="text-[10px] h-6 gap-1">
-              <Layers className="h-3 w-3" /> Por espacio
-            </TabsTrigger>
-            <TabsTrigger value="seccion" className="text-[10px] h-6 gap-1">
-              <Box className="h-3 w-3" /> Por sección
-            </TabsTrigger>
-            <TabsTrigger value="objeto" className="text-[10px] h-6 gap-1">
-              <Ruler className="h-3 w-3" /> Por objeto
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="espacio" className="space-y-2 mt-2">
-            {!showAddForm && addButton}
-            {byWorkspace.map(group => (
-              <div key={group.roomId} className="space-y-1">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-semibold">{group.roomName}</span>
-                  <Badge variant="outline" className="text-[9px] h-4">{group.objects.length}</Badge>
-                  {group.totalM2 > 0 && <Badge variant="secondary" className="text-[8px] h-3.5">📐 {group.totalM2.toFixed(2)} m²</Badge>}
-                  {group.totalM3 > 0 && <Badge variant="secondary" className="text-[8px] h-3.5">📦 {group.totalM3.toFixed(3)} m³</Badge>}
-                  {group.totalMl > 0 && <Badge variant="secondary" className="text-[8px] h-3.5">📏 {group.totalMl.toFixed(2)} ml</Badge>}
+        {/* By Workspace */}
+        <TabsContent value="workspace" className="space-y-2 mt-2">
+          {byWorkspace.map(group => {
+            const groupM2 = group.faces.reduce((s, f) => s + (f.m2 || 0), 0);
+            const groupM3 = group.faces.reduce((s, f) => s + (f.m3 || 0), 0);
+            return (
+              <div key={group.name} className="space-y-0.5">
+                <div className="flex items-center gap-1.5 bg-accent/30 rounded px-1.5 py-0.5">
+                  <span className="text-xs font-semibold">{group.name}</span>
+                  <Badge variant="outline" className="text-[9px] h-4">{group.faces.length} ámbitos</Badge>
+                  {groupM2 > 0 && <Badge variant="secondary" className="text-[8px] h-3.5">📐 {groupM2.toFixed(2)} m²</Badge>}
+                  {groupM3 > 0 && <Badge variant="secondary" className="text-[8px] h-3.5">📦 {groupM3.toFixed(3)} m³</Badge>}
                 </div>
-                {group.objects.map(obj => <ObjectRow key={obj.id} obj={obj} />)}
+                {group.faces.map((f, i) => (
+                  <FaceRow key={`${f.faceName}-${i}`} face={f} showWorkspace={false} />
+                ))}
+              </div>
+            );
+          })}
+        </TabsContent>
+
+        {/* Alphabetical */}
+        <TabsContent value="alpha" className="mt-2">
+          <div className="border rounded overflow-hidden">
+            {/* Header */}
+            <div className="grid grid-cols-[1fr_1fr_auto] gap-1 px-2 py-1 bg-muted/50 text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">
+              <span>Ámbito</span>
+              <span>Espacio</span>
+              <span className="text-right w-20">Medición</span>
+            </div>
+            {alphabetical.map((f, i) => (
+              <div key={`${f.faceName}-${f.workspace}-${i}`} className="grid grid-cols-[1fr_1fr_auto] gap-1 px-2 py-1 text-xs border-t hover:bg-accent/20 transition-colors">
+                <span className="font-medium">
+                  {f.faceName === 'Espacio' ? '🔷 ' : f.faceName === 'Suelo' ? '⬛ ' : f.faceName === 'Techo' ? '⬜ ' : '🧱 '}
+                  {f.faceName}
+                </span>
+                <span className="text-muted-foreground">{f.workspace}</span>
+                <span className="text-right w-20 tabular-nums">
+                  {f.m2 != null && `${f.m2.toFixed(2)} m²`}
+                  {f.m3 != null && `${f.m3.toFixed(3)} m³`}
+                </span>
               </div>
             ))}
-          </TabsContent>
+          </div>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
 
-          <TabsContent value="seccion" className="space-y-2 mt-2">
-            {!showAddForm && addButton}
-            {bySection.map(group => (
-              <div key={group.sectionId} className="space-y-1">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-semibold">
-                    {group.sectionId === 'sin_seccion' ? 'Sin sección asignada' : `Sección ${group.sectionId.slice(0, 8)}…`}
-                  </span>
-                  <Badge variant="outline" className="text-[9px] h-4">{group.objects.length} obj.</Badge>
-                  {group.totalM2 > 0 && <Badge variant="secondary" className="text-[8px] h-3.5">📐 {group.totalM2.toFixed(2)} m²</Badge>}
-                  {group.totalM3 > 0 && <Badge variant="secondary" className="text-[8px] h-3.5">📦 {group.totalM3.toFixed(3)} m³</Badge>}
-                  {group.totalMl > 0 && <Badge variant="secondary" className="text-[8px] h-3.5">📏 {group.totalMl.toFixed(2)} ml</Badge>}
-                </div>
-                {group.objects.map(obj => <ObjectRow key={obj.id} obj={obj} />)}
-              </div>
-            ))}
-          </TabsContent>
-
-          <TabsContent value="objeto" className="space-y-2 mt-2">
-            {!showAddForm && addButton}
-            {byObject.map(group => (
-              <div key={group.objectName} className="space-y-1">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-semibold">{group.objectName}</span>
-                  <Badge variant="outline" className="text-[9px] h-4">{group.objects.length} uds.</Badge>
-                  {group.totalM2 > 0 && <Badge variant="secondary" className="text-[8px] h-3.5">📐 {group.totalM2.toFixed(2)} m²</Badge>}
-                  {group.totalM3 > 0 && <Badge variant="secondary" className="text-[8px] h-3.5">📦 {group.totalM3.toFixed(3)} m³</Badge>}
-                  {group.totalMl > 0 && <Badge variant="secondary" className="text-[8px] h-3.5">📏 {group.totalMl.toFixed(2)} ml</Badge>}
-                </div>
-                {group.objects.map(obj => <ObjectRow key={obj.id} obj={obj} />)}
-              </div>
-            ))}
-          </TabsContent>
-        </Tabs>
-      )}
+function FaceRow({ face, showWorkspace = true }: { face: AutoFace; showWorkspace?: boolean }) {
+  const icon = face.faceName === 'Espacio' ? '🔷' : face.faceName === 'Suelo' ? '⬛' : face.faceName === 'Techo' ? '⬜' : '🧱';
+  return (
+    <div className="flex items-center gap-2 px-2 py-0.5 text-xs hover:bg-accent/20 transition-colors rounded">
+      <span className="text-[10px]">{icon}</span>
+      <span className="font-medium flex-1">{face.faceName}</span>
+      {showWorkspace && <span className="text-muted-foreground text-[10px]">{face.workspace}</span>}
+      {face.m2 != null && <Badge variant="secondary" className="text-[8px] h-3.5 px-1 tabular-nums">📐 {face.m2.toFixed(2)} m²</Badge>}
+      {face.m3 != null && <Badge variant="secondary" className="text-[8px] h-3.5 px-1 tabular-nums">📦 {face.m3.toFixed(3)} m³</Badge>}
     </div>
   );
 }

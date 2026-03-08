@@ -455,10 +455,10 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
   const isZoomed = zoomLevel > 1;
 
   const toSvg = (gx: number, gy: number) => ({
-    sx: pad + (gx - gridOffsetX) * cellSize,
+    sx: pad + (gx - gridOffsetX) * cellW,
     sy: originTopLeft
-      ? pad + (gy - gridOffsetY) * cellSize
-      : pad + (gridHeight - (gy - gridOffsetY)) * cellSize,
+      ? pad + (gy - gridOffsetY) * cellH
+      : pad + (gridHeight - (gy - gridOffsetY)) * cellH,
   });
 
   const fromSvg = (screenX: number, screenY: number) => {

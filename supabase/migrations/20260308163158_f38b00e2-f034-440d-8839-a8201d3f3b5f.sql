@@ -1,0 +1,1 @@
+ALTER TABLE public.budget_wall_objects ADD COLUMN thickness_mm numeric DEFAULT NULL;

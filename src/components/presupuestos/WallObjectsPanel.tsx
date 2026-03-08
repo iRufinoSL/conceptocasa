@@ -91,6 +91,7 @@ export function WallObjectsPanel({
   const [formSurfaceM2, setFormSurfaceM2] = useState('');
   const [formVolumeM3, setFormVolumeM3] = useState('');
   const [formLengthMl, setFormLengthMl] = useState('');
+  const [formThicknessMm, setFormThicknessMm] = useState('');
   const [formVisualPattern, setFormVisualPattern] = useState('');
 
   const { data: objects = [], isLoading } = useQuery({

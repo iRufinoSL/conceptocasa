@@ -529,6 +529,8 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
   };
 
   const handleClick = (gx: number, gy: number) => {
+    // Select/pointer mode: don't add vertices, just allow inspecting
+    if (selectMode) return;
     // Ruler mode: collect start/end points
     if (rulerMode) {
       if (!rulerStart) {

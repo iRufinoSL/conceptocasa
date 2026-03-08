@@ -1953,7 +1953,9 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
               {verts.map((v, vi) => (
                 <text key={`vl-${vi}`} x={toSvg(v.x, v.y).sx} y={toSvg(v.x, v.y).sy - 7}
                   textAnchor="middle" fontSize={6} fontWeight={600} fill={color}
-                  className="pointer-events-none select-none">{hLabel}{v.x},{vLabel}{v.y}</text>
+                  className="pointer-events-none select-none"
+                  data-pdf-vertex-label=""
+                >{hLabel}{v.x},{vLabel}{v.y}</text>
               ))}
               {/* Name + area label */}
               <rect x={cxSvg - 30} y={cySvg - 10} width={60} height={20} rx={3}

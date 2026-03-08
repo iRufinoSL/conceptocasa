@@ -1141,13 +1141,18 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
               const imx = mx + nx * innerOff;
               const imy = my + ny * innerOff;
 
+              // Wall type style
+              const wallDbIdx = idx === 0 ? vertices.length : idx;
+              const activeWt = normalizeWallType(activeWalls.find(w => w.wall_index === wallDbIdx)?.wall_type);
+              const activeWs = WALL_EDGE_STYLES[activeWt] || WALL_EDGE_DEFAULT;
+
               return (
                 <g key={`edge-${idx}-${a.x}-${a.y}`}>
-                  {/* Edge line */}
+                  {/* Edge line — styled by wall type */}
                   <line x1={x1} y1={y1} x2={x2} y2={y2}
-                    stroke={isClosing && !isClosed ? 'hsl(200 80% 50% / 0.5)' : 'hsl(200 80% 50%)'}
-                    strokeWidth={isClosing && !isClosed ? 1.5 : 2}
-                    strokeDasharray={isClosing && !isClosed ? '4 3' : 'none'} />
+                    stroke={isClosing && !isClosed ? 'hsl(200 80% 50% / 0.5)' : activeWs.color}
+                    strokeWidth={isClosing && !isClosed ? 1.5 : activeWs.width}
+                    strokeDasharray={isClosing && !isClosed ? '4 3' : activeWs.dash} />
 
                   {/* Outer arista dimension line with ticks */}
                   {isClosed && (

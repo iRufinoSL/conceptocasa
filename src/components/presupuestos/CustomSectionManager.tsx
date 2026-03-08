@@ -903,10 +903,17 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
     return (
       <g key={`proj-${proj.workspaceId}-${pi}`}>
         {/* Fill polygon — never captures clicks in vertical sections (walls must stay clickable) */}
-        <polygon points={points}
-          fill={hslWithAlpha(color, isEditingThis ? 0.25 : 0.12)}
-          stroke="none"
-          className={isEditingThis || isVerticalSection ? '' : 'cursor-pointer'}
+        {(() => {
+          const patId = wallPatterns.get(proj.workspaceId);
+          const pat = patId ? getPatternById(patId) : undefined;
+          return (
+            <polygon points={points}
+              fill={pat ? `url(#wall-pattern-${pat.id})` : hslWithAlpha(color, isEditingThis ? 0.25 : 0.12)}
+              stroke="none"
+              className={isEditingThis || isVerticalSection ? '' : 'cursor-pointer'}
+            />
+          );
+        })()}
           style={{ pointerEvents: isVerticalSection ? 'none' : undefined }}
           onClick={() => !isEditingThis && !isVerticalSection && selectWorkspace(proj)}
         />

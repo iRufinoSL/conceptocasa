@@ -2,10 +2,11 @@ import { useMemo, useState, useRef, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Layers, List, Search, Box, ChevronRight } from 'lucide-react';
+import { Layers, List, Search, Box, ChevronRight, Package } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WallObjectsPanel } from './WallObjectsPanel';
 import { toast } from 'sonner';
@@ -240,6 +241,78 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
     },
   });
 
+  /* ── Recursos: all wall objects across the budget ── */
+  const { data: allObjects = [] } = useQuery({
+    queryKey: ['budget-wall-objects-all', budgetId],
+    queryFn: async () => {
+      const { data: fp } = await supabase
+        .from('budget_floor_plans')
+        .select('id')
+        .eq('budget_id', budgetId)
+        .maybeSingle();
+      if (!fp) return [];
+      const { data: rooms } = await supabase
+        .from('budget_floor_plan_rooms')
+        .select('id, name')
+        .eq('floor_plan_id', fp.id);
+      if (!rooms?.length) return [];
+      const roomMap = new Map(rooms.map(r => [r.id, r.name]));
+      const { data: walls } = await supabase
+        .from('budget_floor_plan_walls')
+        .select('id, room_id, wall_index')
+        .in('room_id', rooms.map(r => r.id));
+      if (!walls?.length) return [];
+      const wallRoomMap = new Map(walls.map(w => [w.id, { roomId: w.room_id, wallIndex: w.wall_index }]));
+      const { data: objects } = await supabase
+        .from('budget_wall_objects')
+        .select('*')
+        .in('wall_id', walls.map(w => w.id))
+        .order('layer_order', { ascending: true });
+      if (!objects?.length) return [];
+      return objects.map((obj: any) => {
+        const wallInfo = wallRoomMap.get(obj.wall_id);
+        const workspace = wallInfo ? (roomMap.get(wallInfo.roomId) || '—') : '—';
+        const wi = wallInfo?.wallIndex ?? 0;
+        const faceName = wi === 0 ? 'Espacio' : wi === -1 ? 'Suelo' : wi === -2 ? 'Techo' : `Pared ${wi}`;
+        return { ...obj, workspace, faceName };
+      });
+    },
+  });
+
+  const [resourcesView, setResourcesView] = useState<'alpha' | 'workspace'>('alpha');
+  const [resourceOpenGroups, setResourceOpenGroups] = useState<Set<string>>(new Set());
+
+  const toggleResourceGroup = (name: string) => {
+    setResourceOpenGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  };
+
+  const filteredObjects = useMemo(() => {
+    if (!search.trim()) return allObjects;
+    const q = search.toLowerCase();
+    return allObjects.filter((o: any) =>
+      o.name.toLowerCase().includes(q) || o.workspace.toLowerCase().includes(q) || (o.description || '').toLowerCase().includes(q)
+    );
+  }, [allObjects, search]);
+
+  const objectsAlpha = useMemo(() =>
+    [...filteredObjects].sort((a: any, b: any) => a.name.localeCompare(b.name, 'es')),
+  [filteredObjects]);
+
+  const objectsByWorkspace = useMemo(() => {
+    const groups = new Map<string, any[]>();
+    for (const o of filteredObjects) {
+      if (!groups.has(o.workspace)) groups.set(o.workspace, []);
+      groups.get(o.workspace)!.push(o);
+    }
+    return Array.from(groups.entries())
+      .sort(([a], [b]) => a.localeCompare(b, 'es'))
+      .map(([name, objs]) => ({ name, objects: objs.sort((a: any, b: any) => a.layer_order - b.layer_order) }));
+  }, [filteredObjects]);
   const ensureSuperficieObject = async (wallId: string, face: AutoFace) => {
     // Check if order-0 Superficie already exists
     const { data: existing } = await supabase
@@ -380,6 +453,9 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
           <TabsTrigger value="alpha" className="text-xs h-7 gap-1">
             <List className="h-3.5 w-3.5" /> Alfabético
           </TabsTrigger>
+          <TabsTrigger value="recursos" className="text-xs h-7 gap-1">
+            <Package className="h-3.5 w-3.5" /> Recursos
+          </TabsTrigger>
         </TabsList>
 
         {/* By Workspace — collapsible with resizable columns */}
@@ -441,6 +517,101 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
             }))}
             onRowClick={(row) => handleFaceClick(row.face)}
           />
+        </TabsContent>
+
+        {/* Recursos tab */}
+        <TabsContent value="recursos" className="mt-2 space-y-2">
+          <div className="flex gap-1">
+            <Button
+              variant={resourcesView === 'alpha' ? 'default' : 'outline'}
+              size="sm"
+              className="h-7 text-xs gap-1"
+              onClick={() => setResourcesView('alpha')}
+            >
+              <List className="h-3 w-3" /> Alfabético
+            </Button>
+            <Button
+              variant={resourcesView === 'workspace' ? 'default' : 'outline'}
+              size="sm"
+              className="h-7 text-xs gap-1"
+              onClick={() => setResourcesView('workspace')}
+            >
+              <Layers className="h-3 w-3" /> Por espacio
+            </Button>
+          </div>
+
+          {filteredObjects.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">No hay objetos/capas definidos aún</p>
+          ) : resourcesView === 'alpha' ? (
+            <ResizableTable
+              columns={[
+                { key: 'order', header: '#', defaultWidth: 36, minWidth: 30 },
+                { key: 'name', header: 'Objeto / Recurso', defaultWidth: 160, minWidth: 80 },
+                { key: 'face', header: 'Cara', defaultWidth: 90, minWidth: 50 },
+                { key: 'workspace', header: 'Espacio', defaultWidth: 120, minWidth: 60 },
+                { key: 'type', header: 'Tipo', defaultWidth: 90, minWidth: 50 },
+                { key: 'thickness', header: 'Espesor', defaultWidth: 70, minWidth: 45 },
+                { key: 'm2', header: 'm²', defaultWidth: 70, minWidth: 45 },
+                { key: 'm3', header: 'm³', defaultWidth: 70, minWidth: 45 },
+              ]}
+              rows={objectsAlpha.map((o: any) => ({
+                face: { workspace: o.workspace, roomId: '', faceName: o.faceName, m2: o.surface_m2, m3: o.volume_m3, sortKey: 0, wallIndex: 0 } as AutoFace,
+                cells: {
+                  order: String(o.layer_order),
+                  name: o.layer_order === 0 ? `⭐ ${o.name}` : o.name,
+                  face: o.faceName,
+                  workspace: o.workspace,
+                  type: o.object_type || '',
+                  thickness: o.thickness_mm ? `${o.thickness_mm} mm` : '',
+                  m2: o.surface_m2 != null ? o.surface_m2.toFixed(2) : '',
+                  m3: o.volume_m3 != null ? o.volume_m3.toFixed(3) : '',
+                },
+              }))}
+              onRowClick={() => {}}
+            />
+          ) : (
+            <div className="space-y-1.5">
+              {objectsByWorkspace.map(group => {
+                const isOpen = resourceOpenGroups.has(group.name);
+                return (
+                  <Collapsible key={group.name} open={isOpen} onOpenChange={() => toggleResourceGroup(group.name)}>
+                    <CollapsibleTrigger className="flex items-center gap-2 w-full rounded-md px-2 py-1.5 bg-accent/30 hover:bg-accent/50 transition-colors text-left">
+                      <ChevronRight className={cn('h-4 w-4 text-muted-foreground transition-transform duration-200', isOpen && 'rotate-90')} />
+                      <span className="text-sm font-semibold flex-1">{group.name}</span>
+                      <Badge variant="outline" className="text-[10px] h-5">{group.objects.length}</Badge>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <ResizableTable
+                        columns={[
+                          { key: 'order', header: '#', defaultWidth: 36, minWidth: 30 },
+                          { key: 'name', header: 'Objeto / Recurso', defaultWidth: 160, minWidth: 80 },
+                          { key: 'face', header: 'Cara', defaultWidth: 90, minWidth: 50 },
+                          { key: 'type', header: 'Tipo', defaultWidth: 90, minWidth: 50 },
+                          { key: 'thickness', header: 'Espesor', defaultWidth: 70, minWidth: 45 },
+                          { key: 'm2', header: 'm²', defaultWidth: 70, minWidth: 45 },
+                          { key: 'm3', header: 'm³', defaultWidth: 70, minWidth: 45 },
+                        ]}
+                        rows={group.objects.map((o: any) => ({
+                          face: { workspace: o.workspace, roomId: '', faceName: o.faceName, m2: o.surface_m2, m3: o.volume_m3, sortKey: 0, wallIndex: 0 } as AutoFace,
+                          cells: {
+                            order: String(o.layer_order),
+                            name: o.layer_order === 0 ? `⭐ ${o.name}` : o.name,
+                            face: o.faceName,
+                            type: o.object_type || '',
+                            thickness: o.thickness_mm ? `${o.thickness_mm} mm` : '',
+                            m2: o.surface_m2 != null ? o.surface_m2.toFixed(2) : '',
+                            m3: o.volume_m3 != null ? o.volume_m3.toFixed(3) : '',
+                          },
+                        }))}
+                        onRowClick={() => {}}
+                        className="ml-6 mt-1"
+                      />
+                    </CollapsibleContent>
+                  </Collapsible>
+                );
+              })}
+            </div>
+          )}
         </TabsContent>
       </Tabs>
 

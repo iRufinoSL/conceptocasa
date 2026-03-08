@@ -1,32 +1,33 @@
 # Memory: features/budget/workspace-section-drawing
 Updated: now
 
-## Draw Workspaces Directly on Sections
+## Draw Workspace Faces Directly on Sections
 
-New alternative workflow that coexists with the original (create workspace → assign section):
+New workflow that coexists with the original (create workspace → assign section). The key concept: **workspace name is unique and global** — drawing on different sections defines different **faces** (Suelo, Paredes, Techo) of the **same** workspace.
 
 ### Flow
-1. User opens a Section grid (any type: Z, Y, X)
-2. Clicks "**+ Nuevo Espacio**" button in the grid toolbar
-3. Types a name in the inline input field
-4. Clicks "**Dibujar**" → enters drawing mode (crosshair cursor)
-5. Clicks on grid intersections to place vertices
-6. Double-clicks to close the figure
-7. Edit panel appears with vertex coordinates, name field, and save/cancel
-8. Can draw multiple workspaces without leaving the section
+1. User opens a Section grid (Z, Y, or X)
+2. Clicks "**+ Dibujar Cara**" in the grid toolbar
+3. **Selects workspace**: dropdown with existing workspace names + option to type new name
+4. **Selects face type**: auto-detected by section type, but editable
+   - Z section → pre-selects "Suelo" (options: Suelo, Techo, Pared)
+   - Y section → pre-selects "Pared"
+   - X section → pre-selects "Pared"
+5. Clicks "Dibujar [face]" → enters drawing mode
+6. Clicks on grid to place vertices, double-click to close
+7. Edit panel shows vertex coords, name, and save/cancel
+8. Walls auto-number: P1, P2, P3...
 
-### Edit Existing
-- **Click on polygon**: Selects it for editing (vertices become draggable)
-- **Polygon list button**: "Espacios (N)" in toolbar shows list of all standalone polygons
-- From list: can edit (pencil icon) or delete (trash icon) each polygon
-- Renaming via the edit panel's name input field
+### Naming Convention
+- Suelo: `{workspace} (Suelo)` → ID: `ws_{name}_suelo`
+- Techo: `{workspace} (Techo)` → ID: `ws_{name}_techo`
+- Pared: `{workspace} P{n}` → ID: `ws_{name}_pared{n}`
+
+### Polygon List
+- "Caras (N)" button shows all faces grouped by workspace name
+- Each face: click to edit geometry, pencil to edit, trash to delete
 
 ### Data Storage
-- Standalone polygons stored as `SectionPolygon` entries in `section.polygons[]`
-- IDs prefixed with `section_poly_` to distinguish from workspace-bound polygons
+- All faces stored as `SectionPolygon` entries in `section.polygons[]`
 - Persisted in `custom_corners.customSections[].polygons[]` JSONB
-
-### Coexistence
-Both flows work simultaneously:
-- Original: workspace projections from `wallProjectionsBySection` (existing rooms)
-- New: standalone polygons drawn directly on sections (no room record needed)
+- Workspace names collected from: rooms, wallProjections, and all section polygons

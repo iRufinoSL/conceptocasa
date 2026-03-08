@@ -877,8 +877,8 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             );
           })}
 
-          {/* ── Other rooms' polygons (background, clickable) with edge measurements ── */}
-          {otherPolygons.map((op) => {
+          {/* ── Other rooms' polygons (background, clickable) with edge measurements — base first ── */}
+          {[...otherPolygons].sort((a, b) => (b.isBase ? 1 : 0) - (a.isBase ? 1 : 0)).map((op) => {
             const isSelected = selectedOtherId === op.id;
             const verts = isSelected ? otherEditVertices : op.vertices;
             if (verts.length < 3) return null;

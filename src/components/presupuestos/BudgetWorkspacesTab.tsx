@@ -596,25 +596,68 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
         </span>
       </div>
 
-      {/* Legend for other polygons */}
+      {/* Legend for other polygons — with inline editing */}
       {otherPolygons.length > 0 && (
         <div className="flex flex-wrap gap-1.5 items-center">
           <span className="text-[9px] text-muted-foreground">Espacios:</span>
-          {otherPolygons.map((op) => (
-            <button
-              key={op.id}
-              className="flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded border hover:bg-accent/50 transition-colors"
-              style={{ borderColor: 'hsl(200 80% 50%)' }}
-              onClick={() => onSwitchRoom?.(op.id)}
-              title={`Editar ${op.name}`}
-            >
-              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'hsl(200 80% 50%)' }} />
-              {op.name}
-            </button>
-          ))}
+          {otherPolygons.map((op) => {
+            const isSelected = selectedOtherId === op.id;
+            const isEditingName = editingOtherName === op.id;
+            return (
+              <span key={op.id} className="inline-flex items-center gap-0.5">
+                {isEditingName ? (
+                  <span className="inline-flex items-center gap-0.5">
+                    <input
+                      className="h-5 w-20 text-[9px] px-1 border rounded bg-background"
+                      value={otherNameValue}
+                      onChange={(e) => setOtherNameValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && otherNameValue.trim()) {
+                          onOtherPolygonRename?.(op.id, otherNameValue.trim());
+                          setEditingOtherName(null);
+                        } else if (e.key === 'Escape') {
+                          setEditingOtherName(null);
+                        }
+                      }}
+                      autoFocus
+                    />
+                    <button className="text-[9px] text-primary hover:underline" onClick={() => {
+                      if (otherNameValue.trim()) onOtherPolygonRename?.(op.id, otherNameValue.trim());
+                      setEditingOtherName(null);
+                    }}>✓</button>
+                    <button className="text-[9px] text-muted-foreground hover:underline" onClick={() => setEditingOtherName(null)}>✕</button>
+                  </span>
+                ) : (
+                  <button
+                    className={`flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded border transition-colors ${isSelected ? 'bg-accent border-primary font-semibold' : 'hover:bg-accent/50'}`}
+                    style={{ borderColor: isSelected ? undefined : 'hsl(200 80% 50%)' }}
+                    onClick={() => handleSelectOther(op)}
+                    title={`Seleccionar ${op.name} para editar`}
+                  >
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: isSelected ? 'hsl(var(--primary))' : 'hsl(200 80% 50%)' }} />
+                    {op.name}
+                  </button>
+                )}
+                {isSelected && !isEditingName && (
+                  <>
+                    <button
+                      className="text-[9px] text-muted-foreground hover:text-primary px-0.5"
+                      title="Renombrar"
+                      onClick={() => { setEditingOtherName(op.id); setOtherNameValue(op.name); }}
+                    >✏️</button>
+                    <button
+                      className="text-[9px] text-muted-foreground hover:text-primary px-0.5"
+                      title="Ir al espacio"
+                      onClick={() => onSwitchRoom?.(op.id)}
+                    >↗</button>
+                  </>
+                )}
+              </span>
+            );
+          })}
           <span className="flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded border border-primary bg-primary/10 font-semibold">
             <span className="w-2 h-2 rounded-full shrink-0 bg-primary" />
-            Editando
+            {activeName || 'Editando'}
           </span>
         </div>
       )}

@@ -574,7 +574,8 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
   const handleMouseMove = (e: React.MouseEvent) => {
     const activeIdx = draggingIdx !== null ? draggingIdx : null;
     const otherIdx = draggingOtherIdx !== null ? draggingOtherIdx : null;
-    if (activeIdx === null && otherIdx === null) return;
+    const rulerDrag = draggingRulerIdx !== null;
+    if (activeIdx === null && otherIdx === null && !rulerDrag) return;
     if (!svgRef.current) return;
     const rect = svgRef.current.getBoundingClientRect();
     const sx = e.clientX - rect.left;
@@ -583,8 +584,17 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
     // Clamp to grid bounds; in free mode allow fractional
     const clampX = (v: number) => Math.max(gridOffsetX, Math.min(gridOffsetX + gridWidth, v));
     const clampY = (v: number) => Math.max(gridOffsetY, Math.min(gridOffsetY + gridHeight, v));
-    const snappedX = freeMode ? clampX(Math.round(gx * 10) / 10) : clampX(gx);
-    const snappedY = freeMode ? clampY(Math.round(gy * 10) / 10) : clampY(gy);
+    const snappedX = (freeMode || rulerDrag) ? clampX(Math.round(gx * 10) / 10) : clampX(gx);
+    const snappedY = (freeMode || rulerDrag) ? clampY(Math.round(gy * 10) / 10) : clampY(gy);
+    if (rulerDrag && draggingRulerEnd) {
+      setRulerLines(prev => prev.map((rl, i) => {
+        if (i !== draggingRulerIdx) return rl;
+        return draggingRulerEnd === 'start'
+          ? { ...rl, start: { x: snappedX, y: snappedY } }
+          : { ...rl, end: { x: snappedX, y: snappedY } };
+      }));
+      return;
+    }
     if (activeIdx !== null) {
       if (snappedX !== vertices[activeIdx].x || snappedY !== vertices[activeIdx].y) {
         const next = [...vertices];
@@ -607,6 +617,8 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
     }
     setDraggingIdx(null);
     setDraggingOtherIdx(null);
+    setDraggingRulerIdx(null);
+    setDraggingRulerEnd(null);
   };
 
   // Select another polygon for inline editing

@@ -433,15 +433,25 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
   const [rulerStart, setRulerStart] = useState<PolygonVertex | null>(null);
   // Free vertex mode — allows non-node placement
   const [freeMode, setFreeMode] = useState(false);
+  // Annotation display toggles: always show mm, optionally degrees and/or %
+  const [showDegrees, setShowDegrees] = useState(false);
+  const [showPercent, setShowPercent] = useState(false);
 
   // At x1 the grid fits entirely; at higher zooms it grows and scrolls
   const baseCellSize = 28;
   const pad = 30;
-  const logicalW = gridWidth * baseCellSize + pad * 2;
-  const logicalH = gridHeight * baseCellSize + pad * 2;
-  const cellSize = Math.round(baseCellSize * zoomLevel);
-  const svgW = gridWidth * cellSize + pad * 2;
-  const svgH = gridHeight * cellSize + pad * 2;
+  // Compute aspect-correct cell dimensions based on axis scales
+  const hMm = hScaleMm || 625;
+  const vMm = vScaleMm || 625;
+  const scaleRatio = vMm / hMm; // < 1 means vertical cells are shorter
+  const baseCellW = baseCellSize;
+  const baseCellH = Math.round(baseCellSize * scaleRatio);
+  const logicalW = gridWidth * baseCellW + pad * 2;
+  const logicalH = gridHeight * baseCellH + pad * 2;
+  const cellW = Math.round(baseCellW * zoomLevel);
+  const cellH = Math.round(baseCellH * zoomLevel);
+  const svgW = gridWidth * cellW + pad * 2;
+  const svgH = gridHeight * cellH + pad * 2;
   const isZoomed = zoomLevel > 1;
 
   const toSvg = (gx: number, gy: number) => ({

@@ -555,8 +555,9 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
     }
   };
 
-  const handleAddFromGraph = async (parentId: string | null) => {
-    if (!graphAddName.trim()) return;
+  const handleAddFromGraph = async (parentId: string | null, name?: string) => {
+    const itemName = name || graphAddName.trim();
+    if (!itemName) return;
     const code = getNextCode(parentId);
     const siblings = parentId ? getChildren(parentId) : rootItems;
     const { error } = await supabase
@@ -565,7 +566,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
         budget_id: budgetId,
         parent_id: parentId,
         code,
-        name: graphAddName.trim(),
+        name: itemName,
         order_index: siblings.length,
       });
     if (error) {

@@ -594,8 +594,8 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
         )}
       </div>
 
-      {/* Zoom controls + PDF */}
-      <div className="flex items-center gap-1.5">
+      {/* Zoom controls + tools + PDF */}
+      <div className="flex items-center gap-1.5 flex-wrap">
         <span className="text-[9px] text-muted-foreground">Zoom:</span>
         {[1, 1.5, 2, 2.5].map(z => (
           <Button
@@ -608,6 +608,34 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             {z === 1 ? '1×' : `${z}×`}
           </Button>
         ))}
+        <span className="text-[9px] text-muted-foreground ml-2">Herramientas:</span>
+        <Button
+          variant={rulerMode ? 'default' : 'outline'}
+          size="sm"
+          className="h-5 text-[10px] px-2 gap-0.5"
+          style={rulerMode ? { backgroundColor: 'hsl(30 90% 50%)', borderColor: 'hsl(30 90% 50%)' } : {}}
+          onClick={() => { setRulerMode(!rulerMode); setRulerStart(null); }}
+        >
+          📏 Regla
+        </Button>
+        <Button
+          variant={freeMode ? 'default' : 'outline'}
+          size="sm"
+          className="h-5 text-[10px] px-2 gap-0.5"
+          onClick={() => setFreeMode(!freeMode)}
+        >
+          🎯 Libre
+        </Button>
+        {rulerLines.length > 0 && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-5 text-[10px] px-2"
+            onClick={() => { setRulerLines([]); setRulerStart(null); }}
+          >
+            Borrar reglas ({rulerLines.length})
+          </Button>
+        )}
         {pdfTitle && (
           <GridPdfExport
             title={pdfTitle}
@@ -621,10 +649,12 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
       {/* Status indicator */}
       <div className="flex items-center gap-1.5">
         <Badge variant={isClosed ? 'default' : 'outline'} className="text-[9px] h-4 gap-0.5">
-          {isClosed ? '✅ Cerrado' : '⏳ Abierto'}
+          {isClosed ? '✅ Cerrado' : rulerMode ? '📏 Regla' : '⏳ Abierto'}
         </Badge>
         <span className="text-[9px] text-muted-foreground">
           {vertices.length} vértice{vertices.length !== 1 ? 's' : ''}
+          {freeMode && ' · modo libre'}
+          {rulerStart && ' · pulsa 2º punto de la regla'}
         </span>
       </div>
 

@@ -1812,7 +1812,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                 const midY = (gtop + gbottom) / 2;
 
                 return (
-                  <g className="pointer-events-none">
+                  <g className="pointer-events-none" data-pdf-dimension="">
                     {totalWidthMm > 0 && (
                       <>
                         <line x1={gleft} y1={gtop - off} x2={gright} y2={gtop - off} stroke="hsl(0 70% 50%)" strokeWidth={1.2} />

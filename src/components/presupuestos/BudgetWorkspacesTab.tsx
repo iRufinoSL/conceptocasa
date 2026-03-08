@@ -2091,6 +2091,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                 title={isAdmin ? 'Clic para renombrar' : undefined}
               >
                 {r.name}
+                {r.is_base && <Badge variant="outline" className="text-[9px] h-4 px-1 ml-1 border-dashed text-muted-foreground">Base</Badge>}
               </span>
             )}
             <div className="flex flex-wrap gap-1.5 mt-0.5">

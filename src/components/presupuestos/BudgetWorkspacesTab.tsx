@@ -363,6 +363,11 @@ interface OtherPolygon {
   vertices: PolygonVertex[];
 }
 
+interface RulerLine {
+  start: PolygonVertex;
+  end: PolygonVertex;
+}
+
 interface GridPolygonDrawerProps {
   vertices: PolygonVertex[];
   onChange: (vertices: PolygonVertex[]) => void;
@@ -377,6 +382,7 @@ interface GridPolygonDrawerProps {
   onSwitchRoom?: (roomId: string) => void;
   onOtherPolygonChange?: (id: string, vertices: PolygonVertex[]) => void;
   onOtherPolygonRename?: (id: string, newName: string) => void;
+  onSelectOtherWorkspace?: (id: string | null) => void;
   perimeterPolygon?: PolygonVertex[];
   activeName?: string;
   originTopLeft?: boolean;
@@ -389,6 +395,8 @@ interface GridPolygonDrawerProps {
   vScaleMm?: number;
 }
 
+const RULER_COLOR = 'hsl(30 90% 50%)';
+
 const POLY_COLORS = [
   'hsl(var(--chart-1))',
   'hsl(var(--chart-2))',
@@ -400,7 +408,7 @@ const POLY_COLORS = [
   'hsl(280 60% 55%)',
 ];
 
-function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16, gridOffsetX = 0, gridOffsetY = 0, placedRooms = [], cellSizeM = 1, otherPolygons = [], activeRoomId, onSwitchRoom, onOtherPolygonChange, onOtherPolygonRename, perimeterPolygon, activeName, originTopLeft = false, pdfTitle, pdfSubtitle, onWallClick, hAxisLabel = 'X', vAxisLabel = 'Y', hScaleMm, vScaleMm }: GridPolygonDrawerProps) {
+function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16, gridOffsetX = 0, gridOffsetY = 0, placedRooms = [], cellSizeM = 1, otherPolygons = [], activeRoomId, onSwitchRoom, onOtherPolygonChange, onOtherPolygonRename, onSelectOtherWorkspace, perimeterPolygon, activeName, originTopLeft = false, pdfTitle, pdfSubtitle, onWallClick, hAxisLabel = 'X', vAxisLabel = 'Y', hScaleMm, vScaleMm }: GridPolygonDrawerProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null);
@@ -416,6 +424,13 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
 
   // Polygon is "closed" when it has >= 3 vertices and was explicitly closed by clicking first vertex
   const [isClosed, setIsClosed] = useState(() => vertices.length >= 3);
+
+  // Ruler tool state
+  const [rulerMode, setRulerMode] = useState(false);
+  const [rulerLines, setRulerLines] = useState<RulerLine[]>([]);
+  const [rulerStart, setRulerStart] = useState<PolygonVertex | null>(null);
+  // Free vertex mode — allows non-node placement
+  const [freeMode, setFreeMode] = useState(false);
 
   // At x1 the grid fits entirely; at higher zooms it grows and scrolls
   const baseCellSize = 28;
@@ -442,22 +457,42 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
       sx = screenX * (logicalW / rect.width);
       sy = screenY * (logicalH / rect.height);
     }
+    const rawX = (sx - pad) / cellSize + gridOffsetX;
+    const rawY = originTopLeft
+      ? (sy - pad) / cellSize + gridOffsetY
+      : gridOffsetY + gridHeight - (sy - pad) / cellSize;
+    if (freeMode || rulerMode) {
+      // Sub-grid precision: round to 0.1
+      return {
+        gx: Math.round(rawX * 10) / 10,
+        gy: Math.round(rawY * 10) / 10,
+      };
+    }
     return {
-      gx: Math.round((sx - pad) / cellSize + gridOffsetX),
-      gy: originTopLeft
-        ? Math.round((sy - pad) / cellSize + gridOffsetY)
-        : Math.round(gridOffsetY + gridHeight - (sy - pad) / cellSize),
+      gx: Math.round(rawX),
+      gy: Math.round(rawY),
     };
   };
 
   const handleClick = (gx: number, gy: number) => {
+    // Ruler mode: collect start/end points
+    if (rulerMode) {
+      if (!rulerStart) {
+        setRulerStart({ x: gx, y: gy });
+      } else {
+        setRulerLines(prev => [...prev, { start: rulerStart, end: { x: gx, y: gy } }]);
+        setRulerStart(null);
+      }
+      return;
+    }
     if (isClosed) return; // In closed/edit mode, no new vertices
     // Close polygon by clicking first vertex
     if (vertices.length >= 3 && gx === vertices[0].x && gy === vertices[0].y) {
       setIsClosed(true);
       return;
     }
-    if (vertices.some(v => v.x === gx && v.y === gy)) return;
+    // In free mode, allow same fractional positions
+    if (!freeMode && vertices.some(v => v.x === gx && v.y === gy)) return;
     onChange([...vertices, { x: gx, y: gy }]);
   };
 
@@ -493,8 +528,11 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
     const sx = e.clientX - rect.left;
     const sy = e.clientY - rect.top;
     const { gx, gy } = fromSvg(sx, sy);
-    const snappedX = Math.max(gridOffsetX, Math.min(gridOffsetX + gridWidth, gx));
-    const snappedY = Math.max(gridOffsetY, Math.min(gridOffsetY + gridHeight, gy));
+    // Clamp to grid bounds; in free mode allow fractional
+    const clampX = (v: number) => Math.max(gridOffsetX, Math.min(gridOffsetX + gridWidth, v));
+    const clampY = (v: number) => Math.max(gridOffsetY, Math.min(gridOffsetY + gridHeight, v));
+    const snappedX = freeMode ? clampX(Math.round(gx * 10) / 10) : clampX(gx);
+    const snappedY = freeMode ? clampY(Math.round(gy * 10) / 10) : clampY(gy);
     if (activeIdx !== null) {
       if (snappedX !== vertices[activeIdx].x || snappedY !== vertices[activeIdx].y) {
         const next = [...vertices];
@@ -525,9 +563,11 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
       // Deselect
       setSelectedOtherId(null);
       setOtherEditVertices([]);
+      onSelectOtherWorkspace?.(null);
     } else {
       setSelectedOtherId(op.id);
       setOtherEditVertices([...op.vertices]);
+      onSelectOtherWorkspace?.(op.id);
     }
   };
 
@@ -562,8 +602,8 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
         )}
       </div>
 
-      {/* Zoom controls + PDF */}
-      <div className="flex items-center gap-1.5">
+      {/* Zoom controls + tools + PDF */}
+      <div className="flex items-center gap-1.5 flex-wrap">
         <span className="text-[9px] text-muted-foreground">Zoom:</span>
         {[1, 1.5, 2, 2.5].map(z => (
           <Button
@@ -576,6 +616,34 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             {z === 1 ? '1×' : `${z}×`}
           </Button>
         ))}
+        <span className="text-[9px] text-muted-foreground ml-2">Herramientas:</span>
+        <Button
+          variant={rulerMode ? 'default' : 'outline'}
+          size="sm"
+          className="h-5 text-[10px] px-2 gap-0.5"
+          style={rulerMode ? { backgroundColor: 'hsl(30 90% 50%)', borderColor: 'hsl(30 90% 50%)' } : {}}
+          onClick={() => { setRulerMode(!rulerMode); setRulerStart(null); }}
+        >
+          📏 Regla
+        </Button>
+        <Button
+          variant={freeMode ? 'default' : 'outline'}
+          size="sm"
+          className="h-5 text-[10px] px-2 gap-0.5"
+          onClick={() => setFreeMode(!freeMode)}
+        >
+          🎯 Libre
+        </Button>
+        {rulerLines.length > 0 && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-5 text-[10px] px-2"
+            onClick={() => { setRulerLines([]); setRulerStart(null); }}
+          >
+            Borrar reglas ({rulerLines.length})
+          </Button>
+        )}
         {pdfTitle && (
           <GridPdfExport
             title={pdfTitle}
@@ -589,10 +657,12 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
       {/* Status indicator */}
       <div className="flex items-center gap-1.5">
         <Badge variant={isClosed ? 'default' : 'outline'} className="text-[9px] h-4 gap-0.5">
-          {isClosed ? '✅ Cerrado' : '⏳ Abierto'}
+          {isClosed ? '✅ Cerrado' : rulerMode ? '📏 Regla' : '⏳ Abierto'}
         </Badge>
         <span className="text-[9px] text-muted-foreground">
           {vertices.length} vértice{vertices.length !== 1 ? 's' : ''}
+          {freeMode && ' · modo libre'}
+          {rulerStart && ' · pulsa 2º punto de la regla'}
         </span>
       </div>
 
@@ -698,7 +768,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             })
           )}
 
-          {/* Perimeter polygon from the section */}
+          {/* Perimeter polygon from the section — outline only, no vertex labels */}
           {perimeterPolygon && perimeterPolygon.length >= 3 && (
             <polygon
               points={perimeterPolygon.map(v => { const { sx, sy } = toSvg(v.x, v.y); return `${sx},${sy}`; }).join(' ')}
@@ -709,17 +779,11 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
               className="pointer-events-none"
             />
           )}
-          {/* Perimeter vertex markers */}
+          {/* Perimeter vertex dots only (no coordinate labels to avoid visual clutter) */}
           {perimeterPolygon && perimeterPolygon.map((v, i) => {
             const { sx, sy } = toSvg(v.x, v.y);
             return (
-              <g key={`pv-${i}`}>
-                <circle cx={sx} cy={sy} r={4} fill="hsl(var(--primary))" opacity={0.6} className="pointer-events-none" />
-                <text x={sx} y={sy - 8} textAnchor="middle"
-                  className="text-[7px] fill-primary font-bold select-none pointer-events-none">
-                  ({v.x},{v.y})
-                </text>
-              </g>
+              <circle key={`pv-${i}`} cx={sx} cy={sy} r={3} fill="hsl(var(--primary))" opacity={0.4} className="pointer-events-none" />
             );
           })}
 
@@ -1021,8 +1085,50 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             });
           })()}
 
-          {/* Preview line from last vertex to hover (only while drawing) */}
-          {!isClosed && vertices.length > 0 && hoverCell && !vertices.some(v => v.x === hoverCell.x && v.y === hoverCell.y) && (() => {
+          {/* ── Ruler lines ── */}
+          {rulerLines.map((rl, ri) => {
+            const { sx: rx1, sy: ry1 } = toSvg(rl.start.x, rl.start.y);
+            const { sx: rx2, sy: ry2 } = toSvg(rl.end.x, rl.end.y);
+            const rLenMm = Math.round(Math.sqrt(((rl.end.x - rl.start.x) * hScale) ** 2 + ((rl.end.y - rl.start.y) * vScale) ** 2) * 1000);
+            const rmx = (rx1 + rx2) / 2;
+            const rmy = (ry1 + ry2) / 2;
+            const rdx = rx2 - rx1;
+            const rdy = ry2 - ry1;
+            const rAngle = Math.atan2(rdy, rdx) * (180 / Math.PI);
+            const rRot = (rAngle > 90 || rAngle < -90) ? rAngle + 180 : rAngle;
+            return (
+              <g key={`ruler-${ri}`} className="pointer-events-none">
+                <line x1={rx1} y1={ry1} x2={rx2} y2={ry2}
+                  stroke={RULER_COLOR} strokeWidth={1.5} strokeDasharray="6 3" />
+                <circle cx={rx1} cy={ry1} r={3.5} fill={RULER_COLOR} />
+                <circle cx={rx2} cy={ry2} r={3.5} fill={RULER_COLOR} />
+                <text x={rmx} y={rmy - 8} textAnchor="middle" dominantBaseline="central"
+                  transform={`rotate(${rRot}, ${rmx}, ${rmy - 8})`}
+                  fill={RULER_COLOR} fontSize={8} fontWeight="bold" className="select-none">
+                  {rLenMm} mm
+                </text>
+              </g>
+            );
+          })}
+          {/* Ruler start point preview */}
+          {rulerMode && rulerStart && (() => {
+            const { sx, sy } = toSvg(rulerStart.x, rulerStart.y);
+            return (
+              <>
+                <circle cx={sx} cy={sy} r={5} fill={RULER_COLOR} stroke="hsl(var(--background))" strokeWidth={2} />
+                {hoverCell && (
+                  <line
+                    x1={sx} y1={sy}
+                    x2={toSvg(hoverCell.x, hoverCell.y).sx}
+                    y2={toSvg(hoverCell.x, hoverCell.y).sy}
+                    stroke={RULER_COLOR} strokeWidth={1} strokeDasharray="3 3" opacity={0.6} />
+                )}
+              </>
+            );
+          })()}
+
+          {/* Preview line from last vertex to hover (only while drawing, not ruler mode) */}
+          {!isClosed && !rulerMode && vertices.length > 0 && hoverCell && (() => {
             const last = vertices[vertices.length - 1];
             const { sx: x1, sy: y1 } = toSvg(last.x, last.y);
             const { sx: x2, sy: y2 } = toSvg(hoverCell.x, hoverCell.y);
@@ -1032,8 +1138,8 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             );
           })()}
 
-          {/* Clickable intersections (drawing mode) or draggable vertices (edit mode) */}
-          {!isClosed && Array.from({ length: gridHeight + 1 }).map((_, iy) =>
+          {/* Clickable intersections (drawing mode, grid snap) */}
+          {!isClosed && !freeMode && !rulerMode && Array.from({ length: gridHeight + 1 }).map((_, iy) =>
             Array.from({ length: gridWidth + 1 }).map((_, ix) => {
               const gx = ix + gridOffsetX;
               const gy = iy + gridOffsetY;
@@ -1041,6 +1147,9 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
               const isPlaced = vertices.some(v => v.x === gx && v.y === gy);
               const isHover = hoverCell?.x === gx && hoverCell?.y === gy;
               const isFirstClose = isNearFirst && gx === vertices[0].x && gy === vertices[0].y;
+              // Skip if a selected sibling vertex occupies this position
+              const sibVertexHere = selectedOtherId && otherEditVertices.some(v => v.x === gx && v.y === gy);
+              if (sibVertexHere) return null;
               return (
                 <g key={`pt-${gx}-${gy}`}>
                   <circle
@@ -1072,6 +1181,47 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             })
           )}
 
+          {/* Free mode / Ruler mode: transparent overlay for clicking anywhere */}
+          {(freeMode || rulerMode) && !isClosed && (
+            <rect
+              x={pad}
+              y={pad}
+              width={gridWidth * cellSize}
+              height={gridHeight * cellSize}
+              fill="transparent"
+              className={rulerMode ? 'cursor-crosshair' : 'cursor-cell'}
+              onClick={(e) => {
+                if (!svgRef.current) return;
+                const rct = svgRef.current.getBoundingClientRect();
+                const sx = e.clientX - rct.left;
+                const sy = e.clientY - rct.top;
+                const { gx, gy } = fromSvg(sx, sy);
+                handleClick(gx, gy);
+              }}
+              onMouseMove={(e) => {
+                if (!svgRef.current) return;
+                const rct = svgRef.current.getBoundingClientRect();
+                const sx = e.clientX - rct.left;
+                const sy = e.clientY - rct.top;
+                const { gx, gy } = fromSvg(sx, sy);
+                setHoverCell({ x: gx, y: gy });
+              }}
+              onMouseLeave={() => setHoverCell(null)}
+            />
+          )}
+          {/* Free mode: show placed vertex markers */}
+          {(freeMode || rulerMode) && !isClosed && vertices.map((v, vi) => {
+            const { sx, sy } = toSvg(v.x, v.y);
+            return (
+              <g key={`fv-${vi}`}>
+                <circle cx={sx} cy={sy} r={5} fill="hsl(200 80% 50%)" stroke="hsl(var(--background))" strokeWidth={1.5} />
+                <text x={sx} y={sy - 7} textAnchor="middle" className="text-[7px] font-bold select-none pointer-events-none" fill="hsl(200 80% 50%)">
+                  {vi + 1}
+                </text>
+              </g>
+            );
+          })}
+
           {/* Draggable vertices when closed */}
           {isClosed && vertices.map((v, i) => {
             const { sx, sy } = toSvg(v.x, v.y);
@@ -1093,6 +1243,34 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                 </text>
               </g>
             );
+          })}
+
+          {/* ── Sibling workspace vertices ON TOP for guaranteed interactivity ── */}
+          {otherPolygons.map((op) => {
+            if (selectedOtherId !== op.id) return null;
+            const verts = otherEditVertices;
+            return verts.map((v, i) => {
+              const { sx, sy } = toSvg(v.x, v.y);
+              const isDragging = draggingOtherIdx === i;
+              return (
+                <g key={`sib-top-${op.id}-${i}`}>
+                  <circle
+                    cx={sx} cy={sy} r={isDragging ? 8 : 7}
+                    fill={isDragging ? 'hsl(var(--chart-2))' : 'hsl(var(--primary))'}
+                    stroke="hsl(var(--background))"
+                    strokeWidth={2.5}
+                    className="cursor-grab active:cursor-grabbing"
+                    onClick={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); setDraggingOtherIdx(i); }}
+                  />
+                  <text x={sx} y={sy - 10} textAnchor="middle"
+                    className="text-[7px] font-bold select-none pointer-events-none"
+                    fill="hsl(var(--primary))">
+                    {i + 1} ({hAxisLabel}{v.x},{vAxisLabel}{v.y})
+                  </text>
+                </g>
+              );
+            });
           })}
 
           {/* ── External perimeter dimension lines (total width & height of all polygons) ── */}
@@ -1215,7 +1393,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
         </svg>
       </div>
 
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1.5 flex-wrap">
         <Button variant="outline" size="sm" className="h-5 text-[10px] gap-0.5" onClick={handleUndo}
           disabled={vertices.length === 0}>
           {isClosed ? 'Reabrir' : 'Deshacer'}
@@ -1225,11 +1403,14 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
           Limpiar
         </Button>
         <span className="text-[9px] text-muted-foreground ml-auto">
-          {isClosed
-            ? 'Arrastra vértices · Deshacer para reabrir'
-            : vertices.length >= 3
-              ? 'Pulsa primer vértice para cerrar'
-              : `${vertices.length}/3 mín.`}
+          {rulerMode
+            ? rulerStart ? 'Pulsa 2º punto de la regla' : 'Pulsa 1er punto de la regla'
+            : isClosed
+              ? 'Arrastra vértices · Deshacer para reabrir'
+              : vertices.length >= 3
+                ? 'Pulsa primer vértice para cerrar'
+                : `${vertices.length}/3 mín.`}
+          {freeMode && ' · Modo libre'}
         </span>
       </div>
     </div>
@@ -1258,6 +1439,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
   const [newSectionName, setNewSectionName] = useState('');
   const [newSectionAxisValue, setNewSectionAxisValue] = useState('');
   const [inputMode, setInputMode] = useState<'manual' | 'grid'>('manual');
+  const [selectedOtherWorkspaceId, setSelectedOtherWorkspaceId] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
 
@@ -2043,17 +2225,43 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                     .map(other => ({ id: other.id, name: other.name, vertices: other.floor_polygon! }))}
                   onSwitchRoom={switchGridEditRoom}
                   onOtherPolygonChange={handleOtherPolygonChangeZ}
-                  onOtherPolygonRename={handleOtherPolygonRename}
-                  perimeterPolygon={getSectionPerimeter(r.vertical_section_id)}
-                  pdfTitle="Espacio de trabajo"
-                  pdfSubtitle={r.name}
-                  onWallClick={(idx) => {
-                    setSelectedWallMap(prev => ({ ...prev, [r.id]: idx }));
-                    if (!expandedIds.has(r.id)) {
-                      setExpandedIds(prev => { const n = new Set(prev); n.add(r.id); return n; });
-                    }
-                  }}
-                />
+                   onOtherPolygonRename={handleOtherPolygonRename}
+                   onSelectOtherWorkspace={setSelectedOtherWorkspaceId}
+                   perimeterPolygon={getSectionPerimeter(r.vertical_section_id)}
+                   pdfTitle="Espacio de trabajo"
+                   pdfSubtitle={r.name}
+                   onWallClick={(idx) => {
+                     setSelectedWallMap(prev => ({ ...prev, [r.id]: idx }));
+                     if (!expandedIds.has(r.id)) {
+                       setExpandedIds(prev => { const n = new Set(prev); n.add(r.id); return n; });
+                     }
+                   }}
+                 />
+                 {/* Sibling workspace inline property editor */}
+                 {selectedOtherWorkspaceId && (() => {
+                   const sibRoom = rooms.find(rm => rm.id === selectedOtherWorkspaceId);
+                   if (!sibRoom) return null;
+                   const sibWalls = allWalls.filter(w => w.room_id === sibRoom.id);
+                   const sibPoly = sibRoom.floor_polygon;
+                   const sibEdgeCount = sibPoly ? sibPoly.length : 0;
+                   return (
+                     <div className="border rounded p-2 space-y-1.5 bg-accent/10">
+                       <div className="flex items-center gap-2">
+                         <span className="text-[10px] font-semibold">✏️ Editando: {sibRoom.name}</span>
+                         <Button variant="ghost" size="sm" className="h-5 text-[9px]" onClick={() => setSelectedOtherWorkspaceId(null)}>✕ Cerrar</Button>
+                       </div>
+                       <FaceRow label="🟫 Suelo" type={getFloorType(sibRoom)} options={FLOOR_CEILING_TYPES} onChange={(v) => updateFloorCeiling(sibRoom.id, 'has_floor', v as FloorCeilingType)} />
+                       {Array.from({ length: sibEdgeCount }).map((_, i) => {
+                         const dbWallIndex = i + 1;
+                         const wall = sibWalls.find(w => w.wall_index === dbWallIndex);
+                         return (
+                           <FaceRow key={i} label={`🧱 P${i + 1} ${wallLabel(i, sibEdgeCount)}`} type={normalizeWallType(wall?.wall_type)} options={WALL_TYPES} onChange={(v) => ensureAndUpdateWallType(sibRoom.id, i, v, wall?.id)} />
+                         );
+                       })}
+                       <FaceRow label="⬜ Techo" type={getCeilingType(sibRoom)} options={FLOOR_CEILING_TYPES} onChange={(v) => updateFloorCeiling(sibRoom.id, 'has_ceiling', v as FloorCeilingType)} />
+                     </div>
+                   );
+                 })()}
                 <div className="flex items-center justify-between">
                   <div className="flex flex-wrap gap-1.5">
                     {gridEditVertices.length >= 3 && (
@@ -2139,14 +2347,40 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                       if (targetSection) openSectionEditor(targetId, targetSection);
                     }}
                     onOtherPolygonChange={(otherId, newVerts) => handleOtherPolygonChangeSection(otherId, newVerts, view.sectionId)}
-                    onOtherPolygonRename={handleOtherPolygonRename}
-                    pdfTitle={`${section.name} — ${r.name}`}
-                    pdfSubtitle={`${section.axis}=${section.axisValue}`}
-                    hAxisLabel={hLabel}
-                    vAxisLabel={vLabel}
-                    hScaleMm={scaleH}
-                    vScaleMm={scaleV}
-                  />
+                     onOtherPolygonRename={handleOtherPolygonRename}
+                     onSelectOtherWorkspace={setSelectedOtherWorkspaceId}
+                     pdfTitle={`${section.name} — ${r.name}`}
+                     pdfSubtitle={`${section.axis}=${section.axisValue}`}
+                     hAxisLabel={hLabel}
+                     vAxisLabel={vLabel}
+                     hScaleMm={scaleH}
+                     vScaleMm={scaleV}
+                   />
+                   {/* Sibling workspace inline property editor (Y/X) */}
+                   {selectedOtherWorkspaceId && (() => {
+                     const sibRoom = rooms.find(rm => rm.id === selectedOtherWorkspaceId);
+                     if (!sibRoom) return null;
+                     const sibWalls = allWalls.filter(w => w.room_id === sibRoom.id);
+                     const sibPoly = sibRoom.floor_polygon;
+                     const sibEdgeCount = sibPoly ? sibPoly.length : 0;
+                     return (
+                       <div className="border rounded p-2 space-y-1.5 bg-accent/10">
+                         <div className="flex items-center gap-2">
+                           <span className="text-[10px] font-semibold">✏️ Editando: {sibRoom.name}</span>
+                           <Button variant="ghost" size="sm" className="h-5 text-[9px]" onClick={() => setSelectedOtherWorkspaceId(null)}>✕ Cerrar</Button>
+                         </div>
+                         <FaceRow label="🟫 Suelo" type={getFloorType(sibRoom)} options={FLOOR_CEILING_TYPES} onChange={(v) => updateFloorCeiling(sibRoom.id, 'has_floor', v as FloorCeilingType)} />
+                         {Array.from({ length: sibEdgeCount }).map((_, i) => {
+                           const dbWallIndex = i + 1;
+                           const wall = sibWalls.find(w => w.wall_index === dbWallIndex);
+                           return (
+                             <FaceRow key={i} label={`🧱 P${i + 1} ${wallLabel(i, sibEdgeCount)}`} type={normalizeWallType(wall?.wall_type)} options={WALL_TYPES} onChange={(v) => ensureAndUpdateWallType(sibRoom.id, i, v, wall?.id)} />
+                           );
+                         })}
+                         <FaceRow label="⬜ Techo" type={getCeilingType(sibRoom)} options={FLOOR_CEILING_TYPES} onChange={(v) => updateFloorCeiling(sibRoom.id, 'has_ceiling', v as FloorCeilingType)} />
+                       </div>
+                     );
+                   })()}
                   <div className="flex items-center justify-between">
                     <div className="flex flex-wrap gap-1.5">
                       {sectionEditVertices.length >= 3 && (

@@ -432,6 +432,8 @@ interface GridPolygonDrawerProps {
   hScaleMm?: number;
   vScaleMm?: number;
   activeWalls?: WallData[];
+  initialRulerLines?: RulerLine[];
+  onSaveRulerLines?: (lines: RulerLine[]) => void;
 }
 
 const RULER_COLOR = 'hsl(30 90% 50%)';
@@ -447,7 +449,7 @@ const POLY_COLORS = [
   'hsl(280 60% 55%)',
 ];
 
-function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16, gridOffsetX = 0, gridOffsetY = 0, placedRooms = [], cellSizeM = 1, otherPolygons = [], activeRoomId, onSwitchRoom, onOtherPolygonChange, onOtherPolygonRename, onSelectOtherWorkspace, perimeterPolygon, activeName, originTopLeft = false, pdfTitle, pdfSubtitle, onWallClick, hAxisLabel = 'X', vAxisLabel = 'Y', hScaleMm, vScaleMm, activeWalls = [] }: GridPolygonDrawerProps) {
+function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16, gridOffsetX = 0, gridOffsetY = 0, placedRooms = [], cellSizeM = 1, otherPolygons = [], activeRoomId, onSwitchRoom, onOtherPolygonChange, onOtherPolygonRename, onSelectOtherWorkspace, perimeterPolygon, activeName, originTopLeft = false, pdfTitle, pdfSubtitle, onWallClick, hAxisLabel = 'X', vAxisLabel = 'Y', hScaleMm, vScaleMm, activeWalls = [], initialRulerLines = [], onSaveRulerLines }: GridPolygonDrawerProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null);
@@ -466,13 +468,15 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
 
   // Ruler tool state
   const [rulerMode, setRulerMode] = useState(false);
-  const [rulerLines, setRulerLines] = useState<RulerLine[]>([]);
+  const [rulerLines, setRulerLines] = useState<RulerLine[]>(initialRulerLines);
   const [rulerStart, setRulerStart] = useState<PolygonVertex | null>(null);
   // Ruler editing: dragging endpoint of existing ruler
   const [draggingRulerIdx, setDraggingRulerIdx] = useState<number | null>(null);
   const [draggingRulerEnd, setDraggingRulerEnd] = useState<'start' | 'end' | null>(null);
   // Free vertex mode — allows non-node placement
   const [freeMode, setFreeMode] = useState(false);
+  // Select/pointer mode — disables drawing, allows precise element selection
+  const [selectMode, setSelectMode] = useState(false);
   // Annotation display toggles: always show mm, optionally degrees and/or %
   const [showDegrees, setShowDegrees] = useState(false);
   const [showPercent, setShowPercent] = useState(false);
@@ -527,6 +531,8 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
   };
 
   const handleClick = (gx: number, gy: number) => {
+    // Select/pointer mode: don't add vertices, just allow inspecting
+    if (selectMode) return;
     // Ruler mode: collect start/end points
     if (rulerMode) {
       if (!rulerStart) {
@@ -682,11 +688,19 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
         ))}
         <span className="text-[9px] text-muted-foreground ml-2">Herramientas:</span>
         <Button
+          variant={selectMode ? 'default' : 'outline'}
+          size="sm"
+          className="h-5 text-[10px] px-2 gap-0.5"
+          onClick={() => { setSelectMode(!selectMode); if (!selectMode) { setRulerMode(false); setFreeMode(false); setRulerStart(null); } }}
+        >
+          🔍 Puntero
+        </Button>
+        <Button
           variant={rulerMode ? 'default' : 'outline'}
           size="sm"
           className="h-5 text-[10px] px-2 gap-0.5"
           style={rulerMode ? { backgroundColor: 'hsl(30 90% 50%)', borderColor: 'hsl(30 90% 50%)' } : {}}
-          onClick={() => { setRulerMode(!rulerMode); setRulerStart(null); }}
+          onClick={() => { setRulerMode(!rulerMode); setRulerStart(null); if (!rulerMode) setSelectMode(false); }}
         >
           📏 Regla
         </Button>
@@ -694,19 +708,31 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
           variant={freeMode ? 'default' : 'outline'}
           size="sm"
           className="h-5 text-[10px] px-2 gap-0.5"
-          onClick={() => setFreeMode(!freeMode)}
+          onClick={() => { setFreeMode(!freeMode); if (!freeMode) setSelectMode(false); }}
         >
           🎯 Libre
         </Button>
         {rulerLines.length > 0 && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-5 text-[10px] px-2"
-            onClick={() => { setRulerLines([]); setRulerStart(null); }}
-          >
-            Borrar reglas ({rulerLines.length})
-          </Button>
+          <>
+            {onSaveRulerLines && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-5 text-[10px] px-2 text-green-600 hover:text-green-700"
+                onClick={() => { onSaveRulerLines(rulerLines); toast.success(`${rulerLines.length} regla(s) guardada(s)`); }}
+              >
+                💾 Guardar reglas
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-5 text-[10px] px-2"
+              onClick={() => { setRulerLines([]); setRulerStart(null); }}
+            >
+              Borrar reglas ({rulerLines.length})
+            </Button>
+          </>
         )}
         <span className="text-[9px] text-muted-foreground ml-2">Cotas:</span>
         <Button
@@ -738,7 +764,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
       {/* Status indicator */}
       <div className="flex items-center gap-1.5">
         <Badge variant={isClosed ? 'default' : 'outline'} className="text-[9px] h-4 gap-0.5">
-          {isClosed ? '✅ Cerrado' : rulerMode ? '📏 Regla' : '⏳ Abierto'}
+          {isClosed ? '✅ Cerrado' : selectMode ? '🔍 Puntero' : rulerMode ? '📏 Regla' : '⏳ Abierto'}
         </Badge>
         <span className="text-[9px] text-muted-foreground">
           {vertices.length} vértice{vertices.length !== 1 ? 's' : ''}
@@ -1461,7 +1487,13 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             const { sx: blX, sy: blY } = toSvg(bMinX, bMaxY);
             const { sx: brX, sy: brY } = toSvg(bMaxX, bMaxY);
 
-            const dimOffset = 42; // offset outside the polygon area
+            // Grid boundary in SVG space
+            const gridTop = pad;
+            const gridBottom = pad + gridHeight * cellH;
+            const gridLeft = pad;
+            const gridRight = pad + gridWidth * cellW;
+
+            const dimOffset = 22; // offset outside the grid boundary
             const tickLen = 5;
             const dimColor = "hsl(0 70% 50%)";
 
@@ -1469,7 +1501,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
               <g className="pointer-events-none">
                 {/* ── Bottom horizontal dimension (total width) ── */}
                 {totalWidthMm > 0 && (() => {
-                  const y = Math.max(blY, brY) + dimOffset;
+                  const y = gridBottom + dimOffset;
                   return (
                     <>
                       {/* Extension lines */}
@@ -1491,7 +1523,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
 
                 {/* ── Right vertical dimension (total height) ── */}
                 {totalHeightMm > 0 && (() => {
-                  const x = Math.max(trX, brX) + dimOffset;
+                  const x = gridRight + dimOffset;
                   return (
                     <>
                       {/* Extension lines */}
@@ -1514,7 +1546,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
 
                 {/* ── Top horizontal dimension (total width) ── */}
                 {totalWidthMm > 0 && (() => {
-                  const y = Math.min(tlY, trY) - dimOffset;
+                  const y = gridTop - dimOffset;
                   return (
                     <>
                       <line x1={tlX} y1={tlY} x2={tlX} y2={y - tickLen} stroke={dimColor} strokeWidth={0.4} opacity={0.4} />
@@ -1532,7 +1564,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
 
                 {/* ── Left vertical dimension (total height) ── */}
                 {totalHeightMm > 0 && (() => {
-                  const x = Math.min(tlX, blX) - dimOffset;
+                  const x = gridLeft - dimOffset;
                   return (
                     <>
                       <line x1={tlX} y1={tlY} x2={x - tickLen} y2={tlY} stroke={dimColor} strokeWidth={0.4} opacity={0.4} />
@@ -2117,7 +2149,30 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces', budgetId] });
   };
 
-  // Handle rename from within grid editor
+  /** Save ruler lines for a workspace/section to custom_corners */
+  const saveRulerLines = async (key: string, lines: RulerLine[]) => {
+    if (!floorPlan?.id) return;
+    let parsed: any = {};
+    try {
+      parsed = typeof floorPlan.custom_corners === 'string'
+        ? JSON.parse(floorPlan.custom_corners) : (floorPlan.custom_corners || {});
+    } catch { parsed = {}; }
+    if (!parsed.rulerData) parsed.rulerData = {};
+    parsed.rulerData[key] = lines;
+    await supabase.from('budget_floor_plans').update({ custom_corners: parsed }).eq('id', floorPlan.id);
+    queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces', budgetId] });
+  };
+
+  /** Load saved ruler lines for a workspace/section */
+  const getSavedRulerLines = (key: string): RulerLine[] => {
+    if (!floorPlan?.custom_corners) return [];
+    try {
+      const parsed = typeof floorPlan.custom_corners === 'string'
+        ? JSON.parse(floorPlan.custom_corners) : floorPlan.custom_corners;
+      return parsed?.rulerData?.[key] || [];
+    } catch { return []; }
+  };
+
   const handleOtherPolygonRename = async (otherId: string, newName: string) => {
     const { error } = await supabase.from('budget_floor_plan_rooms').update({ name: newName }).eq('id', otherId);
     if (error) { toast.error('Error al renombrar'); return; }
@@ -2403,6 +2458,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                        setExpandedIds(prev => { const n = new Set(prev); n.add(r.id); return n; });
                      }
                    }}
+                   initialRulerLines={getSavedRulerLines(`z_${r.id}`)}
+                   onSaveRulerLines={(lines) => saveRulerLines(`z_${r.id}`, lines)}
                  />
                  {/* Sibling workspace inline property editor */}
                  {selectedOtherWorkspaceId && (() => {
@@ -2523,6 +2580,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                      hScaleMm={scaleH}
                      vScaleMm={scaleV}
                      activeWalls={allWalls.filter(w => w.room_id === r.id)}
+                     initialRulerLines={getSavedRulerLines(`sec_${r.id}_${view.sectionId}`)}
+                     onSaveRulerLines={(lines) => saveRulerLines(`sec_${r.id}_${view.sectionId}`, lines)}
                    />
                    {/* Sibling workspace inline property editor (Y/X) */}
                    {selectedOtherWorkspaceId && (() => {

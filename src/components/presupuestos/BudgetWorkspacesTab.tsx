@@ -1065,9 +1065,8 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
               <>
                 <polygon
                   points={vertices.map(v => { const { sx, sy } = toSvg(v.x, v.y); return `${sx},${sy}`; }).join(' ')}
-                  fill={isClosed ? 'hsl(200 80% 50% / 0.18)' : 'hsl(200 80% 50% / 0.08)'}
-                  stroke={isClosed ? 'hsl(200 80% 50%)' : 'none'}
-                  strokeWidth={isClosed ? 2 : 0}
+                  fill={isClosed ? 'hsl(200 80% 50% / 0.10)' : 'hsl(200 80% 50% / 0.05)'}
+                  stroke="none"
                   className="pointer-events-none"
                 />
                 {activeName && (

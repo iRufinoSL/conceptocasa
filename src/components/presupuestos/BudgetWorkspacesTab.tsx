@@ -821,8 +821,8 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                 <rect
                   x={rx}
                   y={rectY}
-                  width={spanW * cellSize}
-                  height={spanH * cellSize}
+                  width={spanW * cellW}
+                  height={spanH * cellH}
                   fill="hsl(var(--accent) / 0.25)"
                   stroke="hsl(var(--accent-foreground) / 0.4)"
                   strokeWidth={1}

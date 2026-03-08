@@ -1286,6 +1286,33 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                     fill={activeWs.color}>
                     {lenMm} mm{(() => { const s = edgeSlopeInfo(a, b, hScale, vScale, showDegrees, showPercent); return s ? ` · ${s}` : ''; })()}
                   </text>
+
+                  {/* Wall number badge on edge midpoint */}
+                  {isClosed && (() => {
+                    const badgeR = 8;
+                    // Position badge slightly inward from the edge center
+                    const badgeOff = -6;
+                    const bx = mx + nx * badgeOff;
+                    const by = my + ny * badgeOff;
+                    const wallTypeLabel = WALL_TYPES.find(t => t.value === activeWt)?.label || activeWt;
+                    return (
+                      <g className={selectMode ? 'cursor-pointer' : 'pointer-events-none'}
+                        onClick={selectMode && onWallSelect ? (e) => { e.stopPropagation(); onWallSelect(wallDbIdx); } : undefined}>
+                        <circle cx={bx} cy={by} r={badgeR}
+                          fill={activeWs.color} opacity={0.9}
+                          stroke="hsl(var(--background))" strokeWidth={1.5} />
+                        <text x={bx} y={by} textAnchor="middle" dominantBaseline="central"
+                          className="text-[7px] font-bold select-none"
+                          fill="hsl(var(--background))">
+                          {wallDbIdx}
+                        </text>
+                        {/* Invisible larger hitbox for easier clicking */}
+                        {selectMode && (
+                          <circle cx={bx} cy={by} r={badgeR + 6} fill="transparent" />
+                        )}
+                      </g>
+                    );
+                  })()}
                 </g>
               );
             });

@@ -2326,11 +2326,11 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                 .map(other => {
                   const existingPoly = section.polygons?.find(p => p.id === other.id);
                   if (existingPoly && existingPoly.vertices.length >= 3) {
-                    return { id: other.id, name: other.name, vertices: existingPoly.vertices.map(v => ({ x: v.x, y: v.y })) };
+                    return { id: other.id, name: other.name, vertices: existingPoly.vertices.map(v => ({ x: v.x, y: v.y })), isBase: other.is_base };
                   }
                   const defaultProj = computeDefaultProjection(other, section);
                   if (defaultProj.length >= 3) {
-                    return { id: other.id, name: other.name, vertices: defaultProj };
+                    return { id: other.id, name: other.name, vertices: defaultProj, isBase: other.is_base };
                   }
                   return null;
                 })

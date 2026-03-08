@@ -163,6 +163,12 @@ export function WallObjectsPanel({
   };
 
   const handleDelete = async (objId: string) => {
+    // Prevent deleting automatic Superficie (order 0)
+    const obj = objects.find(o => o.id === objId);
+    if (obj && obj.layer_order === 0) {
+      toast.error('La capa Superficie (orden 0) es automática y no se puede eliminar');
+      return;
+    }
     const { error } = await supabase.from('budget_wall_objects').delete().eq('id', objId);
     if (error) { toast.error('Error al eliminar'); return; }
     toast.success('Objeto eliminado');
@@ -245,11 +251,13 @@ export function WallObjectsPanel({
               </p>
             ) : (
               <div className="space-y-1">
-                {objects.map(obj => (
+                {objects.map(obj => {
+                  const isAutoSuperficie = obj.layer_order === 0;
+                  return (
                   <div
                     key={obj.id}
-                    className={`flex items-start gap-2 p-2 rounded border text-xs transition-colors hover:bg-accent/30 cursor-pointer ${obj.is_core ? 'border-primary/30 bg-primary/5' : ''}`}
-                    onClick={() => startEdit(obj)}
+                    className={`flex items-start gap-2 p-2 rounded border text-xs transition-colors cursor-pointer ${isAutoSuperficie ? 'border-accent bg-accent/10' : obj.is_core ? 'border-primary/30 bg-primary/5' : 'hover:bg-accent/30'}`}
+                    onClick={() => !isAutoSuperficie && startEdit(obj)}
                   >
                     <span className="text-muted-foreground font-mono w-5 text-center shrink-0 mt-0.5">
                       {obj.layer_order}
@@ -257,14 +265,21 @@ export function WallObjectsPanel({
                     <div className="flex-1 min-w-0 space-y-0.5">
                       <div className="flex items-center gap-1.5">
                         <span className="font-medium truncate">{obj.name}</span>
+                        {isAutoSuperficie && (
+                          <Badge variant="outline" className="text-[8px] h-3.5 px-1 gap-0.5 border-accent">
+                            Auto
+                          </Badge>
+                        )}
                         {obj.is_core && (
                           <Badge variant="default" className="text-[8px] h-3.5 px-1 gap-0.5">
                             <Star className="h-2 w-2" /> Núcleo
                           </Badge>
                         )}
-                        <Badge variant="outline" className="text-[8px] h-3.5 px-1">
-                          {OBJECT_TYPES.find(t => t.value === obj.object_type)?.label || obj.object_type}
-                        </Badge>
+                        {!isAutoSuperficie && (
+                          <Badge variant="outline" className="text-[8px] h-3.5 px-1">
+                            {OBJECT_TYPES.find(t => t.value === obj.object_type)?.label || obj.object_type}
+                          </Badge>
+                        )}
                       </div>
                       {obj.description && (
                         <p className="text-[10px] text-muted-foreground truncate">{obj.description}</p>
@@ -281,6 +296,7 @@ export function WallObjectsPanel({
                         )}
                       </div>
                     </div>
+                    {!isAutoSuperficie && (
                     <Button
                       variant="ghost"
                       size="icon"
@@ -289,8 +305,10 @@ export function WallObjectsPanel({
                     >
                       <Trash2 className="h-3 w-3" />
                     </Button>
+                    )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 

@@ -1697,7 +1697,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                 const perimFontSize = Math.round(8 * Math.max(1, zoomLevel * 0.8));
 
                 return (
-                  <g className="pointer-events-none">
+                  <g className="pointer-events-none" data-pdf-dimension="">
                     <line x1={globalLeft} y1={topY} x2={globalRight} y2={topY} stroke="hsl(0 70% 50%)" strokeWidth={1.2} />
                     <line x1={globalLeft} y1={globalTop} x2={globalLeft} y2={topY} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
                     <line x1={globalRight} y1={globalTop} x2={globalRight} y2={topY} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />

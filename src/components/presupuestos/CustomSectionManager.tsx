@@ -1113,6 +1113,10 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
             subtitle={`${section.name} (${section.axis}=${section.axisValue})`}
             containerRef={gridContainerRef}
             size="sm"
+            hAxisLabel={hLabel}
+            vAxisLabel={vLabel}
+            scaleH={scaleH}
+            scaleV={scaleV}
           />
           {/* Draw workspace directly on section */}
           <Button

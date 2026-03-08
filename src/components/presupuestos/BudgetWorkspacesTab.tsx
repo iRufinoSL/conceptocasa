@@ -3348,6 +3348,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
               const wall = roomWalls.find(w => w.wall_index === dbWallIndex);
               const edgeLen = poly ? edgeLength(poly[i], poly[(i + 1) % poly.length]) : null;
               const isWallSelected = selectedWallMap[r.id] === i;
+              const defaultHMm = (r.height || floorPlan?.default_height || 2.5) * 1000;
               return (
                 <FaceRow
                   key={i}
@@ -3357,6 +3358,9 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                   onChange={(v) => ensureAndUpdateWallType(r.id, i, v, wall?.id)}
                   highlighted={isWallSelected}
                   onLabelClick={() => setSelectedWallMap(prev => ({ ...prev, [r.id]: prev[r.id] === i ? null : i }))}
+                  heightMm={wall?.height != null ? wall.height * 1000 : null}
+                  defaultHeightMm={defaultHMm}
+                  onHeightChange={(mm) => updateWallHeight(r.id, i, mm, wall?.id)}
                 />
               );
             })}

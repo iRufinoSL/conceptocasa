@@ -1520,7 +1520,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
 
                 {/* ── Top horizontal dimension (total width) ── */}
                 {totalWidthMm > 0 && (() => {
-                  const y = Math.min(tlY, trY) - dimOffset;
+                  const y = gridTop - dimOffset;
                   return (
                     <>
                       <line x1={tlX} y1={tlY} x2={tlX} y2={y - tickLen} stroke={dimColor} strokeWidth={0.4} opacity={0.4} />

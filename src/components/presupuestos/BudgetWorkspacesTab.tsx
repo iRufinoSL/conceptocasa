@@ -1510,7 +1510,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     queryFn: async () => {
       const { data } = await supabase
         .from('budget_floor_plan_rooms')
-        .select('id, name, length, width, height, has_floor, has_ceiling, has_roof, vertical_section_id, floor_polygon')
+        .select('id, name, length, width, height, has_floor, has_ceiling, has_roof, vertical_section_id, floor_polygon, is_base')
         .eq('floor_plan_id', floorPlan!.id)
         .order('name', { ascending: true });
       return (data || []).map((r: any) => ({

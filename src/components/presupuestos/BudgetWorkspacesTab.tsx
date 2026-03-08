@@ -2571,6 +2571,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
               type={floorType}
               options={FLOOR_CEILING_TYPES}
               onChange={(v) => updateFloorCeiling(r.id, 'has_floor', v as FloorCeilingType)}
+            />
             {/* Walls — one per edge */}
             {Array.from({ length: edgeCount }).map((_, i) => {
               const dbWallIndex = i + 1;

@@ -1960,11 +1960,16 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
               {/* Name + area label */}
               <rect x={cxSvg - 30} y={cySvg - 10} width={60} height={20} rx={3}
                 fill="hsl(45 100% 50% / 0.85)" className="cursor-pointer"
+                data-pdf-workspace-name=""
                 onClick={() => !isEditingThisPoly && selectSectionPolygon(poly)} />
               <text x={cxSvg} y={cySvg - 1} textAnchor="middle" fontSize={fontSize} fontWeight={700}
-                fill="hsl(0 0% 10%)" className="pointer-events-none select-none">{poly.name}</text>
+                fill="hsl(0 0% 10%)" className="pointer-events-none select-none"
+                data-pdf-workspace-name=""
+              >{poly.name}</text>
               <text x={cxSvg} y={cySvg + 8} textAnchor="middle" fontSize={fontSize - 1} fontWeight={500}
-                fill="hsl(0 0% 25%)" className="pointer-events-none select-none">{areaVal.toFixed(2)} m²</text>
+                fill="hsl(0 0% 25%)" className="pointer-events-none select-none"
+                data-pdf-workspace-name=""
+              >{areaVal.toFixed(2)} m²</text>
               {/* Draggable vertices in edit mode */}
               {isEditingThisPoly && verts.map((v, vi) => {
                 const { sx, sy } = toSvg(v.x, v.y);

@@ -1426,7 +1426,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             })
           )}
 
-          {/* Select/pointer mode: transparent overlay for clicking on walls */}
+          {/* Select/pointer mode: transparent overlay for clicking on walls/edges */}
           {selectMode && isClosed && vertices.length >= 3 && (
             <rect
               x={pad}
@@ -1442,6 +1442,38 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                 const sy = e.clientY - rct.top;
                 const { gx, gy } = fromSvg(sx, sy);
                 handleClick(gx, gy);
+              }}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                if (!svgRef.current) return;
+                const rct = svgRef.current.getBoundingClientRect();
+                const sx = e.clientX - rct.left;
+                const sy = e.clientY - rct.top;
+                const { gx, gy } = fromSvg(sx, sy);
+                // Detect closest vertex or edge
+                let bestVDist = Infinity, bestVIdx = -1;
+                for (let i = 0; i < vertices.length; i++) {
+                  const d = Math.sqrt((gx - vertices[i].x) ** 2 + (gy - vertices[i].y) ** 2);
+                  if (d < bestVDist) { bestVDist = d; bestVIdx = i; }
+                }
+                if (bestVIdx >= 0 && bestVDist < 1.5) {
+                  setContextMenu({ screenX: e.clientX, screenY: e.clientY, type: 'vertex', index: bestVIdx });
+                  return;
+                }
+                let bestEDist = Infinity, bestEIdx = -1;
+                for (let i = 0; i < vertices.length; i++) {
+                  const j = (i + 1) % vertices.length;
+                  const a = vertices[i], b = vertices[j];
+                  const dx = b.x - a.x, dy = b.y - a.y;
+                  const lenSq = dx * dx + dy * dy;
+                  let t = lenSq > 0 ? ((gx - a.x) * dx + (gy - a.y) * dy) / lenSq : 0;
+                  t = Math.max(0, Math.min(1, t));
+                  const dist = Math.sqrt((gx - (a.x + t * (b.x - a.x))) ** 2 + (gy - (a.y + t * (b.y - a.y))) ** 2);
+                  if (dist < bestEDist) { bestEDist = dist; bestEIdx = i; }
+                }
+                if (bestEIdx >= 0 && bestEDist < 2.5) {
+                  setContextMenu({ screenX: e.clientX, screenY: e.clientY, type: 'edge', index: bestEIdx });
+                }
               }}
             />
           )}

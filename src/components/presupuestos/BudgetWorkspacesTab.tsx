@@ -173,10 +173,16 @@ function edgeLength(a: PolygonVertex, b: PolygonVertex): number {
   return Math.sqrt((b.x - a.x) ** 2 + (b.y - a.y) ** 2);
 }
 
-/** Wall label from edge index */
-function wallLabel(index: number, total: number): string {
+/** Wall label from edge index.
+ * sectionType: 'z' (top-down, origin top-left) or 'xy' (vertical cross-section, origin bottom-left)
+ * For Z: 0=Superior, 1=Derecha, 2=Inferior, 3=Izquierda
+ * For X/Y: clockwise from bottom-left → 0=Inferior, 1=Izquierda, 2=Superior, 3=Derecha
+ */
+function wallLabel(index: number, total: number, sectionType: 'z' | 'xy' = 'z'): string {
   if (total <= 4) {
-    const labels = ['Superior', 'Derecha', 'Inferior', 'Izquierda'];
+    const labels = sectionType === 'z'
+      ? ['Superior', 'Derecha', 'Inferior', 'Izquierda']
+      : ['Inferior', 'Izquierda', 'Superior', 'Derecha'];
     return labels[index] || `Pared ${index + 1}`;
   }
   return `Pared ${index + 1}`;
@@ -2304,7 +2310,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
   };
 
   /** Open the wall objects panel for a specific wall */
-  const openWallPanel = (roomId: string, wallDbIndex: number) => {
+  const openWallPanel = (roomId: string, wallDbIndex: number, sectionType: 'z' | 'xy' = 'z') => {
     const room = rooms.find(r => r.id === roomId);
     if (!room) return;
     const wall = allWalls.find(w => w.room_id === roomId && w.wall_index === wallDbIndex);
@@ -2313,7 +2319,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     setWallPanelWallId(wall?.id || null);
     setWallPanelWallIndex(wallDbIndex);
     setWallPanelWallType(normalizeWallType(wall?.wall_type));
-    setWallPanelLabel(`P${wallDbIndex} ${wallLabel(wallDbIndex - 1, edgeCount)}`);
+    setWallPanelLabel(`P${wallDbIndex} ${wallLabel(wallDbIndex - 1, edgeCount, sectionType)}`);
     setWallPanelRoomName(room.name);
     setWallPanelRoomId(roomId);
     setWallPanelOpen(true);
@@ -2835,7 +2841,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                        setExpandedIds(prev => { const n = new Set(prev); n.add(r.id); return n; });
                      }
                    }}
-                   onWallSelect={(wallDbIdx) => openWallPanel(r.id, wallDbIdx)}
+                   onWallSelect={(wallDbIdx) => openWallPanel(r.id, wallDbIdx, 'z')}
                    initialRulerLines={getSavedRulerLines(`z_${r.id}`)}
                    onSaveRulerLines={(lines) => saveRulerLines(`z_${r.id}`, lines)}
                  />
@@ -2857,13 +2863,28 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                          const dbWallIndex = i + 1;
                          const wall = sibWalls.find(w => w.wall_index === dbWallIndex);
                          return (
-                           <FaceRow key={i} label={`🧱 P${i + 1} ${wallLabel(i, sibEdgeCount)}`} type={normalizeWallType(wall?.wall_type)} options={WALL_TYPES} onChange={(v) => ensureAndUpdateWallType(sibRoom.id, i, v, wall?.id)} />
+                            <FaceRow key={i} label={`🧱 P${i + 1} ${wallLabel(i, sibEdgeCount, 'z')}`} type={normalizeWallType(wall?.wall_type)} options={WALL_TYPES} onChange={(v) => ensureAndUpdateWallType(sibRoom.id, i, v, wall?.id)} />
                          );
                        })}
                        <FaceRow label="⬜ Techo" type={getCeilingType(sibRoom)} options={FLOOR_CEILING_TYPES} onChange={(v) => updateFloorCeiling(sibRoom.id, 'has_ceiling', v as FloorCeilingType)} />
                      </div>
                    );
                  })()}
+                 {/* Inline face editor near Z grid */}
+                 {gridEditVertices.length >= 3 && (
+                   <div className="border rounded p-2 space-y-1 bg-muted/20">
+                     <p className="text-[9px] text-muted-foreground font-medium uppercase tracking-wider">Caras del volumen — {r.name}</p>
+                     <FaceRow label="🟫 Suelo" type={getFloorType(r)} options={FLOOR_CEILING_TYPES} onChange={(v) => updateFloorCeiling(r.id, 'has_floor', v as FloorCeilingType)} />
+                     {Array.from({ length: gridEditVertices.length }).map((_, i) => {
+                       const dbWallIndex = i + 1;
+                       const wall = roomWalls.find(w => w.wall_index === dbWallIndex);
+                       return (
+                         <FaceRow key={i} label={`🧱 P${i + 1} ${wallLabel(i, gridEditVertices.length, 'z')}`} type={normalizeWallType(wall?.wall_type)} options={WALL_TYPES} onChange={(v) => ensureAndUpdateWallType(r.id, i, v, wall?.id)} />
+                       );
+                     })}
+                     <FaceRow label={r.has_roof ? '🏠 Techo (cubierta)' : '⬜ Techo'} type={getCeilingType(r)} options={FLOOR_CEILING_TYPES} onChange={(v) => updateFloorCeiling(r.id, 'has_ceiling', v as FloorCeilingType)} />
+                   </div>
+                 )}
                 <div className="flex items-center justify-between">
                   <div className="flex flex-wrap gap-1.5">
                     {gridEditVertices.length >= 3 && (
@@ -2960,7 +2981,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                      activeWalls={allWalls.filter(w => w.room_id === r.id)}
                      initialRulerLines={getSavedRulerLines(`sec_${r.id}_${view.sectionId}`)}
                      onSaveRulerLines={(lines) => saveRulerLines(`sec_${r.id}_${view.sectionId}`, lines)}
-                     onWallSelect={(wallDbIdx) => openWallPanel(r.id, wallDbIdx)}
+                     onWallSelect={(wallDbIdx) => openWallPanel(r.id, wallDbIdx, 'xy')}
                    />
                    {/* Sibling workspace inline property editor (Y/X) */}
                    {selectedOtherWorkspaceId && (() => {
@@ -2980,13 +3001,28 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                            const dbWallIndex = i + 1;
                            const wall = sibWalls.find(w => w.wall_index === dbWallIndex);
                            return (
-                             <FaceRow key={i} label={`🧱 P${i + 1} ${wallLabel(i, sibEdgeCount)}`} type={normalizeWallType(wall?.wall_type)} options={WALL_TYPES} onChange={(v) => ensureAndUpdateWallType(sibRoom.id, i, v, wall?.id)} />
+                             <FaceRow key={i} label={`🧱 P${i + 1} ${wallLabel(i, sibEdgeCount, 'xy')}`} type={normalizeWallType(wall?.wall_type)} options={WALL_TYPES} onChange={(v) => ensureAndUpdateWallType(sibRoom.id, i, v, wall?.id)} />
                            );
                          })}
                          <FaceRow label="⬜ Techo" type={getCeilingType(sibRoom)} options={FLOOR_CEILING_TYPES} onChange={(v) => updateFloorCeiling(sibRoom.id, 'has_ceiling', v as FloorCeilingType)} />
                        </div>
                      );
                    })()}
+                   {/* Inline face editor near Y/X grid */}
+                   {sectionEditVertices.length >= 3 && (
+                     <div className="border rounded p-2 space-y-1 bg-muted/20">
+                       <p className="text-[9px] text-muted-foreground font-medium uppercase tracking-wider">Caras del volumen — {r.name}</p>
+                       <FaceRow label="🟫 Suelo" type={getFloorType(r)} options={FLOOR_CEILING_TYPES} onChange={(v) => updateFloorCeiling(r.id, 'has_floor', v as FloorCeilingType)} />
+                       {Array.from({ length: sectionEditVertices.length }).map((_, i) => {
+                         const dbWallIndex = i + 1;
+                         const wall = roomWalls.find(w => w.wall_index === dbWallIndex);
+                         return (
+                           <FaceRow key={i} label={`🧱 P${i + 1} ${wallLabel(i, sectionEditVertices.length, 'xy')}`} type={normalizeWallType(wall?.wall_type)} options={WALL_TYPES} onChange={(v) => ensureAndUpdateWallType(r.id, i, v, wall?.id)} />
+                         );
+                       })}
+                       <FaceRow label={r.has_roof ? '🏠 Techo (cubierta)' : '⬜ Techo'} type={getCeilingType(r)} options={FLOOR_CEILING_TYPES} onChange={(v) => updateFloorCeiling(r.id, 'has_ceiling', v as FloorCeilingType)} />
+                     </div>
+                   )}
                   <div className="flex items-center justify-between">
                     <div className="flex flex-wrap gap-1.5">
                       {sectionEditVertices.length >= 3 && (
@@ -3063,7 +3099,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
               return (
                 <FaceRow
                   key={i}
-                  label={`🧱 P${i + 1} ${wallLabel(i, edgeCount)}${edgeLen ? ` (${edgeLen.toFixed(2)}m)` : ''}`}
+                  label={`🧱 P${i + 1} ${wallLabel(i, edgeCount, 'z')}${edgeLen ? ` (${edgeLen.toFixed(2)}m)` : ''}`}
                   type={normalizeWallType(wall?.wall_type)}
                   options={WALL_TYPES}
                   onChange={(v) => ensureAndUpdateWallType(r.id, i, v, wall?.id)}

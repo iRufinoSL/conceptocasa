@@ -200,7 +200,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
   const [wallPatterns, setWallPatterns] = useState<Map<string, string>>(new Map());
   useEffect(() => {
     if (!rooms?.length) return;
-    const roomIds = rooms.filter(r => !r.isBase).map(r => r.id);
+    const roomIds = rooms.map(r => r.id);
     if (!roomIds.length) return;
     (async () => {
       const { data: walls } = await supabase

@@ -555,9 +555,11 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
       // Deselect
       setSelectedOtherId(null);
       setOtherEditVertices([]);
+      onSelectOtherWorkspace?.(null);
     } else {
       setSelectedOtherId(op.id);
       setOtherEditVertices([...op.vertices]);
+      onSelectOtherWorkspace?.(op.id);
     }
   };
 

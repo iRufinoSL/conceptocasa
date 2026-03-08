@@ -363,6 +363,11 @@ interface OtherPolygon {
   vertices: PolygonVertex[];
 }
 
+interface RulerLine {
+  start: PolygonVertex;
+  end: PolygonVertex;
+}
+
 interface GridPolygonDrawerProps {
   vertices: PolygonVertex[];
   onChange: (vertices: PolygonVertex[]) => void;
@@ -377,6 +382,7 @@ interface GridPolygonDrawerProps {
   onSwitchRoom?: (roomId: string) => void;
   onOtherPolygonChange?: (id: string, vertices: PolygonVertex[]) => void;
   onOtherPolygonRename?: (id: string, newName: string) => void;
+  onSelectOtherWorkspace?: (id: string | null) => void;
   perimeterPolygon?: PolygonVertex[];
   activeName?: string;
   originTopLeft?: boolean;
@@ -389,6 +395,8 @@ interface GridPolygonDrawerProps {
   vScaleMm?: number;
 }
 
+const RULER_COLOR = 'hsl(30 90% 50%)';
+
 const POLY_COLORS = [
   'hsl(var(--chart-1))',
   'hsl(var(--chart-2))',
@@ -400,7 +408,7 @@ const POLY_COLORS = [
   'hsl(280 60% 55%)',
 ];
 
-function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16, gridOffsetX = 0, gridOffsetY = 0, placedRooms = [], cellSizeM = 1, otherPolygons = [], activeRoomId, onSwitchRoom, onOtherPolygonChange, onOtherPolygonRename, perimeterPolygon, activeName, originTopLeft = false, pdfTitle, pdfSubtitle, onWallClick, hAxisLabel = 'X', vAxisLabel = 'Y', hScaleMm, vScaleMm }: GridPolygonDrawerProps) {
+function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16, gridOffsetX = 0, gridOffsetY = 0, placedRooms = [], cellSizeM = 1, otherPolygons = [], activeRoomId, onSwitchRoom, onOtherPolygonChange, onOtherPolygonRename, onSelectOtherWorkspace, perimeterPolygon, activeName, originTopLeft = false, pdfTitle, pdfSubtitle, onWallClick, hAxisLabel = 'X', vAxisLabel = 'Y', hScaleMm, vScaleMm }: GridPolygonDrawerProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null);

@@ -468,7 +468,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
 
   // Ruler tool state
   const [rulerMode, setRulerMode] = useState(false);
-  const [rulerLines, setRulerLines] = useState<RulerLine[]>([]);
+  const [rulerLines, setRulerLines] = useState<RulerLine[]>(initialRulerLines);
   const [rulerStart, setRulerStart] = useState<PolygonVertex | null>(null);
   // Ruler editing: dragging endpoint of existing ruler
   const [draggingRulerIdx, setDraggingRulerIdx] = useState<number | null>(null);

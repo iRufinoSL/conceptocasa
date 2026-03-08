@@ -829,8 +829,8 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                   rx={2}
                 />
                 <text
-                  x={rx + (spanW * cellSize) / 2}
-                  y={rectY + (spanH * cellSize) / 2}
+                  x={rx + (spanW * cellW) / 2}
+                  y={rectY + (spanH * cellH) / 2}
                   textAnchor="middle"
                   dominantBaseline="central"
                   className="text-[7px] fill-accent-foreground font-medium select-none pointer-events-none"

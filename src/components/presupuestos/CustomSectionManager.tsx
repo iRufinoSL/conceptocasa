@@ -1599,12 +1599,15 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                                 <circle cx={offX} cy={offY} r={6}
                                   fill={isThisWallSelected ? (isHoriz ? 'hsl(150 70% 40%)' : 'hsl(30 80% 50%)') : 'hsl(var(--muted-foreground))'}
                                   className="cursor-pointer"
+                                  data-pdf-wall-number=""
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     handleWallEdgeClick(room, i, currGrid, nextGrid, mx, my);
                                   }}
                                 />
-                                <text x={offX} y={offY} textAnchor="middle" dominantBaseline="central" fill="hsl(var(--primary-foreground))" fontSize="7" fontWeight="bold" className="pointer-events-none select-none">
+                                <text x={offX} y={offY} textAnchor="middle" dominantBaseline="central" fill="hsl(var(--primary-foreground))" fontSize="7" fontWeight="bold" className="pointer-events-none select-none"
+                                  data-pdf-wall-number=""
+                                >
                                   {i + 1}
                                 </text>
                               </>

@@ -1497,7 +1497,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
 
                 {/* ── Right vertical dimension (total height) ── */}
                 {totalHeightMm > 0 && (() => {
-                  const x = Math.max(trX, brX) + dimOffset;
+                  const x = gridRight + dimOffset;
                   return (
                     <>
                       {/* Extension lines */}

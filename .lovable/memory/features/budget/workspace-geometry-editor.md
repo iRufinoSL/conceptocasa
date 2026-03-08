@@ -14,9 +14,19 @@ Las celdas de la cuadrícula reflejan la proporción real entre ejes. En seccion
 - **Manual**: Clic en cuadrícula para marcar vértices. Doble clic cierra la figura.
 
 ### Herramientas de cuadrícula
+- **Puntero (🔍)**: Selección precisa de vértices y aristas. Clic en arista inserta vértice (divide). Clic en vértice lo selecciona. Clic derecho/pulsación larga abre menú contextual.
 - **Regla (📏)**: Líneas de medición en naranja (`hsl(30 90% 50%)`), aísla interacción
 - **Modo Libre (🎯)**: Vértices en posiciones arbitrarias (precisión 0.1 unidades)
 - **Zoom** (1x-3x), fondo de ajedrez, expansión manual
+
+### Edición de polígonos cerrados
+- **Arrastrar vértices**: Clic y arrastrar para mover vértices existentes
+- **Doble clic en vértice**: Abre editor numérico de coordenadas (X, Y) con inputs inline
+- **Clic en arista (Puntero)**: Inserta nuevo vértice en el punto de clic, dividiendo la arista en dos segmentos
+- **Menú contextual** (clic derecho o pulsación larga): 
+  - En vértice: Editar coordenadas, Eliminar vértice, Mover vértice
+  - En arista: Dividir aquí (inserta vértice en punto medio), Editar tipo de pared
+- **Eliminar vértice**: Disponible desde menú contextual o botón inferior cuando hay un vértice seleccionado (mínimo 3 vértices)
 
 ### Anotaciones de pendiente/ángulo
 Junto a cada medida en mm de los lados de polígonos y líneas de regla, se pueden mostrar opcionalmente:

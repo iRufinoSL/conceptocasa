@@ -2852,8 +2852,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
         budgetId={budgetId}
         module="workspaces"
         onRestore={handleRestoreBackup}
-
-
+      />
       {/* Delete with backup dialog */}
       {deleteTarget && (
         <DeleteWithBackupDialog

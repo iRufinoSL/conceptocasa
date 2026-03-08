@@ -2515,6 +2515,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                        setExpandedIds(prev => { const n = new Set(prev); n.add(r.id); return n; });
                      }
                    }}
+                   onWallSelect={(wallDbIdx) => openWallPanel(r.id, wallDbIdx)}
                    initialRulerLines={getSavedRulerLines(`z_${r.id}`)}
                    onSaveRulerLines={(lines) => saveRulerLines(`z_${r.id}`, lines)}
                  />

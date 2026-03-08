@@ -2966,7 +2966,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                      activeWalls={allWalls.filter(w => w.room_id === r.id)}
                      initialRulerLines={getSavedRulerLines(`sec_${r.id}_${view.sectionId}`)}
                      onSaveRulerLines={(lines) => saveRulerLines(`sec_${r.id}_${view.sectionId}`, lines)}
-                     onWallSelect={(wallDbIdx) => openWallPanel(r.id, wallDbIdx)}
+                     onWallSelect={(wallDbIdx) => openWallPanel(r.id, wallDbIdx, 'xy')}
                    />
                    {/* Sibling workspace inline property editor (Y/X) */}
                    {selectedOtherWorkspaceId && (() => {

@@ -1567,11 +1567,18 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                 return (
                   <g key={room.id}>
                     {/* Fill polygon (no stroke — edges drawn individually below) */}
-                    <polygon
-                      points={points}
-                      fill="hsl(var(--primary) / 0.12)"
-                      stroke="none"
-                      className="pointer-events-none"
+                    {(() => {
+                      const patId = wallPatterns.get(room.id);
+                      const pat = patId ? getPatternById(patId) : undefined;
+                      return (
+                        <polygon
+                          points={points}
+                          fill={pat ? `url(#wall-pattern-${pat.id})` : 'hsl(var(--primary) / 0.12)'}
+                          stroke="none"
+                          className="pointer-events-none"
+                        />
+                      );
+                    })()}
                     />
 
                     {/* Wall edges — CLICKABLE to assign to Y/X section */}

@@ -2049,6 +2049,7 @@ export type Database = {
           name: string
           object_type: string
           surface_m2: number | null
+          thickness_mm: number | null
           updated_at: string
           visual_pattern: string | null
           volume_m3: number | null
@@ -2064,6 +2065,7 @@ export type Database = {
           name: string
           object_type?: string
           surface_m2?: number | null
+          thickness_mm?: number | null
           updated_at?: string
           visual_pattern?: string | null
           volume_m3?: number | null
@@ -2079,6 +2081,7 @@ export type Database = {
           name?: string
           object_type?: string
           surface_m2?: number | null
+          thickness_mm?: number | null
           updated_at?: string
           visual_pattern?: string | null
           volume_m3?: number | null

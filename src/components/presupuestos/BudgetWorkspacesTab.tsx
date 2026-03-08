@@ -684,11 +684,19 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
         ))}
         <span className="text-[9px] text-muted-foreground ml-2">Herramientas:</span>
         <Button
+          variant={selectMode ? 'default' : 'outline'}
+          size="sm"
+          className="h-5 text-[10px] px-2 gap-0.5"
+          onClick={() => { setSelectMode(!selectMode); if (!selectMode) { setRulerMode(false); setFreeMode(false); setRulerStart(null); } }}
+        >
+          🔍 Puntero
+        </Button>
+        <Button
           variant={rulerMode ? 'default' : 'outline'}
           size="sm"
           className="h-5 text-[10px] px-2 gap-0.5"
           style={rulerMode ? { backgroundColor: 'hsl(30 90% 50%)', borderColor: 'hsl(30 90% 50%)' } : {}}
-          onClick={() => { setRulerMode(!rulerMode); setRulerStart(null); }}
+          onClick={() => { setRulerMode(!rulerMode); setRulerStart(null); if (!rulerMode) setSelectMode(false); }}
         >
           📏 Regla
         </Button>
@@ -696,7 +704,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
           variant={freeMode ? 'default' : 'outline'}
           size="sm"
           className="h-5 text-[10px] px-2 gap-0.5"
-          onClick={() => setFreeMode(!freeMode)}
+          onClick={() => { setFreeMode(!freeMode); if (!freeMode) setSelectMode(false); }}
         >
           🎯 Libre
         </Button>

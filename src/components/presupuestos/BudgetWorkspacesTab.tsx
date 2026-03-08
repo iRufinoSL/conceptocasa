@@ -2149,7 +2149,30 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces', budgetId] });
   };
 
-  // Handle rename from within grid editor
+  /** Save ruler lines for a workspace/section to custom_corners */
+  const saveRulerLines = async (key: string, lines: RulerLine[]) => {
+    if (!floorPlan?.id) return;
+    let parsed: any = {};
+    try {
+      parsed = typeof floorPlan.custom_corners === 'string'
+        ? JSON.parse(floorPlan.custom_corners) : (floorPlan.custom_corners || {});
+    } catch { parsed = {}; }
+    if (!parsed.rulerData) parsed.rulerData = {};
+    parsed.rulerData[key] = lines;
+    await supabase.from('budget_floor_plans').update({ custom_corners: parsed }).eq('id', floorPlan.id);
+    queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces', budgetId] });
+  };
+
+  /** Load saved ruler lines for a workspace/section */
+  const getSavedRulerLines = (key: string): RulerLine[] => {
+    if (!floorPlan?.custom_corners) return [];
+    try {
+      const parsed = typeof floorPlan.custom_corners === 'string'
+        ? JSON.parse(floorPlan.custom_corners) : floorPlan.custom_corners;
+      return parsed?.rulerData?.[key] || [];
+    } catch { return []; }
+  };
+
   const handleOtherPolygonRename = async (otherId: string, newName: string) => {
     const { error } = await supabase.from('budget_floor_plan_rooms').update({ name: newName }).eq('id', otherId);
     if (error) { toast.error('Error al renombrar'); return; }

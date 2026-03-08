@@ -1124,7 +1124,39 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                     </text>
                   );
                 })}
-                {(() => {
+                {/* Wall number badges on sibling polygon edges */}
+                {!isBaseWs && opEdges.map(({ a: ea, b: eb }, ei) => {
+                  const { sx: lx1, sy: ly1 } = toSvg(ea.x, ea.y);
+                  const { sx: lx2, sy: ly2 } = toSvg(eb.x, eb.y);
+                  const emx2 = (lx1 + lx2) / 2;
+                  const emy2 = (ly1 + ly2) / 2;
+                  const edx2 = lx2 - lx1;
+                  const edy2 = ly2 - ly1;
+                  const eLen2 = Math.sqrt(edx2 * edx2 + edy2 * edy2) || 1;
+                  let enx2 = edy2 / eLen2;
+                  let eny2 = -edx2 / eLen2;
+                  const { sx: ocsx2, sy: ocsy2 } = toSvg(opCx, opCy);
+                  if (((ocsx2 - emx2) * enx2 + (ocsy2 - emy2) * eny2) > 0) { enx2 = -enx2; eny2 = -eny2; }
+                  const badgeOff2 = -6;
+                  const bx2 = emx2 + enx2 * badgeOff2;
+                  const by2 = emy2 + eny2 * badgeOff2;
+                  const dbIdx2 = ei + 1;
+                  const wt2 = normalizeWallType(opWalls.find(w => w.wall_index === dbIdx2)?.wall_type);
+                  const ws2 = WALL_EDGE_STYLES[wt2] || WALL_EDGE_DEFAULT;
+                  const badgeColor = isSelected ? 'hsl(var(--primary))' : ws2.color;
+                  return (
+                    <g key={`op-badge-${op.id}-${ei}`} className="pointer-events-none">
+                      <circle cx={bx2} cy={by2} r={7}
+                        fill={badgeColor} opacity={0.85}
+                        stroke="hsl(var(--background))" strokeWidth={1} />
+                      <text x={bx2} y={by2} textAnchor="middle" dominantBaseline="central"
+                        className="text-[6px] font-bold select-none"
+                        fill="hsl(var(--background))">
+                        {dbIdx2}
+                      </text>
+                    </g>
+                  );
+                })}
                   const { sx, sy } = toSvg(opCx, opCy);
                   return (
                     <>

@@ -243,7 +243,7 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
   const handleFaceClick = async (face: AutoFace) => {
     let wall = allWalls.find(w => w.room_id === face.roomId && w.wall_index === face.wallIndex);
     if (!wall) {
-      const wallType = face.wallIndex === 0 ? 'espacio' : face.wallIndex === -1 ? 'suelo' : face.wallIndex === -2 ? 'techo' : 'exterior';
+      const wallType = face.wallIndex === 0 ? 'espacio' : face.wallIndex === -1 ? 'suelo_basico' : face.wallIndex === -2 ? 'techo_basico' : 'exterior';
       const { data: newWall, error } = await supabase
         .from('budget_floor_plan_walls')
         .insert({ room_id: face.roomId, wall_index: face.wallIndex, wall_type: wallType })

@@ -1983,6 +1983,31 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     refetch();
   };
 
+  /** Open the wall objects panel for a specific wall */
+  const openWallPanel = (roomId: string, wallDbIndex: number) => {
+    const room = rooms.find(r => r.id === roomId);
+    if (!room) return;
+    const wall = allWalls.find(w => w.room_id === roomId && w.wall_index === wallDbIndex);
+    const poly = room.floor_polygon;
+    const edgeCount = poly ? poly.length : 4;
+    setWallPanelWallId(wall?.id || null);
+    setWallPanelWallIndex(wallDbIndex);
+    setWallPanelWallType(normalizeWallType(wall?.wall_type));
+    setWallPanelLabel(`P${wallDbIndex} ${wallLabel(wallDbIndex - 1, edgeCount)}`);
+    setWallPanelRoomName(room.name);
+    setWallPanelRoomId(roomId);
+    setWallPanelOpen(true);
+    // Also highlight in the wall map
+    setSelectedWallMap(prev => ({ ...prev, [roomId]: wallDbIndex - 1 }));
+  };
+
+  const handleWallPanelTypeChange = async (newType: string) => {
+    if (!wallPanelRoomId) return;
+    const normalized = normalizeWallType(newType);
+    setWallPanelWallType(normalized);
+    await ensureAndUpdateWallType(wallPanelRoomId, wallPanelWallIndex - 1, normalized, wallPanelWallId || undefined);
+  };
+
   const openGridEditor = (r: Workspace) => {
     const verts = r.floor_polygon && r.floor_polygon.length >= 3
       ? r.floor_polygon

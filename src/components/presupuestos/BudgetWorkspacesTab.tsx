@@ -1085,8 +1085,50 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             });
           })()}
 
-          {/* Preview line from last vertex to hover (only while drawing) */}
-          {!isClosed && vertices.length > 0 && hoverCell && !vertices.some(v => v.x === hoverCell.x && v.y === hoverCell.y) && (() => {
+          {/* ── Ruler lines ── */}
+          {rulerLines.map((rl, ri) => {
+            const { sx: rx1, sy: ry1 } = toSvg(rl.start.x, rl.start.y);
+            const { sx: rx2, sy: ry2 } = toSvg(rl.end.x, rl.end.y);
+            const rLenMm = Math.round(Math.sqrt(((rl.end.x - rl.start.x) * hScale) ** 2 + ((rl.end.y - rl.start.y) * vScale) ** 2) * 1000);
+            const rmx = (rx1 + rx2) / 2;
+            const rmy = (ry1 + ry2) / 2;
+            const rdx = rx2 - rx1;
+            const rdy = ry2 - ry1;
+            const rAngle = Math.atan2(rdy, rdx) * (180 / Math.PI);
+            const rRot = (rAngle > 90 || rAngle < -90) ? rAngle + 180 : rAngle;
+            return (
+              <g key={`ruler-${ri}`} className="pointer-events-none">
+                <line x1={rx1} y1={ry1} x2={rx2} y2={ry2}
+                  stroke={RULER_COLOR} strokeWidth={1.5} strokeDasharray="6 3" />
+                <circle cx={rx1} cy={ry1} r={3.5} fill={RULER_COLOR} />
+                <circle cx={rx2} cy={ry2} r={3.5} fill={RULER_COLOR} />
+                <text x={rmx} y={rmy - 8} textAnchor="middle" dominantBaseline="central"
+                  transform={`rotate(${rRot}, ${rmx}, ${rmy - 8})`}
+                  fill={RULER_COLOR} fontSize={8} fontWeight="bold" className="select-none">
+                  {rLenMm} mm
+                </text>
+              </g>
+            );
+          })}
+          {/* Ruler start point preview */}
+          {rulerMode && rulerStart && (() => {
+            const { sx, sy } = toSvg(rulerStart.x, rulerStart.y);
+            return (
+              <>
+                <circle cx={sx} cy={sy} r={5} fill={RULER_COLOR} stroke="hsl(var(--background))" strokeWidth={2} />
+                {hoverCell && (
+                  <line
+                    x1={sx} y1={sy}
+                    x2={toSvg(hoverCell.x, hoverCell.y).sx}
+                    y2={toSvg(hoverCell.x, hoverCell.y).sy}
+                    stroke={RULER_COLOR} strokeWidth={1} strokeDasharray="3 3" opacity={0.6} />
+                )}
+              </>
+            );
+          })()}
+
+          {/* Preview line from last vertex to hover (only while drawing, not ruler mode) */}
+          {!isClosed && !rulerMode && vertices.length > 0 && hoverCell && (() => {
             const last = vertices[vertices.length - 1];
             const { sx: x1, sy: y1 } = toSvg(last.x, last.y);
             const { sx: x2, sy: y2 } = toSvg(hoverCell.x, hoverCell.y);
@@ -1096,8 +1138,8 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             );
           })()}
 
-          {/* Clickable intersections (drawing mode) or draggable vertices (edit mode) */}
-          {!isClosed && Array.from({ length: gridHeight + 1 }).map((_, iy) =>
+          {/* Clickable intersections (drawing mode, grid snap) */}
+          {!isClosed && !freeMode && !rulerMode && Array.from({ length: gridHeight + 1 }).map((_, iy) =>
             Array.from({ length: gridWidth + 1 }).map((_, ix) => {
               const gx = ix + gridOffsetX;
               const gy = iy + gridOffsetY;
@@ -1105,6 +1147,9 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
               const isPlaced = vertices.some(v => v.x === gx && v.y === gy);
               const isHover = hoverCell?.x === gx && hoverCell?.y === gy;
               const isFirstClose = isNearFirst && gx === vertices[0].x && gy === vertices[0].y;
+              // Skip if a selected sibling vertex occupies this position
+              const sibVertexHere = selectedOtherId && otherEditVertices.some(v => v.x === gx && v.y === gy);
+              if (sibVertexHere) return null;
               return (
                 <g key={`pt-${gx}-${gy}`}>
                   <circle
@@ -1136,6 +1181,47 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             })
           )}
 
+          {/* Free mode / Ruler mode: transparent overlay for clicking anywhere */}
+          {(freeMode || rulerMode) && !isClosed && (
+            <rect
+              x={pad}
+              y={pad}
+              width={gridWidth * cellSize}
+              height={gridHeight * cellSize}
+              fill="transparent"
+              className={rulerMode ? 'cursor-crosshair' : 'cursor-cell'}
+              onClick={(e) => {
+                if (!svgRef.current) return;
+                const rct = svgRef.current.getBoundingClientRect();
+                const sx = e.clientX - rct.left;
+                const sy = e.clientY - rct.top;
+                const { gx, gy } = fromSvg(sx, sy);
+                handleClick(gx, gy);
+              }}
+              onMouseMove={(e) => {
+                if (!svgRef.current) return;
+                const rct = svgRef.current.getBoundingClientRect();
+                const sx = e.clientX - rct.left;
+                const sy = e.clientY - rct.top;
+                const { gx, gy } = fromSvg(sx, sy);
+                setHoverCell({ x: gx, y: gy });
+              }}
+              onMouseLeave={() => setHoverCell(null)}
+            />
+          )}
+          {/* Free mode: show placed vertex markers */}
+          {(freeMode || rulerMode) && !isClosed && vertices.map((v, vi) => {
+            const { sx, sy } = toSvg(v.x, v.y);
+            return (
+              <g key={`fv-${vi}`}>
+                <circle cx={sx} cy={sy} r={5} fill="hsl(200 80% 50%)" stroke="hsl(var(--background))" strokeWidth={1.5} />
+                <text x={sx} y={sy - 7} textAnchor="middle" className="text-[7px] font-bold select-none pointer-events-none" fill="hsl(200 80% 50%)">
+                  {vi + 1}
+                </text>
+              </g>
+            );
+          })}
+
           {/* Draggable vertices when closed */}
           {isClosed && vertices.map((v, i) => {
             const { sx, sy } = toSvg(v.x, v.y);
@@ -1157,6 +1243,34 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                 </text>
               </g>
             );
+          })}
+
+          {/* ── Sibling workspace vertices ON TOP for guaranteed interactivity ── */}
+          {otherPolygons.map((op) => {
+            if (selectedOtherId !== op.id) return null;
+            const verts = otherEditVertices;
+            return verts.map((v, i) => {
+              const { sx, sy } = toSvg(v.x, v.y);
+              const isDragging = draggingOtherIdx === i;
+              return (
+                <g key={`sib-top-${op.id}-${i}`}>
+                  <circle
+                    cx={sx} cy={sy} r={isDragging ? 8 : 7}
+                    fill={isDragging ? 'hsl(var(--chart-2))' : 'hsl(var(--primary))'}
+                    stroke="hsl(var(--background))"
+                    strokeWidth={2.5}
+                    className="cursor-grab active:cursor-grabbing"
+                    onClick={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); setDraggingOtherIdx(i); }}
+                  />
+                  <text x={sx} y={sy - 10} textAnchor="middle"
+                    className="text-[7px] font-bold select-none pointer-events-none"
+                    fill="hsl(var(--primary))">
+                    {i + 1} ({hAxisLabel}{v.x},{vAxisLabel}{v.y})
+                  </text>
+                </g>
+              );
+            });
           })}
 
           {/* ── External perimeter dimension lines (total width & height of all polygons) ── */}

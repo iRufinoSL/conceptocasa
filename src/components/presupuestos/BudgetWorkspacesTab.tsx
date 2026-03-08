@@ -34,6 +34,7 @@ interface Workspace {
   has_roof: boolean;
   vertical_section_id: string | null;
   floor_polygon: PolygonVertex[] | null;
+  is_base: boolean;
 }
 
 interface PlacedGridRoom {

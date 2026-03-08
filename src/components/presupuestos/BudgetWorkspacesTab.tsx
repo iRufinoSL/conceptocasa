@@ -2853,7 +2853,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                          const dbWallIndex = i + 1;
                          const wall = sibWalls.find(w => w.wall_index === dbWallIndex);
                          return (
-                            <FaceRow key={i} label={`🧱 P${i + 1} ${wallLabel(i, sibEdgeCount, 'z')}`} type={normalizeWallType(wall?.wall_type)} options={WALL_TYPES} onChange={(v) => ensureAndUpdateWallType(sibRoom.id, i, v, wall?.id)} />
+                            <FaceRow key={i} label={`🧱 P${i + 1}`} type={normalizeWallType(wall?.wall_type)} options={WALL_TYPES} onChange={(v) => ensureAndUpdateWallType(sibRoom.id, i, v, wall?.id)} />
                          );
                        })}
                        <FaceRow label="⬜ Techo" type={getCeilingType(sibRoom)} options={FLOOR_CEILING_TYPES} onChange={(v) => updateFloorCeiling(sibRoom.id, 'has_ceiling', v as FloorCeilingType)} />

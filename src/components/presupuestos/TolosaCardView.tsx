@@ -496,10 +496,12 @@ export function TolosaCardView({
             onKeyDown={e => {
               if (e.key === 'Enter' && addName.trim()) {
                 if (addingContext.type === 'sibling') {
-                  onAddSibling?.(addingContext.parentId, addingContext.afterItemId || '');
+                  onAddSibling?.(addingContext.parentId, addName.trim());
                 } else {
-                  onAddChild?.(addingContext.parentId!);
+                  onAddChild?.(addingContext.parentId!, addName.trim());
                 }
+                setAddName('');
+                setAddingContext(null);
               }
               if (e.key === 'Escape') setAddingContext(null);
             }}

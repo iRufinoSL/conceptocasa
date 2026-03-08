@@ -955,14 +955,27 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             const isBaseWs = !!op.isBase;
             const strokeColor = isBaseWs ? 'hsl(var(--muted-foreground) / 0.25)' : isSelected ? 'hsl(var(--primary))' : 'hsl(200 80% 50%)';
             const fillColor = isBaseWs ? 'hsl(var(--muted-foreground) / 0.06)' : isSelected ? 'hsl(var(--primary) / 0.18)' : 'hsl(200 80% 50% / 0.12)';
+            const opWalls = op.walls || [];
             return (
               <g key={`other-${op.id}`} className="cursor-pointer" onClick={() => handleSelectOther(op)}>
                 <polygon
                   points={verts.map(v => { const { sx, sy } = toSvg(v.x, v.y); return `${sx},${sy}`; }).join(' ')}
                   fill={fillColor}
-                  stroke={strokeColor}
-                  strokeWidth={isSelected ? 2.5 : 1.5}
-                  strokeDasharray={isSelected ? 'none' : '4 2'}
+                  stroke="none"
+                />
+                {/* Per-edge wall-type styled lines */}
+                {opEdges.map(({ a: ea, b: eb }, ei) => {
+                  const { sx: lx1, sy: ly1 } = toSvg(ea.x, ea.y);
+                  const { sx: lx2, sy: ly2 } = toSvg(eb.x, eb.y);
+                  const dbIdx = ei + 1;
+                  const wt = normalizeWallType(opWalls.find(w => w.wall_index === dbIdx)?.wall_type);
+                  const ws = WALL_EDGE_STYLES[wt] || WALL_EDGE_DEFAULT;
+                  const edgeColor = isBaseWs ? 'hsl(var(--muted-foreground) / 0.25)' : isSelected ? 'hsl(var(--primary))' : ws.color;
+                  const edgeWidth = isBaseWs ? 1 : isSelected ? 2.5 : ws.width;
+                  const edgeDash = isBaseWs ? '4 2' : isSelected ? 'none' : ws.dash;
+                  return <line key={`oe-line-${op.id}-${ei}`} x1={lx1} y1={ly1} x2={lx2} y2={ly2}
+                    stroke={edgeColor} strokeWidth={edgeWidth} strokeDasharray={edgeDash} />;
+                })}
                 />
                 {/* Vertices: draggable when selected, static otherwise */}
                 {verts.map((v, i) => {

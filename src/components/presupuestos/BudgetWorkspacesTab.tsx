@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Pencil, Trash2, Plus, ChevronDown, ChevronRight, ChevronLeft, ChevronUp, Triangle, Pyramid, Cuboid, Grid3x3, MapPin, X, MousePointerClick, List, Layers, Save, RefreshCw, Expand } from 'lucide-react';
+import { Pencil, Trash2, Plus, ChevronDown, ChevronRight, ChevronLeft, ChevronUp, Triangle, Pyramid, Cuboid, Grid3x3, MapPin, X, MousePointerClick, List, Layers, Save, RefreshCw, Expand, MousePointer } from 'lucide-react';
+import { WallObjectsPanel } from './WallObjectsPanel';
 import { GridPdfExport } from './GridPdfExport';
 import { DeleteWithBackupDialog } from '@/components/DeleteWithBackupDialog';
 import { DeletionBackupsList } from '@/components/DeletionBackupsList';

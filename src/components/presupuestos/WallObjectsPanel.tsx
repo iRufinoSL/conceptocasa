@@ -116,6 +116,7 @@ export function WallObjectsPanel({
     setFormSurfaceM2('');
     setFormVolumeM3('');
     setFormLengthMl('');
+    setFormThicknessMm('');
     setFormVisualPattern('');
     setShowAddForm(false);
     setEditingObj(null);

@@ -96,7 +96,31 @@ function polygonArea(vertices: PolygonVertex[]): number {
   return Math.abs(area) / 2;
 }
 
-/** Find intersections of polygon edges with axis=val, returning the other-axis values */
+/** Compute slope annotation text for an edge */
+function edgeSlopeInfo(a: PolygonVertex, b: PolygonVertex, hScaleM: number, vScaleM: number, showDeg: boolean, showPct: boolean): string {
+  const dx = (b.x - a.x) * hScaleM;
+  const dy = (b.y - a.y) * vScaleM;
+  const parts: string[] = [];
+  if (showDeg) {
+    const angleDeg = Math.abs(Math.atan2(dy, dx) * (180 / Math.PI));
+    // Normalize: angle from horizontal
+    const fromH = angleDeg > 90 ? 180 - angleDeg : angleDeg;
+    parts.push(`${fromH.toFixed(1)}°`);
+  }
+  if (showPct) {
+    const absDx = Math.abs(dx);
+    const absDy = Math.abs(dy);
+    if (absDx > 0.0001) {
+      const pct = (absDy / absDx) * 100;
+      parts.push(`${pct.toFixed(1)}%`);
+    } else if (absDy > 0.0001) {
+      parts.push('∞%');
+    }
+  }
+  return parts.join(' ');
+}
+
+
 function findPolygonIntersections(
   poly: PolygonVertex[],
   axis: 'x' | 'y',

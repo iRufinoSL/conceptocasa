@@ -1002,6 +1002,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
               transform={`rotate(${eRotAngle}, ${emx + nx * offPx}, ${emy + ny * offPx})`}
               fontSize={fontSize} fontWeight={700} fill={color}
               className="pointer-events-none select-none"
+              data-pdf-dimension=""
             >{eLenMm} mm</text>
           );
         })}

@@ -1011,6 +1011,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
           <text key={`vl-${vi}`} x={toSvg(v.x, v.y).sx} y={toSvg(v.x, v.y).sy - (isEditingThis ? 10 : 7)}
             textAnchor="middle" fontSize={6} fontWeight={600} fill={color}
             className="pointer-events-none select-none"
+            data-pdf-vertex-label=""
           >{hLabel}{v.x},{vLabel}{v.y}</text>
         ))}
 

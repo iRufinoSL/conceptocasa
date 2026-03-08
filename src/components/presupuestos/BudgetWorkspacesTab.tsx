@@ -1676,6 +1676,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
       floor_plan_id: floorPlan.id,
       vertical_section_id: sectionId,
       floor_polygon: formVertices,
+      is_base: formIsBase,
     };
 
     if (editingId) {

@@ -2430,49 +2430,210 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     openGridEditor(target);
   };
 
+  /** Get the effective height (in Z blocks) for a specific wall of a workspace */
+  const getWallZTop = useCallback((room: Workspace, wallIndex: number, zBase: number, defaultZTop: number): number => {
+    const wall = allWalls.find(w => w.room_id === room.id && w.wall_index === wallIndex);
+    if (wall?.height != null && wall.height > 0) {
+      return zBase + Math.round((wall.height * 1000) / 250);
+    }
+    return defaultZTop;
+  }, [allWalls]);
+
+  /** Check if a workspace has non-uniform wall heights */
+  const getWallHeightsMap = useCallback((roomId: string): Map<number, number | null> => {
+    const map = new Map<number, number | null>();
+    allWalls.filter(w => w.room_id === roomId && w.wall_index > 0).forEach(w => {
+      map.set(w.wall_index, w.height);
+    });
+    return map;
+  }, [allWalls]);
+
+  /** Auto-generate inclined sections when height differences are detected */
+  const autoGenerateInclinedSections = async (roomId: string) => {
+    if (!floorPlan?.id) return;
+    const room = rooms.find(r => r.id === roomId);
+    if (!room || !room.floor_polygon || room.floor_polygon.length < 3) return;
+
+    const poly = room.floor_polygon;
+    const heightM = room.height || floorPlan?.default_height || 2.5;
+    const vSection = verticalSections.find(s => s.id === room.vertical_section_id);
+    const zBase = vSection ? vSection.axisValue : 0;
+    const defaultHeightMm = heightM * 1000;
+
+    // Get per-wall heights
+    const wallHeights = allWalls.filter(w => w.room_id === roomId && w.wall_index > 0);
+    const edgeCount = poly.length;
+    
+    // Build height array for each wall (mm)
+    const heights: number[] = [];
+    for (let i = 0; i < edgeCount; i++) {
+      const wall = wallHeights.find(w => w.wall_index === i + 1);
+      heights.push(wall?.height != null ? wall.height * 1000 : defaultHeightMm);
+    }
+
+    // Check if any heights differ → needs inclined section
+    const uniqueHeights = new Set(heights);
+    if (uniqueHeights.size <= 1) return; // All same height, no inclined sections needed
+
+    let parsed: any = {};
+    try {
+      parsed = typeof floorPlan.custom_corners === 'string'
+        ? JSON.parse(floorPlan.custom_corners) : (floorPlan.custom_corners || {});
+    } catch { parsed = {}; }
+    const sections: CustomSection[] = parsed.customSections || [];
+
+    // Remove existing auto-generated inclined sections for this workspace
+    const filteredSections = sections.filter(s => 
+      !(s.sectionType === 'inclined' && s.inclinedMeta?.workspaceId === roomId)
+    );
+
+    // Find pairs of adjacent walls with different heights → these form inclined planes
+    for (let i = 0; i < edgeCount; i++) {
+      const nextI = (i + 1) % edgeCount;
+      const h1 = heights[i];
+      const h2 = heights[nextI];
+      if (Math.abs(h1 - h2) < 1) continue; // Same height, skip
+
+      // The wall between vertex[nextI] and vertex[(nextI+1)%n] connects these two corners
+      // Actually the inclined plane spans between the two walls at different heights
+      // Calculate real length of the inclined surface
+      const v1 = poly[i];
+      const v2 = poly[nextI];
+      const cellMm = (floorPlan.block_length_mm || 625);
+      const edgeLenMm = Math.sqrt(
+        ((v2.x - v1.x) * cellMm) ** 2 + ((v2.y - v1.y) * cellMm) ** 2
+      );
+      const dH = Math.abs(h2 - h1);
+      const realLengthMm = Math.sqrt(edgeLenMm ** 2 + dH ** 2);
+      const slopeAngleDeg = Math.atan2(dH, edgeLenMm) * (180 / Math.PI);
+
+      const inclinedSection: CustomSection = {
+        id: `inclined_${roomId}_p${i + 1}_p${nextI + 1}`,
+        name: `${room.name} Inclinada P${i + 1}→P${nextI + 1}`,
+        sectionType: 'inclined',
+        axis: 'Z',
+        axisValue: zBase,
+        polygons: [],
+        inclinedMeta: {
+          workspaceId: roomId,
+          workspaceName: room.name,
+          wallHeights: [
+            { wallIndex: i + 1, heightMm: h1 },
+            { wallIndex: nextI + 1, heightMm: h2 },
+          ],
+          realLengthMm,
+          slopeAngleDeg,
+        },
+      };
+
+      filteredSections.push(inclinedSection);
+    }
+
+    parsed.customSections = filteredSections;
+    await supabase.from('budget_floor_plans').update({ custom_corners: parsed }).eq('id', floorPlan.id);
+    queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces', budgetId] });
+  };
+
   /** Compute the default projected polygon for a workspace on a Y or X section */
   const computeDefaultProjection = useCallback((room: Workspace, section: CustomSection): PolygonVertex[] => {
     if (!room.floor_polygon || room.floor_polygon.length < 3) return [];
     const poly = room.floor_polygon;
-    const blockHMm = floorPlan?.block_length_mm ? 250 : 250; // blockHeightMm
     const heightM = room.height || floorPlan?.default_height || 2.5;
     
     // Find workspace's Z base from its vertical section
     const vSection = verticalSections.find(s => s.id === room.vertical_section_id);
     const zBase = vSection ? vSection.axisValue : 0;
-    const heightBlocks = Math.round((heightM * 1000) / 250);
-    const zTop = zBase + heightBlocks;
+    const defaultZTop = zBase + Math.round((heightM * 1000) / 250);
 
     const axisVal = section.axisValue;
 
     if (section.sectionType === 'longitudinal') {
-      // Cut at Y=axisVal: find X intersections, project X vs Z
+      // Cut at Y=axisVal: find which edges intersect this line
       const intersections = findPolygonIntersections(poly, 'y', axisVal);
       if (intersections.length < 2) return [];
       const hMin = Math.min(...intersections);
       const hMax = Math.max(...intersections);
-      // Default rectangular projection
+
+      // Find wall indices at hMin and hMax to determine their heights
+      const zTopLeft = getWallTopAtIntersection(room, poly, 'y', axisVal, hMin, zBase, defaultZTop);
+      const zTopRight = getWallTopAtIntersection(room, poly, 'y', axisVal, hMax, zBase, defaultZTop);
+
+      if (zTopLeft === zTopRight) {
+        return [
+          { x: hMin, y: zBase },
+          { x: hMax, y: zBase },
+          { x: hMax, y: zTopRight },
+          { x: hMin, y: zTopLeft },
+        ];
+      }
+      // Non-uniform top → diagonal ceiling line
       return [
         { x: hMin, y: zBase },
         { x: hMax, y: zBase },
-        { x: hMax, y: zTop },
-        { x: hMin, y: zTop },
+        { x: hMax, y: zTopRight },
+        { x: hMin, y: zTopLeft },
       ];
     } else if (section.sectionType === 'transversal') {
-      // Cut at X=axisVal: find Y intersections, project Y vs Z
       const intersections = findPolygonIntersections(poly, 'x', axisVal);
       if (intersections.length < 2) return [];
       const hMin = Math.min(...intersections);
       const hMax = Math.max(...intersections);
+
+      const zTopLeft = getWallTopAtIntersection(room, poly, 'x', axisVal, hMin, zBase, defaultZTop);
+      const zTopRight = getWallTopAtIntersection(room, poly, 'x', axisVal, hMax, zBase, defaultZTop);
+
       return [
         { x: hMin, y: zBase },
         { x: hMax, y: zBase },
-        { x: hMax, y: zTop },
-        { x: hMin, y: zTop },
+        { x: hMax, y: zTopRight },
+        { x: hMin, y: zTopLeft },
       ];
     }
     return [];
-  }, [floorPlan, verticalSections]);
+  }, [floorPlan, verticalSections, allWalls]);
+
+  /** Find the Z-top at a specific intersection point by identifying which wall edge it falls on */
+  const getWallTopAtIntersection = useCallback((
+    room: Workspace,
+    poly: PolygonVertex[],
+    cutAxis: 'x' | 'y',
+    cutVal: number,
+    hVal: number,
+    zBase: number,
+    defaultZTop: number
+  ): number => {
+    const otherAxis = cutAxis === 'y' ? 'x' : 'y';
+    const heightM = room.height || floorPlan?.default_height || 2.5;
+
+    // Find which edge contains this intersection
+    for (let i = 0; i < poly.length; i++) {
+      const j = (i + 1) % poly.length;
+      const a = poly[i];
+      const b = poly[j];
+      const aVal = a[cutAxis], bVal = b[cutAxis];
+
+      if ((aVal <= cutVal && bVal >= cutVal) || (aVal >= cutVal && bVal <= cutVal)) {
+        if (Math.abs(aVal - bVal) < 0.001 && Math.abs(aVal - cutVal) < 0.001) {
+          // Edge is along the cut line
+          if (Math.min(a[otherAxis], b[otherAxis]) <= hVal && Math.max(a[otherAxis], b[otherAxis]) >= hVal) {
+            const wallIdx = i + 1;
+            return getWallZTop(room, wallIdx, zBase, defaultZTop);
+          }
+        } else {
+          const t = (cutVal - aVal) / (bVal - aVal);
+          const intersectH = a[otherAxis] + t * (b[otherAxis] - a[otherAxis]);
+          if (Math.abs(intersectH - hVal) < 0.5) {
+            // This intersection is on edge i→j
+            // The "top height" at this point interpolates between wall i+1 and wall j+1 heights
+            const zTopI = getWallZTop(room, i + 1, zBase, defaultZTop);
+            const zTopJ = getWallZTop(room, j + 1, zBase, defaultZTop);
+            return Math.round(zTopI + t * (zTopJ - zTopI));
+          }
+        }
+      }
+    }
+    return defaultZTop;
+  }, [floorPlan, getWallZTop]);
 
   /** Open a Y or X section editor for a workspace */
   const openSectionEditor = (roomId: string, section: CustomSection) => {

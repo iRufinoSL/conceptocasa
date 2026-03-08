@@ -1397,6 +1397,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
               className="fill-muted-foreground"
               fontSize={val === 0 ? 10 : 7}
               fontWeight={val === 0 ? 700 : 400}
+              data-pdf-axis-label=""
             >
               {hLabel}{val}
             </text>
@@ -1410,6 +1411,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
           className="fill-muted-foreground"
           fontSize={9}
           fontWeight={600}
+          data-pdf-axis-label=""
         >
           {hLabel}
         </text>
@@ -1426,6 +1428,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
               className="fill-muted-foreground"
               fontSize={val === 0 ? 10 : 7}
               fontWeight={val === 0 ? 700 : 400}
+              data-pdf-axis-label=""
             >
               {vLabel}{val}
             </text>
@@ -1440,6 +1443,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
           className="fill-muted-foreground"
           fontSize={9}
           fontWeight={600}
+          data-pdf-axis-label=""
         >
           {vLabel}
         </text>

@@ -920,6 +920,7 @@ export type Database = {
           height: number | null
           id: string
           int_wall_thickness: number | null
+          is_base: boolean
           length: number
           name: string
           order_index: number | null
@@ -943,6 +944,7 @@ export type Database = {
           height?: number | null
           id?: string
           int_wall_thickness?: number | null
+          is_base?: boolean
           length?: number
           name: string
           order_index?: number | null
@@ -966,6 +968,7 @@ export type Database = {
           height?: number | null
           id?: string
           int_wall_thickness?: number | null
+          is_base?: boolean
           length?: number
           name?: string
           order_index?: number | null

@@ -1157,6 +1157,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                     </g>
                   );
                 })}
+                {(() => {
                   const { sx, sy } = toSvg(opCx, opCy);
                   return (
                     <>

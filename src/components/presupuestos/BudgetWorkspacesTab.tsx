@@ -1464,6 +1464,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
   const [newSectionName, setNewSectionName] = useState('');
   const [newSectionAxisValue, setNewSectionAxisValue] = useState('');
   const [inputMode, setInputMode] = useState<'manual' | 'grid'>('manual');
+  const [formIsBase, setFormIsBase] = useState(false);
   const [selectedOtherWorkspaceId, setSelectedOtherWorkspaceId] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');

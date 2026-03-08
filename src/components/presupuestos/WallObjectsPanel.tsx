@@ -159,35 +159,43 @@ export function WallObjectsPanel({
 
   const isExterior = wallType.startsWith('exterior');
   const isInvisible = wallType.includes('invisible');
+  const isEspacio = wallType === 'espacio';
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-[380px] sm:w-[420px] overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="text-sm">
-            🧱 {wallLabel} — {roomName}
+            {isEspacio ? '🔷' : '🧱'} {wallLabel} — {roomName}
           </SheetTitle>
         </SheetHeader>
 
         <div className="space-y-4 mt-4">
-          {/* Wall type selector */}
-          <div className="space-y-1.5">
-            <Label className="text-xs font-semibold">Tipo de pared</Label>
-            <Select value={wallType} onValueChange={onWallTypeChange}>
-              <SelectTrigger className="h-8 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {WALL_TYPES.map(t => (
-                  <SelectItem key={t.value} value={t.value} className="text-xs">{t.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <div className="flex gap-1.5">
-              <Badge variant="outline" className="text-[9px] h-4">{isExterior ? 'Exterior' : 'Interior'}</Badge>
-              {isInvisible && <Badge variant="secondary" className="text-[9px] h-4">Invisible — sin representación</Badge>}
+          {/* Wall type selector — hidden for Espacio */}
+          {!isEspacio && (
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Tipo de pared</Label>
+              <Select value={wallType} onValueChange={onWallTypeChange}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {WALL_TYPES.map(t => (
+                    <SelectItem key={t.value} value={t.value} className="text-xs">{t.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <div className="flex gap-1.5">
+                <Badge variant="outline" className="text-[9px] h-4">{isExterior ? 'Exterior' : 'Interior'}</Badge>
+                {isInvisible && <Badge variant="secondary" className="text-[9px] h-4">Invisible — sin representación</Badge>}
+              </div>
             </div>
-          </div>
+          )}
+          {isEspacio && (
+            <p className="text-[10px] text-muted-foreground">
+              Volumen interior del espacio de trabajo. Añade objetos como mobiliario, instalaciones, etc.
+            </p>
+          )}
 
           {/* Objects/Layers section */}
           <div className="space-y-2">

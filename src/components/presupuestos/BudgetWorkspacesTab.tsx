@@ -482,6 +482,16 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
   // Annotation display toggles: always show mm, optionally degrees and/or %
   const [showDegrees, setShowDegrees] = useState(false);
   const [showPercent, setShowPercent] = useState(false);
+  // Context menu state for right-click on edge/vertex
+  const [contextMenu, setContextMenu] = useState<{ screenX: number; screenY: number; type: 'edge' | 'vertex'; index: number } | null>(null);
+  // Selected vertex for highlighting
+  const [selectedVertexIdx, setSelectedVertexIdx] = useState<number | null>(null);
+  // Numeric coordinate editing on double-click
+  const [editingVertexIdx, setEditingVertexIdx] = useState<number | null>(null);
+  const [editCoordX, setEditCoordX] = useState('');
+  const [editCoordY, setEditCoordY] = useState('');
+  // Long-press timer for context menu
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // At x1 the grid fits entirely; at higher zooms it grows and scrolls
   const baseCellSize = 28;

@@ -16,6 +16,7 @@ import { FloorPlanGridView } from './FloorPlanGridView';
 import { FloorPlanSpaceForm } from './FloorPlanSpaceForm';
 import { ArrowLeft } from 'lucide-react';
 import { FloorPlanSummaryView } from './FloorPlanSummary';
+import { WallObjectsList } from './WallObjectsList';
 import { FloorPlanVolumesView } from './FloorPlanVolumesView';
 import { ElevationsGridViewer } from './ElevationsGridViewer';
 import { CoordinateVariablesPanel } from './CoordinateVariablesPanel';

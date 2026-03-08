@@ -543,26 +543,50 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
   };
 
   const handleClick = (gx: number, gy: number) => {
-    // Select/pointer mode: detect closest wall edge and select it
+    // Select/pointer mode: detect closest vertex or edge
     if (selectMode) {
-      if (vertices.length >= 3 && onWallSelect) {
+      setContextMenu(null);
+      if (vertices.length >= 3) {
+        // First check if clicking near a vertex (threshold 1.2 grid units)
+        let bestVDist = Infinity;
+        let bestVIdx = -1;
+        for (let i = 0; i < vertices.length; i++) {
+          const d = Math.sqrt((gx - vertices[i].x) ** 2 + (gy - vertices[i].y) ** 2);
+          if (d < bestVDist) { bestVDist = d; bestVIdx = i; }
+        }
+        if (bestVIdx >= 0 && bestVDist < 1.2) {
+          setSelectedVertexIdx(bestVIdx);
+          return;
+        }
+        // Then check edges — click inserts a new vertex (splits edge)
         let bestDist = Infinity;
         let bestIdx = -1;
+        let bestT = 0;
         for (let i = 0; i < vertices.length; i++) {
           const j = (i + 1) % vertices.length;
           const a = vertices[i], b = vertices[j];
-          // Point-to-segment distance
           const dx = b.x - a.x, dy = b.y - a.y;
           const lenSq = dx * dx + dy * dy;
           let t = lenSq > 0 ? ((gx - a.x) * dx + (gy - a.y) * dy) / lenSq : 0;
           t = Math.max(0, Math.min(1, t));
           const px = a.x + t * dx, py = a.y + t * dy;
           const dist = Math.sqrt((gx - px) ** 2 + (gy - py) ** 2);
-          if (dist < bestDist) { bestDist = dist; bestIdx = i; }
+          if (dist < bestDist) { bestDist = dist; bestIdx = i; bestT = t; }
         }
         if (bestIdx >= 0 && bestDist < 2) {
-          const wallDbIdx = bestIdx + 1;
-          onWallSelect(wallDbIdx);
+          // Insert vertex at click point on the edge
+          const a = vertices[bestIdx];
+          const b = vertices[(bestIdx + 1) % vertices.length];
+          const newX = freeMode ? Math.round((a.x + bestT * (b.x - a.x)) * 10) / 10 : Math.round(a.x + bestT * (b.x - a.x));
+          const newY = freeMode ? Math.round((a.y + bestT * (b.y - a.y)) * 10) / 10 : Math.round(a.y + bestT * (b.y - a.y));
+          const insertIdx = bestIdx + 1;
+          const next = [...vertices];
+          next.splice(insertIdx, 0, { x: newX, y: newY });
+          onChange(next);
+          setSelectedVertexIdx(insertIdx);
+          toast.success(`Vértice insertado en arista ${bestIdx + 1}`);
+        } else {
+          setSelectedVertexIdx(null);
         }
       }
       return;

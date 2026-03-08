@@ -568,7 +568,109 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
     ]);
   };
 
-  /** Render a workspace geometry (point, line, or polygon) */
+  // ── NEW: Start creating a new workspace directly on the section ──
+  const startNewWorkspaceDrawing = () => {
+    const name = newWorkspaceName.trim();
+    if (!name) { toast.error('Introduce un nombre para el Espacio'); return; }
+    const newId = `section_poly_${generateId()}`;
+    setIsCreatingWorkspace(true);
+    setSelectedWorkspaceId(null);
+    setEditingPolygonId(newId);
+    setEditingPolygonName(name);
+    setEditVertices([]);
+    setDrawingMode(true);
+    setShowNewWorkspaceInput(false);
+    toast.info(`Dibuja "${name}" — Clic para añadir vértices, doble clic para cerrar.`);
+  };
+
+  // Save a newly drawn or edited standalone polygon
+  const saveStandalonePolygon = () => {
+    if (!editingPolygonId || !allSections || !onSectionsChange) return;
+    if (editVertices.length < 1) { toast.error('Mínimo 1 vértice'); return; }
+    const polyName = editingPolygonName.trim() || 'Espacio';
+
+    const updatedSections = allSections.map(s => {
+      if (s.id !== section.id) return s;
+      const polys = [...(s.polygons || [])];
+      const existingIdx = polys.findIndex(p => p.id === editingPolygonId);
+      const polyEntry: SectionPolygon = {
+        id: editingPolygonId,
+        name: polyName,
+        vertices: editVertices.map(v => ({ x: v.x, y: v.y, z: 0 })),
+      };
+      if (existingIdx >= 0) {
+        polys[existingIdx] = polyEntry;
+      } else {
+        polys.push(polyEntry);
+      }
+      return { ...s, polygons: polys };
+    });
+
+    onSectionsChange(updatedSections);
+    toast.success(`"${polyName}" guardado (${geometryTypeLabel(editVertices.length)})`);
+    setEditingPolygonId(null);
+    setEditingPolygonName('');
+    setEditVertices([]);
+    setDrawingMode(false);
+    setIsCreatingWorkspace(false);
+    setNewWorkspaceName('');
+  };
+
+  const cancelNewWorkspace = () => {
+    setEditingPolygonId(null);
+    setEditingPolygonName('');
+    setEditVertices([]);
+    setDrawingMode(false);
+    setIsCreatingWorkspace(false);
+    setShowNewWorkspaceInput(false);
+    setNewWorkspaceName('');
+  };
+
+  const selectSectionPolygon = (poly: SectionPolygon) => {
+    if (editingPolygonId === poly.id) {
+      cancelNewWorkspace();
+      return;
+    }
+    setSelectedWorkspaceId(null);
+    setEditingPolygonId(poly.id);
+    setEditingPolygonName(poly.name);
+    setEditVertices(poly.vertices.map(v => ({ x: v.x, y: v.y })));
+    setDrawingMode(false);
+    setIsCreatingWorkspace(false);
+  };
+
+  const deleteSectionPolygon = (polyId: string) => {
+    if (!allSections || !onSectionsChange) return;
+    const updatedSections = allSections.map(s => {
+      if (s.id !== section.id) return s;
+      return { ...s, polygons: (s.polygons || []).filter(p => p.id !== polyId) };
+    });
+    onSectionsChange(updatedSections);
+    if (editingPolygonId === polyId) cancelNewWorkspace();
+    toast.success('Espacio eliminado');
+  };
+
+  const renameSectionPolygon = (polyId: string, newName: string) => {
+    if (!allSections || !onSectionsChange || !newName.trim()) return;
+    const updatedSections = allSections.map(s => {
+      if (s.id !== section.id) return s;
+      return {
+        ...s,
+        polygons: (s.polygons || []).map(p =>
+          p.id === polyId ? { ...p, name: newName.trim() } : p
+        ),
+      };
+    });
+    onSectionsChange(updatedSections);
+  };
+
+  // Get standalone polygons (not tied to existing wallProjections)
+  const standalonePolygons = (section.polygons || []).filter(p => {
+    if (wallProjections?.some(wp => wp.workspaceId === p.id)) return false;
+    return true;
+  });
+
+
   const renderWorkspaceGeometry = (
     verts: PolygonVertex[],
     proj: SectionWallProjection,

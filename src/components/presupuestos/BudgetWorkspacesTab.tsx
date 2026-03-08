@@ -1248,7 +1248,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
           })}
 
           {/* Draggable vertices when closed */}
-          {isClosed && vertices.map((v, i) => {
+          {isClosed && !rulerMode && vertices.map((v, i) => {
             const { sx, sy } = toSvg(v.x, v.y);
             const isDragging = draggingIdx === i;
             return (

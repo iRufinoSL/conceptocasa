@@ -2342,12 +2342,42 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     setWallPanelWallId(wall?.id || null);
     setWallPanelWallIndex(wallDbIndex);
     setWallPanelWallType(normalizeWallType(wall?.wall_type));
-    setWallPanelLabel(`P${wallDbIndex}`);
+    setWallPanelLabel(wallDbIndex === 0 ? 'Espacio' : `P${wallDbIndex}`);
     setWallPanelRoomName(room.name);
     setWallPanelRoomId(roomId);
     setWallPanelOpen(true);
-    // Also highlight in the wall map
-    setSelectedWallMap(prev => ({ ...prev, [roomId]: wallDbIndex - 1 }));
+    // Also highlight in the wall map (skip for Espacio)
+    if (wallDbIndex > 0) {
+      setSelectedWallMap(prev => ({ ...prev, [roomId]: wallDbIndex - 1 }));
+    }
+  };
+
+  /** Open the objects panel for the "Espacio" (interior volume) scope */
+  const openEspacioPanel = async (roomId: string) => {
+    const room = rooms.find(r => r.id === roomId);
+    if (!room) return;
+    // Ensure a wall record with wall_index=0 (espacio) exists
+    let wall = allWalls.find(w => w.room_id === roomId && w.wall_index === 0);
+    if (!wall) {
+      const { data: newWall, error } = await supabase
+        .from('budget_floor_plan_walls')
+        .insert({ room_id: roomId, wall_index: 0, wall_type: 'espacio' })
+        .select('id, room_id, wall_index, wall_type')
+        .single();
+      if (error || !newWall) {
+        toast.error('Error al crear ámbito Espacio');
+        return;
+      }
+      queryClient.invalidateQueries({ queryKey: ['workspace-walls'] });
+      wall = newWall as WallData;
+    }
+    setWallPanelWallId(wall.id);
+    setWallPanelWallIndex(0);
+    setWallPanelWallType('espacio');
+    setWallPanelLabel('Espacio');
+    setWallPanelRoomName(room.name);
+    setWallPanelRoomId(roomId);
+    setWallPanelOpen(true);
   };
 
   const handleWallPanelTypeChange = async (newType: string) => {
@@ -2890,6 +2920,10 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                          );
                        })}
                        <FaceRow label="⬜ Techo" type={getCeilingType(sibRoom)} options={FLOOR_CEILING_TYPES} onChange={(v) => updateFloorCeiling(sibRoom.id, 'has_ceiling', v as FloorCeilingType)} />
+                       <div className="flex items-center justify-between gap-2 py-0.5 px-1 rounded cursor-pointer hover:bg-accent/30" onClick={() => openEspacioPanel(sibRoom.id)}>
+                         <span className="text-xs">🔷 Espacio (volumen interior)</span>
+                         <Badge variant="outline" className="text-[9px] h-4">Objetos →</Badge>
+                       </div>
                      </div>
                    );
                  })()}
@@ -2905,7 +2939,11 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                          <FaceRow key={i} label={`🧱 P${i + 1}`} type={normalizeWallType(wall?.wall_type)} options={WALL_TYPES} onChange={(v) => ensureAndUpdateWallType(r.id, i, v, wall?.id)} />
                        );
                      })}
-                     <FaceRow label={r.has_roof ? '🏠 Techo (cubierta)' : '⬜ Techo'} type={getCeilingType(r)} options={FLOOR_CEILING_TYPES} onChange={(v) => updateFloorCeiling(r.id, 'has_ceiling', v as FloorCeilingType)} />
+                      <FaceRow label={r.has_roof ? '🏠 Techo (cubierta)' : '⬜ Techo'} type={getCeilingType(r)} options={FLOOR_CEILING_TYPES} onChange={(v) => updateFloorCeiling(r.id, 'has_ceiling', v as FloorCeilingType)} />
+                      <div className="flex items-center justify-between gap-2 py-0.5 px-1 rounded cursor-pointer hover:bg-accent/30" onClick={() => openEspacioPanel(r.id)}>
+                        <span className="text-xs">🔷 Espacio (volumen interior)</span>
+                        <Badge variant="outline" className="text-[9px] h-4">Objetos →</Badge>
+                      </div>
                    </div>
                  )}
                 <div className="flex items-center justify-between">
@@ -3027,7 +3065,11 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                              <FaceRow key={i} label={`🧱 P${i + 1}`} type={normalizeWallType(wall?.wall_type)} options={WALL_TYPES} onChange={(v) => ensureAndUpdateWallType(sibRoom.id, i, v, wall?.id)} />
                            );
                          })}
-                         <FaceRow label="⬜ Techo" type={getCeilingType(sibRoom)} options={FLOOR_CEILING_TYPES} onChange={(v) => updateFloorCeiling(sibRoom.id, 'has_ceiling', v as FloorCeilingType)} />
+                          <FaceRow label="⬜ Techo" type={getCeilingType(sibRoom)} options={FLOOR_CEILING_TYPES} onChange={(v) => updateFloorCeiling(sibRoom.id, 'has_ceiling', v as FloorCeilingType)} />
+                          <div className="flex items-center justify-between gap-2 py-0.5 px-1 rounded cursor-pointer hover:bg-accent/30" onClick={() => openEspacioPanel(sibRoom.id)}>
+                            <span className="text-xs">🔷 Espacio (volumen interior)</span>
+                            <Badge variant="outline" className="text-[9px] h-4">Objetos →</Badge>
+                          </div>
                        </div>
                      );
                    })()}
@@ -3043,7 +3085,11 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                            <FaceRow key={i} label={`🧱 P${i + 1}`} type={normalizeWallType(wall?.wall_type)} options={WALL_TYPES} onChange={(v) => ensureAndUpdateWallType(r.id, i, v, wall?.id)} />
                          );
                        })}
-                       <FaceRow label={r.has_roof ? '🏠 Techo (cubierta)' : '⬜ Techo'} type={getCeilingType(r)} options={FLOOR_CEILING_TYPES} onChange={(v) => updateFloorCeiling(r.id, 'has_ceiling', v as FloorCeilingType)} />
+                        <FaceRow label={r.has_roof ? '🏠 Techo (cubierta)' : '⬜ Techo'} type={getCeilingType(r)} options={FLOOR_CEILING_TYPES} onChange={(v) => updateFloorCeiling(r.id, 'has_ceiling', v as FloorCeilingType)} />
+                        <div className="flex items-center justify-between gap-2 py-0.5 px-1 rounded cursor-pointer hover:bg-accent/30" onClick={() => openEspacioPanel(r.id)}>
+                          <span className="text-xs">🔷 Espacio (volumen interior)</span>
+                          <Badge variant="outline" className="text-[9px] h-4">Objetos →</Badge>
+                        </div>
                      </div>
                    )}
                   <div className="flex items-center justify-between">
@@ -3139,6 +3185,12 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
               options={FLOOR_CEILING_TYPES}
               onChange={(v) => updateFloorCeiling(r.id, 'has_ceiling', v as FloorCeilingType)}
             />
+
+            {/* Espacio (interior volume) */}
+            <div className="flex items-center justify-between gap-2 py-0.5 px-1 rounded cursor-pointer hover:bg-accent/30" onClick={() => openEspacioPanel(r.id)}>
+              <span className="text-xs">🔷 Espacio (volumen interior)</span>
+              <Badge variant="outline" className="text-[9px] h-4">Objetos →</Badge>
+            </div>
           </div>
         )}
       </div>

@@ -999,12 +999,14 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                   const wallOff = 10;
                   const wmx = emx + enx * wallOff;
                   const wmy = emy + eny * wallOff;
+                  const slopeStr = edgeSlopeInfo(a, b, hScale, vScale, showDegrees, showPercent);
+                  const labelText = slopeStr ? `${eLenMm} mm · ${slopeStr}` : `${eLenMm} mm`;
                   return (
                     <text key={`oe-${op.id}-${ei}`} x={wmx} y={wmy} textAnchor="middle" dominantBaseline="central"
                       transform={`rotate(${eRot}, ${wmx}, ${wmy})`}
                       className="text-[6px] font-semibold select-none pointer-events-none"
                       fill={isSelected ? 'hsl(var(--primary) / 0.8)' : 'hsl(200 80% 50% / 0.8)'}>
-                      {eLenMm} mm
+                      {labelText}
                     </text>
                   );
                 })}

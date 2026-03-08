@@ -467,13 +467,24 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
   };
 
   const handleClick = (gx: number, gy: number) => {
+    // Ruler mode: collect start/end points
+    if (rulerMode) {
+      if (!rulerStart) {
+        setRulerStart({ x: gx, y: gy });
+      } else {
+        setRulerLines(prev => [...prev, { start: rulerStart, end: { x: gx, y: gy } }]);
+        setRulerStart(null);
+      }
+      return;
+    }
     if (isClosed) return; // In closed/edit mode, no new vertices
     // Close polygon by clicking first vertex
     if (vertices.length >= 3 && gx === vertices[0].x && gy === vertices[0].y) {
       setIsClosed(true);
       return;
     }
-    if (vertices.some(v => v.x === gx && v.y === gy)) return;
+    // In free mode, allow same fractional positions
+    if (!freeMode && vertices.some(v => v.x === gx && v.y === gy)) return;
     onChange([...vertices, { x: gx, y: gy }]);
   };
 

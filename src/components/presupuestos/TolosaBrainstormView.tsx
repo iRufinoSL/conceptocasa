@@ -152,9 +152,11 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
   const [showOnlyExecuted, setShowOnlyExecuted] = useState(true);
   const [graphEntryItemId, setGraphEntryItemId] = useState<string | null>(null); // tracks item opened from graph card ✏️
   const [measurementVersions, setMeasurementVersions] = useState<Record<string, number>>({});
-  const [fullDetailItemId, setFullDetailItemId] = useState<string | null>(null); // item shown in full-detail dialog from graph
-  const [lastWorkedItemId, setLastWorkedItemId] = useState<string | null>(null); // last item the user interacted with
-  const [previousViewMode, setPreviousViewMode] = useState<'list' | 'cards' | null>(null); // for back navigation
+  const [fullDetailItemId, setFullDetailItemId] = useState<string | null>(null);
+  const [lastWorkedItemId, setLastWorkedItemId] = useState<string | null>(null);
+  const [previousViewMode, setPreviousViewMode] = useState<'list' | 'cards' | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ item: TolosItem; descendants: TolosItem[] } | null>(null);
+  const [graphAddName, setGraphAddName] = useState('');
 
   const bumpMeasurementVersion = useCallback((itemId: string) => {
     setMeasurementVersions(prev => ({ ...prev, [itemId]: (prev[itemId] || 0) + 1 }));

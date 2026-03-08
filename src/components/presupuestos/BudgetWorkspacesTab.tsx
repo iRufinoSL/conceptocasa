@@ -1523,19 +1523,46 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
           {isClosed && !rulerMode && vertices.map((v, i) => {
             const { sx, sy } = toSvg(v.x, v.y);
             const isDragging = draggingIdx === i;
+            const isSelected = selectedVertexIdx === i;
             return (
               <g key={`dv-${i}`}>
+                {/* Selected vertex highlight ring */}
+                {isSelected && (
+                  <circle cx={sx} cy={sy} r={11} fill="none" stroke="hsl(var(--chart-2))" strokeWidth={2} strokeDasharray="3 2" />
+                )}
                 <circle
-                  cx={sx} cy={sy} r={isDragging ? 7 : 6}
-                  fill={isDragging ? 'hsl(var(--chart-2))' : 'hsl(200 80% 50%)'}
+                  cx={sx} cy={sy} r={isDragging ? 7 : isSelected ? 7 : 6}
+                  fill={isDragging ? 'hsl(var(--chart-2))' : isSelected ? 'hsl(var(--chart-2))' : 'hsl(200 80% 50%)'}
                   stroke="hsl(var(--background))"
                   strokeWidth={2}
                   className="cursor-grab active:cursor-grabbing"
-                  onMouseDown={(e) => handleMouseDown(i, e)}
+                  onMouseDown={(e) => {
+                    if (selectMode) {
+                      // Long press for context menu
+                      longPressTimer.current = setTimeout(() => {
+                        setContextMenu({ screenX: e.clientX, screenY: e.clientY, type: 'vertex', index: i });
+                        longPressTimer.current = null;
+                      }, 500);
+                    }
+                    handleMouseDown(i, e);
+                  }}
+                  onMouseUp={() => { if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; } }}
+                  onDoubleClick={(e) => {
+                    e.stopPropagation();
+                    setEditingVertexIdx(i);
+                    setEditCoordX(String(v.x));
+                    setEditCoordY(String(v.y));
+                    setSelectedVertexIdx(i);
+                  }}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setContextMenu({ screenX: e.clientX, screenY: e.clientY, type: 'vertex', index: i });
+                  }}
                 />
                 <text x={sx} y={sy - 9} textAnchor="middle"
                   className="text-[7px] font-bold select-none pointer-events-none"
-                  fill="hsl(200 80% 50%)">
+                  fill={isSelected ? 'hsl(var(--chart-2))' : 'hsl(200 80% 50%)'}>
                   {i + 1} ({hAxisLabel}{v.x},{vAxisLabel}{v.y})
                 </text>
               </g>

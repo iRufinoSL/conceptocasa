@@ -176,6 +176,14 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
   const [ceilingAssignRoom, setCeilingAssignRoom] = useState<{ roomId: string; roomName: string } | null>(null);
   const [ceilingNewName, setCeilingNewName] = useState('');
   const [ceilingNewValue, setCeilingNewValue] = useState('');
+  // ── New: draw workspace directly on section ──
+  const [newWorkspaceName, setNewWorkspaceName] = useState('');
+  const [isCreatingWorkspace, setIsCreatingWorkspace] = useState(false);
+  const [showNewWorkspaceInput, setShowNewWorkspaceInput] = useState(false);
+  // ── Edit existing section polygon (standalone) ──
+  const [editingPolygonId, setEditingPolygonId] = useState<string | null>(null);
+  const [editingPolygonName, setEditingPolygonName] = useState('');
+  const [showPolygonsList, setShowPolygonsList] = useState(false);
   const gridCount = gridMax - gridMin + 1;
   const baseCellSize = 28;
   const cellSize = Math.round(baseCellSize * zoomLevel);

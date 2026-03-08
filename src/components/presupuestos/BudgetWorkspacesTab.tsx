@@ -1660,6 +1660,14 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
   const [selectedOtherWorkspaceId, setSelectedOtherWorkspaceId] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  // Wall objects panel state
+  const [wallPanelOpen, setWallPanelOpen] = useState(false);
+  const [wallPanelWallId, setWallPanelWallId] = useState<string | null>(null);
+  const [wallPanelWallIndex, setWallPanelWallIndex] = useState(0);
+  const [wallPanelWallType, setWallPanelWallType] = useState('exterior');
+  const [wallPanelLabel, setWallPanelLabel] = useState('');
+  const [wallPanelRoomName, setWallPanelRoomName] = useState('');
+  const [wallPanelRoomId, setWallPanelRoomId] = useState<string | null>(null);
 
   const { data: floorPlan } = useQuery({
     queryKey: ['floor-plan-for-workspaces', budgetId],

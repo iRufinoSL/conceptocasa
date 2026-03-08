@@ -176,6 +176,14 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
   const [ceilingAssignRoom, setCeilingAssignRoom] = useState<{ roomId: string; roomName: string } | null>(null);
   const [ceilingNewName, setCeilingNewName] = useState('');
   const [ceilingNewValue, setCeilingNewValue] = useState('');
+  // ── New: draw workspace directly on section ──
+  const [newWorkspaceName, setNewWorkspaceName] = useState('');
+  const [isCreatingWorkspace, setIsCreatingWorkspace] = useState(false);
+  const [showNewWorkspaceInput, setShowNewWorkspaceInput] = useState(false);
+  // ── Edit existing section polygon (standalone) ──
+  const [editingPolygonId, setEditingPolygonId] = useState<string | null>(null);
+  const [editingPolygonName, setEditingPolygonName] = useState('');
+  const [showPolygonsList, setShowPolygonsList] = useState(false);
   const gridCount = gridMax - gridMin + 1;
   const baseCellSize = 28;
   const cellSize = Math.round(baseCellSize * zoomLevel);
@@ -560,7 +568,109 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
     ]);
   };
 
-  /** Render a workspace geometry (point, line, or polygon) */
+  // ── NEW: Start creating a new workspace directly on the section ──
+  const startNewWorkspaceDrawing = () => {
+    const name = newWorkspaceName.trim();
+    if (!name) { toast.error('Introduce un nombre para el Espacio'); return; }
+    const newId = `section_poly_${generateId()}`;
+    setIsCreatingWorkspace(true);
+    setSelectedWorkspaceId(null);
+    setEditingPolygonId(newId);
+    setEditingPolygonName(name);
+    setEditVertices([]);
+    setDrawingMode(true);
+    setShowNewWorkspaceInput(false);
+    toast.info(`Dibuja "${name}" — Clic para añadir vértices, doble clic para cerrar.`);
+  };
+
+  // Save a newly drawn or edited standalone polygon
+  const saveStandalonePolygon = () => {
+    if (!editingPolygonId || !allSections || !onSectionsChange) return;
+    if (editVertices.length < 1) { toast.error('Mínimo 1 vértice'); return; }
+    const polyName = editingPolygonName.trim() || 'Espacio';
+
+    const updatedSections = allSections.map(s => {
+      if (s.id !== section.id) return s;
+      const polys = [...(s.polygons || [])];
+      const existingIdx = polys.findIndex(p => p.id === editingPolygonId);
+      const polyEntry: SectionPolygon = {
+        id: editingPolygonId,
+        name: polyName,
+        vertices: editVertices.map(v => ({ x: v.x, y: v.y, z: 0 })),
+      };
+      if (existingIdx >= 0) {
+        polys[existingIdx] = polyEntry;
+      } else {
+        polys.push(polyEntry);
+      }
+      return { ...s, polygons: polys };
+    });
+
+    onSectionsChange(updatedSections);
+    toast.success(`"${polyName}" guardado (${geometryTypeLabel(editVertices.length)})`);
+    setEditingPolygonId(null);
+    setEditingPolygonName('');
+    setEditVertices([]);
+    setDrawingMode(false);
+    setIsCreatingWorkspace(false);
+    setNewWorkspaceName('');
+  };
+
+  const cancelNewWorkspace = () => {
+    setEditingPolygonId(null);
+    setEditingPolygonName('');
+    setEditVertices([]);
+    setDrawingMode(false);
+    setIsCreatingWorkspace(false);
+    setShowNewWorkspaceInput(false);
+    setNewWorkspaceName('');
+  };
+
+  const selectSectionPolygon = (poly: SectionPolygon) => {
+    if (editingPolygonId === poly.id) {
+      cancelNewWorkspace();
+      return;
+    }
+    setSelectedWorkspaceId(null);
+    setEditingPolygonId(poly.id);
+    setEditingPolygonName(poly.name);
+    setEditVertices(poly.vertices.map(v => ({ x: v.x, y: v.y })));
+    setDrawingMode(false);
+    setIsCreatingWorkspace(false);
+  };
+
+  const deleteSectionPolygon = (polyId: string) => {
+    if (!allSections || !onSectionsChange) return;
+    const updatedSections = allSections.map(s => {
+      if (s.id !== section.id) return s;
+      return { ...s, polygons: (s.polygons || []).filter(p => p.id !== polyId) };
+    });
+    onSectionsChange(updatedSections);
+    if (editingPolygonId === polyId) cancelNewWorkspace();
+    toast.success('Espacio eliminado');
+  };
+
+  const renameSectionPolygon = (polyId: string, newName: string) => {
+    if (!allSections || !onSectionsChange || !newName.trim()) return;
+    const updatedSections = allSections.map(s => {
+      if (s.id !== section.id) return s;
+      return {
+        ...s,
+        polygons: (s.polygons || []).map(p =>
+          p.id === polyId ? { ...p, name: newName.trim() } : p
+        ),
+      };
+    });
+    onSectionsChange(updatedSections);
+  };
+
+  // Get standalone polygons (not tied to existing wallProjections)
+  const standalonePolygons = (section.polygons || []).filter(p => {
+    if (wallProjections?.some(wp => wp.workspaceId === p.id)) return false;
+    return true;
+  });
+
+
   const renderWorkspaceGeometry = (
     verts: PolygonVertex[],
     proj: SectionWallProjection,
@@ -923,10 +1033,79 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
             containerRef={gridContainerRef}
             size="sm"
           />
+          {/* Draw workspace directly on section */}
+          <Button
+            variant={showNewWorkspaceInput ? 'default' : 'outline'}
+            size="sm"
+            className="h-5 text-[9px] gap-0.5 px-1.5"
+            onClick={() => { setShowNewWorkspaceInput(!showNewWorkspaceInput); setNewWorkspaceName(''); }}
+            disabled={isCreatingWorkspace || !!editingPolygonId}
+          >
+            <Plus className="h-3 w-3" /> Nuevo Espacio
+          </Button>
+          {/* Toggle polygon list */}
+          {standalonePolygons.length > 0 && (
+            <Button
+              variant={showPolygonsList ? 'default' : 'ghost'}
+              size="sm"
+              className="h-5 text-[9px] gap-0.5 px-1.5"
+              onClick={() => setShowPolygonsList(!showPolygonsList)}
+            >
+              <Pencil className="h-3 w-3" /> Espacios ({standalonePolygons.length})
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* Placement dialog: auto or manual */}
+      {/* ── New workspace inline input ── */}
+      {showNewWorkspaceInput && (
+        <div className="flex items-center gap-1.5 px-2 py-1.5 bg-accent/30 border border-accent rounded-md mx-1">
+          <span className="text-[10px] font-medium text-foreground shrink-0">Nombre:</span>
+          <Input
+            className="h-6 text-[10px] flex-1 max-w-[180px]"
+            placeholder="Ej: Salón, Cocina..."
+            value={newWorkspaceName}
+            onChange={e => setNewWorkspaceName(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && startNewWorkspaceDrawing()}
+            autoFocus
+          />
+          <Button size="sm" className="h-6 text-[10px] gap-0.5" onClick={startNewWorkspaceDrawing} disabled={!newWorkspaceName.trim()}>
+            <PenTool className="h-3 w-3" /> Dibujar
+          </Button>
+          <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => { setShowNewWorkspaceInput(false); setNewWorkspaceName(''); }}>
+            Cancelar
+          </Button>
+        </div>
+      )}
+
+      {/* ── Polygon list panel ── */}
+      {showPolygonsList && standalonePolygons.length > 0 && (
+        <div className="mx-1 px-2 py-1.5 border border-border rounded-md bg-card space-y-1">
+          <span className="text-[10px] font-semibold text-foreground">Espacios en esta sección:</span>
+          {standalonePolygons.map((poly, pi) => {
+            const isActive = editingPolygonId === poly.id;
+            const vertCount = poly.vertices.length;
+            const color = PROJ_COLORS[(pi + (wallProjections?.length || 0)) % PROJ_COLORS.length];
+            return (
+              <div key={poly.id} className={`flex items-center gap-1.5 px-1.5 py-1 rounded transition-colors ${isActive ? 'bg-primary/10 border border-primary/30' : 'hover:bg-accent/30'}`}>
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                <span className="text-[10px] font-medium flex-1 truncate cursor-pointer" onClick={() => selectSectionPolygon(poly)}>
+                  {poly.name}
+                </span>
+                <Badge variant="outline" className="text-[8px] h-3.5 shrink-0">{geometryTypeLabel(vertCount)}</Badge>
+                <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0" onClick={() => selectSectionPolygon(poly)} title="Editar geometría">
+                  <Pencil className="h-3 w-3" />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0 text-destructive hover:bg-destructive/10" onClick={() => deleteSectionPolygon(poly.id)} title="Eliminar">
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+
       {showPlacementDialog && wallProjections && (() => {
         const diagProj = wallProjections.find(p => p.workspaceId === showPlacementDialog);
         if (!diagProj) return null;
@@ -1483,6 +1662,145 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
           );
         })()}
 
+        {/* ── Standalone section polygons (drawn directly on section) ── */}
+        {standalonePolygons.map((poly, pi) => {
+          const isEditingThisPoly = editingPolygonId === poly.id;
+          const verts = isEditingThisPoly ? editVertices : poly.vertices.map(v => ({ x: v.x, y: v.y }));
+          if (verts.length === 0) return null;
+
+          const color = PROJ_COLORS[(pi + (wallProjections?.length || 0)) % PROJ_COLORS.length];
+          const svgPts = verts.map(v => toSvg(v.x, v.y));
+          const fontSize = Math.round(7 * Math.max(1, zoomLevel * 0.8));
+
+          if (verts.length === 1) {
+            const { sx, sy } = svgPts[0];
+            return (
+              <g key={`sp-${poly.id}`}>
+                <circle cx={sx} cy={sy} r={isEditingThisPoly ? 8 : 6}
+                  fill={hslWithAlpha(color, 0.6)} stroke={color} strokeWidth={2}
+                  className="cursor-pointer" onClick={() => !isEditingThisPoly && selectSectionPolygon(poly)}
+                />
+                <text x={sx} y={sy - 12} textAnchor="middle" fontSize={6} fontWeight={600} fill={color} className="pointer-events-none select-none">
+                  {hLabel}{verts[0].x},{vLabel}{verts[0].y}
+                </text>
+                <rect x={sx - 25} y={sy + 10} width={50} height={14} rx={3}
+                  fill="hsl(45 100% 50% / 0.85)" className="cursor-pointer"
+                  onClick={() => !isEditingThisPoly && selectSectionPolygon(poly)}
+                />
+                <text x={sx} y={sy + 19} textAnchor="middle" fontSize={fontSize} fontWeight={700}
+                  fill="hsl(0 0% 10%)" className="pointer-events-none select-none">{poly.name}</text>
+                {isEditingThisPoly && (
+                  <circle cx={sx} cy={sy} r={draggingIdx === 0 ? 10 : 7}
+                    fill={draggingIdx === 0 ? 'hsl(var(--destructive))' : color}
+                    stroke="white" strokeWidth={2} className="cursor-grab"
+                    onMouseDown={(e) => handleMouseDown(0, e)}
+                  />
+                )}
+              </g>
+            );
+          }
+
+          if (verts.length === 2) {
+            const { sx: x1, sy: y1 } = svgPts[0];
+            const { sx: x2, sy: y2 } = svgPts[1];
+            const mx = (x1 + x2) / 2;
+            const my = (y1 + y2) / 2;
+            const lineLenMm = Math.round(Math.sqrt(((verts[1].x - verts[0].x) * scaleHm) ** 2 + ((verts[1].y - verts[0].y) * scaleVm) ** 2) * 1000);
+            return (
+              <g key={`sp-${poly.id}`}>
+                <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={color} strokeWidth={isEditingThisPoly ? 3 : 2}
+                  className="cursor-pointer" onClick={() => !isEditingThisPoly && selectSectionPolygon(poly)} />
+                <text x={mx} y={my - 8} textAnchor="middle" fontSize={fontSize} fontWeight={700} fill={color}
+                  className="pointer-events-none select-none">{lineLenMm} mm</text>
+                <rect x={mx - 25} y={my + 3} width={50} height={14} rx={3}
+                  fill="hsl(45 100% 50% / 0.85)" className="cursor-pointer"
+                  onClick={() => !isEditingThisPoly && selectSectionPolygon(poly)} />
+                <text x={mx} y={my + 12} textAnchor="middle" fontSize={fontSize} fontWeight={700}
+                  fill="hsl(0 0% 10%)" className="pointer-events-none select-none">{poly.name}</text>
+                {isEditingThisPoly && verts.map((v, vi) => {
+                  const { sx, sy } = svgPts[vi];
+                  return (
+                    <circle key={`dv-${vi}`} cx={sx} cy={sy} r={draggingIdx === vi ? 7 : 5}
+                      fill={draggingIdx === vi ? 'hsl(var(--destructive))' : color}
+                      stroke="white" strokeWidth={2} className="cursor-grab"
+                      onMouseDown={(e) => handleMouseDown(vi, e)} />
+                  );
+                })}
+              </g>
+            );
+          }
+
+          // 3+ vertices polygon
+          const points = svgPts.map(p => `${p.sx},${p.sy}`).join(' ');
+          const cx = verts.reduce((s, v) => s + v.x, 0) / verts.length;
+          const cy = verts.reduce((s, v) => s + v.y, 0) / verts.length;
+          const { sx: cxSvg, sy: cySvg } = toSvg(cx, cy);
+          const areaVal = polygonAreaCalc(verts) * scaleHm * scaleVm;
+
+          return (
+            <g key={`sp-${poly.id}`}>
+              <polygon points={points}
+                fill={hslWithAlpha(color, isEditingThisPoly ? 0.25 : 0.12)}
+                stroke={color} strokeWidth={isEditingThisPoly ? 2.5 : 1.5}
+                strokeDasharray={isEditingThisPoly ? 'none' : '4 2'}
+                className="cursor-pointer"
+                onClick={() => !isEditingThisPoly && selectSectionPolygon(poly)}
+              />
+              {/* Edge measurements */}
+              {verts.map((v, ei) => {
+                const next = verts[(ei + 1) % verts.length];
+                const { sx: x1, sy: y1 } = toSvg(v.x, v.y);
+                const { sx: x2, sy: y2 } = toSvg(next.x, next.y);
+                const emx = (x1 + x2) / 2;
+                const emy = (y1 + y2) / 2;
+                const edx = x2 - x1;
+                const edy = y2 - y1;
+                const eAngle = Math.atan2(edy, edx) * (180 / Math.PI);
+                const eRotAngle = (eAngle > 90 || eAngle < -90) ? eAngle + 180 : eAngle;
+                const eLenMm = Math.round(Math.sqrt(((next.x - v.x) * scaleHm) ** 2 + ((next.y - v.y) * scaleVm) ** 2) * 1000);
+                const len = Math.sqrt(edx * edx + edy * edy) || 1;
+                let nx = -edy / len; let ny = edx / len;
+                if ((cxSvg - emx) * nx + (cySvg - emy) * ny > 0) { nx = -nx; ny = -ny; }
+                return (
+                  <text key={`emm-${ei}`} x={emx + nx * 10} y={emy + ny * 10}
+                    textAnchor="middle" dominantBaseline="central"
+                    transform={`rotate(${eRotAngle}, ${emx + nx * 10}, ${emy + ny * 10})`}
+                    fontSize={fontSize} fontWeight={700} fill={color}
+                    className="pointer-events-none select-none">{eLenMm} mm</text>
+                );
+              })}
+              {/* Vertex labels */}
+              {verts.map((v, vi) => (
+                <text key={`vl-${vi}`} x={toSvg(v.x, v.y).sx} y={toSvg(v.x, v.y).sy - 7}
+                  textAnchor="middle" fontSize={6} fontWeight={600} fill={color}
+                  className="pointer-events-none select-none">{hLabel}{v.x},{vLabel}{v.y}</text>
+              ))}
+              {/* Name + area label */}
+              <rect x={cxSvg - 30} y={cySvg - 10} width={60} height={20} rx={3}
+                fill="hsl(45 100% 50% / 0.85)" className="cursor-pointer"
+                onClick={() => !isEditingThisPoly && selectSectionPolygon(poly)} />
+              <text x={cxSvg} y={cySvg - 1} textAnchor="middle" fontSize={fontSize} fontWeight={700}
+                fill="hsl(0 0% 10%)" className="pointer-events-none select-none">{poly.name}</text>
+              <text x={cxSvg} y={cySvg + 8} textAnchor="middle" fontSize={fontSize - 1} fontWeight={500}
+                fill="hsl(0 0% 25%)" className="pointer-events-none select-none">{areaVal.toFixed(2)} m²</text>
+              {/* Draggable vertices in edit mode */}
+              {isEditingThisPoly && verts.map((v, vi) => {
+                const { sx, sy } = toSvg(v.x, v.y);
+                return (
+                  <g key={`dv-${vi}`}>
+                    <circle cx={sx} cy={sy} r={draggingIdx === vi ? 7 : 5}
+                      fill={draggingIdx === vi ? 'hsl(var(--destructive))' : color}
+                      stroke="white" strokeWidth={2} className="cursor-grab"
+                      onMouseDown={(e) => handleMouseDown(vi, e)} />
+                    <text x={sx} y={sy + 16} textAnchor="middle" fontSize={7} fontWeight={700}
+                      fill={color} className="pointer-events-none select-none">V{vi + 1}</text>
+                  </g>
+                );
+              })}
+            </g>
+          );
+        })}
+
       </svg>
       </div>
 
@@ -1618,12 +1936,20 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
         <div className="mt-1 px-2 py-1.5 bg-primary/10 border border-primary/30 rounded-md flex items-center gap-2">
           <PenTool className="h-3.5 w-3.5 text-primary animate-pulse" />
           <span className="text-[10px] text-primary font-medium">
-            Modo dibujo manual — Clic en la cuadrícula para añadir vértices ({editVertices.length} colocados: {geometryTypeLabel(editVertices.length)}).
+            {editingPolygonId && !selectedWorkspaceId
+              ? `Dibujando "${editingPolygonName}" — `
+              : 'Modo dibujo manual — '}
+            Clic en la cuadrícula para añadir vértices ({editVertices.length} colocados: {geometryTypeLabel(editVertices.length)}).
             <strong> Doble clic para cerrar la figura.</strong>
           </span>
           <Button variant="ghost" size="sm" className="h-5 text-[9px] ml-auto" onClick={() => { setDrawingMode(false); }}>
             Finalizar
           </Button>
+          {editingPolygonId && !selectedWorkspaceId && (
+            <Button variant="ghost" size="sm" className="h-5 text-[9px] text-destructive" onClick={cancelNewWorkspace}>
+              Cancelar
+            </Button>
+          )}
         </div>
       )}
 
@@ -1709,6 +2035,94 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
           </div>
           <p className="text-[9px] text-muted-foreground">
             Punto (1v) · Línea (2v) · Triángulo (3v) · Polígono (N vértices). Arrastra o edita coordenadas. Usa "Dibujar" para marcar vértices haciendo clic.
+          </p>
+        </div>
+      )}
+
+      {/* ── Standalone polygon editing controls ── */}
+      {editingPolygonId && !selectedWorkspaceId && !drawingMode && (
+        <div className="mt-2 border rounded-lg p-2 bg-muted/30 space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-muted-foreground">Nombre:</span>
+              <Input
+                className="h-6 text-[10px] w-36"
+                value={editingPolygonName}
+                onChange={e => setEditingPolygonName(e.target.value)}
+              />
+            </div>
+            <Badge variant="secondary" className="text-[9px] h-4">
+              {geometryTypeLabel(editVertices.length)}
+              {editVertices.length >= 3 && ` · ${(polygonAreaCalc(editVertices) * scaleHm * scaleVm).toFixed(2)} m²`}
+              {editVertices.length === 2 && ` · ${Math.round(Math.sqrt(((editVertices[1].x - editVertices[0].x) * scaleHm) ** 2 + ((editVertices[1].y - editVertices[0].y) * scaleVm) ** 2) * 1000)} mm`}
+            </Badge>
+          </div>
+
+          {/* Vertex list */}
+          <div className="space-y-1">
+            {editVertices.map((v, i) => {
+              const nextV = editVertices.length > 1 ? editVertices[(i + 1) % editVertices.length] : v;
+              const edgeMm = editVertices.length > 1
+                ? Math.round(Math.sqrt(((nextV.x - v.x) * scaleHm) ** 2 + ((nextV.y - v.y) * scaleVm) ** 2) * 1000)
+                : 0;
+              return (
+                <div key={i} className="flex items-center gap-1">
+                  <span className="text-[9px] text-muted-foreground w-5 text-right font-mono">V{i + 1}</span>
+                  <div className="flex items-center gap-0.5">
+                    <span className="text-[9px] text-muted-foreground">{hLabel}=</span>
+                    <Input
+                      className="h-5 text-[10px] w-12"
+                      type="number"
+                      value={v.x}
+                      onChange={e => {
+                        const next = [...editVertices];
+                        next[i] = { ...next[i], x: parseFloat(e.target.value) || 0 };
+                        setEditVertices(next);
+                      }}
+                    />
+                  </div>
+                  <div className="flex items-center gap-0.5">
+                    <span className="text-[9px] text-muted-foreground">{vLabel}=</span>
+                    <Input
+                      className="h-5 text-[10px] w-12"
+                      type="number"
+                      value={v.y}
+                      onChange={e => {
+                        const next = [...editVertices];
+                        next[i] = { ...next[i], y: parseFloat(e.target.value) || 0 };
+                        setEditVertices(next);
+                      }}
+                    />
+                  </div>
+                  {editVertices.length > 1 && <span className="text-[8px] text-muted-foreground">→ {edgeMm}mm</span>}
+                  {editVertices.length > 1 && (
+                    <Button variant="ghost" size="icon" className="h-4 w-4" onClick={() => removeVertex(i)}>
+                      <Trash2 className="h-2.5 w-2.5" />
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center gap-1 flex-wrap">
+            <Button variant="outline" size="sm" className="h-6 text-[10px] gap-0.5" onClick={addVertex}>
+              <Plus className="h-3 w-3" /> Vértice
+            </Button>
+            <Button variant="outline" size="sm" className="h-6 text-[10px] gap-0.5" onClick={() => setDrawingMode(true)}>
+              <PenTool className="h-3 w-3" /> Dibujar
+            </Button>
+            <div className="ml-auto flex gap-1">
+              <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={cancelNewWorkspace}>
+                Cancelar
+              </Button>
+              <Button size="sm" className="h-6 text-[10px] gap-0.5" onClick={saveStandalonePolygon} disabled={editVertices.length < 1}>
+                <Save className="h-3 w-3" /> Guardar
+              </Button>
+            </div>
+          </div>
+          <p className="text-[9px] text-muted-foreground">
+            Punto (1v) · Línea (2v) · Triángulo (3v) · Polígono (N vértices). Arrastra o edita coordenadas.
           </p>
         </div>
       )}

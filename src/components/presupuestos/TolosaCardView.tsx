@@ -46,8 +46,8 @@ interface TolosaCardViewProps {
   onEditItem?: (itemId: string) => void;
   onOpenFullDetail?: (itemId: string) => void;
   onUpdateItem?: (itemId: string, fields: { name?: string; code?: string }) => Promise<void>;
-  onAddSibling?: (parentId: string | null, afterItemId: string) => void;
-  onAddChild?: (parentId: string) => void;
+  onAddSibling?: (parentId: string | null, name: string) => void;
+  onAddChild?: (parentId: string, name: string) => void;
   onDeleteItem?: (itemId: string) => void;
   initialFocusId?: string | null;
 }

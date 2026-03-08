@@ -1207,7 +1207,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
           )}
 
           {/* Free mode / Ruler mode: transparent overlay for clicking anywhere */}
-          {(freeMode || rulerMode) && !isClosed && (
+          {((freeMode && !isClosed) || rulerMode) && (
             <rect
               x={pad}
               y={pad}

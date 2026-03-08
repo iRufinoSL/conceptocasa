@@ -1579,7 +1579,6 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                         />
                       );
                     })()}
-                    />
 
                     {/* Wall edges — CLICKABLE to assign to Y/X section */}
                     {svgPts.map((pt, i) => {

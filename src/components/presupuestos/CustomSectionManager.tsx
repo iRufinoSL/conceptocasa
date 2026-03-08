@@ -184,6 +184,8 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
   const [editingPolygonId, setEditingPolygonId] = useState<string | null>(null);
   const [editingPolygonName, setEditingPolygonName] = useState('');
   const [showPolygonsList, setShowPolygonsList] = useState(false);
+  const [selectedFaceType, setSelectedFaceType] = useState('Suelo');
+  const [selectedExistingWorkspace, setSelectedExistingWorkspace] = useState('');
   const gridCount = gridMax - gridMin + 1;
   const baseCellSize = 28;
   const cellSize = Math.round(baseCellSize * zoomLevel);

@@ -289,6 +289,9 @@ export function WallObjectsPanel({
                         <p className="text-[10px] text-muted-foreground truncate">{obj.description}</p>
                       )}
                       <div className="flex flex-wrap gap-1">
+                        {(obj as any).thickness_mm != null && (
+                          <Badge variant="secondary" className="text-[8px] h-3.5 px-1">🧱 {(obj as any).thickness_mm} mm</Badge>
+                        )}
                         {obj.surface_m2 != null && (
                           <Badge variant="secondary" className="text-[8px] h-3.5 px-1">📐 {obj.surface_m2} m²</Badge>
                         )}

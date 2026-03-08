@@ -107,6 +107,11 @@ export function WallObjectsPanel({
     },
   });
 
+  // The face's base surface comes from the auto Superficie object (order 0)
+  const superficieObj = objects.find(o => o.layer_order === 0);
+  const faceSurfaceM2 = superficieObj?.surface_m2 ?? 0;
+  const faceVolumeM3 = superficieObj?.volume_m3 ?? null;
+
   const resetForm = () => {
     setFormName('');
     setFormDescription('');
@@ -139,6 +144,18 @@ export function WallObjectsPanel({
 
   const handleSave = async () => {
     if (!formName.trim() || !wallId) return;
+    // Auto-calculate surface and volume when no manual length
+    const hasManualLength = !!formLengthMl;
+    const effectiveSurface = hasManualLength
+      ? (formSurfaceM2 ? parseFloat(formSurfaceM2) : null)
+      : faceSurfaceM2 || null;
+    const effectiveThickness = formThicknessMm ? parseFloat(formThicknessMm) : null;
+    const effectiveVolume = hasManualLength
+      ? (formVolumeM3 ? parseFloat(formVolumeM3) : null)
+      : (effectiveSurface && effectiveThickness
+          ? Math.round(effectiveSurface * effectiveThickness / 1000 * 1000) / 1000
+          : null);
+
     const payload = {
       wall_id: wallId,
       name: formName.trim(),
@@ -146,10 +163,10 @@ export function WallObjectsPanel({
       object_type: formObjectType,
       is_core: formIsCore,
       layer_order: formLayerOrder,
-      surface_m2: formSurfaceM2 ? parseFloat(formSurfaceM2) : null,
-      volume_m3: formVolumeM3 ? parseFloat(formVolumeM3) : null,
+      surface_m2: effectiveSurface,
+      volume_m3: effectiveVolume,
       length_ml: formLengthMl ? parseFloat(formLengthMl) : null,
-      thickness_mm: formThicknessMm ? parseFloat(formThicknessMm) : null,
+      thickness_mm: effectiveThickness,
       visual_pattern: formVisualPattern.trim() || null,
     };
 
@@ -359,13 +376,34 @@ export function WallObjectsPanel({
                   </div>
                   <div>
                     <Label className="text-[10px]">Superficie m²</Label>
-                    <Input className="h-7 text-xs" type="number" step="0.01" value={formSurfaceM2} onChange={e => setFormSurfaceM2(e.target.value)} disabled={!formLengthMl} />
-                    {!formLengthMl && <p className="text-[8px] text-muted-foreground mt-0.5">Auto: hereda de la cara</p>}
+                    {!formLengthMl ? (
+                      <>
+                        <Input className="h-7 text-xs bg-muted/30" type="number" value={faceSurfaceM2 || ''} disabled />
+                        <p className="text-[8px] text-muted-foreground mt-0.5">Auto: hereda de la cara</p>
+                      </>
+                    ) : (
+                      <Input className="h-7 text-xs" type="number" step="0.01" value={formSurfaceM2} onChange={e => setFormSurfaceM2(e.target.value)} />
+                    )}
                   </div>
                   <div>
                     <Label className="text-[10px]">Volumen m³</Label>
-                    <Input className="h-7 text-xs" type="number" step="0.001" value={formVolumeM3} onChange={e => setFormVolumeM3(e.target.value)} disabled={!formLengthMl} />
-                    {!formLengthMl && <p className="text-[8px] text-muted-foreground mt-0.5">Auto: superficie × espesor</p>}
+                    {!formLengthMl ? (
+                      <>
+                        <Input
+                          className="h-7 text-xs bg-muted/30"
+                          type="number"
+                          value={faceSurfaceM2 && formThicknessMm
+                            ? (Math.round(faceSurfaceM2 * parseFloat(formThicknessMm) / 1000 * 1000) / 1000)
+                            : ''}
+                          disabled
+                        />
+                        <p className="text-[8px] text-muted-foreground mt-0.5">
+                          {formThicknessMm ? `Auto: ${faceSurfaceM2} m² × ${formThicknessMm} mm` : 'Rellena espesor para calcular'}
+                        </p>
+                      </>
+                    ) : (
+                      <Input className="h-7 text-xs" type="number" step="0.001" value={formVolumeM3} onChange={e => setFormVolumeM3(e.target.value)} />
+                    )}
                   </div>
                   <div>
                     <Label className="text-[10px]">Patrón visual</Label>

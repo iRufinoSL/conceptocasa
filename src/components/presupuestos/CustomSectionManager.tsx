@@ -2030,6 +2030,94 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
           </p>
         </div>
       )}
+
+      {/* ── Standalone polygon editing controls ── */}
+      {editingPolygonId && !selectedWorkspaceId && !drawingMode && (
+        <div className="mt-2 border rounded-lg p-2 bg-muted/30 space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-muted-foreground">Nombre:</span>
+              <Input
+                className="h-6 text-[10px] w-36"
+                value={editingPolygonName}
+                onChange={e => setEditingPolygonName(e.target.value)}
+              />
+            </div>
+            <Badge variant="secondary" className="text-[9px] h-4">
+              {geometryTypeLabel(editVertices.length)}
+              {editVertices.length >= 3 && ` · ${(polygonAreaCalc(editVertices) * scaleHm * scaleVm).toFixed(2)} m²`}
+              {editVertices.length === 2 && ` · ${Math.round(Math.sqrt(((editVertices[1].x - editVertices[0].x) * scaleHm) ** 2 + ((editVertices[1].y - editVertices[0].y) * scaleVm) ** 2) * 1000)} mm`}
+            </Badge>
+          </div>
+
+          {/* Vertex list */}
+          <div className="space-y-1">
+            {editVertices.map((v, i) => {
+              const nextV = editVertices.length > 1 ? editVertices[(i + 1) % editVertices.length] : v;
+              const edgeMm = editVertices.length > 1
+                ? Math.round(Math.sqrt(((nextV.x - v.x) * scaleHm) ** 2 + ((nextV.y - v.y) * scaleVm) ** 2) * 1000)
+                : 0;
+              return (
+                <div key={i} className="flex items-center gap-1">
+                  <span className="text-[9px] text-muted-foreground w-5 text-right font-mono">V{i + 1}</span>
+                  <div className="flex items-center gap-0.5">
+                    <span className="text-[9px] text-muted-foreground">{hLabel}=</span>
+                    <Input
+                      className="h-5 text-[10px] w-12"
+                      type="number"
+                      value={v.x}
+                      onChange={e => {
+                        const next = [...editVertices];
+                        next[i] = { ...next[i], x: parseFloat(e.target.value) || 0 };
+                        setEditVertices(next);
+                      }}
+                    />
+                  </div>
+                  <div className="flex items-center gap-0.5">
+                    <span className="text-[9px] text-muted-foreground">{vLabel}=</span>
+                    <Input
+                      className="h-5 text-[10px] w-12"
+                      type="number"
+                      value={v.y}
+                      onChange={e => {
+                        const next = [...editVertices];
+                        next[i] = { ...next[i], y: parseFloat(e.target.value) || 0 };
+                        setEditVertices(next);
+                      }}
+                    />
+                  </div>
+                  {editVertices.length > 1 && <span className="text-[8px] text-muted-foreground">→ {edgeMm}mm</span>}
+                  {editVertices.length > 1 && (
+                    <Button variant="ghost" size="icon" className="h-4 w-4" onClick={() => removeVertex(i)}>
+                      <Trash2 className="h-2.5 w-2.5" />
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center gap-1 flex-wrap">
+            <Button variant="outline" size="sm" className="h-6 text-[10px] gap-0.5" onClick={addVertex}>
+              <Plus className="h-3 w-3" /> Vértice
+            </Button>
+            <Button variant="outline" size="sm" className="h-6 text-[10px] gap-0.5" onClick={() => setDrawingMode(true)}>
+              <PenTool className="h-3 w-3" /> Dibujar
+            </Button>
+            <div className="ml-auto flex gap-1">
+              <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={cancelNewWorkspace}>
+                Cancelar
+              </Button>
+              <Button size="sm" className="h-6 text-[10px] gap-0.5" onClick={saveStandalonePolygon} disabled={editVertices.length < 1}>
+                <Save className="h-3 w-3" /> Guardar
+              </Button>
+            </div>
+          </div>
+          <p className="text-[9px] text-muted-foreground">
+            Punto (1v) · Línea (2v) · Triángulo (3v) · Polígono (N vértices). Arrastra o edita coordenadas.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

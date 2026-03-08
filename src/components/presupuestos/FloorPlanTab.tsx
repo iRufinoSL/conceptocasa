@@ -1157,9 +1157,6 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
               <TabsTrigger value="resumen" className="text-xs h-7 px-3">
                 <BarChart3 className="h-3.5 w-3.5 mr-1" /> Resumen Mediciones
               </TabsTrigger>
-              <TabsTrigger value="objetos" className="text-xs h-7 px-3">
-                <Blocks className="h-3.5 w-3.5 mr-1" /> Objetos
-              </TabsTrigger>
             </TabsList>
           </Tabs>
           {planData && (

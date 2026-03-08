@@ -469,10 +469,10 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
       sx = screenX * (logicalW / rect.width);
       sy = screenY * (logicalH / rect.height);
     }
-    const rawX = (sx - pad) / cellSize + gridOffsetX;
+    const rawX = (sx - pad) / cellW + gridOffsetX;
     const rawY = originTopLeft
-      ? (sy - pad) / cellSize + gridOffsetY
-      : gridOffsetY + gridHeight - (sy - pad) / cellSize;
+      ? (sy - pad) / cellH + gridOffsetY
+      : gridOffsetY + gridHeight - (sy - pad) / cellH;
     if (freeMode || rulerMode) {
       // Sub-grid precision: round to 0.1
       return {

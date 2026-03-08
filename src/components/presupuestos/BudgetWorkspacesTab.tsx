@@ -431,6 +431,7 @@ interface GridPolygonDrawerProps {
   vAxisLabel?: string;
   hScaleMm?: number;
   vScaleMm?: number;
+  activeWalls?: WallData[];
 }
 
 const RULER_COLOR = 'hsl(30 90% 50%)';

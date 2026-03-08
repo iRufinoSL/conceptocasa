@@ -485,23 +485,50 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (draggingIdx === null || !svgRef.current) return;
+    const activeIdx = draggingIdx !== null ? draggingIdx : null;
+    const otherIdx = draggingOtherIdx !== null ? draggingOtherIdx : null;
+    if (activeIdx === null && otherIdx === null) return;
+    if (!svgRef.current) return;
     const rect = svgRef.current.getBoundingClientRect();
     const sx = e.clientX - rect.left;
     const sy = e.clientY - rect.top;
     const { gx, gy } = fromSvg(sx, sy);
-    // Snap to grid
     const snappedX = Math.max(gridOffsetX, Math.min(gridOffsetX + gridWidth, gx));
     const snappedY = Math.max(gridOffsetY, Math.min(gridOffsetY + gridHeight, gy));
-    if (snappedX !== vertices[draggingIdx].x || snappedY !== vertices[draggingIdx].y) {
-      const next = [...vertices];
-      next[draggingIdx] = { x: snappedX, y: snappedY };
-      onChange(next);
+    if (activeIdx !== null) {
+      if (snappedX !== vertices[activeIdx].x || snappedY !== vertices[activeIdx].y) {
+        const next = [...vertices];
+        next[activeIdx] = { x: snappedX, y: snappedY };
+        onChange(next);
+      }
+    } else if (otherIdx !== null && selectedOtherId) {
+      const cur = otherEditVertices;
+      if (cur[otherIdx] && (snappedX !== cur[otherIdx].x || snappedY !== cur[otherIdx].y)) {
+        const next = [...cur];
+        next[otherIdx] = { x: snappedX, y: snappedY };
+        setOtherEditVertices(next);
+      }
     }
   };
 
   const handleMouseUp = () => {
+    if (draggingOtherIdx !== null && selectedOtherId && onOtherPolygonChange) {
+      onOtherPolygonChange(selectedOtherId, otherEditVertices);
+    }
     setDraggingIdx(null);
+    setDraggingOtherIdx(null);
+  };
+
+  // Select another polygon for inline editing
+  const handleSelectOther = (op: OtherPolygon) => {
+    if (selectedOtherId === op.id) {
+      // Deselect
+      setSelectedOtherId(null);
+      setOtherEditVertices([]);
+    } else {
+      setSelectedOtherId(op.id);
+      setOtherEditVertices([...op.vertices]);
+    }
   };
 
   // Scale factors: if hScaleMm/vScaleMm are given, use them; otherwise uniform cellSizeM

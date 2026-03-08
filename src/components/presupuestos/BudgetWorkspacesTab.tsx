@@ -3673,7 +3673,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
 }
 
 function FaceRow({
-  label, type, options, onChange, highlighted, onLabelClick,
+  label, type, options, onChange, highlighted, onLabelClick, heightMm, onHeightChange, defaultHeightMm,
 }: {
   label: string;
   type: string;
@@ -3681,25 +3681,76 @@ function FaceRow({
   onChange: (value: string) => void;
   highlighted?: boolean;
   onLabelClick?: () => void;
+  heightMm?: number | null;
+  onHeightChange?: (mm: number | null) => void;
+  defaultHeightMm?: number;
 }) {
+  const [editingHeight, setEditingHeight] = useState(false);
+  const [tempHeight, setTempHeight] = useState('');
+
+  const isCustomHeight = heightMm != null && heightMm > 0;
+  const displayHeight = isCustomHeight ? heightMm : defaultHeightMm;
+
   return (
     <div className={`flex items-center justify-between gap-2 py-0.5 px-1 rounded ${highlighted ? 'bg-primary/10 ring-1 ring-primary/30' : ''}`}>
       <span
-        className={`text-xs ${onLabelClick ? 'cursor-pointer hover:text-primary underline-offset-2 hover:underline' : ''}`}
+        className={`text-xs flex-shrink-0 ${onLabelClick ? 'cursor-pointer hover:text-primary underline-offset-2 hover:underline' : ''}`}
         onClick={onLabelClick}
       >
         {label}
       </span>
-      <Select value={type} onValueChange={onChange}>
-        <SelectTrigger className="h-6 w-[140px] text-[10px]">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {options.map(o => (
-            <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <div className="flex items-center gap-1 flex-1 justify-end">
+        {onHeightChange && (
+          editingHeight ? (
+            <div className="flex items-center gap-0.5">
+              <Input
+                className="h-5 w-16 text-[9px] px-1"
+                type="number"
+                placeholder={String(defaultHeightMm || '')}
+                value={tempHeight}
+                onChange={e => setTempHeight(e.target.value)}
+                autoFocus
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    const val = tempHeight.trim() ? parseFloat(tempHeight) : null;
+                    onHeightChange(val === 0 ? 0 : val);
+                    setEditingHeight(false);
+                  }
+                  if (e.key === 'Escape') setEditingHeight(false);
+                }}
+                onBlur={() => {
+                  const val = tempHeight.trim() ? parseFloat(tempHeight) : null;
+                  onHeightChange(val === 0 ? 0 : val);
+                  setEditingHeight(false);
+                }}
+              />
+              <span className="text-[8px] text-muted-foreground">mm</span>
+            </div>
+          ) : (
+            <Badge
+              variant={isCustomHeight ? 'default' : 'outline'}
+              className={`text-[8px] h-4 px-1 cursor-pointer ${isCustomHeight ? 'bg-amber-500/20 text-amber-700 border-amber-300 hover:bg-amber-500/30' : 'hover:bg-accent/50'}`}
+              onClick={() => {
+                setTempHeight(isCustomHeight ? String(heightMm) : '');
+                setEditingHeight(true);
+              }}
+              title="Altura personalizada de esta pared (mm). Click para editar."
+            >
+              ↕ {displayHeight != null ? `${displayHeight}mm` : 'Auto'}
+            </Badge>
+          )
+        )}
+        <Select value={type} onValueChange={onChange}>
+          <SelectTrigger className="h-6 w-[120px] text-[10px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {options.map(o => (
+              <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
     </div>
   );
 }

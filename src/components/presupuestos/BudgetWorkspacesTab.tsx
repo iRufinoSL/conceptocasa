@@ -520,8 +520,11 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
     const sx = e.clientX - rect.left;
     const sy = e.clientY - rect.top;
     const { gx, gy } = fromSvg(sx, sy);
-    const snappedX = Math.max(gridOffsetX, Math.min(gridOffsetX + gridWidth, gx));
-    const snappedY = Math.max(gridOffsetY, Math.min(gridOffsetY + gridHeight, gy));
+    // Clamp to grid bounds; in free mode allow fractional
+    const clampX = (v: number) => Math.max(gridOffsetX, Math.min(gridOffsetX + gridWidth, v));
+    const clampY = (v: number) => Math.max(gridOffsetY, Math.min(gridOffsetY + gridHeight, v));
+    const snappedX = freeMode ? clampX(Math.round(gx * 10) / 10) : clampX(gx);
+    const snappedY = freeMode ? clampY(Math.round(gy * 10) / 10) : clampY(gy);
     if (activeIdx !== null) {
       if (snappedX !== vertices[activeIdx].x || snappedY !== vertices[activeIdx].y) {
         const next = [...vertices];

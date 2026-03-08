@@ -1662,6 +1662,145 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
           );
         })()}
 
+        {/* ── Standalone section polygons (drawn directly on section) ── */}
+        {standalonePolygons.map((poly, pi) => {
+          const isEditingThisPoly = editingPolygonId === poly.id;
+          const verts = isEditingThisPoly ? editVertices : poly.vertices.map(v => ({ x: v.x, y: v.y }));
+          if (verts.length === 0) return null;
+
+          const color = PROJ_COLORS[(pi + (wallProjections?.length || 0)) % PROJ_COLORS.length];
+          const svgPts = verts.map(v => toSvg(v.x, v.y));
+          const fontSize = Math.round(7 * Math.max(1, zoomLevel * 0.8));
+
+          if (verts.length === 1) {
+            const { sx, sy } = svgPts[0];
+            return (
+              <g key={`sp-${poly.id}`}>
+                <circle cx={sx} cy={sy} r={isEditingThisPoly ? 8 : 6}
+                  fill={hslWithAlpha(color, 0.6)} stroke={color} strokeWidth={2}
+                  className="cursor-pointer" onClick={() => !isEditingThisPoly && selectSectionPolygon(poly)}
+                />
+                <text x={sx} y={sy - 12} textAnchor="middle" fontSize={6} fontWeight={600} fill={color} className="pointer-events-none select-none">
+                  {hLabel}{verts[0].x},{vLabel}{verts[0].y}
+                </text>
+                <rect x={sx - 25} y={sy + 10} width={50} height={14} rx={3}
+                  fill="hsl(45 100% 50% / 0.85)" className="cursor-pointer"
+                  onClick={() => !isEditingThisPoly && selectSectionPolygon(poly)}
+                />
+                <text x={sx} y={sy + 19} textAnchor="middle" fontSize={fontSize} fontWeight={700}
+                  fill="hsl(0 0% 10%)" className="pointer-events-none select-none">{poly.name}</text>
+                {isEditingThisPoly && (
+                  <circle cx={sx} cy={sy} r={draggingIdx === 0 ? 10 : 7}
+                    fill={draggingIdx === 0 ? 'hsl(var(--destructive))' : color}
+                    stroke="white" strokeWidth={2} className="cursor-grab"
+                    onMouseDown={(e) => handleMouseDown(0, e)}
+                  />
+                )}
+              </g>
+            );
+          }
+
+          if (verts.length === 2) {
+            const { sx: x1, sy: y1 } = svgPts[0];
+            const { sx: x2, sy: y2 } = svgPts[1];
+            const mx = (x1 + x2) / 2;
+            const my = (y1 + y2) / 2;
+            const lineLenMm = Math.round(Math.sqrt(((verts[1].x - verts[0].x) * scaleHm) ** 2 + ((verts[1].y - verts[0].y) * scaleVm) ** 2) * 1000);
+            return (
+              <g key={`sp-${poly.id}`}>
+                <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={color} strokeWidth={isEditingThisPoly ? 3 : 2}
+                  className="cursor-pointer" onClick={() => !isEditingThisPoly && selectSectionPolygon(poly)} />
+                <text x={mx} y={my - 8} textAnchor="middle" fontSize={fontSize} fontWeight={700} fill={color}
+                  className="pointer-events-none select-none">{lineLenMm} mm</text>
+                <rect x={mx - 25} y={my + 3} width={50} height={14} rx={3}
+                  fill="hsl(45 100% 50% / 0.85)" className="cursor-pointer"
+                  onClick={() => !isEditingThisPoly && selectSectionPolygon(poly)} />
+                <text x={mx} y={my + 12} textAnchor="middle" fontSize={fontSize} fontWeight={700}
+                  fill="hsl(0 0% 10%)" className="pointer-events-none select-none">{poly.name}</text>
+                {isEditingThisPoly && verts.map((v, vi) => {
+                  const { sx, sy } = svgPts[vi];
+                  return (
+                    <circle key={`dv-${vi}`} cx={sx} cy={sy} r={draggingIdx === vi ? 7 : 5}
+                      fill={draggingIdx === vi ? 'hsl(var(--destructive))' : color}
+                      stroke="white" strokeWidth={2} className="cursor-grab"
+                      onMouseDown={(e) => handleMouseDown(vi, e)} />
+                  );
+                })}
+              </g>
+            );
+          }
+
+          // 3+ vertices polygon
+          const points = svgPts.map(p => `${p.sx},${p.sy}`).join(' ');
+          const cx = verts.reduce((s, v) => s + v.x, 0) / verts.length;
+          const cy = verts.reduce((s, v) => s + v.y, 0) / verts.length;
+          const { sx: cxSvg, sy: cySvg } = toSvg(cx, cy);
+          const areaVal = polygonAreaCalc(verts) * scaleHm * scaleVm;
+
+          return (
+            <g key={`sp-${poly.id}`}>
+              <polygon points={points}
+                fill={hslWithAlpha(color, isEditingThisPoly ? 0.25 : 0.12)}
+                stroke={color} strokeWidth={isEditingThisPoly ? 2.5 : 1.5}
+                strokeDasharray={isEditingThisPoly ? 'none' : '4 2'}
+                className="cursor-pointer"
+                onClick={() => !isEditingThisPoly && selectSectionPolygon(poly)}
+              />
+              {/* Edge measurements */}
+              {verts.map((v, ei) => {
+                const next = verts[(ei + 1) % verts.length];
+                const { sx: x1, sy: y1 } = toSvg(v.x, v.y);
+                const { sx: x2, sy: y2 } = toSvg(next.x, next.y);
+                const emx = (x1 + x2) / 2;
+                const emy = (y1 + y2) / 2;
+                const edx = x2 - x1;
+                const edy = y2 - y1;
+                const eAngle = Math.atan2(edy, edx) * (180 / Math.PI);
+                const eRotAngle = (eAngle > 90 || eAngle < -90) ? eAngle + 180 : eAngle;
+                const eLenMm = Math.round(Math.sqrt(((next.x - v.x) * scaleHm) ** 2 + ((next.y - v.y) * scaleVm) ** 2) * 1000);
+                const len = Math.sqrt(edx * edx + edy * edy) || 1;
+                let nx = -edy / len; let ny = edx / len;
+                if ((cxSvg - emx) * nx + (cySvg - emy) * ny > 0) { nx = -nx; ny = -ny; }
+                return (
+                  <text key={`emm-${ei}`} x={emx + nx * 10} y={emy + ny * 10}
+                    textAnchor="middle" dominantBaseline="central"
+                    transform={`rotate(${eRotAngle}, ${emx + nx * 10}, ${emy + ny * 10})`}
+                    fontSize={fontSize} fontWeight={700} fill={color}
+                    className="pointer-events-none select-none">{eLenMm} mm</text>
+                );
+              })}
+              {/* Vertex labels */}
+              {verts.map((v, vi) => (
+                <text key={`vl-${vi}`} x={toSvg(v.x, v.y).sx} y={toSvg(v.x, v.y).sy - 7}
+                  textAnchor="middle" fontSize={6} fontWeight={600} fill={color}
+                  className="pointer-events-none select-none">{hLabel}{v.x},{vLabel}{v.y}</text>
+              ))}
+              {/* Name + area label */}
+              <rect x={cxSvg - 30} y={cySvg - 10} width={60} height={20} rx={3}
+                fill="hsl(45 100% 50% / 0.85)" className="cursor-pointer"
+                onClick={() => !isEditingThisPoly && selectSectionPolygon(poly)} />
+              <text x={cxSvg} y={cySvg - 1} textAnchor="middle" fontSize={fontSize} fontWeight={700}
+                fill="hsl(0 0% 10%)" className="pointer-events-none select-none">{poly.name}</text>
+              <text x={cxSvg} y={cySvg + 8} textAnchor="middle" fontSize={fontSize - 1} fontWeight={500}
+                fill="hsl(0 0% 25%)" className="pointer-events-none select-none">{areaVal.toFixed(2)} m²</text>
+              {/* Draggable vertices in edit mode */}
+              {isEditingThisPoly && verts.map((v, vi) => {
+                const { sx, sy } = toSvg(v.x, v.y);
+                return (
+                  <g key={`dv-${vi}`}>
+                    <circle cx={sx} cy={sy} r={draggingIdx === vi ? 7 : 5}
+                      fill={draggingIdx === vi ? 'hsl(var(--destructive))' : color}
+                      stroke="white" strokeWidth={2} className="cursor-grab"
+                      onMouseDown={(e) => handleMouseDown(vi, e)} />
+                    <text x={sx} y={sy + 16} textAnchor="middle" fontSize={7} fontWeight={700}
+                      fill={color} className="pointer-events-none select-none">V{vi + 1}</text>
+                  </g>
+                );
+              })}
+            </g>
+          );
+        })}
+
       </svg>
       </div>
 

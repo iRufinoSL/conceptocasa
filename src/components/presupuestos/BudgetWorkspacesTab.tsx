@@ -1728,6 +1728,56 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     refetch();
   };
 
+  // Handle polygon change for another workspace from within a grid editor (Z section)
+  const handleOtherPolygonChangeZ = async (otherId: string, newVertices: PolygonVertex[]) => {
+    if (newVertices.length < 3) return;
+    const bbox = polygonBBox(newVertices);
+    await supabase.from('budget_floor_plan_rooms').update({
+      floor_polygon: newVertices as any,
+      length: Math.round(bbox.w * cellSizeM * 100) / 100,
+      width: Math.round(bbox.h * cellSizeM * 100) / 100,
+    }).eq('id', otherId);
+    // Rebuild walls preserving types
+    const { data: existingWalls } = await supabase.from('budget_floor_plan_walls')
+      .select('wall_index, wall_type').eq('room_id', otherId).order('wall_index');
+    const oldTypeMap = new Map((existingWalls || []).map(w => [w.wall_index, normalizeWallType(w.wall_type)]));
+    await supabase.from('budget_floor_plan_walls').delete().eq('room_id', otherId);
+    const walls = newVertices.map((_, i) => ({ room_id: otherId, wall_index: i + 1, wall_type: oldTypeMap.get(i + 1) || 'exterior' }));
+    await supabase.from('budget_floor_plan_walls').insert(walls);
+    await refetch();
+    queryClient.invalidateQueries({ queryKey: ['workspace-walls'] });
+  };
+
+  // Handle polygon change for another workspace from within a Y/X section editor
+  const handleOtherPolygonChangeSection = async (otherId: string, newVertices: PolygonVertex[], sectionId: string) => {
+    if (newVertices.length < 3 || !floorPlan?.id) return;
+    let parsed: any = {};
+    try {
+      parsed = typeof floorPlan.custom_corners === 'string'
+        ? JSON.parse(floorPlan.custom_corners) : (floorPlan.custom_corners || {});
+    } catch { parsed = {}; }
+    const sections: CustomSection[] = parsed.customSections || [];
+    const sIdx = sections.findIndex(s => s.id === sectionId);
+    if (sIdx < 0) return;
+    const room = rooms.find(r => r.id === otherId);
+    const polyEntry = { id: otherId, name: room?.name || 'Espacio', vertices: newVertices.map(v => ({ x: v.x, y: v.y, z: 0 })) };
+    if (!sections[sIdx].polygons) sections[sIdx].polygons = [];
+    const existingIdx = sections[sIdx].polygons.findIndex(p => p.id === otherId);
+    if (existingIdx >= 0) sections[sIdx].polygons[existingIdx] = polyEntry;
+    else sections[sIdx].polygons.push(polyEntry);
+    parsed.customSections = sections;
+    await supabase.from('budget_floor_plans').update({ custom_corners: parsed }).eq('id', floorPlan.id);
+    queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces', budgetId] });
+  };
+
+  // Handle rename from within grid editor
+  const handleOtherPolygonRename = async (otherId: string, newName: string) => {
+    const { error } = await supabase.from('budget_floor_plan_rooms').update({ name: newName }).eq('id', otherId);
+    if (error) { toast.error('Error al renombrar'); return; }
+    toast.success('Nombre actualizado');
+    refetch();
+  };
+
   // Group by section type → section → workspaces
   const groupedByType = useMemo(() => {
     const sectionTypes = [

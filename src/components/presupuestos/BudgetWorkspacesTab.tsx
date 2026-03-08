@@ -1616,18 +1616,57 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces', budgetId] });
   };
 
-  // Group by vertical section
-  const grouped = useMemo(() => {
-    const map = new Map<string, { section: CustomSection | null; rooms: Workspace[] }>();
-    for (const s of verticalSections) map.set(s.id, { section: s, rooms: [] });
-    for (const r of rooms) {
-      const key = r.vertical_section_id || '__unassigned__';
-      if (!map.has(key)) map.set(key, { section: null, rooms: [] });
-      map.get(key)!.rooms.push(r);
-    }
-    for (const g of map.values()) g.rooms.sort((a, b) => a.name.localeCompare(b.name, 'es'));
-    return map;
-  }, [rooms, verticalSections]);
+  // Rename workspace inline
+  const handleRename = async (roomId: string) => {
+    const trimmed = renameValue.trim();
+    if (!trimmed) { setRenamingId(null); return; }
+    const { error } = await supabase.from('budget_floor_plan_rooms').update({ name: trimmed }).eq('id', roomId);
+    if (error) { toast.error('Error al renombrar'); return; }
+    toast.success('Nombre actualizado');
+    setRenamingId(null);
+    refetch();
+  };
+
+  // Group by section type → section → workspaces
+  const groupedByType = useMemo(() => {
+    const sectionTypes = [
+      { type: 'vertical' as const, label: 'Secciones Verticales (Z)', sections: verticalSections },
+      { type: 'longitudinal' as const, label: 'Secciones Longitudinales (Y)', sections: longitudinalSections },
+      { type: 'transversal' as const, label: 'Secciones Transversales (X)', sections: transversalSections },
+    ];
+
+    return sectionTypes.map(({ type, label, sections }) => {
+      const sectionGroups = sections.map(section => {
+        // For vertical sections, match by vertical_section_id
+        // For Y/X sections, match by polygon intersection
+        let sectionRooms: Workspace[];
+        if (type === 'vertical') {
+          sectionRooms = rooms.filter(r => r.vertical_section_id === section.id);
+        } else {
+          const axis = type === 'longitudinal' ? 'y' : 'x';
+          sectionRooms = rooms.filter(r => {
+            if (!r.floor_polygon || r.floor_polygon.length < 3) return false;
+            // Check if workspace has a stored polygon in this section
+            const hasPoly = section.polygons?.some(p => p.id === r.id);
+            if (hasPoly) return true;
+            // Check if workspace intersects this section
+            return findPolygonIntersections(r.floor_polygon, axis as 'x' | 'y', section.axisValue).length >= 2;
+          });
+        }
+        return { section, rooms: sectionRooms.sort((a, b) => a.name.localeCompare(b.name, 'es')) };
+      });
+
+      // For vertical, also include unassigned rooms
+      let unassigned: Workspace[] = [];
+      if (type === 'vertical') {
+        const assignedIds = new Set(sectionGroups.flatMap(g => g.rooms.map(r => r.id)));
+        unassigned = rooms.filter(r => !r.vertical_section_id && !assignedIds.has(r.id));
+      }
+
+      const totalRooms = sectionGroups.reduce((sum, g) => sum + g.rooms.length, 0) + unassigned.length;
+      return { type, label, sectionGroups, unassigned, totalRooms };
+    });
+  }, [rooms, verticalSections, longitudinalSections, transversalSections]);
 
   const canSave = formName.trim() && formVertices.length >= 3 && (formSectionId || showNewSection);
 

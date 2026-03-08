@@ -398,6 +398,7 @@ interface OtherPolygon {
   name: string;
   vertices: PolygonVertex[];
   isBase?: boolean;
+  walls?: WallData[];
 }
 
 interface RulerLine {

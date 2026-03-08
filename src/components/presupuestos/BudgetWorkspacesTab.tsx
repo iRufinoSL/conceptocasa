@@ -976,7 +976,6 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                   return <line key={`oe-line-${op.id}-${ei}`} x1={lx1} y1={ly1} x2={lx2} y2={ly2}
                     stroke={edgeColor} strokeWidth={edgeWidth} strokeDasharray={edgeDash} />;
                 })}
-                />
                 {/* Vertices: draggable when selected, static otherwise */}
                 {verts.map((v, i) => {
                   const { sx, sy } = toSvg(v.x, v.y);

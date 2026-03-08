@@ -1391,9 +1391,6 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
         />
       )}
 
-      {viewTab === 'objetos' && (
-        <WallObjectsList budgetId={budgetId} />
-      )}
     </div>
   );
 }

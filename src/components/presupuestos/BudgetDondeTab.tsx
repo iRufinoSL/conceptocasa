@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { PenTool, MapPin, Home, Box, ChevronRight } from 'lucide-react';
+import { PenTool, MapPin, Home, Box, Layers, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { FloorPlanTab } from './FloorPlanTab';
 import { BudgetWorkAreasTab } from './BudgetWorkAreasTab';
 import { BudgetSpacesTab } from './BudgetSpacesTab';
 import { BudgetWorkspacesTab } from './BudgetWorkspacesTab';
+import { WallObjectsList } from './WallObjectsList';
 
 interface BudgetDondeTabProps {
   budgetId: string;
@@ -21,6 +22,7 @@ export function BudgetDondeTab({ budgetId, budgetName, isAdmin }: BudgetDondeTab
     { id: 'areas-trabajo', label: 'Áreas de trabajo', icon: MapPin, color: 'text-emerald-600' },
     { id: 'espacios', label: 'Espacios', icon: Home, color: 'text-green-600' },
     { id: 'espacios-trabajo', label: 'Espacios de trabajo', icon: Box, color: 'text-blue-600' },
+    { id: 'objetos', label: 'Objetos', icon: Layers, color: 'text-purple-600' },
   ];
 
   const toggleSection = (id: string) => {
@@ -57,6 +59,9 @@ export function BudgetDondeTab({ budgetId, budgetName, isAdmin }: BudgetDondeTab
             )}
             {id === 'espacios-trabajo' && (
               <BudgetWorkspacesTab budgetId={budgetId} isAdmin={isAdmin} />
+            )}
+            {id === 'objetos' && (
+              <WallObjectsList budgetId={budgetId} />
             )}
           </CollapsibleContent>
         </Collapsible>

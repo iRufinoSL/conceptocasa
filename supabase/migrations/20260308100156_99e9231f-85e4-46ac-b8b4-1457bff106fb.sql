@@ -1,0 +1,1 @@
+ALTER TABLE public.budget_floor_plan_rooms ADD COLUMN IF NOT EXISTS is_base boolean NOT NULL DEFAULT false;

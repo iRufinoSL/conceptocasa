@@ -34,6 +34,7 @@ interface Workspace {
   has_roof: boolean;
   vertical_section_id: string | null;
   floor_polygon: PolygonVertex[] | null;
+  is_base: boolean;
 }
 
 interface PlacedGridRoom {
@@ -361,6 +362,7 @@ interface OtherPolygon {
   id: string;
   name: string;
   vertices: PolygonVertex[];
+  isBase?: boolean;
 }
 
 interface RulerLine {
@@ -875,8 +877,8 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             );
           })}
 
-          {/* ── Other rooms' polygons (background, clickable) with edge measurements ── */}
-          {otherPolygons.map((op) => {
+          {/* ── Other rooms' polygons (background, clickable) with edge measurements — base first ── */}
+          {[...otherPolygons].sort((a, b) => (b.isBase ? 1 : 0) - (a.isBase ? 1 : 0)).map((op) => {
             const isSelected = selectedOtherId === op.id;
             const verts = isSelected ? otherEditVertices : op.vertices;
             if (verts.length < 3) return null;
@@ -886,8 +888,9 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             opEdges.push({ a: verts[verts.length - 1], b: verts[0] });
             const opCx = verts.reduce((s, v) => s + v.x, 0) / verts.length;
             const opCy = verts.reduce((s, v) => s + v.y, 0) / verts.length;
-            const strokeColor = isSelected ? 'hsl(var(--primary))' : 'hsl(200 80% 50%)';
-            const fillColor = isSelected ? 'hsl(var(--primary) / 0.18)' : 'hsl(200 80% 50% / 0.12)';
+            const isBaseWs = !!op.isBase;
+            const strokeColor = isBaseWs ? 'hsl(var(--muted-foreground) / 0.25)' : isSelected ? 'hsl(var(--primary))' : 'hsl(200 80% 50%)';
+            const fillColor = isBaseWs ? 'hsl(var(--muted-foreground) / 0.06)' : isSelected ? 'hsl(var(--primary) / 0.18)' : 'hsl(200 80% 50% / 0.12)';
             return (
               <g key={`other-${op.id}`} className="cursor-pointer" onClick={() => handleSelectOther(op)}>
                 <polygon
@@ -1461,6 +1464,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
   const [newSectionName, setNewSectionName] = useState('');
   const [newSectionAxisValue, setNewSectionAxisValue] = useState('');
   const [inputMode, setInputMode] = useState<'manual' | 'grid'>('manual');
+  const [formIsBase, setFormIsBase] = useState(false);
   const [selectedOtherWorkspaceId, setSelectedOtherWorkspaceId] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
@@ -1508,7 +1512,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     queryFn: async () => {
       const { data } = await supabase
         .from('budget_floor_plan_rooms')
-        .select('id, name, length, width, height, has_floor, has_ceiling, has_roof, vertical_section_id, floor_polygon')
+        .select('id, name, length, width, height, has_floor, has_ceiling, has_roof, vertical_section_id, floor_polygon, is_base')
         .eq('floor_plan_id', floorPlan!.id)
         .order('name', { ascending: true });
       return (data || []).map((r: any) => ({
@@ -1618,6 +1622,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     setNewSectionName('');
     setNewSectionAxisValue('');
     setInputMode('manual');
+    setFormIsBase(false);
   };
 
   const createVerticalSection = async (): Promise<string | null> => {
@@ -1671,6 +1676,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
       floor_plan_id: floorPlan.id,
       vertical_section_id: sectionId,
       floor_polygon: formVertices,
+      is_base: formIsBase,
     };
 
     if (editingId) {
@@ -1712,6 +1718,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
       : []
     );
     setFormSectionId(r.vertical_section_id || '');
+    setFormIsBase(r.is_base);
     setEditingId(r.id);
     setShowForm(true);
   };
@@ -2084,6 +2091,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                 title={isAdmin ? 'Clic para renombrar' : undefined}
               >
                 {r.name}
+                {r.is_base && <Badge variant="outline" className="text-[9px] h-4 px-1 ml-1 border-dashed text-muted-foreground">Base</Badge>}
               </span>
             )}
             <div className="flex flex-wrap gap-1.5 mt-0.5">
@@ -2244,7 +2252,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                   activeName={r.name}
                   otherPolygons={rooms
                     .filter(other => other.id !== r.id && other.vertical_section_id === r.vertical_section_id && other.floor_polygon && other.floor_polygon.length >= 3)
-                    .map(other => ({ id: other.id, name: other.name, vertices: other.floor_polygon! }))}
+                    .map(other => ({ id: other.id, name: other.name, vertices: other.floor_polygon!, isBase: other.is_base }))}
                   onSwitchRoom={switchGridEditRoom}
                   onOtherPolygonChange={handleOtherPolygonChangeZ}
                    onOtherPolygonRename={handleOtherPolygonRename}
@@ -2323,11 +2331,11 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                 .map(other => {
                   const existingPoly = section.polygons?.find(p => p.id === other.id);
                   if (existingPoly && existingPoly.vertices.length >= 3) {
-                    return { id: other.id, name: other.name, vertices: existingPoly.vertices.map(v => ({ x: v.x, y: v.y })) };
+                    return { id: other.id, name: other.name, vertices: existingPoly.vertices.map(v => ({ x: v.x, y: v.y })), isBase: other.is_base };
                   }
                   const defaultProj = computeDefaultProjection(other, section);
                   if (defaultProj.length >= 3) {
-                    return { id: other.id, name: other.name, vertices: defaultProj };
+                    return { id: other.id, name: other.name, vertices: defaultProj, isBase: other.is_base };
                   }
                   return null;
                 })
@@ -2585,6 +2593,17 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
               <Label className="text-[10px]">Alto Z (m)</Label>
               <Input className="h-7 text-xs" type="number" step="0.01" placeholder="2.6" value={formHeight} onChange={e => setFormHeight(e.target.value)} />
             </div>
+            <div className="flex items-end pb-1">
+              <label className="flex items-center gap-1.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formIsBase}
+                  onChange={e => setFormIsBase(e.target.checked)}
+                  className="h-3.5 w-3.5 rounded border-input accent-primary"
+                />
+                <span className="text-[10px] font-medium text-muted-foreground">Base (fondo de sección)</span>
+              </label>
+            </div>
           </div>
 
           {/* Input mode toggle + editor */}
@@ -2646,7 +2665,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                   activeName={formName || undefined}
                   otherPolygons={rooms
                     .filter(other => other.id !== editingId && other.vertical_section_id === formSectionId && other.floor_polygon && other.floor_polygon.length >= 3)
-                    .map(other => ({ id: other.id, name: other.name, vertices: other.floor_polygon! }))}
+                    .map(other => ({ id: other.id, name: other.name, vertices: other.floor_polygon!, isBase: other.is_base }))}
                   onSwitchRoom={editingId ? switchGridEditRoom : undefined}
                   onOtherPolygonChange={handleOtherPolygonChangeZ}
                   onOtherPolygonRename={handleOtherPolygonRename}

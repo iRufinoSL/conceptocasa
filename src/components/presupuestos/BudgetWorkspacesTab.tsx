@@ -473,6 +473,8 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
   const [draggingRulerEnd, setDraggingRulerEnd] = useState<'start' | 'end' | null>(null);
   // Free vertex mode — allows non-node placement
   const [freeMode, setFreeMode] = useState(false);
+  // Select/pointer mode — disables drawing, allows precise element selection
+  const [selectMode, setSelectMode] = useState(false);
   // Annotation display toggles: always show mm, optionally degrees and/or %
   const [showDegrees, setShowDegrees] = useState(false);
   const [showPercent, setShowPercent] = useState(false);

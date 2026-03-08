@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Plus, Trash2, Layout, BarChart3, RefreshCw, Save, Wand2, Settings2, Layers, Pencil, Printer, ChevronUp, ChevronDown, X, Box, Ruler, Blocks } from 'lucide-react';
+import { Loader2, Plus, Trash2, Layout, BarChart3, RefreshCw, Save, Wand2, Settings2, Layers, Pencil, Printer, ChevronUp, ChevronDown, X, Box, Ruler } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFloorPlan } from '@/hooks/useFloorPlan';
 import { FloorPlanGridView } from './FloorPlanGridView';

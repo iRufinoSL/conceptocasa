@@ -680,6 +680,23 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             Borrar reglas ({rulerLines.length})
           </Button>
         )}
+        <span className="text-[9px] text-muted-foreground ml-2">Cotas:</span>
+        <Button
+          variant={showDegrees ? 'default' : 'outline'}
+          size="sm"
+          className="h-5 text-[10px] px-2 gap-0.5"
+          onClick={() => setShowDegrees(!showDegrees)}
+        >
+          📐 º
+        </Button>
+        <Button
+          variant={showPercent ? 'default' : 'outline'}
+          size="sm"
+          className="h-5 text-[10px] px-2 gap-0.5"
+          onClick={() => setShowPercent(!showPercent)}
+        >
+          📊 %
+        </Button>
         {pdfTitle && (
           <GridPdfExport
             title={pdfTitle}

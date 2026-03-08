@@ -163,6 +163,12 @@ export function WallObjectsPanel({
   };
 
   const handleDelete = async (objId: string) => {
+    // Prevent deleting automatic Superficie (order 0)
+    const obj = objects.find(o => o.id === objId);
+    if (obj && obj.layer_order === 0) {
+      toast.error('La capa Superficie (orden 0) es automática y no se puede eliminar');
+      return;
+    }
     const { error } = await supabase.from('budget_wall_objects').delete().eq('id', objId);
     if (error) { toast.error('Error al eliminar'); return; }
     toast.success('Objeto eliminado');

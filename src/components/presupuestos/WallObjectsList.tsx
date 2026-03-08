@@ -240,6 +240,33 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
     },
   });
 
+  const ensureSuperficieObject = async (wallId: string, face: AutoFace) => {
+    // Check if order-0 Superficie already exists
+    const { data: existing } = await supabase
+      .from('budget_wall_objects')
+      .select('id')
+      .eq('wall_id', wallId)
+      .eq('layer_order', 0)
+      .maybeSingle();
+    if (existing) return;
+
+    const surfaceM2 = face.m2 ?? null;
+    const volumeM3 = face.m3 ?? null;
+    const faceLabel = face.faceName;
+    const uniqueName = `Superficie`;
+
+    await supabase.from('budget_wall_objects').insert({
+      wall_id: wallId,
+      layer_order: 0,
+      name: uniqueName,
+      description: `${faceLabel}/${face.workspace}`,
+      object_type: 'material',
+      is_core: false,
+      surface_m2: surfaceM2,
+      volume_m3: volumeM3,
+    });
+  };
+
   const handleFaceClick = async (face: AutoFace) => {
     let wall = allWalls.find(w => w.room_id === face.roomId && w.wall_index === face.wallIndex);
     if (!wall) {
@@ -255,6 +282,9 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
       }
       wall = newWall;
     }
+    // Ensure the automatic Superficie object exists
+    await ensureSuperficieObject(wall.id, face);
+
     setPanelWallId(wall.id);
     setPanelWallIndex(face.wallIndex);
     setPanelWallType(wall.wall_type);

@@ -347,16 +347,22 @@ export function WallObjectsPanel({
                     <Input className="h-7 text-xs" type="number" min={1} value={formLayerOrder} onChange={e => setFormLayerOrder(parseInt(e.target.value) || 1)} />
                   </div>
                   <div>
-                    <Label className="text-[10px]">Superficie m²</Label>
-                    <Input className="h-7 text-xs" type="number" step="0.01" value={formSurfaceM2} onChange={e => setFormSurfaceM2(e.target.value)} />
-                  </div>
-                  <div>
-                    <Label className="text-[10px]">Volumen m³</Label>
-                    <Input className="h-7 text-xs" type="number" step="0.001" value={formVolumeM3} onChange={e => setFormVolumeM3(e.target.value)} />
+                    <Label className="text-[10px]">Espesor (mm)</Label>
+                    <Input className="h-7 text-xs" type="number" step="1" min={0} value={formThicknessMm} onChange={e => setFormThicknessMm(e.target.value)} placeholder="Ej: 300" />
                   </div>
                   <div>
                     <Label className="text-[10px]">Longitud ml</Label>
-                    <Input className="h-7 text-xs" type="number" step="0.01" value={formLengthMl} onChange={e => setFormLengthMl(e.target.value)} />
+                    <Input className="h-7 text-xs" type="number" step="0.01" value={formLengthMl} onChange={e => setFormLengthMl(e.target.value)} placeholder="Solo si lineal" />
+                  </div>
+                  <div>
+                    <Label className="text-[10px]">Superficie m²</Label>
+                    <Input className="h-7 text-xs" type="number" step="0.01" value={formSurfaceM2} onChange={e => setFormSurfaceM2(e.target.value)} disabled={!formLengthMl} />
+                    {!formLengthMl && <p className="text-[8px] text-muted-foreground mt-0.5">Auto: hereda de la cara</p>}
+                  </div>
+                  <div>
+                    <Label className="text-[10px]">Volumen m³</Label>
+                    <Input className="h-7 text-xs" type="number" step="0.001" value={formVolumeM3} onChange={e => setFormVolumeM3(e.target.value)} disabled={!formLengthMl} />
+                    {!formLengthMl && <p className="text-[8px] text-muted-foreground mt-0.5">Auto: superficie × espesor</p>}
                   </div>
                   <div>
                     <Label className="text-[10px]">Patrón visual</Label>

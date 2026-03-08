@@ -1033,10 +1033,79 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
             containerRef={gridContainerRef}
             size="sm"
           />
+          {/* Draw workspace directly on section */}
+          <Button
+            variant={showNewWorkspaceInput ? 'default' : 'outline'}
+            size="sm"
+            className="h-5 text-[9px] gap-0.5 px-1.5"
+            onClick={() => { setShowNewWorkspaceInput(!showNewWorkspaceInput); setNewWorkspaceName(''); }}
+            disabled={isCreatingWorkspace || !!editingPolygonId}
+          >
+            <Plus className="h-3 w-3" /> Nuevo Espacio
+          </Button>
+          {/* Toggle polygon list */}
+          {standalonePolygons.length > 0 && (
+            <Button
+              variant={showPolygonsList ? 'default' : 'ghost'}
+              size="sm"
+              className="h-5 text-[9px] gap-0.5 px-1.5"
+              onClick={() => setShowPolygonsList(!showPolygonsList)}
+            >
+              <Pencil className="h-3 w-3" /> Espacios ({standalonePolygons.length})
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* Placement dialog: auto or manual */}
+      {/* ── New workspace inline input ── */}
+      {showNewWorkspaceInput && (
+        <div className="flex items-center gap-1.5 px-2 py-1.5 bg-accent/30 border border-accent rounded-md mx-1">
+          <span className="text-[10px] font-medium text-foreground shrink-0">Nombre:</span>
+          <Input
+            className="h-6 text-[10px] flex-1 max-w-[180px]"
+            placeholder="Ej: Salón, Cocina..."
+            value={newWorkspaceName}
+            onChange={e => setNewWorkspaceName(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && startNewWorkspaceDrawing()}
+            autoFocus
+          />
+          <Button size="sm" className="h-6 text-[10px] gap-0.5" onClick={startNewWorkspaceDrawing} disabled={!newWorkspaceName.trim()}>
+            <PenTool className="h-3 w-3" /> Dibujar
+          </Button>
+          <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => { setShowNewWorkspaceInput(false); setNewWorkspaceName(''); }}>
+            Cancelar
+          </Button>
+        </div>
+      )}
+
+      {/* ── Polygon list panel ── */}
+      {showPolygonsList && standalonePolygons.length > 0 && (
+        <div className="mx-1 px-2 py-1.5 border border-border rounded-md bg-card space-y-1">
+          <span className="text-[10px] font-semibold text-foreground">Espacios en esta sección:</span>
+          {standalonePolygons.map((poly, pi) => {
+            const isActive = editingPolygonId === poly.id;
+            const vertCount = poly.vertices.length;
+            const color = PROJ_COLORS[(pi + (wallProjections?.length || 0)) % PROJ_COLORS.length];
+            return (
+              <div key={poly.id} className={`flex items-center gap-1.5 px-1.5 py-1 rounded transition-colors ${isActive ? 'bg-primary/10 border border-primary/30' : 'hover:bg-accent/30'}`}>
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                <span className="text-[10px] font-medium flex-1 truncate cursor-pointer" onClick={() => selectSectionPolygon(poly)}>
+                  {poly.name}
+                </span>
+                <Badge variant="outline" className="text-[8px] h-3.5 shrink-0">{geometryTypeLabel(vertCount)}</Badge>
+                <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0" onClick={() => selectSectionPolygon(poly)} title="Editar geometría">
+                  <Pencil className="h-3 w-3" />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0 text-destructive hover:bg-destructive/10" onClick={() => deleteSectionPolygon(poly.id)} title="Eliminar">
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+
       {showPlacementDialog && wallProjections && (() => {
         const diagProj = wallProjections.find(p => p.workspaceId === showPlacementDialog);
         if (!diagProj) return null;

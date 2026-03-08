@@ -406,6 +406,13 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
   const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null);
   const [draggingIdx, setDraggingIdx] = useState<number | null>(null);
   const [zoomLevel, setZoomLevel] = useState(1);
+  // Selected other polygon for inline editing
+  const [selectedOtherId, setSelectedOtherId] = useState<string | null>(null);
+  const [draggingOtherIdx, setDraggingOtherIdx] = useState<number | null>(null);
+  const [editingOtherName, setEditingOtherName] = useState<string | null>(null);
+  const [otherNameValue, setOtherNameValue] = useState('');
+  // Local mutable copy of selected other polygon vertices for dragging
+  const [otherEditVertices, setOtherEditVertices] = useState<PolygonVertex[]>([]);
 
   // Polygon is "closed" when it has >= 3 vertices and was explicitly closed by clicking first vertex
   const [isClosed, setIsClosed] = useState(() => vertices.length >= 3);

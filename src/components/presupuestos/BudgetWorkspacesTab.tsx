@@ -888,8 +888,9 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             opEdges.push({ a: verts[verts.length - 1], b: verts[0] });
             const opCx = verts.reduce((s, v) => s + v.x, 0) / verts.length;
             const opCy = verts.reduce((s, v) => s + v.y, 0) / verts.length;
-            const strokeColor = isSelected ? 'hsl(var(--primary))' : 'hsl(200 80% 50%)';
-            const fillColor = isSelected ? 'hsl(var(--primary) / 0.18)' : 'hsl(200 80% 50% / 0.12)';
+            const isBaseWs = !!op.isBase;
+            const strokeColor = isBaseWs ? 'hsl(var(--muted-foreground) / 0.25)' : isSelected ? 'hsl(var(--primary))' : 'hsl(200 80% 50%)';
+            const fillColor = isBaseWs ? 'hsl(var(--muted-foreground) / 0.06)' : isSelected ? 'hsl(var(--primary) / 0.18)' : 'hsl(200 80% 50% / 0.12)';
             return (
               <g key={`other-${op.id}`} className="cursor-pointer" onClick={() => handleSelectOther(op)}>
                 <polygon

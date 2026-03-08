@@ -1236,8 +1236,8 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             <rect
               x={pad}
               y={pad}
-              width={gridWidth * cellSize}
-              height={gridHeight * cellSize}
+              width={gridWidth * cellW}
+              height={gridHeight * cellH}
               fill="transparent"
               className={rulerMode ? 'cursor-crosshair' : 'cursor-cell'}
               onClick={(e) => {

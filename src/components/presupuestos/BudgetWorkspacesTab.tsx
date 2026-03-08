@@ -558,10 +558,9 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
           setSelectedVertexIdx(bestVIdx);
           return;
         }
-        // Then check edges — click inserts a new vertex (splits edge)
+        // Then check edges — click selects the wall (opens wall panel)
         let bestDist = Infinity;
         let bestIdx = -1;
-        let bestT = 0;
         for (let i = 0; i < vertices.length; i++) {
           const j = (i + 1) % vertices.length;
           const a = vertices[i], b = vertices[j];
@@ -571,20 +570,15 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
           t = Math.max(0, Math.min(1, t));
           const px = a.x + t * dx, py = a.y + t * dy;
           const dist = Math.sqrt((gx - px) ** 2 + (gy - py) ** 2);
-          if (dist < bestDist) { bestDist = dist; bestIdx = i; bestT = t; }
+          if (dist < bestDist) { bestDist = dist; bestIdx = i; }
         }
         if (bestIdx >= 0 && bestDist < 2) {
-          // Insert vertex at click point on the edge
-          const a = vertices[bestIdx];
-          const b = vertices[(bestIdx + 1) % vertices.length];
-          const newX = freeMode ? Math.round((a.x + bestT * (b.x - a.x)) * 10) / 10 : Math.round(a.x + bestT * (b.x - a.x));
-          const newY = freeMode ? Math.round((a.y + bestT * (b.y - a.y)) * 10) / 10 : Math.round(a.y + bestT * (b.y - a.y));
-          const insertIdx = bestIdx + 1;
-          const next = [...vertices];
-          next.splice(insertIdx, 0, { x: newX, y: newY });
-          onChange(next);
-          setSelectedVertexIdx(insertIdx);
-          toast.success(`Vértice insertado en arista ${bestIdx + 1}`);
+          // Select this wall — open wall panel
+          const wallDbIdx = bestIdx === vertices.length - 1 ? vertices.length : bestIdx + 1;
+          if (onWallSelect) {
+            onWallSelect(wallDbIdx);
+          }
+          setSelectedVertexIdx(null);
         } else {
           setSelectedVertexIdx(null);
         }

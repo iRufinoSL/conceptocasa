@@ -96,7 +96,31 @@ function polygonArea(vertices: PolygonVertex[]): number {
   return Math.abs(area) / 2;
 }
 
-/** Find intersections of polygon edges with axis=val, returning the other-axis values */
+/** Compute slope annotation text for an edge */
+function edgeSlopeInfo(a: PolygonVertex, b: PolygonVertex, hScaleM: number, vScaleM: number, showDeg: boolean, showPct: boolean): string {
+  const dx = (b.x - a.x) * hScaleM;
+  const dy = (b.y - a.y) * vScaleM;
+  const parts: string[] = [];
+  if (showDeg) {
+    const angleDeg = Math.abs(Math.atan2(dy, dx) * (180 / Math.PI));
+    // Normalize: angle from horizontal
+    const fromH = angleDeg > 90 ? 180 - angleDeg : angleDeg;
+    parts.push(`${fromH.toFixed(1)}°`);
+  }
+  if (showPct) {
+    const absDx = Math.abs(dx);
+    const absDy = Math.abs(dy);
+    if (absDx > 0.0001) {
+      const pct = (absDy / absDx) * 100;
+      parts.push(`${pct.toFixed(1)}%`);
+    } else if (absDy > 0.0001) {
+      parts.push('∞%');
+    }
+  }
+  return parts.join(' ');
+}
+
+
 function findPolygonIntersections(
   poly: PolygonVertex[],
   axis: 'x' | 'y',
@@ -433,22 +457,32 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
   const [rulerStart, setRulerStart] = useState<PolygonVertex | null>(null);
   // Free vertex mode — allows non-node placement
   const [freeMode, setFreeMode] = useState(false);
+  // Annotation display toggles: always show mm, optionally degrees and/or %
+  const [showDegrees, setShowDegrees] = useState(false);
+  const [showPercent, setShowPercent] = useState(false);
 
   // At x1 the grid fits entirely; at higher zooms it grows and scrolls
   const baseCellSize = 28;
   const pad = 30;
-  const logicalW = gridWidth * baseCellSize + pad * 2;
-  const logicalH = gridHeight * baseCellSize + pad * 2;
-  const cellSize = Math.round(baseCellSize * zoomLevel);
-  const svgW = gridWidth * cellSize + pad * 2;
-  const svgH = gridHeight * cellSize + pad * 2;
+  // Compute aspect-correct cell dimensions based on axis scales
+  const hMm = hScaleMm || 625;
+  const vMm = vScaleMm || 625;
+  const scaleRatio = vMm / hMm; // < 1 means vertical cells are shorter
+  const baseCellW = baseCellSize;
+  const baseCellH = Math.round(baseCellSize * scaleRatio);
+  const logicalW = gridWidth * baseCellW + pad * 2;
+  const logicalH = gridHeight * baseCellH + pad * 2;
+  const cellW = Math.round(baseCellW * zoomLevel);
+  const cellH = Math.round(baseCellH * zoomLevel);
+  const svgW = gridWidth * cellW + pad * 2;
+  const svgH = gridHeight * cellH + pad * 2;
   const isZoomed = zoomLevel > 1;
 
   const toSvg = (gx: number, gy: number) => ({
-    sx: pad + (gx - gridOffsetX) * cellSize,
+    sx: pad + (gx - gridOffsetX) * cellW,
     sy: originTopLeft
-      ? pad + (gy - gridOffsetY) * cellSize
-      : pad + (gridHeight - (gy - gridOffsetY)) * cellSize,
+      ? pad + (gy - gridOffsetY) * cellH
+      : pad + (gridHeight - (gy - gridOffsetY)) * cellH,
   });
 
   const fromSvg = (screenX: number, screenY: number) => {
@@ -459,10 +493,10 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
       sx = screenX * (logicalW / rect.width);
       sy = screenY * (logicalH / rect.height);
     }
-    const rawX = (sx - pad) / cellSize + gridOffsetX;
+    const rawX = (sx - pad) / cellW + gridOffsetX;
     const rawY = originTopLeft
-      ? (sy - pad) / cellSize + gridOffsetY
-      : gridOffsetY + gridHeight - (sy - pad) / cellSize;
+      ? (sy - pad) / cellH + gridOffsetY
+      : gridOffsetY + gridHeight - (sy - pad) / cellH;
     if (freeMode || rulerMode) {
       // Sub-grid precision: round to 0.1
       return {
@@ -646,6 +680,23 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             Borrar reglas ({rulerLines.length})
           </Button>
         )}
+        <span className="text-[9px] text-muted-foreground ml-2">Cotas:</span>
+        <Button
+          variant={showDegrees ? 'default' : 'outline'}
+          size="sm"
+          className="h-5 text-[10px] px-2 gap-0.5"
+          onClick={() => setShowDegrees(!showDegrees)}
+        >
+          📐 º
+        </Button>
+        <Button
+          variant={showPercent ? 'default' : 'outline'}
+          size="sm"
+          className="h-5 text-[10px] px-2 gap-0.5"
+          onClick={() => setShowPercent(!showPercent)}
+        >
+          📊 %
+        </Button>
         {pdfTitle && (
           <GridPdfExport
             title={pdfTitle}
@@ -759,9 +810,9 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                 <rect
                   key={`c-${col}-${row}`}
                   x={sx}
-                  y={originTopLeft ? sy : sy - cellSize}
-                  width={cellSize}
-                  height={cellSize}
+                  y={originTopLeft ? sy : sy - cellH}
+                  width={cellW}
+                  height={cellH}
                   fill={isEven ? 'hsl(var(--muted))' : 'hsl(var(--background))'}
                   stroke="hsl(var(--border))"
                   strokeWidth={0.5}
@@ -805,22 +856,22 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             const { sx: rx, sy: ry } = originTopLeft
               ? toSvg(startGx, startGy)
               : toSvg(startGx, startGy + spanH);
-            const rectY = originTopLeft ? ry : ry - cellSize;
+            const rectY = originTopLeft ? ry : ry - cellH;
             return (
               <g key={`pr-${pr.id}`}>
                 <rect
                   x={rx}
                   y={rectY}
-                  width={spanW * cellSize}
-                  height={spanH * cellSize}
+                  width={spanW * cellW}
+                  height={spanH * cellH}
                   fill="hsl(var(--accent) / 0.25)"
                   stroke="hsl(var(--accent-foreground) / 0.4)"
                   strokeWidth={1}
                   rx={2}
                 />
                 <text
-                  x={rx + (spanW * cellSize) / 2}
-                  y={rectY + (spanH * cellSize) / 2}
+                  x={rx + (spanW * cellW) / 2}
+                  y={rectY + (spanH * cellH) / 2}
                   textAnchor="middle"
                   dominantBaseline="central"
                   className="text-[7px] fill-accent-foreground font-medium select-none pointer-events-none"
@@ -948,12 +999,14 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                   const wallOff = 10;
                   const wmx = emx + enx * wallOff;
                   const wmy = emy + eny * wallOff;
+                  const slopeStr = edgeSlopeInfo(a, b, hScale, vScale, showDegrees, showPercent);
+                  const labelText = slopeStr ? `${eLenMm} mm · ${slopeStr}` : `${eLenMm} mm`;
                   return (
                     <text key={`oe-${op.id}-${ei}`} x={wmx} y={wmy} textAnchor="middle" dominantBaseline="central"
                       transform={`rotate(${eRot}, ${wmx}, ${wmy})`}
                       className="text-[6px] font-semibold select-none pointer-events-none"
                       fill={isSelected ? 'hsl(var(--primary) / 0.8)' : 'hsl(200 80% 50% / 0.8)'}>
-                      {eLenMm} mm
+                      {labelText}
                     </text>
                   );
                 })}
@@ -1093,7 +1146,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                         transform={`rotate(${rotAngle}, ${omx + nx * 6}, ${omy + ny * 6})`}
                         className="text-[6px] font-bold select-none pointer-events-none"
                         fill="hsl(var(--muted-foreground))">
-                        {lenMm} mm
+                        {lenMm} mm{(() => { const s = edgeSlopeInfo(a, b, hScale, vScale, showDegrees, showPercent); return s ? ` · ${s}` : ''; })()}
                       </text>
                     </>
                   )}
@@ -1103,7 +1156,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                     transform={`rotate(${rotAngle}, ${imx}, ${imy})`}
                     className="text-[7px] font-semibold select-none pointer-events-none"
                     fill="hsl(200 80% 50%)">
-                    {lenMm} mm
+                    {lenMm} mm{(() => { const s = edgeSlopeInfo(a, b, hScale, vScale, showDegrees, showPercent); return s ? ` · ${s}` : ''; })()}
                   </text>
                 </g>
               );
@@ -1130,7 +1183,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                 <text x={rmx} y={rmy - 8} textAnchor="middle" dominantBaseline="central"
                   transform={`rotate(${rRot}, ${rmx}, ${rmy - 8})`}
                   fill={RULER_COLOR} fontSize={8} fontWeight="bold" className="select-none">
-                  {rLenMm} mm
+                  {rLenMm} mm{(() => { const s = edgeSlopeInfo(rl.start, rl.end, hScale, vScale, showDegrees, showPercent); return s ? ` · ${s}` : ''; })()}
                 </text>
               </g>
             );
@@ -1158,7 +1211,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                       <text x={pmx} y={pmy - 8} textAnchor="middle" dominantBaseline="central"
                         transform={`rotate(${pRot}, ${pmx}, ${pmy - 8})`}
                         fill={RULER_COLOR} fontSize={8} fontWeight="bold" opacity={0.7} className="select-none pointer-events-none">
-                        {previewLenMm} mm
+                        {previewLenMm} mm{(() => { const s = edgeSlopeInfo(rulerStart, hoverCell!, hScale, vScale, showDegrees, showPercent); return s ? ` · ${s}` : ''; })()}
                       </text>
                     )}
                   </>
@@ -1226,8 +1279,8 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             <rect
               x={pad}
               y={pad}
-              width={gridWidth * cellSize}
-              height={gridHeight * cellSize}
+              width={gridWidth * cellW}
+              height={gridHeight * cellH}
               fill="transparent"
               className={rulerMode ? 'cursor-crosshair' : 'cursor-cell'}
               onClick={(e) => {

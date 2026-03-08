@@ -2125,10 +2125,17 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
             });
           }}
           onOpenFullDetail={(itemId) => {
-            // Open full-detail dialog from graph without leaving graph mode
             setFullDetailItemId(itemId);
             setLastWorkedItemId(itemId);
           }}
+          onUpdateItem={handleUpdateItemFromGraph}
+          onAddSibling={(parentId) => {
+            handleAddFromGraph(parentId);
+          }}
+          onAddChild={(parentId) => {
+            handleAddFromGraph(parentId);
+          }}
+          onDeleteItem={handleDeleteById}
         />
       ) : (
         <div className="space-y-1">

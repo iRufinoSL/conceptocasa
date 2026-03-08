@@ -2349,7 +2349,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                   activeName={r.name}
                   otherPolygons={rooms
                     .filter(other => other.id !== r.id && other.vertical_section_id === r.vertical_section_id && other.floor_polygon && other.floor_polygon.length >= 3)
-                    .map(other => ({ id: other.id, name: other.name, vertices: other.floor_polygon!, isBase: other.is_base }))}
+                    .map(other => ({ id: other.id, name: other.name, vertices: other.floor_polygon!, isBase: other.is_base, walls: allWalls.filter(w => w.room_id === other.id) }))}
+                  activeWalls={allWalls.filter(w => w.room_id === r.id)}
                   onSwitchRoom={switchGridEditRoom}
                   onOtherPolygonChange={handleOtherPolygonChangeZ}
                    onOtherPolygonRename={handleOtherPolygonRename}

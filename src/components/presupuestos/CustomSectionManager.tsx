@@ -937,12 +937,15 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                     <circle cx={offX} cy={offY} r={6}
                       fill={isThisWallSelected ? (isHoriz ? 'hsl(150 70% 40%)' : 'hsl(30 80% 50%)') : 'hsl(var(--muted-foreground))'}
                       className="cursor-pointer"
+                      data-pdf-wall-number=""
                       onClick={(e) => {
                         e.stopPropagation();
                         handleWallEdgeClick(pseudoRoom, ei, v, next, emx, emy);
                       }}
                     />
-                    <text x={offX} y={offY} textAnchor="middle" dominantBaseline="central" fill="hsl(var(--primary-foreground))" fontSize="7" fontWeight="bold" className="pointer-events-none select-none">
+                    <text x={offX} y={offY} textAnchor="middle" dominantBaseline="central" fill="hsl(var(--primary-foreground))" fontSize="7" fontWeight="bold" className="pointer-events-none select-none"
+                      data-pdf-wall-number=""
+                    >
                       {ei + 1}
                     </text>
                   </>
@@ -999,6 +1002,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
               transform={`rotate(${eRotAngle}, ${emx + nx * offPx}, ${emy + ny * offPx})`}
               fontSize={fontSize} fontWeight={700} fill={color}
               className="pointer-events-none select-none"
+              data-pdf-dimension=""
             >{eLenMm} mm</text>
           );
         })}
@@ -1007,6 +1011,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
           <text key={`vl-${vi}`} x={toSvg(v.x, v.y).sx} y={toSvg(v.x, v.y).sy - (isEditingThis ? 10 : 7)}
             textAnchor="middle" fontSize={6} fontWeight={600} fill={color}
             className="pointer-events-none select-none"
+            data-pdf-vertex-label=""
           >{hLabel}{v.x},{vLabel}{v.y}</text>
         ))}
 
@@ -1034,13 +1039,16 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
         <rect x={cxSvg - 30} y={cySvg - 10} width={60} height={20} rx={3}
           fill="hsl(45 100% 50% / 0.85)"
           className={isEditingThis ? '' : 'cursor-pointer'}
+          data-pdf-workspace-name=""
           onClick={() => !isEditingThis && selectWorkspace(proj)}
         />
         <text x={cxSvg} y={cySvg - 1} textAnchor="middle" fontSize={fontSize} fontWeight={700}
           fill="hsl(0 0% 10%)" className="pointer-events-none select-none"
+          data-pdf-workspace-name=""
         >{proj.workspaceName}</text>
         <text x={cxSvg} y={cySvg + 8} textAnchor="middle" fontSize={fontSize - 1} fontWeight={500}
           fill="hsl(0 0% 25%)" className="pointer-events-none select-none"
+          data-pdf-workspace-name=""
         >{areaVal.toFixed(2)} m²</text>
         {/* Draggable vertices */}
         {isEditingThis && verts.map((v, vi) => {
@@ -1113,6 +1121,10 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
             subtitle={`${section.name} (${section.axis}=${section.axisValue})`}
             containerRef={gridContainerRef}
             size="sm"
+            hAxisLabel={hLabel}
+            vAxisLabel={vLabel}
+            scaleH={scaleH}
+            scaleV={scaleV}
           />
           {/* Draw workspace directly on section */}
           <Button
@@ -1385,6 +1397,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
               className="fill-muted-foreground"
               fontSize={val === 0 ? 10 : 7}
               fontWeight={val === 0 ? 700 : 400}
+              data-pdf-axis-label=""
             >
               {hLabel}{val}
             </text>
@@ -1398,6 +1411,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
           className="fill-muted-foreground"
           fontSize={9}
           fontWeight={600}
+          data-pdf-axis-label=""
         >
           {hLabel}
         </text>
@@ -1414,6 +1428,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
               className="fill-muted-foreground"
               fontSize={val === 0 ? 10 : 7}
               fontWeight={val === 0 ? 700 : 400}
+              data-pdf-axis-label=""
             >
               {vLabel}{val}
             </text>
@@ -1428,6 +1443,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
           className="fill-muted-foreground"
           fontSize={9}
           fontWeight={600}
+          data-pdf-axis-label=""
         >
           {vLabel}
         </text>
@@ -1570,6 +1586,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                             stroke="white"
                             strokeWidth={0.3}
                             className="pointer-events-none select-none"
+                            data-pdf-dimension=""
                           >
                             {wallLenMm} mm
                           </text>
@@ -1587,12 +1604,15 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                                 <circle cx={offX} cy={offY} r={6}
                                   fill={isThisWallSelected ? (isHoriz ? 'hsl(150 70% 40%)' : 'hsl(30 80% 50%)') : 'hsl(var(--muted-foreground))'}
                                   className="cursor-pointer"
+                                  data-pdf-wall-number=""
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     handleWallEdgeClick(room, i, currGrid, nextGrid, mx, my);
                                   }}
                                 />
-                                <text x={offX} y={offY} textAnchor="middle" dominantBaseline="central" fill="hsl(var(--primary-foreground))" fontSize="7" fontWeight="bold" className="pointer-events-none select-none">
+                                <text x={offX} y={offY} textAnchor="middle" dominantBaseline="central" fill="hsl(var(--primary-foreground))" fontSize="7" fontWeight="bold" className="pointer-events-none select-none"
+                                  data-pdf-wall-number=""
+                                >
                                   {i + 1}
                                 </text>
                               </>
@@ -1637,6 +1657,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                       height={22}
                       rx={3}
                       fill="hsl(45 100% 50% / 0.85)"
+                      data-pdf-workspace-name=""
                     />
                     <text
                       x={cxSvg}
@@ -1645,6 +1666,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                       fontSize={Math.round(8 * Math.max(1, zoomLevel * 0.7))}
                       fontWeight={700}
                       fill="hsl(0 0% 10%)"
+                      data-pdf-workspace-name=""
                     >
                       {room.name}
                     </text>
@@ -1655,6 +1677,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                       fontSize={Math.round(7 * Math.max(1, zoomLevel * 0.7))}
                       fontWeight={600}
                       fill="hsl(0 0% 15%)"
+                      data-pdf-workspace-name=""
                     >
                       {areaM2.toFixed(2)} m²
                     </text>
@@ -1674,7 +1697,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                 const perimFontSize = Math.round(8 * Math.max(1, zoomLevel * 0.8));
 
                 return (
-                  <g className="pointer-events-none">
+                  <g className="pointer-events-none" data-pdf-dimension="">
                     <line x1={globalLeft} y1={topY} x2={globalRight} y2={topY} stroke="hsl(0 70% 50%)" strokeWidth={1.2} />
                     <line x1={globalLeft} y1={globalTop} x2={globalLeft} y2={topY} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
                     <line x1={globalRight} y1={globalTop} x2={globalRight} y2={topY} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
@@ -1789,7 +1812,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                 const midY = (gtop + gbottom) / 2;
 
                 return (
-                  <g className="pointer-events-none">
+                  <g className="pointer-events-none" data-pdf-dimension="">
                     {totalWidthMm > 0 && (
                       <>
                         <line x1={gleft} y1={gtop - off} x2={gright} y2={gtop - off} stroke="hsl(0 70% 50%)" strokeWidth={1.2} />
@@ -1921,23 +1944,32 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                     textAnchor="middle" dominantBaseline="central"
                     transform={`rotate(${eRotAngle}, ${emx + nx * 10}, ${emy + ny * 10})`}
                     fontSize={fontSize} fontWeight={700} fill={color}
-                    className="pointer-events-none select-none">{eLenMm} mm</text>
+                    className="pointer-events-none select-none"
+                    data-pdf-dimension=""
+                  >{eLenMm} mm</text>
                 );
               })}
               {/* Vertex labels */}
               {verts.map((v, vi) => (
                 <text key={`vl-${vi}`} x={toSvg(v.x, v.y).sx} y={toSvg(v.x, v.y).sy - 7}
                   textAnchor="middle" fontSize={6} fontWeight={600} fill={color}
-                  className="pointer-events-none select-none">{hLabel}{v.x},{vLabel}{v.y}</text>
+                  className="pointer-events-none select-none"
+                  data-pdf-vertex-label=""
+                >{hLabel}{v.x},{vLabel}{v.y}</text>
               ))}
               {/* Name + area label */}
               <rect x={cxSvg - 30} y={cySvg - 10} width={60} height={20} rx={3}
                 fill="hsl(45 100% 50% / 0.85)" className="cursor-pointer"
+                data-pdf-workspace-name=""
                 onClick={() => !isEditingThisPoly && selectSectionPolygon(poly)} />
               <text x={cxSvg} y={cySvg - 1} textAnchor="middle" fontSize={fontSize} fontWeight={700}
-                fill="hsl(0 0% 10%)" className="pointer-events-none select-none">{poly.name}</text>
+                fill="hsl(0 0% 10%)" className="pointer-events-none select-none"
+                data-pdf-workspace-name=""
+              >{poly.name}</text>
               <text x={cxSvg} y={cySvg + 8} textAnchor="middle" fontSize={fontSize - 1} fontWeight={500}
-                fill="hsl(0 0% 25%)" className="pointer-events-none select-none">{areaVal.toFixed(2)} m²</text>
+                fill="hsl(0 0% 25%)" className="pointer-events-none select-none"
+                data-pdf-workspace-name=""
+              >{areaVal.toFixed(2)} m²</text>
               {/* Draggable vertices in edit mode */}
               {isEditingThisPoly && verts.map((v, vi) => {
                 const { sx, sy } = toSvg(v.x, v.y);

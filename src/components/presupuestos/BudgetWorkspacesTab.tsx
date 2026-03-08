@@ -2347,14 +2347,40 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                       if (targetSection) openSectionEditor(targetId, targetSection);
                     }}
                     onOtherPolygonChange={(otherId, newVerts) => handleOtherPolygonChangeSection(otherId, newVerts, view.sectionId)}
-                    onOtherPolygonRename={handleOtherPolygonRename}
-                    pdfTitle={`${section.name} — ${r.name}`}
-                    pdfSubtitle={`${section.axis}=${section.axisValue}`}
-                    hAxisLabel={hLabel}
-                    vAxisLabel={vLabel}
-                    hScaleMm={scaleH}
-                    vScaleMm={scaleV}
-                  />
+                     onOtherPolygonRename={handleOtherPolygonRename}
+                     onSelectOtherWorkspace={setSelectedOtherWorkspaceId}
+                     pdfTitle={`${section.name} — ${r.name}`}
+                     pdfSubtitle={`${section.axis}=${section.axisValue}`}
+                     hAxisLabel={hLabel}
+                     vAxisLabel={vLabel}
+                     hScaleMm={scaleH}
+                     vScaleMm={scaleV}
+                   />
+                   {/* Sibling workspace inline property editor (Y/X) */}
+                   {selectedOtherWorkspaceId && (() => {
+                     const sibRoom = rooms.find(rm => rm.id === selectedOtherWorkspaceId);
+                     if (!sibRoom) return null;
+                     const sibWalls = allWalls.filter(w => w.room_id === sibRoom.id);
+                     const sibPoly = sibRoom.floor_polygon;
+                     const sibEdgeCount = sibPoly ? sibPoly.length : 0;
+                     return (
+                       <div className="border rounded p-2 space-y-1.5 bg-accent/10">
+                         <div className="flex items-center gap-2">
+                           <span className="text-[10px] font-semibold">✏️ Editando: {sibRoom.name}</span>
+                           <Button variant="ghost" size="sm" className="h-5 text-[9px]" onClick={() => setSelectedOtherWorkspaceId(null)}>✕ Cerrar</Button>
+                         </div>
+                         <FaceRow label="🟫 Suelo" type={getFloorType(sibRoom)} options={FLOOR_CEILING_TYPES} onChange={(v) => updateFloorCeiling(sibRoom.id, 'has_floor', v as FloorCeilingType)} />
+                         {Array.from({ length: sibEdgeCount }).map((_, i) => {
+                           const dbWallIndex = i + 1;
+                           const wall = sibWalls.find(w => w.wall_index === dbWallIndex);
+                           return (
+                             <FaceRow key={i} label={`🧱 P${i + 1} ${wallLabel(i, sibEdgeCount)}`} type={normalizeWallType(wall?.wall_type)} options={WALL_TYPES} onChange={(v) => ensureAndUpdateWallType(sibRoom.id, i, v, wall?.id)} />
+                           );
+                         })}
+                         <FaceRow label="⬜ Techo" type={getCeilingType(sibRoom)} options={FLOOR_CEILING_TYPES} onChange={(v) => updateFloorCeiling(sibRoom.id, 'has_ceiling', v as FloorCeilingType)} />
+                       </div>
+                     );
+                   })()}
                   <div className="flex items-center justify-between">
                     <div className="flex flex-wrap gap-1.5">
                       {sectionEditVertices.length >= 3 && (

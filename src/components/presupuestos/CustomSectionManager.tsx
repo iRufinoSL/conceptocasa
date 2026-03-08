@@ -184,6 +184,8 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
   const [editingPolygonId, setEditingPolygonId] = useState<string | null>(null);
   const [editingPolygonName, setEditingPolygonName] = useState('');
   const [showPolygonsList, setShowPolygonsList] = useState(false);
+  const [selectedFaceType, setSelectedFaceType] = useState('Suelo');
+  const [selectedExistingWorkspace, setSelectedExistingWorkspace] = useState('');
   const gridCount = gridMax - gridMin + 1;
   const baseCellSize = 28;
   const cellSize = Math.round(baseCellSize * zoomLevel);
@@ -568,22 +570,94 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
     ]);
   };
 
-  // ── NEW: Start creating a new workspace directly on the section ──
+  // ── Face types ──
+  const FACE_OPTIONS_BY_SECTION: Record<string, string[]> = {
+    vertical: ['Suelo', 'Techo'],
+    longitudinal: ['Pared'],
+    transversal: ['Pared'],
+  };
+
+  const getDefaultFaceType = () => {
+    return section.sectionType === 'vertical' ? 'Suelo' : 'Pared';
+  };
+
+  // Collect all unique workspace names across ALL sections
+  const allWorkspaceNames = (() => {
+    const names = new Set<string>();
+    // From rooms (existing workspace system)
+    rooms?.forEach(r => names.add(r.name));
+    // From wallProjections
+    wallProjections?.forEach(wp => names.add(wp.workspaceName));
+    // From all section polygons — extract workspace name from polygon name
+    allSections?.forEach(s => {
+      s.polygons?.forEach(p => {
+        // Extract workspace name: "Cocina (Suelo)" → "Cocina", "Cocina P1" → "Cocina"
+        const wsName = p.name.replace(/\s*\((?:Suelo|Techo|Pared\s*\d*)\)\s*$/, '').replace(/\s+P\d+$/, '').trim();
+        if (wsName) names.add(wsName);
+      });
+    });
+    return Array.from(names).sort();
+  })();
+
+  // Count existing faces for a workspace to auto-number walls
+  const getNextWallIndex = (workspaceName: string) => {
+    let maxIdx = 0;
+    allSections?.forEach(s => {
+      s.polygons?.forEach(p => {
+        const match = p.name.match(new RegExp(`^${workspaceName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s+P(\\d+)$`));
+        if (match) maxIdx = Math.max(maxIdx, parseInt(match[1]));
+        if (p.name === `${workspaceName} (Pared)`) maxIdx = Math.max(maxIdx, 1);
+      });
+    });
+    return maxIdx + 1;
+  };
+
+  // Build the full polygon display name
+  const buildPolygonName = (workspaceName: string, faceType: string, wallIndex?: number) => {
+    if (faceType === 'Pared') {
+      const idx = wallIndex ?? getNextWallIndex(workspaceName);
+      return `${workspaceName} P${idx}`;
+    }
+    return `${workspaceName} (${faceType})`;
+  };
+
+  // Build polygon ID
+  const buildPolygonId = (workspaceName: string, faceType: string, wallIndex?: number) => {
+    const sanitized = workspaceName.replace(/\s+/g, '_').toLowerCase();
+    if (faceType === 'Suelo') return `ws_${sanitized}_suelo`;
+    if (faceType === 'Techo') return `ws_${sanitized}_techo`;
+    const idx = wallIndex ?? getNextWallIndex(workspaceName);
+    return `ws_${sanitized}_pared${idx}`;
+  };
+
+
+  // ── Start drawing a face for a workspace ──
   const startNewWorkspaceDrawing = () => {
-    const name = newWorkspaceName.trim();
-    if (!name) { toast.error('Introduce un nombre para el Espacio'); return; }
-    const newId = `section_poly_${generateId()}`;
+    const wsName = newWorkspaceName.trim() || selectedExistingWorkspace;
+    if (!wsName) { toast.error('Selecciona o crea un Espacio de trabajo'); return; }
+
+    const wallIdx = selectedFaceType === 'Pared' ? getNextWallIndex(wsName) : undefined;
+    const polyId = buildPolygonId(wsName, selectedFaceType, wallIdx);
+    const polyName = buildPolygonName(wsName, selectedFaceType, wallIdx);
+
+    // Check if this face already exists
+    const existing = section.polygons?.find(p => p.id === polyId);
+    if (existing && selectedFaceType !== 'Pared') {
+      toast.error(`"${polyName}" ya existe en esta sección. Edítalo desde la lista.`);
+      return;
+    }
+
     setIsCreatingWorkspace(true);
     setSelectedWorkspaceId(null);
-    setEditingPolygonId(newId);
-    setEditingPolygonName(name);
+    setEditingPolygonId(polyId);
+    setEditingPolygonName(polyName);
     setEditVertices([]);
     setDrawingMode(true);
     setShowNewWorkspaceInput(false);
-    toast.info(`Dibuja "${name}" — Clic para añadir vértices, doble clic para cerrar.`);
+    toast.info(`Dibuja "${polyName}" — Clic para añadir vértices, doble clic para cerrar.`);
   };
 
-  // Save a newly drawn or edited standalone polygon
+  // Save a newly drawn or edited polygon
   const saveStandalonePolygon = () => {
     if (!editingPolygonId || !allSections || !onSectionsChange) return;
     if (editVertices.length < 1) { toast.error('Mínimo 1 vértice'); return; }
@@ -614,6 +688,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
     setDrawingMode(false);
     setIsCreatingWorkspace(false);
     setNewWorkspaceName('');
+    setSelectedExistingWorkspace('');
   };
 
   const cancelNewWorkspace = () => {
@@ -624,6 +699,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
     setIsCreatingWorkspace(false);
     setShowNewWorkspaceInput(false);
     setNewWorkspaceName('');
+    setSelectedExistingWorkspace('');
   };
 
   const selectSectionPolygon = (poly: SectionPolygon) => {
@@ -647,28 +723,25 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
     });
     onSectionsChange(updatedSections);
     if (editingPolygonId === polyId) cancelNewWorkspace();
-    toast.success('Espacio eliminado');
+    toast.success('Cara eliminada');
   };
 
-  const renameSectionPolygon = (polyId: string, newName: string) => {
-    if (!allSections || !onSectionsChange || !newName.trim()) return;
-    const updatedSections = allSections.map(s => {
-      if (s.id !== section.id) return s;
-      return {
-        ...s,
-        polygons: (s.polygons || []).map(p =>
-          p.id === polyId ? { ...p, name: newName.trim() } : p
-        ),
-      };
-    });
-    onSectionsChange(updatedSections);
-  };
-
-  // Get standalone polygons (not tied to existing wallProjections)
+  // Get all section polygons (excluding wallProjection-bound ones)
   const standalonePolygons = (section.polygons || []).filter(p => {
     if (wallProjections?.some(wp => wp.workspaceId === p.id)) return false;
     return true;
   });
+
+  // Group standalone polygons by workspace name
+  const groupedPolygons = (() => {
+    const groups: Record<string, SectionPolygon[]> = {};
+    standalonePolygons.forEach(p => {
+      const wsName = p.name.replace(/\s*\((?:Suelo|Techo|Pared\s*\d*)\)\s*$/, '').replace(/\s+P\d+$/, '').trim();
+      if (!groups[wsName]) groups[wsName] = [];
+      groups[wsName].push(p);
+    });
+    return groups;
+  })();
 
 
   const renderWorkspaceGeometry = (
@@ -1038,10 +1111,15 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
             variant={showNewWorkspaceInput ? 'default' : 'outline'}
             size="sm"
             className="h-5 text-[9px] gap-0.5 px-1.5"
-            onClick={() => { setShowNewWorkspaceInput(!showNewWorkspaceInput); setNewWorkspaceName(''); }}
+            onClick={() => {
+              setShowNewWorkspaceInput(!showNewWorkspaceInput);
+              setNewWorkspaceName('');
+              setSelectedExistingWorkspace('');
+              setSelectedFaceType(getDefaultFaceType());
+            }}
             disabled={isCreatingWorkspace || !!editingPolygonId}
           >
-            <Plus className="h-3 w-3" /> Nuevo Espacio
+            <Plus className="h-3 w-3" /> Dibujar Cara
           </Button>
           {/* Toggle polygon list */}
           {standalonePolygons.length > 0 && (
@@ -1051,59 +1129,128 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
               className="h-5 text-[9px] gap-0.5 px-1.5"
               onClick={() => setShowPolygonsList(!showPolygonsList)}
             >
-              <Pencil className="h-3 w-3" /> Espacios ({standalonePolygons.length})
+              <Pencil className="h-3 w-3" /> Caras ({standalonePolygons.length})
             </Button>
           )}
         </div>
       </div>
 
-      {/* ── New workspace inline input ── */}
+      {/* ── New face drawing panel ── */}
       {showNewWorkspaceInput && (
-        <div className="flex items-center gap-1.5 px-2 py-1.5 bg-accent/30 border border-accent rounded-md mx-1">
-          <span className="text-[10px] font-medium text-foreground shrink-0">Nombre:</span>
-          <Input
-            className="h-6 text-[10px] flex-1 max-w-[180px]"
-            placeholder="Ej: Salón, Cocina..."
-            value={newWorkspaceName}
-            onChange={e => setNewWorkspaceName(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && startNewWorkspaceDrawing()}
-            autoFocus
-          />
-          <Button size="sm" className="h-6 text-[10px] gap-0.5" onClick={startNewWorkspaceDrawing} disabled={!newWorkspaceName.trim()}>
-            <PenTool className="h-3 w-3" /> Dibujar
-          </Button>
-          <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => { setShowNewWorkspaceInput(false); setNewWorkspaceName(''); }}>
-            Cancelar
-          </Button>
+        <div className="px-2 py-2 bg-accent/20 border border-accent rounded-md mx-1 space-y-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Workspace selector: existing or new */}
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] font-semibold text-foreground shrink-0">Espacio:</span>
+              {allWorkspaceNames.length > 0 && (
+                <select
+                  className="h-6 text-[10px] rounded border border-input bg-background px-1.5"
+                  value={selectedExistingWorkspace}
+                  onChange={e => { setSelectedExistingWorkspace(e.target.value); setNewWorkspaceName(''); }}
+                >
+                  <option value="">— Nuevo —</option>
+                  {allWorkspaceNames.map(name => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                </select>
+              )}
+              {!selectedExistingWorkspace && (
+                <Input
+                  className="h-6 text-[10px] w-32"
+                  placeholder="Nombre nuevo..."
+                  value={newWorkspaceName}
+                  onChange={e => setNewWorkspaceName(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && startNewWorkspaceDrawing()}
+                  autoFocus
+                />
+              )}
+            </div>
+
+            {/* Face type selector */}
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] font-semibold text-foreground shrink-0">Cara:</span>
+              <div className="flex items-center gap-0.5">
+                {(FACE_OPTIONS_BY_SECTION[section.sectionType] || ['Suelo']).map(face => (
+                  <Button
+                    key={face}
+                    variant={selectedFaceType === face ? 'default' : 'outline'}
+                    size="sm"
+                    className="h-5 text-[9px] px-2"
+                    onClick={() => setSelectedFaceType(face)}
+                  >
+                    {face}
+                  </Button>
+                ))}
+                {/* Allow Pared on Z sections too for special cases */}
+                {section.sectionType === 'vertical' && (
+                  <Button
+                    variant={selectedFaceType === 'Pared' ? 'default' : 'ghost'}
+                    size="sm"
+                    className="h-5 text-[9px] px-2"
+                    onClick={() => setSelectedFaceType('Pared')}
+                  >
+                    Pared
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <Button
+              size="sm"
+              className="h-6 text-[10px] gap-0.5"
+              onClick={startNewWorkspaceDrawing}
+              disabled={!newWorkspaceName.trim() && !selectedExistingWorkspace}
+            >
+              <PenTool className="h-3 w-3" /> Dibujar {selectedFaceType}
+            </Button>
+            <span className="text-[9px] text-muted-foreground">
+              {(selectedExistingWorkspace || newWorkspaceName.trim()) && selectedFaceType
+                ? `→ "${buildPolygonName(selectedExistingWorkspace || newWorkspaceName.trim(), selectedFaceType)}"`
+                : ''}
+            </span>
+            <Button variant="ghost" size="sm" className="h-6 text-[10px] ml-auto" onClick={() => { setShowNewWorkspaceInput(false); setNewWorkspaceName(''); setSelectedExistingWorkspace(''); }}>
+              Cancelar
+            </Button>
+          </div>
         </div>
       )}
 
-      {/* ── Polygon list panel ── */}
+      {/* ── Polygon list panel (grouped by workspace) ── */}
       {showPolygonsList && standalonePolygons.length > 0 && (
-        <div className="mx-1 px-2 py-1.5 border border-border rounded-md bg-card space-y-1">
-          <span className="text-[10px] font-semibold text-foreground">Espacios en esta sección:</span>
-          {standalonePolygons.map((poly, pi) => {
-            const isActive = editingPolygonId === poly.id;
-            const vertCount = poly.vertices.length;
-            const color = PROJ_COLORS[(pi + (wallProjections?.length || 0)) % PROJ_COLORS.length];
-            return (
-              <div key={poly.id} className={`flex items-center gap-1.5 px-1.5 py-1 rounded transition-colors ${isActive ? 'bg-primary/10 border border-primary/30' : 'hover:bg-accent/30'}`}>
-                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
-                <span className="text-[10px] font-medium flex-1 truncate cursor-pointer" onClick={() => selectSectionPolygon(poly)}>
-                  {poly.name}
-                </span>
-                <Badge variant="outline" className="text-[8px] h-3.5 shrink-0">{geometryTypeLabel(vertCount)}</Badge>
-                <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0" onClick={() => selectSectionPolygon(poly)} title="Editar geometría">
-                  <Pencil className="h-3 w-3" />
-                </Button>
-                <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0 text-destructive hover:bg-destructive/10" onClick={() => deleteSectionPolygon(poly.id)} title="Eliminar">
-                  <Trash2 className="h-3 w-3" />
-                </Button>
-              </div>
-            );
-          })}
+        <div className="mx-1 px-2 py-1.5 border border-border rounded-md bg-card space-y-1.5">
+          <span className="text-[10px] font-semibold text-foreground">Caras en esta sección:</span>
+          {Object.entries(groupedPolygons).map(([wsName, polys]) => (
+            <div key={wsName} className="space-y-0.5">
+              <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wide">{wsName}</span>
+              {polys.map((poly, pi) => {
+                const isActive = editingPolygonId === poly.id;
+                const vertCount = poly.vertices.length;
+                const color = PROJ_COLORS[(standalonePolygons.indexOf(poly) + (wallProjections?.length || 0)) % PROJ_COLORS.length];
+                // Extract face label from name
+                const faceLabel = poly.name.replace(wsName, '').trim();
+                return (
+                  <div key={poly.id} className={`flex items-center gap-1.5 px-1.5 py-0.5 rounded transition-colors ${isActive ? 'bg-primary/10 border border-primary/30' : 'hover:bg-accent/30'}`}>
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                    <span className="text-[10px] font-medium flex-1 truncate cursor-pointer" onClick={() => selectSectionPolygon(poly)}>
+                      {faceLabel || poly.name}
+                    </span>
+                    <Badge variant="outline" className="text-[8px] h-3.5 shrink-0">{geometryTypeLabel(vertCount)}</Badge>
+                    <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0" onClick={() => selectSectionPolygon(poly)} title="Editar">
+                      <Pencil className="h-3 w-3" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0 text-destructive hover:bg-destructive/10" onClick={() => deleteSectionPolygon(poly.id)} title="Eliminar">
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
         </div>
       )}
+
 
 
       {showPlacementDialog && wallProjections && (() => {

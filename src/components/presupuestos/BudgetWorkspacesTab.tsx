@@ -1723,6 +1723,168 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
         </svg>
       </div>
 
+      {/* ── Context menu (right-click / long-press) ── */}
+      {contextMenu && (
+        <div
+          className="fixed z-50 bg-popover border border-border rounded-md shadow-lg py-1 min-w-[160px]"
+          style={{ left: contextMenu.screenX, top: contextMenu.screenY }}
+          onClick={() => setContextMenu(null)}
+          onMouseLeave={() => setContextMenu(null)}
+        >
+          {contextMenu.type === 'vertex' && (
+            <>
+              <button
+                className="w-full text-left px-3 py-1.5 text-xs hover:bg-accent transition-colors flex items-center gap-2"
+                onClick={() => {
+                  const v = vertices[contextMenu.index];
+                  setEditingVertexIdx(contextMenu.index);
+                  setEditCoordX(String(v.x));
+                  setEditCoordY(String(v.y));
+                  setSelectedVertexIdx(contextMenu.index);
+                  setContextMenu(null);
+                }}
+              >
+                ✏️ Editar coordenadas
+              </button>
+              <button
+                className="w-full text-left px-3 py-1.5 text-xs hover:bg-accent transition-colors flex items-center gap-2"
+                onClick={() => {
+                  if (vertices.length <= 3) {
+                    toast.error('Mínimo 3 vértices');
+                  } else {
+                    const next = vertices.filter((_, idx) => idx !== contextMenu.index);
+                    onChange(next);
+                    setSelectedVertexIdx(null);
+                    toast.success(`Vértice ${contextMenu.index + 1} eliminado`);
+                  }
+                  setContextMenu(null);
+                }}
+              >
+                🗑️ Eliminar vértice
+              </button>
+              <button
+                className="w-full text-left px-3 py-1.5 text-xs hover:bg-accent transition-colors flex items-center gap-2"
+                onClick={() => {
+                  setSelectedVertexIdx(contextMenu.index);
+                  setContextMenu(null);
+                  toast('Arrastra el vértice a su nueva posición');
+                }}
+              >
+                ↕️ Mover vértice
+              </button>
+            </>
+          )}
+          {contextMenu.type === 'edge' && (
+            <>
+              <button
+                className="w-full text-left px-3 py-1.5 text-xs hover:bg-accent transition-colors flex items-center gap-2"
+                onClick={() => {
+                  const a = vertices[contextMenu.index];
+                  const b = vertices[(contextMenu.index + 1) % vertices.length];
+                  const midX = Math.round(((a.x + b.x) / 2) * 10) / 10;
+                  const midY = Math.round(((a.y + b.y) / 2) * 10) / 10;
+                  const next = [...vertices];
+                  next.splice(contextMenu.index + 1, 0, { x: midX, y: midY });
+                  onChange(next);
+                  setSelectedVertexIdx(contextMenu.index + 1);
+                  toast.success(`Arista ${contextMenu.index + 1} dividida`);
+                  setContextMenu(null);
+                }}
+              >
+                ✂️ Dividir aquí
+              </button>
+              {onWallSelect && (
+                <button
+                  className="w-full text-left px-3 py-1.5 text-xs hover:bg-accent transition-colors flex items-center gap-2"
+                  onClick={() => {
+                    onWallSelect(contextMenu.index + 1);
+                    setContextMenu(null);
+                  }}
+                >
+                  🧱 Editar tipo de pared
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ── Coordinate editor (double-click on vertex) ── */}
+      {editingVertexIdx !== null && editingVertexIdx < vertices.length && (
+        <div className="flex items-center gap-1.5 p-2 rounded border bg-accent/30 text-xs">
+          <span className="font-semibold text-muted-foreground">Vértice {editingVertexIdx + 1}:</span>
+          <label className="text-muted-foreground">{hAxisLabel}</label>
+          <input
+            className="h-6 w-14 px-1 border rounded bg-background text-xs text-center"
+            value={editCoordX}
+            onChange={(e) => setEditCoordX(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                const nx = parseFloat(editCoordX);
+                const ny = parseFloat(editCoordY);
+                if (!isNaN(nx) && !isNaN(ny)) {
+                  const next = [...vertices];
+                  next[editingVertexIdx!] = { x: nx, y: ny };
+                  onChange(next);
+                  setEditingVertexIdx(null);
+                  toast.success('Coordenadas actualizadas');
+                }
+              } else if (e.key === 'Escape') {
+                setEditingVertexIdx(null);
+              }
+            }}
+            autoFocus
+          />
+          <label className="text-muted-foreground">{vAxisLabel}</label>
+          <input
+            className="h-6 w-14 px-1 border rounded bg-background text-xs text-center"
+            value={editCoordY}
+            onChange={(e) => setEditCoordY(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                const nx = parseFloat(editCoordX);
+                const ny = parseFloat(editCoordY);
+                if (!isNaN(nx) && !isNaN(ny)) {
+                  const next = [...vertices];
+                  next[editingVertexIdx!] = { x: nx, y: ny };
+                  onChange(next);
+                  setEditingVertexIdx(null);
+                  toast.success('Coordenadas actualizadas');
+                }
+              } else if (e.key === 'Escape') {
+                setEditingVertexIdx(null);
+              }
+            }}
+          />
+          <Button
+            variant="default"
+            size="sm"
+            className="h-6 text-[10px] px-2"
+            onClick={() => {
+              const nx = parseFloat(editCoordX);
+              const ny = parseFloat(editCoordY);
+              if (!isNaN(nx) && !isNaN(ny)) {
+                const next = [...vertices];
+                next[editingVertexIdx!] = { x: nx, y: ny };
+                onChange(next);
+                setEditingVertexIdx(null);
+                toast.success('Coordenadas actualizadas');
+              }
+            }}
+          >
+            ✓ Aplicar
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 text-[10px] px-2"
+            onClick={() => setEditingVertexIdx(null)}
+          >
+            ✕
+          </Button>
+        </div>
+      )}
+
       <div className="flex items-center gap-1.5 flex-wrap">
         <Button variant="outline" size="sm" className="h-5 text-[10px] gap-0.5" onClick={handleUndo}
           disabled={vertices.length === 0}>
@@ -1732,14 +1894,33 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
           disabled={vertices.length === 0}>
           Limpiar
         </Button>
+        {selectedVertexIdx !== null && vertices.length > 3 && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-5 text-[10px] gap-0.5 text-destructive border-destructive/40 hover:bg-destructive/10"
+            onClick={() => {
+              const next = vertices.filter((_, idx) => idx !== selectedVertexIdx);
+              onChange(next);
+              setSelectedVertexIdx(null);
+              toast.success(`Vértice ${selectedVertexIdx + 1} eliminado`);
+            }}
+          >
+            🗑️ Eliminar V{selectedVertexIdx + 1}
+          </Button>
+        )}
         <span className="text-[9px] text-muted-foreground ml-auto">
-          {rulerMode
-            ? rulerStart ? 'Pulsa 2º punto de la regla' : 'Pulsa 1er punto de la regla'
-            : isClosed
-              ? 'Arrastra vértices · Deshacer para reabrir'
-              : vertices.length >= 3
-                ? 'Pulsa primer vértice para cerrar'
-                : `${vertices.length}/3 mín.`}
+          {selectMode
+            ? selectedVertexIdx !== null
+              ? `V${selectedVertexIdx + 1} seleccionado · Doble clic=coordenadas · Clic derecho=menú`
+              : 'Clic en arista=dividir · Clic en vértice=seleccionar · Clic dcho.=menú'
+            : rulerMode
+              ? rulerStart ? 'Pulsa 2º punto de la regla' : 'Pulsa 1er punto de la regla'
+              : isClosed
+                ? 'Arrastra vértices · Deshacer para reabrir'
+                : vertices.length >= 3
+                  ? 'Pulsa primer vértice para cerrar'
+                  : `${vertices.length}/3 mín.`}
           {freeMode && ' · Modo libre'}
         </span>
       </div>

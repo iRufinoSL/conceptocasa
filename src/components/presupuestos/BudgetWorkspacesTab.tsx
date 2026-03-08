@@ -1393,7 +1393,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
         </svg>
       </div>
 
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1.5 flex-wrap">
         <Button variant="outline" size="sm" className="h-5 text-[10px] gap-0.5" onClick={handleUndo}
           disabled={vertices.length === 0}>
           {isClosed ? 'Reabrir' : 'Deshacer'}
@@ -1403,11 +1403,14 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
           Limpiar
         </Button>
         <span className="text-[9px] text-muted-foreground ml-auto">
-          {isClosed
-            ? 'Arrastra vértices · Deshacer para reabrir'
-            : vertices.length >= 3
-              ? 'Pulsa primer vértice para cerrar'
-              : `${vertices.length}/3 mín.`}
+          {rulerMode
+            ? rulerStart ? 'Pulsa 2º punto de la regla' : 'Pulsa 1er punto de la regla'
+            : isClosed
+              ? 'Arrastra vértices · Deshacer para reabrir'
+              : vertices.length >= 3
+                ? 'Pulsa primer vértice para cerrar'
+                : `${vertices.length}/3 mín.`}
+          {freeMode && ' · Modo libre'}
         </span>
       </div>
     </div>

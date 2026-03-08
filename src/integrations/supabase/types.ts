@@ -2038,6 +2038,62 @@ export type Database = {
           },
         ]
       }
+      budget_wall_objects: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_core: boolean
+          layer_order: number
+          length_ml: number | null
+          name: string
+          object_type: string
+          surface_m2: number | null
+          updated_at: string
+          visual_pattern: string | null
+          volume_m3: number | null
+          wall_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_core?: boolean
+          layer_order?: number
+          length_ml?: number | null
+          name: string
+          object_type?: string
+          surface_m2?: number | null
+          updated_at?: string
+          visual_pattern?: string | null
+          volume_m3?: number | null
+          wall_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_core?: boolean
+          layer_order?: number
+          length_ml?: number | null
+          name?: string
+          object_type?: string
+          surface_m2?: number | null
+          updated_at?: string
+          visual_pattern?: string | null
+          volume_m3?: number | null
+          wall_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_wall_objects_wall_id_fkey"
+            columns: ["wall_id"]
+            isOneToOne: false
+            referencedRelation: "budget_floor_plan_walls"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       budget_work_area_activities: {
         Row: {
           activity_id: string

@@ -2,10 +2,13 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Layers, List, Search, Plus, Box } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Layers, List, Search, Box, ChevronRight } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { WallObjectsPanel } from './WallObjectsPanel';
+import { toast } from 'sonner';
 
 interface WallObjectsListProps {
   budgetId: string;
@@ -13,7 +16,6 @@ interface WallObjectsListProps {
 
 interface PolygonVertex { x: number; y: number }
 
-/** Shoelace formula */
 function polygonArea(vertices: PolygonVertex[]): number {
   if (vertices.length < 3) return 0;
   let area = 0;
@@ -31,16 +33,26 @@ function edgeLength(a: PolygonVertex, b: PolygonVertex): number {
 
 interface AutoFace {
   workspace: string;
-  faceName: string; // Suelo, Pared 1, ..., Techo, Espacio
+  roomId: string;
+  faceName: string;
   m2: number | null;
   m3: number | null;
-  sortKey: number; // 0=suelo, 1..N=paredes, N+1=techo, N+2=espacio
+  sortKey: number;
+  wallIndex: number; // 0=espacio, -1=suelo, -2=techo, 1..N=paredes
 }
 
 export function WallObjectsList({ budgetId }: WallObjectsListProps) {
   const [search, setSearch] = useState('');
+  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
 
-  // Fetch rooms + floor plan data to auto-compute surfaces
+  // Panel state
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [panelWallId, setPanelWallId] = useState<string | null>(null);
+  const [panelWallIndex, setPanelWallIndex] = useState(0);
+  const [panelWallType, setPanelWallType] = useState('exterior');
+  const [panelWallLabel, setPanelWallLabel] = useState('');
+  const [panelRoomName, setPanelRoomName] = useState('');
+
   const { data: autoFaces = [], isLoading } = useQuery({
     queryKey: ['budget-auto-faces', budgetId],
     queryFn: async () => {
@@ -63,12 +75,11 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
       const faces: AutoFace[] = [];
 
       for (const room of rooms) {
-        if (room.is_base) continue; // skip perimeter polygons
+        if (room.is_base) continue;
 
         const poly = Array.isArray(room.floor_polygon) ? (room.floor_polygon as unknown as PolygonVertex[]) : null;
         const heightM = room.height || 2.5;
 
-        // Floor area
         let floorArea: number;
         if (poly && poly.length >= 3) {
           floorArea = polygonArea(poly) * cellSizeM * cellSizeM;
@@ -76,10 +87,8 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
           floorArea = (room.length || 0) * (room.width || 0);
         }
 
-        // Suelo
-        faces.push({ workspace: room.name, faceName: 'Suelo', m2: Math.round(floorArea * 100) / 100, m3: null, sortKey: 0 });
+        faces.push({ workspace: room.name, roomId: room.id, faceName: 'Suelo', m2: Math.round(floorArea * 100) / 100, m3: null, sortKey: 0, wallIndex: -1 });
 
-        // Walls
         const edgeCount = poly && poly.length >= 3 ? poly.length : 4;
         for (let i = 0; i < edgeCount; i++) {
           let wallLengthM: number;
@@ -88,26 +97,69 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
             const b = poly[(i + 1) % poly.length];
             wallLengthM = edgeLength(a, b) * cellSizeM;
           } else {
-            // Rectangular fallback
             wallLengthM = i % 2 === 0 ? (room.length || 0) : (room.width || 0);
           }
           const wallArea = Math.round(wallLengthM * heightM * 100) / 100;
-          faces.push({ workspace: room.name, faceName: `Pared ${i + 1}`, m2: wallArea, m3: null, sortKey: i + 1 });
+          faces.push({ workspace: room.name, roomId: room.id, faceName: `Pared ${i + 1}`, m2: wallArea, m3: null, sortKey: i + 1, wallIndex: i + 1 });
         }
 
-        // Techo
-        faces.push({ workspace: room.name, faceName: 'Techo', m2: Math.round(floorArea * 100) / 100, m3: null, sortKey: edgeCount + 1 });
+        faces.push({ workspace: room.name, roomId: room.id, faceName: 'Techo', m2: Math.round(floorArea * 100) / 100, m3: null, sortKey: edgeCount + 1, wallIndex: -2 });
 
-        // Espacio (volumen)
         const vol = Math.round(floorArea * heightM * 1000) / 1000;
-        faces.push({ workspace: room.name, faceName: 'Espacio', m2: null, m3: vol, sortKey: edgeCount + 2 });
+        faces.push({ workspace: room.name, roomId: room.id, faceName: 'Espacio', m2: null, m3: vol, sortKey: edgeCount + 2, wallIndex: 0 });
       }
 
       return faces;
     },
   });
 
-  // Filter by search
+  // Fetch walls for panel opening
+  const { data: allWalls = [] } = useQuery({
+    queryKey: ['budget-walls-for-panel', budgetId],
+    queryFn: async () => {
+      const { data: fp } = await supabase
+        .from('budget_floor_plans')
+        .select('id')
+        .eq('budget_id', budgetId)
+        .maybeSingle();
+      if (!fp) return [];
+      const { data: rooms } = await supabase
+        .from('budget_floor_plan_rooms')
+        .select('id')
+        .eq('floor_plan_id', fp.id);
+      if (!rooms?.length) return [];
+      const { data: walls } = await supabase
+        .from('budget_floor_plan_walls')
+        .select('id, room_id, wall_index, wall_type')
+        .in('room_id', rooms.map(r => r.id));
+      return walls || [];
+    },
+  });
+
+  const handleFaceClick = async (face: AutoFace) => {
+    // Find or create the wall record for this face
+    let wall = allWalls.find(w => w.room_id === face.roomId && w.wall_index === face.wallIndex);
+    if (!wall) {
+      const wallType = face.wallIndex === 0 ? 'espacio' : face.wallIndex === -1 ? 'suelo' : face.wallIndex === -2 ? 'techo' : 'exterior';
+      const { data: newWall, error } = await supabase
+        .from('budget_floor_plan_walls')
+        .insert({ room_id: face.roomId, wall_index: face.wallIndex, wall_type: wallType })
+        .select()
+        .single();
+      if (error || !newWall) {
+        toast.error('Error al abrir el ámbito');
+        return;
+      }
+      wall = newWall;
+    }
+    setPanelWallId(wall.id);
+    setPanelWallIndex(face.wallIndex);
+    setPanelWallType(wall.wall_type);
+    setPanelWallLabel(face.faceName);
+    setPanelRoomName(face.workspace);
+    setPanelOpen(true);
+  };
+
   const filtered = useMemo(() => {
     if (!search.trim()) return autoFaces;
     const q = search.toLowerCase();
@@ -116,7 +168,6 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
     );
   }, [autoFaces, search]);
 
-  // View: By workspace
   const byWorkspace = useMemo(() => {
     const groups = new Map<string, AutoFace[]>();
     for (const f of filtered) {
@@ -128,7 +179,6 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
       .map(([name, faces]) => ({ name, faces: faces.sort((a, b) => a.sortKey - b.sortKey) }));
   }, [filtered]);
 
-  // View: Alphabetical by face
   const alphabetical = useMemo(() => {
     return [...filtered].sort((a, b) => {
       const cmp = a.faceName.localeCompare(b.faceName, 'es');
@@ -136,42 +186,53 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
     });
   }, [filtered]);
 
-  // Totals
   const totalM2 = filtered.reduce((s, f) => s + (f.m2 || 0), 0);
   const totalM3 = filtered.reduce((s, f) => s + (f.m3 || 0), 0);
   const workspaceCount = new Set(filtered.map(f => f.workspace)).size;
 
-  if (isLoading) return <p className="text-xs text-muted-foreground py-2">Cargando objetos...</p>;
+  const toggleGroup = (name: string) => {
+    setOpenGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  };
+
+  if (isLoading) return <p className="text-sm text-muted-foreground py-2">Cargando objetos...</p>;
 
   if (autoFaces.length === 0) {
     return (
       <div className="text-center py-6 text-muted-foreground">
         <Box className="h-8 w-8 mx-auto mb-2 opacity-40" />
-        <p className="text-xs">No hay Espacios de trabajo definidos</p>
-        <p className="text-[10px]">Crea espacios en la cuadrícula para ver su desglose automático</p>
+        <p className="text-sm">No hay Espacios de trabajo definidos</p>
+        <p className="text-xs">Crea espacios en la cuadrícula para ver su desglose automático</p>
       </div>
     );
   }
 
+  const faceIcon = (name: string) =>
+    name === 'Espacio' ? '🔷' : name === 'Suelo' ? '⬛' : name === 'Techo' ? '⬜' : '🧱';
+
   return (
     <div className="space-y-3">
       {/* Summary */}
-      <div className="flex flex-wrap gap-1.5 items-center">
-        <Badge variant="secondary" className="text-[10px] h-5 gap-1">
-          <Layers className="h-3 w-3" /> {workspaceCount} espacios
+      <div className="flex flex-wrap gap-2 items-center">
+        <Badge variant="secondary" className="text-xs h-6 gap-1">
+          <Layers className="h-3.5 w-3.5" /> {workspaceCount} espacios
         </Badge>
-        <Badge variant="secondary" className="text-[10px] h-5 gap-1">
-          <Box className="h-3 w-3" /> {autoFaces.length} ámbitos
+        <Badge variant="secondary" className="text-xs h-6 gap-1">
+          <Box className="h-3.5 w-3.5" /> {autoFaces.length} ámbitos
         </Badge>
-        {totalM2 > 0 && <Badge variant="secondary" className="text-[10px] h-5">📐 {totalM2.toFixed(2)} m²</Badge>}
-        {totalM3 > 0 && <Badge variant="secondary" className="text-[10px] h-5">📦 {totalM3.toFixed(3)} m³</Badge>}
+        {totalM2 > 0 && <Badge variant="secondary" className="text-xs h-6">📐 {totalM2.toFixed(2)} m²</Badge>}
+        {totalM3 > 0 && <Badge variant="secondary" className="text-xs h-6">📦 {totalM3.toFixed(3)} m³</Badge>}
       </div>
 
       {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+      <div className="relative max-w-sm">
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
-          className="h-7 text-[11px] pl-7"
+          className="h-9 text-sm pl-8"
           placeholder="Buscar espacio o ámbito..."
           value={search}
           onChange={e => setSearch(e.target.value)}
@@ -179,74 +240,92 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
       </div>
 
       <Tabs defaultValue="workspace" className="w-full">
-        <TabsList className="h-7">
-          <TabsTrigger value="workspace" className="text-[10px] h-6 gap-1">
-            <Layers className="h-3 w-3" /> Por espacio
+        <TabsList className="h-8">
+          <TabsTrigger value="workspace" className="text-xs h-7 gap-1">
+            <Layers className="h-3.5 w-3.5" /> Por espacio
           </TabsTrigger>
-          <TabsTrigger value="alpha" className="text-[10px] h-6 gap-1">
-            <List className="h-3 w-3" /> Alfabético
+          <TabsTrigger value="alpha" className="text-xs h-7 gap-1">
+            <List className="h-3.5 w-3.5" /> Alfabético
           </TabsTrigger>
         </TabsList>
 
-        {/* By Workspace */}
-        <TabsContent value="workspace" className="space-y-2 mt-2">
+        {/* By Workspace — collapsible */}
+        <TabsContent value="workspace" className="space-y-1.5 mt-2">
           {byWorkspace.map(group => {
             const groupM2 = group.faces.reduce((s, f) => s + (f.m2 || 0), 0);
             const groupM3 = group.faces.reduce((s, f) => s + (f.m3 || 0), 0);
+            const isOpen = openGroups.has(group.name);
             return (
-              <div key={group.name} className="space-y-0.5">
-                <div className="flex items-center gap-1.5 bg-accent/30 rounded px-1.5 py-0.5">
-                  <span className="text-xs font-semibold">{group.name}</span>
-                  <Badge variant="outline" className="text-[9px] h-4">{group.faces.length} ámbitos</Badge>
-                  {groupM2 > 0 && <Badge variant="secondary" className="text-[8px] h-3.5">📐 {groupM2.toFixed(2)} m²</Badge>}
-                  {groupM3 > 0 && <Badge variant="secondary" className="text-[8px] h-3.5">📦 {groupM3.toFixed(3)} m³</Badge>}
-                </div>
-                {group.faces.map((f, i) => (
-                  <FaceRow key={`${f.faceName}-${i}`} face={f} showWorkspace={false} />
-                ))}
-              </div>
+              <Collapsible key={group.name} open={isOpen} onOpenChange={() => toggleGroup(group.name)}>
+                <CollapsibleTrigger className="flex items-center gap-2 w-full rounded-md px-2 py-1.5 bg-accent/30 hover:bg-accent/50 transition-colors text-left">
+                  <ChevronRight className={cn('h-4 w-4 text-muted-foreground transition-transform duration-200', isOpen && 'rotate-90')} />
+                  <span className="text-sm font-semibold flex-1">{group.name}</span>
+                  <Badge variant="outline" className="text-[10px] h-5">{group.faces.length}</Badge>
+                  {groupM2 > 0 && <span className="text-xs text-muted-foreground tabular-nums">{groupM2.toFixed(2)} m²</span>}
+                  {groupM3 > 0 && <span className="text-xs text-muted-foreground tabular-nums">{groupM3.toFixed(3)} m³</span>}
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="max-w-md ml-6 mt-1 space-y-px">
+                    {group.faces.map((f, i) => (
+                      <button
+                        key={`${f.faceName}-${i}`}
+                        onClick={() => handleFaceClick(f)}
+                        className="flex items-center gap-2 w-full text-left px-2 py-1 rounded hover:bg-accent/40 transition-colors cursor-pointer group"
+                      >
+                        <span className="text-sm">{faceIcon(f.faceName)}</span>
+                        <span className="text-sm font-medium">{f.faceName}</span>
+                        <span className="text-sm tabular-nums text-muted-foreground ml-auto">
+                          {f.m2 != null && `${f.m2.toFixed(2)} m²`}
+                          {f.m3 != null && `${f.m3.toFixed(3)} m³`}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
             );
           })}
         </TabsContent>
 
         {/* Alphabetical */}
         <TabsContent value="alpha" className="mt-2">
-          <div className="border rounded overflow-hidden">
-            {/* Header */}
-            <div className="grid grid-cols-[1fr_1fr_auto] gap-1 px-2 py-1 bg-muted/50 text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">
+          <div className="border rounded overflow-hidden max-w-lg">
+            <div className="grid grid-cols-[auto_1fr_auto] gap-3 px-3 py-1.5 bg-muted/50 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               <span>Ámbito</span>
               <span>Espacio</span>
-              <span className="text-right w-20">Medición</span>
+              <span className="text-right">Medición</span>
             </div>
             {alphabetical.map((f, i) => (
-              <div key={`${f.faceName}-${f.workspace}-${i}`} className="grid grid-cols-[1fr_1fr_auto] gap-1 px-2 py-1 text-xs border-t hover:bg-accent/20 transition-colors">
-                <span className="font-medium">
-                  {f.faceName === 'Espacio' ? '🔷 ' : f.faceName === 'Suelo' ? '⬛ ' : f.faceName === 'Techo' ? '⬜ ' : '🧱 '}
-                  {f.faceName}
+              <button
+                key={`${f.faceName}-${f.workspace}-${i}`}
+                onClick={() => handleFaceClick(f)}
+                className="grid grid-cols-[auto_1fr_auto] gap-3 px-3 py-1.5 text-sm border-t hover:bg-accent/30 transition-colors w-full text-left cursor-pointer"
+              >
+                <span className="font-medium whitespace-nowrap">
+                  {faceIcon(f.faceName)} {f.faceName}
                 </span>
                 <span className="text-muted-foreground">{f.workspace}</span>
-                <span className="text-right w-20 tabular-nums">
+                <span className="text-right tabular-nums whitespace-nowrap">
                   {f.m2 != null && `${f.m2.toFixed(2)} m²`}
                   {f.m3 != null && `${f.m3.toFixed(3)} m³`}
                 </span>
-              </div>
+              </button>
             ))}
           </div>
         </TabsContent>
       </Tabs>
-    </div>
-  );
-}
 
-function FaceRow({ face, showWorkspace = true }: { face: AutoFace; showWorkspace?: boolean }) {
-  const icon = face.faceName === 'Espacio' ? '🔷' : face.faceName === 'Suelo' ? '⬛' : face.faceName === 'Techo' ? '⬜' : '🧱';
-  return (
-    <div className="flex items-center gap-2 px-2 py-0.5 text-xs hover:bg-accent/20 transition-colors rounded">
-      <span className="text-[10px]">{icon}</span>
-      <span className="font-medium flex-1">{face.faceName}</span>
-      {showWorkspace && <span className="text-muted-foreground text-[10px]">{face.workspace}</span>}
-      {face.m2 != null && <Badge variant="secondary" className="text-[8px] h-3.5 px-1 tabular-nums">📐 {face.m2.toFixed(2)} m²</Badge>}
-      {face.m3 != null && <Badge variant="secondary" className="text-[8px] h-3.5 px-1 tabular-nums">📦 {face.m3.toFixed(3)} m³</Badge>}
+      {/* Panel for editing wall objects */}
+      <WallObjectsPanel
+        open={panelOpen}
+        onOpenChange={setPanelOpen}
+        wallId={panelWallId}
+        wallIndex={panelWallIndex}
+        wallType={panelWallType}
+        wallLabel={panelWallLabel}
+        roomName={panelRoomName}
+        onWallTypeChange={(newType) => setPanelWallType(newType)}
+      />
     </div>
   );
 }

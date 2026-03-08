@@ -533,8 +533,30 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
   };
 
   const handleClick = (gx: number, gy: number) => {
-    // Select/pointer mode: don't add vertices, just allow inspecting
-    if (selectMode) return;
+    // Select/pointer mode: detect closest wall edge and select it
+    if (selectMode) {
+      if (vertices.length >= 3 && onWallSelect) {
+        let bestDist = Infinity;
+        let bestIdx = -1;
+        for (let i = 0; i < vertices.length; i++) {
+          const j = (i + 1) % vertices.length;
+          const a = vertices[i], b = vertices[j];
+          // Point-to-segment distance
+          const dx = b.x - a.x, dy = b.y - a.y;
+          const lenSq = dx * dx + dy * dy;
+          let t = lenSq > 0 ? ((gx - a.x) * dx + (gy - a.y) * dy) / lenSq : 0;
+          t = Math.max(0, Math.min(1, t));
+          const px = a.x + t * dx, py = a.y + t * dy;
+          const dist = Math.sqrt((gx - px) ** 2 + (gy - py) ** 2);
+          if (dist < bestDist) { bestDist = dist; bestIdx = i; }
+        }
+        if (bestIdx >= 0 && bestDist < 2) {
+          const wallDbIdx = bestIdx + 1;
+          onWallSelect(wallDbIdx);
+        }
+      }
+      return;
+    }
     // Ruler mode: collect start/end points
     if (rulerMode) {
       if (!rulerStart) {

@@ -65,7 +65,7 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
       for (const room of rooms) {
         if (room.is_base) continue; // skip perimeter polygons
 
-        const poly = Array.isArray(room.floor_polygon) ? (room.floor_polygon as PolygonVertex[]) : null;
+        const poly = Array.isArray(room.floor_polygon) ? (room.floor_polygon as unknown as PolygonVertex[]) : null;
         const heightM = room.height || 2.5;
 
         // Floor area

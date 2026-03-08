@@ -432,6 +432,8 @@ interface GridPolygonDrawerProps {
   hScaleMm?: number;
   vScaleMm?: number;
   activeWalls?: WallData[];
+  initialRulerLines?: RulerLine[];
+  onSaveRulerLines?: (lines: RulerLine[]) => void;
 }
 
 const RULER_COLOR = 'hsl(30 90% 50%)';

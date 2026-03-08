@@ -72,6 +72,17 @@ const WALL_TYPES = [
   { value: 'interior_invisible', label: 'Int. invisible' },
 ];
 
+/** Visual styles per wall type for grid edge rendering */
+const WALL_EDGE_STYLES: Record<string, { color: string; width: number; dash: string }> = {
+  exterior:             { color: 'hsl(145 70% 35%)',  width: 3.5, dash: 'none' },
+  exterior_compartida:  { color: 'hsl(145 70% 35%)',  width: 3.5, dash: 'none' },
+  exterior_invisible:   { color: 'hsl(0 0% 65%)',     width: 2.5, dash: '4 3' },
+  interior:             { color: 'hsl(30 85% 50%)',   width: 2,   dash: 'none' },
+  interior_compartida:  { color: 'hsl(30 85% 50%)',   width: 2,   dash: 'none' },
+  interior_invisible:   { color: 'hsl(0 0% 65%)',     width: 1.5, dash: '3 2' },
+};
+const WALL_EDGE_DEFAULT = { color: 'hsl(200 80% 50%)', width: 2, dash: 'none' };
+
 const FLOOR_CEILING_TYPES: { value: FloorCeilingType; label: string }[] = [
   { value: 'normal', label: 'Normal' },
   { value: 'invisible', label: 'Invisible' },

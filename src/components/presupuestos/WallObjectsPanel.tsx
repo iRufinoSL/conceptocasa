@@ -149,6 +149,7 @@ export function WallObjectsPanel({
       surface_m2: formSurfaceM2 ? parseFloat(formSurfaceM2) : null,
       volume_m3: formVolumeM3 ? parseFloat(formVolumeM3) : null,
       length_ml: formLengthMl ? parseFloat(formLengthMl) : null,
+      thickness_mm: formThicknessMm ? parseFloat(formThicknessMm) : null,
       visual_pattern: formVisualPattern.trim() || null,
     };
 

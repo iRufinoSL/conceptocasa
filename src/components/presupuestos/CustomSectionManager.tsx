@@ -1363,6 +1363,19 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
         onClick={handleGridClick}
         onDoubleClick={handleGridDblClick}
       >
+        {/* SVG pattern definitions for wall visual patterns */}
+        <defs>
+          {VISUAL_PATTERNS.map(p => (
+            <pattern
+              key={`pat-${p.id}`}
+              id={`wall-pattern-${p.id}`}
+              patternUnits="userSpaceOnUse"
+              width={p.width}
+              height={p.height}
+              dangerouslySetInnerHTML={{ __html: p.svgContent }}
+            />
+          ))}
+        </defs>
         {/* Checkerboard cells */}
         {Array.from({ length: gridCount }, (_, row) =>
           Array.from({ length: gridCount }, (_, col) => {

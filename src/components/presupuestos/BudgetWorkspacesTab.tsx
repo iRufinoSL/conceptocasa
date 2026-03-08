@@ -173,10 +173,16 @@ function edgeLength(a: PolygonVertex, b: PolygonVertex): number {
   return Math.sqrt((b.x - a.x) ** 2 + (b.y - a.y) ** 2);
 }
 
-/** Wall label from edge index */
-function wallLabel(index: number, total: number): string {
+/** Wall label from edge index.
+ * sectionType: 'z' (top-down, origin top-left) or 'xy' (vertical cross-section, origin bottom-left)
+ * For Z: 0=Superior, 1=Derecha, 2=Inferior, 3=Izquierda
+ * For X/Y: clockwise from bottom-left → 0=Inferior, 1=Izquierda, 2=Superior, 3=Derecha
+ */
+function wallLabel(index: number, total: number, sectionType: 'z' | 'xy' = 'z'): string {
   if (total <= 4) {
-    const labels = ['Superior', 'Derecha', 'Inferior', 'Izquierda'];
+    const labels = sectionType === 'z'
+      ? ['Superior', 'Derecha', 'Inferior', 'Izquierda']
+      : ['Inferior', 'Izquierda', 'Superior', 'Derecha'];
     return labels[index] || `Pared ${index + 1}`;
   }
   return `Pared ${index + 1}`;

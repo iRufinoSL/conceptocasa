@@ -1286,7 +1286,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
           })}
 
           {/* ── Sibling workspace vertices ON TOP for guaranteed interactivity ── */}
-          {otherPolygons.map((op) => {
+          {!rulerMode && otherPolygons.map((op) => {
             if (selectedOtherId !== op.id) return null;
             const verts = otherEditVertices;
             return verts.map((v, i) => {

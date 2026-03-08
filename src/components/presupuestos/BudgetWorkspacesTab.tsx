@@ -375,6 +375,8 @@ interface GridPolygonDrawerProps {
   otherPolygons?: OtherPolygon[];
   activeRoomId?: string | null;
   onSwitchRoom?: (roomId: string) => void;
+  onOtherPolygonChange?: (id: string, vertices: PolygonVertex[]) => void;
+  onOtherPolygonRename?: (id: string, newName: string) => void;
   perimeterPolygon?: PolygonVertex[];
   activeName?: string;
   originTopLeft?: boolean;
@@ -398,12 +400,19 @@ const POLY_COLORS = [
   'hsl(280 60% 55%)',
 ];
 
-function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16, gridOffsetX = 0, gridOffsetY = 0, placedRooms = [], cellSizeM = 1, otherPolygons = [], activeRoomId, onSwitchRoom, perimeterPolygon, activeName, originTopLeft = false, pdfTitle, pdfSubtitle, onWallClick, hAxisLabel = 'X', vAxisLabel = 'Y', hScaleMm, vScaleMm }: GridPolygonDrawerProps) {
+function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16, gridOffsetX = 0, gridOffsetY = 0, placedRooms = [], cellSizeM = 1, otherPolygons = [], activeRoomId, onSwitchRoom, onOtherPolygonChange, onOtherPolygonRename, perimeterPolygon, activeName, originTopLeft = false, pdfTitle, pdfSubtitle, onWallClick, hAxisLabel = 'X', vAxisLabel = 'Y', hScaleMm, vScaleMm }: GridPolygonDrawerProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null);
   const [draggingIdx, setDraggingIdx] = useState<number | null>(null);
   const [zoomLevel, setZoomLevel] = useState(1);
+  // Selected other polygon for inline editing
+  const [selectedOtherId, setSelectedOtherId] = useState<string | null>(null);
+  const [draggingOtherIdx, setDraggingOtherIdx] = useState<number | null>(null);
+  const [editingOtherName, setEditingOtherName] = useState<string | null>(null);
+  const [otherNameValue, setOtherNameValue] = useState('');
+  // Local mutable copy of selected other polygon vertices for dragging
+  const [otherEditVertices, setOtherEditVertices] = useState<PolygonVertex[]>([]);
 
   // Polygon is "closed" when it has >= 3 vertices and was explicitly closed by clicking first vertex
   const [isClosed, setIsClosed] = useState(() => vertices.length >= 3);
@@ -476,23 +485,50 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (draggingIdx === null || !svgRef.current) return;
+    const activeIdx = draggingIdx !== null ? draggingIdx : null;
+    const otherIdx = draggingOtherIdx !== null ? draggingOtherIdx : null;
+    if (activeIdx === null && otherIdx === null) return;
+    if (!svgRef.current) return;
     const rect = svgRef.current.getBoundingClientRect();
     const sx = e.clientX - rect.left;
     const sy = e.clientY - rect.top;
     const { gx, gy } = fromSvg(sx, sy);
-    // Snap to grid
     const snappedX = Math.max(gridOffsetX, Math.min(gridOffsetX + gridWidth, gx));
     const snappedY = Math.max(gridOffsetY, Math.min(gridOffsetY + gridHeight, gy));
-    if (snappedX !== vertices[draggingIdx].x || snappedY !== vertices[draggingIdx].y) {
-      const next = [...vertices];
-      next[draggingIdx] = { x: snappedX, y: snappedY };
-      onChange(next);
+    if (activeIdx !== null) {
+      if (snappedX !== vertices[activeIdx].x || snappedY !== vertices[activeIdx].y) {
+        const next = [...vertices];
+        next[activeIdx] = { x: snappedX, y: snappedY };
+        onChange(next);
+      }
+    } else if (otherIdx !== null && selectedOtherId) {
+      const cur = otherEditVertices;
+      if (cur[otherIdx] && (snappedX !== cur[otherIdx].x || snappedY !== cur[otherIdx].y)) {
+        const next = [...cur];
+        next[otherIdx] = { x: snappedX, y: snappedY };
+        setOtherEditVertices(next);
+      }
     }
   };
 
   const handleMouseUp = () => {
+    if (draggingOtherIdx !== null && selectedOtherId && onOtherPolygonChange) {
+      onOtherPolygonChange(selectedOtherId, otherEditVertices);
+    }
     setDraggingIdx(null);
+    setDraggingOtherIdx(null);
+  };
+
+  // Select another polygon for inline editing
+  const handleSelectOther = (op: OtherPolygon) => {
+    if (selectedOtherId === op.id) {
+      // Deselect
+      setSelectedOtherId(null);
+      setOtherEditVertices([]);
+    } else {
+      setSelectedOtherId(op.id);
+      setOtherEditVertices([...op.vertices]);
+    }
   };
 
   // Scale factors: if hScaleMm/vScaleMm are given, use them; otherwise uniform cellSizeM
@@ -560,25 +596,68 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
         </span>
       </div>
 
-      {/* Legend for other polygons */}
+      {/* Legend for other polygons — with inline editing */}
       {otherPolygons.length > 0 && (
         <div className="flex flex-wrap gap-1.5 items-center">
           <span className="text-[9px] text-muted-foreground">Espacios:</span>
-          {otherPolygons.map((op) => (
-            <button
-              key={op.id}
-              className="flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded border hover:bg-accent/50 transition-colors"
-              style={{ borderColor: 'hsl(200 80% 50%)' }}
-              onClick={() => onSwitchRoom?.(op.id)}
-              title={`Editar ${op.name}`}
-            >
-              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'hsl(200 80% 50%)' }} />
-              {op.name}
-            </button>
-          ))}
+          {otherPolygons.map((op) => {
+            const isSelected = selectedOtherId === op.id;
+            const isEditingName = editingOtherName === op.id;
+            return (
+              <span key={op.id} className="inline-flex items-center gap-0.5">
+                {isEditingName ? (
+                  <span className="inline-flex items-center gap-0.5">
+                    <input
+                      className="h-5 w-20 text-[9px] px-1 border rounded bg-background"
+                      value={otherNameValue}
+                      onChange={(e) => setOtherNameValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && otherNameValue.trim()) {
+                          onOtherPolygonRename?.(op.id, otherNameValue.trim());
+                          setEditingOtherName(null);
+                        } else if (e.key === 'Escape') {
+                          setEditingOtherName(null);
+                        }
+                      }}
+                      autoFocus
+                    />
+                    <button className="text-[9px] text-primary hover:underline" onClick={() => {
+                      if (otherNameValue.trim()) onOtherPolygonRename?.(op.id, otherNameValue.trim());
+                      setEditingOtherName(null);
+                    }}>✓</button>
+                    <button className="text-[9px] text-muted-foreground hover:underline" onClick={() => setEditingOtherName(null)}>✕</button>
+                  </span>
+                ) : (
+                  <button
+                    className={`flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded border transition-colors ${isSelected ? 'bg-accent border-primary font-semibold' : 'hover:bg-accent/50'}`}
+                    style={{ borderColor: isSelected ? undefined : 'hsl(200 80% 50%)' }}
+                    onClick={() => handleSelectOther(op)}
+                    title={`Seleccionar ${op.name} para editar`}
+                  >
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: isSelected ? 'hsl(var(--primary))' : 'hsl(200 80% 50%)' }} />
+                    {op.name}
+                  </button>
+                )}
+                {isSelected && !isEditingName && (
+                  <>
+                    <button
+                      className="text-[9px] text-muted-foreground hover:text-primary px-0.5"
+                      title="Renombrar"
+                      onClick={() => { setEditingOtherName(op.id); setOtherNameValue(op.name); }}
+                    >✏️</button>
+                    <button
+                      className="text-[9px] text-muted-foreground hover:text-primary px-0.5"
+                      title="Ir al espacio"
+                      onClick={() => onSwitchRoom?.(op.id)}
+                    >↗</button>
+                  </>
+                )}
+              </span>
+            );
+          })}
           <span className="flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded border border-primary bg-primary/10 font-semibold">
             <span className="w-2 h-2 rounded-full shrink-0 bg-primary" />
-            Editando
+            {activeName || 'Editando'}
           </span>
         </div>
       )}
@@ -712,32 +791,56 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
 
           {/* ── Other rooms' polygons (background, clickable) with edge measurements ── */}
           {otherPolygons.map((op) => {
-            const verts = op.vertices;
+            const isSelected = selectedOtherId === op.id;
+            const verts = isSelected ? otherEditVertices : op.vertices;
             if (verts.length < 3) return null;
-            const areaVal = polygonArea(verts) * cellSizeM * cellSizeM;
-            // Build edges for measurements
+            const areaVal = polygonArea(verts) * (hScaleMm && vScaleMm ? hScale * vScale : cellSizeM * cellSizeM);
             const opEdges: Array<{ a: PolygonVertex; b: PolygonVertex }> = [];
             for (let i = 1; i < verts.length; i++) opEdges.push({ a: verts[i - 1], b: verts[i] });
             opEdges.push({ a: verts[verts.length - 1], b: verts[0] });
             const opCx = verts.reduce((s, v) => s + v.x, 0) / verts.length;
             const opCy = verts.reduce((s, v) => s + v.y, 0) / verts.length;
+            const strokeColor = isSelected ? 'hsl(var(--primary))' : 'hsl(200 80% 50%)';
+            const fillColor = isSelected ? 'hsl(var(--primary) / 0.18)' : 'hsl(200 80% 50% / 0.12)';
             return (
-              <g key={`other-${op.id}`} className="cursor-pointer" onClick={() => onSwitchRoom?.(op.id)}>
+              <g key={`other-${op.id}`} className="cursor-pointer" onClick={() => handleSelectOther(op)}>
                 <polygon
                   points={verts.map(v => { const { sx, sy } = toSvg(v.x, v.y); return `${sx},${sy}`; }).join(' ')}
-                  fill="hsl(200 80% 50% / 0.12)"
-                  stroke="hsl(200 80% 50%)"
-                  strokeWidth={1.5}
-                  strokeDasharray="4 2"
+                  fill={fillColor}
+                  stroke={strokeColor}
+                  strokeWidth={isSelected ? 2.5 : 1.5}
+                  strokeDasharray={isSelected ? 'none' : '4 2'}
                 />
+                {/* Vertices: draggable when selected, static otherwise */}
                 {verts.map((v, i) => {
                   const { sx, sy } = toSvg(v.x, v.y);
+                  if (isSelected) {
+                    const isDragging = draggingOtherIdx === i;
+                    return (
+                      <g key={`ov-${op.id}-${i}`}>
+                        <circle
+                          cx={sx} cy={sy} r={isDragging ? 7 : 6}
+                          fill={isDragging ? 'hsl(var(--chart-2))' : strokeColor}
+                          stroke="hsl(var(--background))"
+                          strokeWidth={2}
+                          className="cursor-grab active:cursor-grabbing"
+                          onClick={(e) => e.stopPropagation()}
+                          onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); setDraggingOtherIdx(i); }}
+                        />
+                        <text x={sx} y={sy - 9} textAnchor="middle"
+                          className="text-[7px] font-bold select-none pointer-events-none"
+                          fill={strokeColor}>
+                          {i + 1} ({hAxisLabel}{v.x},{vAxisLabel}{v.y})
+                        </text>
+                      </g>
+                    );
+                  }
                   return (
                     <circle key={`ov-${op.id}-${i}`} cx={sx} cy={sy} r={3}
                       fill="hsl(200 80% 50%)" opacity={0.7} />
                   );
                 })}
-                {/* Edge measurements for other polygons */}
+                {/* Edge measurements */}
                 {opEdges.map(({ a, b }, ei) => {
                   const { sx: ex1, sy: ey1 } = toSvg(a.x, a.y);
                   const { sx: ex2, sy: ey2 } = toSvg(b.x, b.y);
@@ -760,25 +863,23 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                     <text key={`oe-${op.id}-${ei}`} x={wmx} y={wmy} textAnchor="middle" dominantBaseline="central"
                       transform={`rotate(${eRot}, ${wmx}, ${wmy})`}
                       className="text-[6px] font-semibold select-none pointer-events-none"
-                      fill="hsl(200 80% 50% / 0.8)">
+                      fill={isSelected ? 'hsl(var(--primary) / 0.8)' : 'hsl(200 80% 50% / 0.8)'}>
                       {eLenMm} mm
                     </text>
                   );
                 })}
                 {(() => {
-                  const cx = opCx;
-                  const cy = opCy;
-                  const { sx, sy } = toSvg(cx, cy);
+                  const { sx, sy } = toSvg(opCx, opCy);
                   return (
                     <>
                       <text x={sx} y={sy - 5} textAnchor="middle" dominantBaseline="central"
                         className="text-[8px] font-semibold select-none pointer-events-none"
-                        fill="hsl(200 80% 50%)">
+                        fill={strokeColor}>
                         {op.name}
                       </text>
                       <text x={sx} y={sy + 7} textAnchor="middle" dominantBaseline="central"
                         className="text-[7px] select-none pointer-events-none"
-                        fill="hsl(200 80% 50%)" opacity={0.8}>
+                        fill={strokeColor} opacity={0.8}>
                         {areaVal.toFixed(2)} m²
                       </text>
                     </>
@@ -1627,6 +1728,56 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     refetch();
   };
 
+  // Handle polygon change for another workspace from within a grid editor (Z section)
+  const handleOtherPolygonChangeZ = async (otherId: string, newVertices: PolygonVertex[]) => {
+    if (newVertices.length < 3) return;
+    const bbox = polygonBBox(newVertices);
+    await supabase.from('budget_floor_plan_rooms').update({
+      floor_polygon: newVertices as any,
+      length: Math.round(bbox.w * cellSizeM * 100) / 100,
+      width: Math.round(bbox.h * cellSizeM * 100) / 100,
+    }).eq('id', otherId);
+    // Rebuild walls preserving types
+    const { data: existingWalls } = await supabase.from('budget_floor_plan_walls')
+      .select('wall_index, wall_type').eq('room_id', otherId).order('wall_index');
+    const oldTypeMap = new Map((existingWalls || []).map(w => [w.wall_index, normalizeWallType(w.wall_type)]));
+    await supabase.from('budget_floor_plan_walls').delete().eq('room_id', otherId);
+    const walls = newVertices.map((_, i) => ({ room_id: otherId, wall_index: i + 1, wall_type: oldTypeMap.get(i + 1) || 'exterior' }));
+    await supabase.from('budget_floor_plan_walls').insert(walls);
+    await refetch();
+    queryClient.invalidateQueries({ queryKey: ['workspace-walls'] });
+  };
+
+  // Handle polygon change for another workspace from within a Y/X section editor
+  const handleOtherPolygonChangeSection = async (otherId: string, newVertices: PolygonVertex[], sectionId: string) => {
+    if (newVertices.length < 3 || !floorPlan?.id) return;
+    let parsed: any = {};
+    try {
+      parsed = typeof floorPlan.custom_corners === 'string'
+        ? JSON.parse(floorPlan.custom_corners) : (floorPlan.custom_corners || {});
+    } catch { parsed = {}; }
+    const sections: CustomSection[] = parsed.customSections || [];
+    const sIdx = sections.findIndex(s => s.id === sectionId);
+    if (sIdx < 0) return;
+    const room = rooms.find(r => r.id === otherId);
+    const polyEntry = { id: otherId, name: room?.name || 'Espacio', vertices: newVertices.map(v => ({ x: v.x, y: v.y, z: 0 })) };
+    if (!sections[sIdx].polygons) sections[sIdx].polygons = [];
+    const existingIdx = sections[sIdx].polygons.findIndex(p => p.id === otherId);
+    if (existingIdx >= 0) sections[sIdx].polygons[existingIdx] = polyEntry;
+    else sections[sIdx].polygons.push(polyEntry);
+    parsed.customSections = sections;
+    await supabase.from('budget_floor_plans').update({ custom_corners: parsed }).eq('id', floorPlan.id);
+    queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces', budgetId] });
+  };
+
+  // Handle rename from within grid editor
+  const handleOtherPolygonRename = async (otherId: string, newName: string) => {
+    const { error } = await supabase.from('budget_floor_plan_rooms').update({ name: newName }).eq('id', otherId);
+    if (error) { toast.error('Error al renombrar'); return; }
+    toast.success('Nombre actualizado');
+    refetch();
+  };
+
   // Group by section type → section → workspaces
   const groupedByType = useMemo(() => {
     const sectionTypes = [
@@ -1891,6 +2042,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                     .filter(other => other.id !== r.id && other.vertical_section_id === r.vertical_section_id && other.floor_polygon && other.floor_polygon.length >= 3)
                     .map(other => ({ id: other.id, name: other.name, vertices: other.floor_polygon! }))}
                   onSwitchRoom={switchGridEditRoom}
+                  onOtherPolygonChange={handleOtherPolygonChangeZ}
+                  onOtherPolygonRename={handleOtherPolygonRename}
                   perimeterPolygon={getSectionPerimeter(r.vertical_section_id)}
                   pdfTitle="Espacio de trabajo"
                   pdfSubtitle={r.name}
@@ -1985,6 +2138,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                       const targetSection = allSections.find(s => s.id === view.sectionId);
                       if (targetSection) openSectionEditor(targetId, targetSection);
                     }}
+                    onOtherPolygonChange={(otherId, newVerts) => handleOtherPolygonChangeSection(otherId, newVerts, view.sectionId)}
+                    onOtherPolygonRename={handleOtherPolygonRename}
                     pdfTitle={`${section.name} — ${r.name}`}
                     pdfSubtitle={`${section.axis}=${section.axisValue}`}
                     hAxisLabel={hLabel}
@@ -2237,6 +2392,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                     .filter(other => other.id !== editingId && other.vertical_section_id === formSectionId && other.floor_polygon && other.floor_polygon.length >= 3)
                     .map(other => ({ id: other.id, name: other.name, vertices: other.floor_polygon! }))}
                   onSwitchRoom={editingId ? switchGridEditRoom : undefined}
+                  onOtherPolygonChange={handleOtherPolygonChangeZ}
+                  onOtherPolygonRename={handleOtherPolygonRename}
                   pdfTitle="Espacio de trabajo"
                   pdfSubtitle={formName || 'Nuevo espacio'}
                 />

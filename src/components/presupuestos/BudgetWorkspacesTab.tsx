@@ -2294,7 +2294,12 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
 
   const updateFloorCeiling = async (roomId: string, field: 'has_floor' | 'has_ceiling', value: FloorCeilingType) => {
     const boolVal = value !== 'invisible';
-    await supabase.from('budget_floor_plan_rooms').update({ [field]: boolVal }).eq('id', roomId);
+    const updatePayload: Record<string, boolean> = { [field]: boolVal };
+    // When changing ceiling type, also reset has_roof so it doesn't override the value
+    if (field === 'has_ceiling') {
+      updatePayload.has_roof = false;
+    }
+    await supabase.from('budget_floor_plan_rooms').update(updatePayload).eq('id', roomId);
     refetch();
   };
 

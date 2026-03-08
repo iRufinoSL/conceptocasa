@@ -1717,6 +1717,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
       : []
     );
     setFormSectionId(r.vertical_section_id || '');
+    setFormIsBase(r.is_base);
     setEditingId(r.id);
     setShowForm(true);
   };

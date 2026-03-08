@@ -1944,7 +1944,9 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                     textAnchor="middle" dominantBaseline="central"
                     transform={`rotate(${eRotAngle}, ${emx + nx * 10}, ${emy + ny * 10})`}
                     fontSize={fontSize} fontWeight={700} fill={color}
-                    className="pointer-events-none select-none">{eLenMm} mm</text>
+                    className="pointer-events-none select-none"
+                    data-pdf-dimension=""
+                  >{eLenMm} mm</text>
                 );
               })}
               {/* Vertex labels */}

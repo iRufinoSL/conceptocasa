@@ -1582,6 +1582,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                             stroke="white"
                             strokeWidth={0.3}
                             className="pointer-events-none select-none"
+                            data-pdf-dimension=""
                           >
                             {wallLenMm} mm
                           </text>

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Badge } from '@/components/ui/badge';
@@ -10,6 +10,109 @@ import { cn } from '@/lib/utils';
 import { WallObjectsPanel } from './WallObjectsPanel';
 import { toast } from 'sonner';
 
+/* ── Resizable column table ── */
+interface ColDef {
+  key: string;
+  header: string;
+  defaultWidth: number;
+  minWidth: number;
+}
+
+interface TableRow<T> {
+  face: T;
+  cells: Record<string, string>;
+}
+
+function ResizableTable<T>({
+  columns,
+  rows,
+  onRowClick,
+  className,
+}: {
+  columns: ColDef[];
+  rows: TableRow<T>[];
+  onRowClick: (row: TableRow<T>) => void;
+  className?: string;
+}) {
+  const [widths, setWidths] = useState<number[]>(() => columns.map(c => c.defaultWidth));
+  const dragRef = useRef<{ colIdx: number; startX: number; startW: number } | null>(null);
+
+  const onPointerDown = useCallback(
+    (colIdx: number, e: React.PointerEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dragRef.current = { colIdx, startX: e.clientX, startW: widths[colIdx] };
+      const onMove = (ev: PointerEvent) => {
+        if (!dragRef.current) return;
+        const delta = ev.clientX - dragRef.current.startX;
+        const newW = Math.max(columns[dragRef.current.colIdx].minWidth, dragRef.current.startW + delta);
+        setWidths(prev => {
+          const next = [...prev];
+          next[dragRef.current!.colIdx] = newW;
+          return next;
+        });
+      };
+      const onUp = () => {
+        dragRef.current = null;
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+      };
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    },
+    [widths, columns],
+  );
+
+  return (
+    <div className={cn('border rounded overflow-auto', className)}>
+      <table className="border-collapse" style={{ tableLayout: 'fixed', width: widths.reduce((a, b) => a + b, 0) + columns.length * 1 }}>
+        <colgroup>
+          {widths.map((w, i) => (
+            <col key={i} style={{ width: w }} />
+          ))}
+        </colgroup>
+        {/* Header */}
+        <thead>
+          <tr className="bg-muted/50">
+            {columns.map((col, ci) => (
+              <th
+                key={col.key}
+                className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1.5 relative select-none"
+              >
+                {col.header}
+                {/* Resize handle */}
+                <span
+                  onPointerDown={e => onPointerDown(ci, e)}
+                  className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors"
+                />
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, ri) => (
+            <tr
+              key={ri}
+              onClick={() => onRowClick(row)}
+              className="border-t hover:bg-accent/30 transition-colors cursor-pointer"
+            >
+              {columns.map(col => (
+                <td
+                  key={col.key}
+                  className="text-left text-sm px-2 py-1 break-words align-top"
+                >
+                  {row.cells[col.key] || ''}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/* ── Types ── */
 interface WallObjectsListProps {
   budgetId: string;
 }
@@ -38,9 +141,10 @@ interface AutoFace {
   m2: number | null;
   m3: number | null;
   sortKey: number;
-  wallIndex: number; // 0=espacio, -1=suelo, -2=techo, 1..N=paredes
+  wallIndex: number;
 }
 
+/* ── Main component ── */
 export function WallObjectsList({ budgetId }: WallObjectsListProps) {
   const [search, setSearch] = useState('');
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
@@ -137,7 +241,6 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
   });
 
   const handleFaceClick = async (face: AutoFace) => {
-    // Find or create the wall record for this face
     let wall = allWalls.find(w => w.room_id === face.roomId && w.wall_index === face.wallIndex);
     if (!wall) {
       const wallType = face.wallIndex === 0 ? 'espacio' : face.wallIndex === -1 ? 'suelo' : face.wallIndex === -2 ? 'techo' : 'exterior';
@@ -249,7 +352,7 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
           </TabsTrigger>
         </TabsList>
 
-        {/* By Workspace — collapsible */}
+        {/* By Workspace — collapsible with resizable columns */}
         <TabsContent value="workspace" className="space-y-1.5 mt-2">
           {byWorkspace.map(group => {
             const groupM2 = group.faces.reduce((s, f) => s + (f.m2 || 0), 0);
@@ -265,53 +368,49 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
                   {groupM3 > 0 && <span className="text-xs text-muted-foreground tabular-nums">{groupM3.toFixed(3)} m³</span>}
                 </CollapsibleTrigger>
                 <CollapsibleContent>
-                  <div className="max-w-md ml-6 mt-1 space-y-px">
-                    {group.faces.map((f, i) => (
-                      <button
-                        key={`${f.faceName}-${i}`}
-                        onClick={() => handleFaceClick(f)}
-                        className="flex items-center gap-2 w-full text-left px-2 py-1 rounded hover:bg-accent/40 transition-colors cursor-pointer group"
-                      >
-                        <span className="text-sm">{faceIcon(f.faceName)}</span>
-                        <span className="text-sm font-medium">{f.faceName}</span>
-                        <span className="text-sm tabular-nums text-muted-foreground ml-auto">
-                          {f.m2 != null && `${f.m2.toFixed(2)} m²`}
-                          {f.m3 != null && `${f.m3.toFixed(3)} m³`}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
+                  <ResizableTable
+                    columns={[
+                      { key: 'icon', header: '', defaultWidth: 32, minWidth: 28 },
+                      { key: 'name', header: 'Ámbito', defaultWidth: 130, minWidth: 60 },
+                      { key: 'measure', header: 'Medición', defaultWidth: 120, minWidth: 60 },
+                    ]}
+                    rows={group.faces.map((f) => ({
+                      face: f,
+                      cells: {
+                        icon: faceIcon(f.faceName),
+                        name: f.faceName,
+                        measure: f.m2 != null ? `${f.m2.toFixed(2)} m²` : f.m3 != null ? `${f.m3.toFixed(3)} m³` : '',
+                      },
+                    }))}
+                    onRowClick={(row) => handleFaceClick(row.face)}
+                    className="ml-6 mt-1"
+                  />
                 </CollapsibleContent>
               </Collapsible>
             );
           })}
         </TabsContent>
 
-        {/* Alphabetical */}
+        {/* Alphabetical with resizable columns */}
         <TabsContent value="alpha" className="mt-2">
-          <div className="border rounded overflow-hidden max-w-lg">
-            <div className="grid grid-cols-[auto_1fr_auto] gap-3 px-3 py-1.5 bg-muted/50 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              <span>Ámbito</span>
-              <span>Espacio</span>
-              <span className="text-right">Medición</span>
-            </div>
-            {alphabetical.map((f, i) => (
-              <button
-                key={`${f.faceName}-${f.workspace}-${i}`}
-                onClick={() => handleFaceClick(f)}
-                className="grid grid-cols-[auto_1fr_auto] gap-3 px-3 py-1.5 text-sm border-t hover:bg-accent/30 transition-colors w-full text-left cursor-pointer"
-              >
-                <span className="font-medium whitespace-nowrap">
-                  {faceIcon(f.faceName)} {f.faceName}
-                </span>
-                <span className="text-muted-foreground">{f.workspace}</span>
-                <span className="text-right tabular-nums whitespace-nowrap">
-                  {f.m2 != null && `${f.m2.toFixed(2)} m²`}
-                  {f.m3 != null && `${f.m3.toFixed(3)} m³`}
-                </span>
-              </button>
-            ))}
-          </div>
+          <ResizableTable
+            columns={[
+              { key: 'icon', header: '', defaultWidth: 32, minWidth: 28 },
+              { key: 'name', header: 'Ámbito', defaultWidth: 130, minWidth: 60 },
+              { key: 'workspace', header: 'Espacio', defaultWidth: 140, minWidth: 60 },
+              { key: 'measure', header: 'Medición', defaultWidth: 120, minWidth: 60 },
+            ]}
+            rows={alphabetical.map((f) => ({
+              face: f,
+              cells: {
+                icon: faceIcon(f.faceName),
+                name: f.faceName,
+                workspace: f.workspace,
+                measure: f.m2 != null ? `${f.m2.toFixed(2)} m²` : f.m3 != null ? `${f.m3.toFixed(3)} m³` : '',
+              },
+            }))}
+            onRowClick={(row) => handleFaceClick(row.face)}
+          />
         </TabsContent>
       </Tabs>
 

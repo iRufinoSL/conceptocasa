@@ -513,10 +513,12 @@ export function TolosaCardView({
             onClick={() => {
               if (!addName.trim()) return;
               if (addingContext.type === 'sibling') {
-                onAddSibling?.(addingContext.parentId, addingContext.afterItemId || '');
+                onAddSibling?.(addingContext.parentId, addName.trim());
               } else {
-                onAddChild?.(addingContext.parentId!);
+                onAddChild?.(addingContext.parentId!, addName.trim());
               }
+              setAddName('');
+              setAddingContext(null);
             }}
           >
             <Plus className="h-3 w-3 mr-1" /> Añadir

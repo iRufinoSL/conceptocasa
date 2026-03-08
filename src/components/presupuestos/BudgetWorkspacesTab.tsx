@@ -2805,6 +2805,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
       { type: 'vertical' as const, label: 'Secciones Verticales (Z)', sections: verticalSections },
       { type: 'longitudinal' as const, label: 'Secciones Longitudinales (Y)', sections: longitudinalSections },
       { type: 'transversal' as const, label: 'Secciones Transversales (X)', sections: transversalSections },
+      { type: 'inclined' as const, label: 'Secciones Inclinadas', sections: inclinedSections },
     ];
 
     return sectionTypes.map(({ type, label, sections }) => {

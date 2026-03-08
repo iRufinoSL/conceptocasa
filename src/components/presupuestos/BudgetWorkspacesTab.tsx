@@ -1844,416 +1844,67 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
         <p className="text-xs text-muted-foreground text-center py-4">No hay espacios de trabajo definidos</p>
       )}
 
-       {/* ── Grouped list ── */}
+       {/* ── Grouped list by Section Type → Section → Workspaces ── */}
       <div className="space-y-3">
-        {Array.from(grouped.entries()).map(([key, { section, rooms: groupRooms }]) => {
-          if (groupRooms.length === 0) return null;
-          const isSectionCollapsed = collapsedSections.has(key);
+        {groupedByType.map(({ type, label, sectionGroups, unassigned, totalRooms }) => {
+          if (totalRooms === 0 && sectionGroups.length === 0) return null;
+          const isTypeCollapsed = collapsedSectionTypes.has(type);
           return (
-            <div key={key} className="space-y-1.5">
+            <div key={type} className="space-y-1">
+              {/* Section Type header */}
               <button
-                onClick={() => setCollapsedSections(prev => {
+                onClick={() => setCollapsedSectionTypes(prev => {
                   const next = new Set(prev);
-                  if (next.has(key)) next.delete(key); else next.add(key);
+                  if (next.has(type)) next.delete(type); else next.add(type);
                   return next;
                 })}
-                className="flex items-center gap-1.5 px-1 w-full text-left hover:bg-accent/30 rounded transition-colors py-1"
+                className="flex items-center gap-1.5 px-1 w-full text-left hover:bg-accent/30 rounded transition-colors py-1.5"
               >
-                {isSectionCollapsed ? <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
-                <Grid3x3 className="h-3.5 w-3.5 text-primary" />
-                <span className="text-xs font-semibold">{section ? section.name : 'Sin sección asignada'}</span>
-                {section && <Badge variant="outline" className="text-[9px] h-4 px-1">Z={section.axisValue}</Badge>}
-                <Badge variant="secondary" className="text-[9px] h-4 px-1">{groupRooms.length}</Badge>
+                {isTypeCollapsed ? <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" /> : <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />}
+                <span className="text-xs font-bold">{label}</span>
+                <Badge variant="secondary" className="text-[9px] h-4 px-1">{totalRooms}</Badge>
               </button>
 
-              {!isSectionCollapsed && groupRooms.map(r => {
-                const poly = r.floor_polygon && r.floor_polygon.length >= 3 ? r.floor_polygon : null;
-                const area = poly ? polygonArea(poly) : r.length * r.width;
-                const vol = r.height ? area * r.height : null;
-                const edgeCount = poly ? poly.length : 4;
-                const geo = getGeometryType(r);
-                const geoInfo = GEOMETRY_INFO[geo];
-                const isExpanded = expandedIds.has(r.id);
-                const roomWalls = allWalls.filter(w => w.room_id === r.id).sort((a, b) => a.wall_index - b.wall_index);
-                const floorType = getFloorType(r);
-                const ceilingType = getCeilingType(r);
+              {!isTypeCollapsed && (
+                <div className="pl-3 space-y-2">
+                  {sectionGroups.map(({ section, rooms: groupRooms }) => {
+                    if (groupRooms.length === 0) return null;
+                    const sectionKey = `${type}-${section.id}`;
+                    const isSectionCollapsed = collapsedSections.has(sectionKey);
+                    return (
+                      <div key={section.id} className="space-y-1.5">
+                        <button
+                          onClick={() => setCollapsedSections(prev => {
+                            const next = new Set(prev);
+                            if (next.has(sectionKey)) next.delete(sectionKey); else next.add(sectionKey);
+                            return next;
+                          })}
+                          className="flex items-center gap-1.5 px-1 w-full text-left hover:bg-accent/30 rounded transition-colors py-1"
+                        >
+                          {isSectionCollapsed ? <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+                          <Grid3x3 className="h-3.5 w-3.5 text-primary" />
+                          <span className="text-xs font-semibold">{section.name}</span>
+                          <Badge variant="outline" className="text-[9px] h-4 px-1">{section.axis}={section.axisValue}</Badge>
+                          <Badge variant="secondary" className="text-[9px] h-4 px-1">{groupRooms.length}</Badge>
+                        </button>
 
-                return (
-                  <div key={r.id} className="rounded-lg border bg-card overflow-hidden">
-                    <button
-                      onClick={() => toggleExpand(r.id)}
-                      className="flex items-center gap-2 p-2.5 w-full text-left hover:bg-accent/30 transition-colors"
-                    >
-                      {isExpanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
-                      {poly ? <PolygonPreview vertices={poly} size={28} /> : <GeometryIcon type={geo} />}
-                      <div className="flex-1 min-w-0">
-                        <span className="text-sm font-medium">{r.name}</span>
-                        <div className="flex flex-wrap gap-1.5 mt-0.5">
-                          <Badge variant="secondary" className="text-[10px] h-4 px-1">📐 {area.toFixed(2)} m²</Badge>
-                          {vol != null && vol > 0 && (
-                            <Badge variant="secondary" className="text-[10px] h-4 px-1">📦 {vol.toFixed(2)} m³</Badge>
-                          )}
-                          <Badge variant="outline" className="text-[10px] h-4 px-1">
-                            {edgeCount} aristas · {edgeCount + 2} caras
-                          </Badge>
-                          {r.height != null && r.height > 0 && (
-                            <Badge variant="outline" className="text-[10px] h-4 px-1">Z {r.height}m</Badge>
-                          )}
-                        </div>
+                        {!isSectionCollapsed && groupRooms.map(r => renderWorkspaceCard(r))}
                       </div>
-                      {isAdmin && (
-                        <div className="flex gap-0.5 shrink-0" onClick={e => e.stopPropagation()}>
-                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEdit(r)}>
-                            <Pencil className="h-3 w-3" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => setDeleteTarget(r)}>
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      )}
-                    </button>
+                    );
+                  })}
 
-                    {isExpanded && (
-                      <div className="border-t px-3 py-2 space-y-2 bg-muted/20">
-                        {/* Summary header */}
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-xs font-semibold">{r.name}</span>
-                          <Badge variant="secondary" className="text-[10px] h-4 px-1">📐 {area.toFixed(2)} m²</Badge>
-                          <Badge variant="outline" className="text-[10px] h-4 px-1">↔ {(poly ? polygonBBox(poly).w : r.length).toFixed(2)}m × ↕ {(poly ? polygonBBox(poly).h : r.width).toFixed(2)}m</Badge>
-                          {vol != null && vol > 0 && (
-                            <Badge variant="secondary" className="text-[10px] h-4 px-1">📦 {vol.toFixed(2)} m³</Badge>
-                          )}
-                        </div>
-
-                        {/* Section buttons — Z, Y, X */}
-                        {isAdmin && (
-                          <div className="space-y-1.5">
-                            <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Secciones disponibles</p>
-                            <div className="flex flex-wrap gap-1">
-                              {/* Z section (vertical) */}
-                              <Button
-                                variant={gridEditId === r.id ? 'default' : 'outline'}
-                                size="sm"
-                                className="h-6 text-[10px] gap-1"
-                                onClick={() => {
-                                  if (gridEditId === r.id) {
-                                    setGridEditId(null);
-                                  } else {
-                                    openGridEditor(r);
-                                  }
-                                }}
-                              >
-                                <Layers className="h-3 w-3" /> Sección Z
-                                {r.vertical_section_id && (() => {
-                                  const vs = verticalSections.find(s => s.id === r.vertical_section_id);
-                                  return vs ? <span className="text-muted-foreground ml-0.5">({vs.name})</span> : null;
-                                })()}
-                              </Button>
-
-                              {/* Y sections (longitudinal) */}
-                              {longitudinalSections.map(ls => {
-                                const isActive = activeSectionView[r.id]?.sectionId === ls.id;
-                                const hasProjection = r.floor_polygon && r.floor_polygon.length >= 3 &&
-                                  findPolygonIntersections(r.floor_polygon, 'y', ls.axisValue).length >= 2;
-                                if (!hasProjection) return null;
-                                return (
-                                  <Button
-                                    key={ls.id}
-                                    variant={isActive ? 'default' : 'outline'}
-                                    size="sm"
-                                    className="h-6 text-[10px] gap-1"
-                                    onClick={() => {
-                                      if (isActive) {
-                                        setActiveSectionView(prev => ({ ...prev, [r.id]: null }));
-                                      } else {
-                                        openSectionEditor(r.id, ls);
-                                      }
-                                    }}
-                                  >
-                                    <span className="text-green-600 font-bold">Y</span> {ls.name} (Y={ls.axisValue})
-                                  </Button>
-                                );
-                              })}
-
-                              {/* X sections (transversal) */}
-                              {transversalSections.map(ts => {
-                                const isActive = activeSectionView[r.id]?.sectionId === ts.id;
-                                const hasProjection = r.floor_polygon && r.floor_polygon.length >= 3 &&
-                                  findPolygonIntersections(r.floor_polygon, 'x', ts.axisValue).length >= 2;
-                                if (!hasProjection) return null;
-                                return (
-                                  <Button
-                                    key={ts.id}
-                                    variant={isActive ? 'default' : 'outline'}
-                                    size="sm"
-                                    className="h-6 text-[10px] gap-1"
-                                    onClick={() => {
-                                      if (isActive) {
-                                        setActiveSectionView(prev => ({ ...prev, [r.id]: null }));
-                                      } else {
-                                        openSectionEditor(r.id, ts);
-                                      }
-                                    }}
-                                  >
-                                    <span className="text-orange-600 font-bold">X</span> {ts.name} (X={ts.axisValue})
-                                  </Button>
-                                );
-                              })}
-
-                              {longitudinalSections.length === 0 && transversalSections.length === 0 && (
-                                <span className="text-[9px] text-muted-foreground italic ml-1">
-                                  Define secciones Y/X en la pestaña Secciones para ver cortes
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Inline Z grid editor */}
-                        {gridEditId === r.id && (
-                          <div className="space-y-2 border rounded-lg p-2 bg-background">
-                            <div className="flex items-center gap-1 flex-wrap">
-                              <span className="text-[8px] text-muted-foreground font-medium">Ampliar cuadrícula:</span>
-                              <Button variant="outline" size="sm" className="h-5 text-[9px] px-1.5 gap-0.5" onClick={() => setGridExtend(e => ({ ...e, left: e.left + 2 }))}>
-                                <ChevronLeft className="h-3 w-3" />←X
-                              </Button>
-                              <Button variant="outline" size="sm" className="h-5 text-[9px] px-1.5 gap-0.5" onClick={() => setGridExtend(e => ({ ...e, right: e.right + 2 }))}>
-                                X→<ChevronRight className="h-3 w-3" />
-                              </Button>
-                              <Button variant="outline" size="sm" className="h-5 text-[9px] px-1.5 gap-0.5" onClick={() => setGridExtend(e => ({ ...e, top: e.top + 2 }))}>
-                                <ChevronUp className="h-3 w-3" />↑Y
-                              </Button>
-                              <Button variant="outline" size="sm" className="h-5 text-[9px] px-1.5 gap-0.5" onClick={() => setGridExtend(e => ({ ...e, bottom: e.bottom + 2 }))}>
-                                Y↓<ChevronDown className="h-3 w-3" />
-                              </Button>
-                              {(gridExtend.left + gridExtend.right + gridExtend.top + gridExtend.bottom > 0) && (
-                                <Button variant="ghost" size="sm" className="h-5 text-[9px] px-1.5" onClick={() => setGridExtend({ left: 0, right: 0, top: 0, bottom: 0 })}>
-                                  Reset
-                                </Button>
-                              )}
-                            </div>
-                            <GridPolygonDrawer
-                              originTopLeft
-                              vertices={gridEditVertices}
-                              onChange={setGridEditVertices}
-                              gridWidth={gridWidth}
-                              gridHeight={gridHeight}
-                              gridOffsetX={gridBounds.minCol}
-                              gridOffsetY={gridBounds.minRow}
-                              placedRooms={allFloorPlanRooms}
-                              cellSizeM={cellSizeM}
-                              activeRoomId={r.id}
-                              activeName={r.name}
-                              otherPolygons={rooms
-                                .filter(other => other.id !== r.id && other.vertical_section_id === r.vertical_section_id && other.floor_polygon && other.floor_polygon.length >= 3)
-                                .map(other => ({ id: other.id, name: other.name, vertices: other.floor_polygon! }))}
-                              onSwitchRoom={switchGridEditRoom}
-                              perimeterPolygon={getSectionPerimeter(r.vertical_section_id)}
-                              pdfTitle="Espacio de trabajo"
-                              pdfSubtitle={r.name}
-                              onWallClick={(idx) => {
-                                setSelectedWallMap(prev => ({ ...prev, [r.id]: idx }));
-                                if (!expandedIds.has(r.id)) {
-                                  setExpandedIds(prev => { const n = new Set(prev); n.add(r.id); return n; });
-                                }
-                              }}
-                            />
-                            <div className="flex items-center justify-between">
-                              <div className="flex flex-wrap gap-1.5">
-                                {gridEditVertices.length >= 3 && (
-                                  <>
-                                    <Badge variant="secondary" className="text-[10px] h-4">📐 {(polygonArea(gridEditVertices) * cellSizeM * cellSizeM).toFixed(2)} m²</Badge>
-                                    <Badge variant="outline" className="text-[10px] h-4">↔ {(polygonBBox(gridEditVertices).w * cellSizeM).toFixed(2)}m × ↕ {(polygonBBox(gridEditVertices).h * cellSizeM).toFixed(2)}m</Badge>
-                                  </>
-                                )}
-                              </div>
-                              <div className="flex gap-1">
-                                <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => setGridEditId(null)}>
-                                  Cancelar
-                                </Button>
-                                <Button size="sm" className="h-6 text-[10px] gap-1" onClick={() => saveGridEditorPolygon(r.id)} disabled={gridEditVertices.length < 3}>
-                                  <Save className="h-3 w-3" /> Guardar polígono
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Inline Y/X section editor */}
-                        {activeSectionView[r.id] && (() => {
-                          const view = activeSectionView[r.id]!;
-                          const section = allSections.find(s => s.id === view.sectionId);
-                          if (!section) return null;
-                          const isLongitudinal = section.sectionType === 'longitudinal';
-                          const hLabel = isLongitudinal ? 'X' : 'Y';
-                          const vLabel = 'Z';
-                          const scaleH = floorPlan?.block_length_mm || 625;
-                          const scaleV = 250; // blockHeightMm
-                          const scaleHm = scaleH / 1000;
-                          const scaleVm = scaleV / 1000;
-
-                          // Get other workspaces' projections on this section for context
-                          const otherProjections: OtherPolygon[] = rooms
-                            .filter(other => other.id !== r.id && other.floor_polygon && other.floor_polygon.length >= 3)
-                            .map(other => {
-                              const existingPoly = section.polygons?.find(p => p.id === other.id);
-                              if (existingPoly && existingPoly.vertices.length >= 3) {
-                                return { id: other.id, name: other.name, vertices: existingPoly.vertices.map(v => ({ x: v.x, y: v.y })) };
-                              }
-                              const defaultProj = computeDefaultProjection(other, section);
-                              if (defaultProj.length >= 3) {
-                                return { id: other.id, name: other.name, vertices: defaultProj };
-                              }
-                              return null;
-                            })
-                            .filter(Boolean) as OtherPolygon[];
-
-                          // Compute grid bounds from ALL projections (active + others)
-                          const allProjVerts: PolygonVertex[] = [...sectionEditVertices];
-                          for (const op of otherProjections) {
-                            allProjVerts.push(...op.vertices);
-                          }
-                          const projBBox = allProjVerts.length >= 2
-                            ? polygonBBox(allProjVerts)
-                            : { minX: -3, maxX: 20, minY: -3, maxY: 20 };
-                          const secGridMinCol = Math.floor(projBBox.minX) - 2;
-                          const secGridMaxCol = Math.ceil(projBBox.maxX) + 2;
-                          const secGridMinRow = Math.floor(projBBox.minY) - 2;
-                          const secGridMaxRow = Math.ceil(projBBox.maxY) + 2;
-                          const secGridW = secGridMaxCol - secGridMinCol + 1;
-                          const secGridH = secGridMaxRow - secGridMinRow + 1;
-
-                          return (
-                            <div className="space-y-2 border rounded-lg p-2 bg-background">
-                              <div className="flex items-center gap-2">
-                                <Badge variant="secondary" className="text-[10px] h-5">
-                                  {isLongitudinal ? '↔ Longitudinal' : '↕ Transversal'} — {section.name} ({section.axis}={section.axisValue})
-                                </Badge>
-                                <span className="text-[9px] text-muted-foreground">
-                                  {hLabel}: {scaleH}mm · {vLabel}: {scaleV}mm
-                                </span>
-                              </div>
-                              <GridPolygonDrawer
-                                originTopLeft={false}
-                                vertices={sectionEditVertices}
-                                onChange={setSectionEditVertices}
-                                gridWidth={secGridW}
-                                gridHeight={secGridH}
-                                gridOffsetX={secGridMinCol}
-                                gridOffsetY={secGridMinRow}
-                                cellSizeM={1}
-                                activeName={r.name}
-                                otherPolygons={otherProjections}
-                                onSwitchRoom={(targetId) => {
-                                  const targetSection = allSections.find(s => s.id === view.sectionId);
-                                  if (targetSection) openSectionEditor(targetId, targetSection);
-                                }}
-                                pdfTitle={`${section.name} — ${r.name}`}
-                                pdfSubtitle={`${section.axis}=${section.axisValue}`}
-                                hAxisLabel={hLabel}
-                                vAxisLabel={vLabel}
-                                hScaleMm={scaleH}
-                                vScaleMm={scaleV}
-                              />
-                              <div className="flex items-center justify-between">
-                                <div className="flex flex-wrap gap-1.5">
-                                  {sectionEditVertices.length >= 3 && (
-                                    <>
-                                      <Badge variant="secondary" className="text-[10px] h-4">📐 {(polygonArea(sectionEditVertices) * scaleHm * scaleVm).toFixed(2)} m²</Badge>
-                                      <Badge variant="outline" className="text-[10px] h-4">↔ {(polygonBBox(sectionEditVertices).w * scaleHm * 1000).toFixed(0)}mm × ↕ {(polygonBBox(sectionEditVertices).h * scaleVm * 1000).toFixed(0)}mm</Badge>
-                                    </>
-                                  )}
-                                </div>
-                                <div className="flex gap-1">
-                                  <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => setActiveSectionView(prev => ({ ...prev, [r.id]: null }))}>
-                                    Cancelar
-                                  </Button>
-                                  <Button variant="outline" size="sm" className="h-6 text-[10px] gap-1" onClick={() => {
-                                    const defaultVerts = computeDefaultProjection(r, section);
-                                    setSectionEditVertices(defaultVerts);
-                                  }}>
-                                    Resetear
-                                  </Button>
-                                  <Button size="sm" className="h-6 text-[10px] gap-1" onClick={() => saveSectionPolygon(r.id)} disabled={sectionEditVertices.length < 3}>
-                                    <Save className="h-3 w-3" /> Guardar
-                                  </Button>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })()}
-
-                        {/* Polygon with wall numbers + vertices list */}
-                        {poly && gridEditId !== r.id && (
-                          <div className="space-y-2">
-                            <div className="flex gap-3 items-start">
-                              <PolygonPreviewWithWalls
-                                vertices={poly}
-                                size={140}
-                                selectedWall={selectedWallMap[r.id] ?? null}
-                                onSelectWall={(idx) => setSelectedWallMap(prev => ({ ...prev, [r.id]: prev[r.id] === idx ? null : idx }))}
-                              />
-                              <div className="flex-1 space-y-1">
-                                <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
-                                  Polígono base — {poly.length} vértices
-                                </p>
-                                <div className="flex flex-wrap gap-1">
-                                  {poly.map((v, i) => (
-                                    <Badge key={i} variant="outline" className="text-[9px] h-4 px-1 gap-0.5">
-                                      <MapPin className="h-2.5 w-2.5" />
-                                      ({v.x}, {v.y})
-                                    </Badge>
-                                  ))}
-                                </div>
-                                <p className="text-[9px] text-muted-foreground mt-1">Pulsa un nº de pared para ver/editar sus datos</p>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
-                          Caras del volumen
-                        </p>
-
-                        {/* Floor */}
-                        <FaceRow
-                          label="🟫 Suelo"
-                          type={floorType}
-                          options={FLOOR_CEILING_TYPES}
-                          onChange={(v) => updateFloorCeiling(r.id, 'has_floor', v as FloorCeilingType)}
-                        />
-
-                        {/* Walls — one per edge */}
-                        {Array.from({ length: edgeCount }).map((_, i) => {
-                          const dbWallIndex = i + 1;
-                          const wall = roomWalls.find(w => w.wall_index === dbWallIndex);
-                          const edgeLen = poly ? edgeLength(poly[i], poly[(i + 1) % poly.length]) : null;
-                          const isWallSelected = selectedWallMap[r.id] === i;
-                          return (
-                            <FaceRow
-                              key={i}
-                              label={`🧱 P${i + 1} ${wallLabel(i, edgeCount)}${edgeLen ? ` (${edgeLen.toFixed(2)}m)` : ''}`}
-                              type={normalizeWallType(wall?.wall_type)}
-                              options={WALL_TYPES}
-                              onChange={(v) => ensureAndUpdateWallType(r.id, i, v, wall?.id)}
-                              highlighted={isWallSelected}
-                              onLabelClick={() => setSelectedWallMap(prev => ({ ...prev, [r.id]: prev[r.id] === i ? null : i }))}
-                            />
-                          );
-                        })}
-
-                        {/* Ceiling */}
-                        <FaceRow
-                          label={r.has_roof ? '🏠 Techo (cubierta)' : '⬜ Techo'}
-                          type={ceilingType}
-                          options={FLOOR_CEILING_TYPES}
-                          onChange={(v) => updateFloorCeiling(r.id, 'has_ceiling', v as FloorCeilingType)}
-                        />
+                  {/* Unassigned rooms (only for vertical type) */}
+                  {unassigned.length > 0 && (
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-1.5 px-1 py-1">
+                        <span className="text-xs font-semibold text-muted-foreground">Sin sección asignada</span>
+                        <Badge variant="secondary" className="text-[9px] h-4 px-1">{unassigned.length}</Badge>
                       </div>
-                    )}
-                  </div>
-                );
-              })}
+                      {unassigned.map(r => renderWorkspaceCard(r))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           );
         })}

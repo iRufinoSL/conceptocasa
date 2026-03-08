@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,6 +8,8 @@ import type { RoomData } from '@/lib/floor-plan-calculations';
 import { Plus, Trash2, Pencil, MapPin, Eye, EyeOff, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Save, RefreshCw, MousePointer, PenTool } from 'lucide-react';
 import { GridPdfExport } from './GridPdfExport';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
+import { VISUAL_PATTERNS, getPatternById } from '@/lib/visual-patterns';
 
 export interface SectionPolygon {
   id: string;

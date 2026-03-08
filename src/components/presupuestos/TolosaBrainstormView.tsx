@@ -2239,6 +2239,37 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
           <span>{items.length - rootItems.length} sub-QUÉ?</span>
         </div>
       )}
+
+      {/* Delete confirmation dialog for items with descendants */}
+      {deleteConfirm && (
+        <Dialog open={true} onOpenChange={(open) => { if (!open) setDeleteConfirm(null); }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Eliminar "{deleteConfirm.item.name}"</DialogTitle>
+              <DialogDescription>
+                Este ítem tiene <strong>{deleteConfirm.descendants.length}</strong> descendiente{deleteConfirm.descendants.length > 1 ? 's' : ''}.
+                ¿Qué deseas hacer?
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2 max-h-40 overflow-y-auto border rounded p-2 bg-muted/30">
+              {deleteConfirm.descendants.map(d => (
+                <div key={d.id} className="flex items-center gap-2 text-xs">
+                  <Badge variant="outline" className="font-mono text-[10px] shrink-0">{d.code}</Badge>
+                  <span className="truncate">{d.name}</span>
+                </div>
+              ))}
+            </div>
+            <DialogFooter className="flex flex-col sm:flex-row gap-2">
+              <Button variant="outline" onClick={() => setDeleteConfirm(null)}>
+                Cancelar
+              </Button>
+              <Button variant="destructive" onClick={handleDeleteWithDescendants}>
+                <Trash2 className="h-4 w-4 mr-1" /> Eliminar todo ({deleteConfirm.descendants.length + 1})
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

@@ -2225,17 +2225,43 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                     .map(other => ({ id: other.id, name: other.name, vertices: other.floor_polygon! }))}
                   onSwitchRoom={switchGridEditRoom}
                   onOtherPolygonChange={handleOtherPolygonChangeZ}
-                  onOtherPolygonRename={handleOtherPolygonRename}
-                  perimeterPolygon={getSectionPerimeter(r.vertical_section_id)}
-                  pdfTitle="Espacio de trabajo"
-                  pdfSubtitle={r.name}
-                  onWallClick={(idx) => {
-                    setSelectedWallMap(prev => ({ ...prev, [r.id]: idx }));
-                    if (!expandedIds.has(r.id)) {
-                      setExpandedIds(prev => { const n = new Set(prev); n.add(r.id); return n; });
-                    }
-                  }}
-                />
+                   onOtherPolygonRename={handleOtherPolygonRename}
+                   onSelectOtherWorkspace={setSelectedOtherWorkspaceId}
+                   perimeterPolygon={getSectionPerimeter(r.vertical_section_id)}
+                   pdfTitle="Espacio de trabajo"
+                   pdfSubtitle={r.name}
+                   onWallClick={(idx) => {
+                     setSelectedWallMap(prev => ({ ...prev, [r.id]: idx }));
+                     if (!expandedIds.has(r.id)) {
+                       setExpandedIds(prev => { const n = new Set(prev); n.add(r.id); return n; });
+                     }
+                   }}
+                 />
+                 {/* Sibling workspace inline property editor */}
+                 {selectedOtherWorkspaceId && (() => {
+                   const sibRoom = rooms.find(rm => rm.id === selectedOtherWorkspaceId);
+                   if (!sibRoom) return null;
+                   const sibWalls = allWalls.filter(w => w.room_id === sibRoom.id);
+                   const sibPoly = sibRoom.floor_polygon;
+                   const sibEdgeCount = sibPoly ? sibPoly.length : 0;
+                   return (
+                     <div className="border rounded p-2 space-y-1.5 bg-accent/10">
+                       <div className="flex items-center gap-2">
+                         <span className="text-[10px] font-semibold">✏️ Editando: {sibRoom.name}</span>
+                         <Button variant="ghost" size="sm" className="h-5 text-[9px]" onClick={() => setSelectedOtherWorkspaceId(null)}>✕ Cerrar</Button>
+                       </div>
+                       <FaceRow label="🟫 Suelo" type={getFloorType(sibRoom)} options={FLOOR_CEILING_TYPES} onChange={(v) => updateFloorCeiling(sibRoom.id, 'has_floor', v as FloorCeilingType)} />
+                       {Array.from({ length: sibEdgeCount }).map((_, i) => {
+                         const dbWallIndex = i + 1;
+                         const wall = sibWalls.find(w => w.wall_index === dbWallIndex);
+                         return (
+                           <FaceRow key={i} label={`🧱 P${i + 1} ${wallLabel(i, sibEdgeCount)}`} type={normalizeWallType(wall?.wall_type)} options={WALL_TYPES} onChange={(v) => ensureAndUpdateWallType(sibRoom.id, i, v, wall?.id)} />
+                         );
+                       })}
+                       <FaceRow label="⬜ Techo" type={getCeilingType(sibRoom)} options={FLOOR_CEILING_TYPES} onChange={(v) => updateFloorCeiling(sibRoom.id, 'has_ceiling', v as FloorCeilingType)} />
+                     </div>
+                   );
+                 })()}
                 <div className="flex items-center justify-between">
                   <div className="flex flex-wrap gap-1.5">
                     {gridEditVertices.length >= 3 && (

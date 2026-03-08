@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Pencil, Trash2, Plus, ChevronDown, ChevronRight, ChevronLeft, ChevronUp, Triangle, Pyramid, Cuboid, Grid3x3, MapPin, X, MousePointerClick, List, Layers, Save, RefreshCw, Expand } from 'lucide-react';
+import { Pencil, Trash2, Plus, ChevronDown, ChevronRight, ChevronLeft, ChevronUp, Triangle, Pyramid, Cuboid, Grid3x3, MapPin, X, MousePointerClick, List, Layers, Save, RefreshCw, Expand, MousePointer } from 'lucide-react';
+import { WallObjectsPanel } from './WallObjectsPanel';
 import { GridPdfExport } from './GridPdfExport';
 import { DeleteWithBackupDialog } from '@/components/DeleteWithBackupDialog';
 import { DeletionBackupsList } from '@/components/DeletionBackupsList';
@@ -427,6 +428,7 @@ interface GridPolygonDrawerProps {
   pdfTitle?: string;
   pdfSubtitle?: string;
   onWallClick?: (wallIndex: number) => void;
+  onWallSelect?: (wallIndex: number) => void;
   hAxisLabel?: string;
   vAxisLabel?: string;
   hScaleMm?: number;
@@ -449,7 +451,7 @@ const POLY_COLORS = [
   'hsl(280 60% 55%)',
 ];
 
-function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16, gridOffsetX = 0, gridOffsetY = 0, placedRooms = [], cellSizeM = 1, otherPolygons = [], activeRoomId, onSwitchRoom, onOtherPolygonChange, onOtherPolygonRename, onSelectOtherWorkspace, perimeterPolygon, activeName, originTopLeft = false, pdfTitle, pdfSubtitle, onWallClick, hAxisLabel = 'X', vAxisLabel = 'Y', hScaleMm, vScaleMm, activeWalls = [], initialRulerLines = [], onSaveRulerLines }: GridPolygonDrawerProps) {
+function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16, gridOffsetX = 0, gridOffsetY = 0, placedRooms = [], cellSizeM = 1, otherPolygons = [], activeRoomId, onSwitchRoom, onOtherPolygonChange, onOtherPolygonRename, onSelectOtherWorkspace, perimeterPolygon, activeName, originTopLeft = false, pdfTitle, pdfSubtitle, onWallClick, onWallSelect, hAxisLabel = 'X', vAxisLabel = 'Y', hScaleMm, vScaleMm, activeWalls = [], initialRulerLines = [], onSaveRulerLines }: GridPolygonDrawerProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null);
@@ -531,8 +533,30 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
   };
 
   const handleClick = (gx: number, gy: number) => {
-    // Select/pointer mode: don't add vertices, just allow inspecting
-    if (selectMode) return;
+    // Select/pointer mode: detect closest wall edge and select it
+    if (selectMode) {
+      if (vertices.length >= 3 && onWallSelect) {
+        let bestDist = Infinity;
+        let bestIdx = -1;
+        for (let i = 0; i < vertices.length; i++) {
+          const j = (i + 1) % vertices.length;
+          const a = vertices[i], b = vertices[j];
+          // Point-to-segment distance
+          const dx = b.x - a.x, dy = b.y - a.y;
+          const lenSq = dx * dx + dy * dy;
+          let t = lenSq > 0 ? ((gx - a.x) * dx + (gy - a.y) * dy) / lenSq : 0;
+          t = Math.max(0, Math.min(1, t));
+          const px = a.x + t * dx, py = a.y + t * dy;
+          const dist = Math.sqrt((gx - px) ** 2 + (gy - py) ** 2);
+          if (dist < bestDist) { bestDist = dist; bestIdx = i; }
+        }
+        if (bestIdx >= 0 && bestDist < 2) {
+          const wallDbIdx = bestIdx + 1;
+          onWallSelect(wallDbIdx);
+        }
+      }
+      return;
+    }
     // Ruler mode: collect start/end points
     if (rulerMode) {
       if (!rulerStart) {
@@ -1368,6 +1392,26 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             })
           )}
 
+          {/* Select/pointer mode: transparent overlay for clicking on walls */}
+          {selectMode && isClosed && vertices.length >= 3 && (
+            <rect
+              x={pad}
+              y={pad}
+              width={gridWidth * cellW}
+              height={gridHeight * cellH}
+              fill="transparent"
+              className="cursor-pointer"
+              onClick={(e) => {
+                if (!svgRef.current) return;
+                const rct = svgRef.current.getBoundingClientRect();
+                const sx = e.clientX - rct.left;
+                const sy = e.clientY - rct.top;
+                const { gx, gy } = fromSvg(sx, sy);
+                handleClick(gx, gy);
+              }}
+            />
+          )}
+
           {/* Free mode / Ruler mode: transparent overlay for clicking anywhere */}
           {((freeMode && !isClosed) || rulerMode) && (
             <rect
@@ -1636,6 +1680,14 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
   const [selectedOtherWorkspaceId, setSelectedOtherWorkspaceId] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  // Wall objects panel state
+  const [wallPanelOpen, setWallPanelOpen] = useState(false);
+  const [wallPanelWallId, setWallPanelWallId] = useState<string | null>(null);
+  const [wallPanelWallIndex, setWallPanelWallIndex] = useState(0);
+  const [wallPanelWallType, setWallPanelWallType] = useState('exterior');
+  const [wallPanelLabel, setWallPanelLabel] = useState('');
+  const [wallPanelRoomName, setWallPanelRoomName] = useState('');
+  const [wallPanelRoomId, setWallPanelRoomId] = useState<string | null>(null);
 
   const { data: floorPlan } = useQuery({
     queryKey: ['floor-plan-for-workspaces', budgetId],
@@ -1949,6 +2001,31 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     const boolVal = value !== 'invisible';
     await supabase.from('budget_floor_plan_rooms').update({ [field]: boolVal }).eq('id', roomId);
     refetch();
+  };
+
+  /** Open the wall objects panel for a specific wall */
+  const openWallPanel = (roomId: string, wallDbIndex: number) => {
+    const room = rooms.find(r => r.id === roomId);
+    if (!room) return;
+    const wall = allWalls.find(w => w.room_id === roomId && w.wall_index === wallDbIndex);
+    const poly = room.floor_polygon;
+    const edgeCount = poly ? poly.length : 4;
+    setWallPanelWallId(wall?.id || null);
+    setWallPanelWallIndex(wallDbIndex);
+    setWallPanelWallType(normalizeWallType(wall?.wall_type));
+    setWallPanelLabel(`P${wallDbIndex} ${wallLabel(wallDbIndex - 1, edgeCount)}`);
+    setWallPanelRoomName(room.name);
+    setWallPanelRoomId(roomId);
+    setWallPanelOpen(true);
+    // Also highlight in the wall map
+    setSelectedWallMap(prev => ({ ...prev, [roomId]: wallDbIndex - 1 }));
+  };
+
+  const handleWallPanelTypeChange = async (newType: string) => {
+    if (!wallPanelRoomId) return;
+    const normalized = normalizeWallType(newType);
+    setWallPanelWallType(normalized);
+    await ensureAndUpdateWallType(wallPanelRoomId, wallPanelWallIndex - 1, normalized, wallPanelWallId || undefined);
   };
 
   const openGridEditor = (r: Workspace) => {
@@ -2458,6 +2535,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                        setExpandedIds(prev => { const n = new Set(prev); n.add(r.id); return n; });
                      }
                    }}
+                   onWallSelect={(wallDbIdx) => openWallPanel(r.id, wallDbIdx)}
                    initialRulerLines={getSavedRulerLines(`z_${r.id}`)}
                    onSaveRulerLines={(lines) => saveRulerLines(`z_${r.id}`, lines)}
                  />
@@ -2582,6 +2660,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                      activeWalls={allWalls.filter(w => w.room_id === r.id)}
                      initialRulerLines={getSavedRulerLines(`sec_${r.id}_${view.sectionId}`)}
                      onSaveRulerLines={(lines) => saveRulerLines(`sec_${r.id}_${view.sectionId}`, lines)}
+                     onWallSelect={(wallDbIdx) => openWallPanel(r.id, wallDbIdx)}
                    />
                    {/* Sibling workspace inline property editor (Y/X) */}
                    {selectedOtherWorkspaceId && (() => {
@@ -2983,6 +3062,18 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
           }}
         />
       )}
+
+      {/* Wall Objects Panel */}
+      <WallObjectsPanel
+        open={wallPanelOpen}
+        onOpenChange={setWallPanelOpen}
+        wallId={wallPanelWallId}
+        wallIndex={wallPanelWallIndex}
+        wallType={wallPanelWallType}
+        wallLabel={wallPanelLabel}
+        roomName={wallPanelRoomName}
+        onWallTypeChange={handleWallPanelTypeChange}
+      />
     </div>
   );
 }

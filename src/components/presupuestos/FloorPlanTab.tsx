@@ -9,13 +9,14 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Plus, Trash2, Layout, BarChart3, RefreshCw, Save, Wand2, Settings2, Layers, Pencil, Printer, ChevronUp, ChevronDown, X, Box, Ruler } from 'lucide-react';
+import { Loader2, Plus, Trash2, Layout, BarChart3, RefreshCw, Save, Wand2, Settings2, Layers, Pencil, Printer, ChevronUp, ChevronDown, X, Box, Ruler, Blocks } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFloorPlan } from '@/hooks/useFloorPlan';
 import { FloorPlanGridView } from './FloorPlanGridView';
 import { FloorPlanSpaceForm } from './FloorPlanSpaceForm';
 import { ArrowLeft } from 'lucide-react';
 import { FloorPlanSummaryView } from './FloorPlanSummary';
+import { WallObjectsList } from './WallObjectsList';
 import { FloorPlanVolumesView } from './FloorPlanVolumesView';
 import { ElevationsGridViewer } from './ElevationsGridViewer';
 import { CoordinateVariablesPanel } from './CoordinateVariablesPanel';
@@ -1156,6 +1157,9 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
               <TabsTrigger value="resumen" className="text-xs h-7 px-3">
                 <BarChart3 className="h-3.5 w-3.5 mr-1" /> Resumen Mediciones
               </TabsTrigger>
+              <TabsTrigger value="objetos" className="text-xs h-7 px-3">
+                <Blocks className="h-3.5 w-3.5 mr-1" /> Objetos
+              </TabsTrigger>
             </TabsList>
           </Tabs>
           {planData && (
@@ -1388,6 +1392,10 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
           }}
           recalculating={saving}
         />
+      )}
+
+      {viewTab === 'objetos' && (
+        <WallObjectsList budgetId={budgetId} />
       )}
     </div>
   );

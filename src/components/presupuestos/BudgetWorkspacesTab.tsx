@@ -3099,7 +3099,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
               return (
                 <FaceRow
                   key={i}
-                  label={`🧱 P${i + 1} ${wallLabel(i, edgeCount)}${edgeLen ? ` (${edgeLen.toFixed(2)}m)` : ''}`}
+                  label={`🧱 P${i + 1} ${wallLabel(i, edgeCount, 'z')}${edgeLen ? ` (${edgeLen.toFixed(2)}m)` : ''}`}
                   type={normalizeWallType(wall?.wall_type)}
                   options={WALL_TYPES}
                   onChange={(v) => ensureAndUpdateWallType(r.id, i, v, wall?.id)}

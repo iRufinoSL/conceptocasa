@@ -376,13 +376,34 @@ export function WallObjectsPanel({
                   </div>
                   <div>
                     <Label className="text-[10px]">Superficie m²</Label>
-                    <Input className="h-7 text-xs" type="number" step="0.01" value={formSurfaceM2} onChange={e => setFormSurfaceM2(e.target.value)} disabled={!formLengthMl} />
-                    {!formLengthMl && <p className="text-[8px] text-muted-foreground mt-0.5">Auto: hereda de la cara</p>}
+                    {!formLengthMl ? (
+                      <>
+                        <Input className="h-7 text-xs bg-muted/30" type="number" value={faceSurfaceM2 || ''} disabled />
+                        <p className="text-[8px] text-muted-foreground mt-0.5">Auto: hereda de la cara</p>
+                      </>
+                    ) : (
+                      <Input className="h-7 text-xs" type="number" step="0.01" value={formSurfaceM2} onChange={e => setFormSurfaceM2(e.target.value)} />
+                    )}
                   </div>
                   <div>
                     <Label className="text-[10px]">Volumen m³</Label>
-                    <Input className="h-7 text-xs" type="number" step="0.001" value={formVolumeM3} onChange={e => setFormVolumeM3(e.target.value)} disabled={!formLengthMl} />
-                    {!formLengthMl && <p className="text-[8px] text-muted-foreground mt-0.5">Auto: superficie × espesor</p>}
+                    {!formLengthMl ? (
+                      <>
+                        <Input
+                          className="h-7 text-xs bg-muted/30"
+                          type="number"
+                          value={faceSurfaceM2 && formThicknessMm
+                            ? (Math.round(faceSurfaceM2 * parseFloat(formThicknessMm) / 1000 * 1000) / 1000)
+                            : ''}
+                          disabled
+                        />
+                        <p className="text-[8px] text-muted-foreground mt-0.5">
+                          {formThicknessMm ? `Auto: ${faceSurfaceM2} m² × ${formThicknessMm} mm` : 'Rellena espesor para calcular'}
+                        </p>
+                      </>
+                    ) : (
+                      <Input className="h-7 text-xs" type="number" step="0.001" value={formVolumeM3} onChange={e => setFormVolumeM3(e.target.value)} />
+                    )}
                   </div>
                   <div>
                     <Label className="text-[10px]">Patrón visual</Label>

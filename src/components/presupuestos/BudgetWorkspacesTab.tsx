@@ -1146,7 +1146,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                         transform={`rotate(${rotAngle}, ${omx + nx * 6}, ${omy + ny * 6})`}
                         className="text-[6px] font-bold select-none pointer-events-none"
                         fill="hsl(var(--muted-foreground))">
-                        {lenMm} mm
+                        {lenMm} mm{(() => { const s = edgeSlopeInfo(a, b, hScale, vScale, showDegrees, showPercent); return s ? ` · ${s}` : ''; })()}
                       </text>
                     </>
                   )}

@@ -1349,10 +1349,10 @@ export const OPENING_PRESETS = {
 } as const;
 
 export const WALL_LABELS: Record<number, string> = {
-  1: 'Pared Superior',
-  2: 'Pared Derecha',
-  3: 'Pared Inferior',
-  4: 'Pared Izquierda',
+  1: 'P1',
+  2: 'P2',
+  3: 'P3',
+  4: 'P4',
 };
 
 // Corner-based wall side naming:

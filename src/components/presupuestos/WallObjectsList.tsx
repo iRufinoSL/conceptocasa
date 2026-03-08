@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Layers, List, Search, Box, ChevronRight } from 'lucide-react';
+import { Layers, List, Search, Box, ChevronRight, Package } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WallObjectsPanel } from './WallObjectsPanel';
 import { toast } from 'sonner';

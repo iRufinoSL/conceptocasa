@@ -1461,7 +1461,13 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
             const { sx: blX, sy: blY } = toSvg(bMinX, bMaxY);
             const { sx: brX, sy: brY } = toSvg(bMaxX, bMaxY);
 
-            const dimOffset = 42; // offset outside the polygon area
+            // Grid boundary in SVG space
+            const gridTop = pad;
+            const gridBottom = pad + gridHeight * cellH;
+            const gridLeft = pad;
+            const gridRight = pad + gridWidth * cellW;
+
+            const dimOffset = 22; // offset outside the grid boundary
             const tickLen = 5;
             const dimColor = "hsl(0 70% 50%)";
 

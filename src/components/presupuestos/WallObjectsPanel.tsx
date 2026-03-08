@@ -131,6 +131,7 @@ export function WallObjectsPanel({
     setFormSurfaceM2(obj.surface_m2?.toString() || '');
     setFormVolumeM3(obj.volume_m3?.toString() || '');
     setFormLengthMl(obj.length_ml?.toString() || '');
+    setFormThicknessMm((obj as any).thickness_mm?.toString() || '');
     setFormVisualPattern(obj.visual_pattern || '');
     setEditingObj(obj.id);
     setShowAddForm(true);

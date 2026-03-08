@@ -1111,10 +1111,15 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
             variant={showNewWorkspaceInput ? 'default' : 'outline'}
             size="sm"
             className="h-5 text-[9px] gap-0.5 px-1.5"
-            onClick={() => { setShowNewWorkspaceInput(!showNewWorkspaceInput); setNewWorkspaceName(''); }}
+            onClick={() => {
+              setShowNewWorkspaceInput(!showNewWorkspaceInput);
+              setNewWorkspaceName('');
+              setSelectedExistingWorkspace('');
+              setSelectedFaceType(getDefaultFaceType());
+            }}
             disabled={isCreatingWorkspace || !!editingPolygonId}
           >
-            <Plus className="h-3 w-3" /> Nuevo Espacio
+            <Plus className="h-3 w-3" /> Dibujar Cara
           </Button>
           {/* Toggle polygon list */}
           {standalonePolygons.length > 0 && (
@@ -1124,59 +1129,128 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
               className="h-5 text-[9px] gap-0.5 px-1.5"
               onClick={() => setShowPolygonsList(!showPolygonsList)}
             >
-              <Pencil className="h-3 w-3" /> Espacios ({standalonePolygons.length})
+              <Pencil className="h-3 w-3" /> Caras ({standalonePolygons.length})
             </Button>
           )}
         </div>
       </div>
 
-      {/* ── New workspace inline input ── */}
+      {/* ── New face drawing panel ── */}
       {showNewWorkspaceInput && (
-        <div className="flex items-center gap-1.5 px-2 py-1.5 bg-accent/30 border border-accent rounded-md mx-1">
-          <span className="text-[10px] font-medium text-foreground shrink-0">Nombre:</span>
-          <Input
-            className="h-6 text-[10px] flex-1 max-w-[180px]"
-            placeholder="Ej: Salón, Cocina..."
-            value={newWorkspaceName}
-            onChange={e => setNewWorkspaceName(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && startNewWorkspaceDrawing()}
-            autoFocus
-          />
-          <Button size="sm" className="h-6 text-[10px] gap-0.5" onClick={startNewWorkspaceDrawing} disabled={!newWorkspaceName.trim()}>
-            <PenTool className="h-3 w-3" /> Dibujar
-          </Button>
-          <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => { setShowNewWorkspaceInput(false); setNewWorkspaceName(''); }}>
-            Cancelar
-          </Button>
+        <div className="px-2 py-2 bg-accent/20 border border-accent rounded-md mx-1 space-y-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Workspace selector: existing or new */}
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] font-semibold text-foreground shrink-0">Espacio:</span>
+              {allWorkspaceNames.length > 0 && (
+                <select
+                  className="h-6 text-[10px] rounded border border-input bg-background px-1.5"
+                  value={selectedExistingWorkspace}
+                  onChange={e => { setSelectedExistingWorkspace(e.target.value); setNewWorkspaceName(''); }}
+                >
+                  <option value="">— Nuevo —</option>
+                  {allWorkspaceNames.map(name => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                </select>
+              )}
+              {!selectedExistingWorkspace && (
+                <Input
+                  className="h-6 text-[10px] w-32"
+                  placeholder="Nombre nuevo..."
+                  value={newWorkspaceName}
+                  onChange={e => setNewWorkspaceName(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && startNewWorkspaceDrawing()}
+                  autoFocus
+                />
+              )}
+            </div>
+
+            {/* Face type selector */}
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] font-semibold text-foreground shrink-0">Cara:</span>
+              <div className="flex items-center gap-0.5">
+                {(FACE_OPTIONS_BY_SECTION[section.sectionType] || ['Suelo']).map(face => (
+                  <Button
+                    key={face}
+                    variant={selectedFaceType === face ? 'default' : 'outline'}
+                    size="sm"
+                    className="h-5 text-[9px] px-2"
+                    onClick={() => setSelectedFaceType(face)}
+                  >
+                    {face}
+                  </Button>
+                ))}
+                {/* Allow Pared on Z sections too for special cases */}
+                {section.sectionType === 'vertical' && (
+                  <Button
+                    variant={selectedFaceType === 'Pared' ? 'default' : 'ghost'}
+                    size="sm"
+                    className="h-5 text-[9px] px-2"
+                    onClick={() => setSelectedFaceType('Pared')}
+                  >
+                    Pared
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <Button
+              size="sm"
+              className="h-6 text-[10px] gap-0.5"
+              onClick={startNewWorkspaceDrawing}
+              disabled={!newWorkspaceName.trim() && !selectedExistingWorkspace}
+            >
+              <PenTool className="h-3 w-3" /> Dibujar {selectedFaceType}
+            </Button>
+            <span className="text-[9px] text-muted-foreground">
+              {(selectedExistingWorkspace || newWorkspaceName.trim()) && selectedFaceType
+                ? `→ "${buildPolygonName(selectedExistingWorkspace || newWorkspaceName.trim(), selectedFaceType)}"`
+                : ''}
+            </span>
+            <Button variant="ghost" size="sm" className="h-6 text-[10px] ml-auto" onClick={() => { setShowNewWorkspaceInput(false); setNewWorkspaceName(''); setSelectedExistingWorkspace(''); }}>
+              Cancelar
+            </Button>
+          </div>
         </div>
       )}
 
-      {/* ── Polygon list panel ── */}
+      {/* ── Polygon list panel (grouped by workspace) ── */}
       {showPolygonsList && standalonePolygons.length > 0 && (
-        <div className="mx-1 px-2 py-1.5 border border-border rounded-md bg-card space-y-1">
-          <span className="text-[10px] font-semibold text-foreground">Espacios en esta sección:</span>
-          {standalonePolygons.map((poly, pi) => {
-            const isActive = editingPolygonId === poly.id;
-            const vertCount = poly.vertices.length;
-            const color = PROJ_COLORS[(pi + (wallProjections?.length || 0)) % PROJ_COLORS.length];
-            return (
-              <div key={poly.id} className={`flex items-center gap-1.5 px-1.5 py-1 rounded transition-colors ${isActive ? 'bg-primary/10 border border-primary/30' : 'hover:bg-accent/30'}`}>
-                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
-                <span className="text-[10px] font-medium flex-1 truncate cursor-pointer" onClick={() => selectSectionPolygon(poly)}>
-                  {poly.name}
-                </span>
-                <Badge variant="outline" className="text-[8px] h-3.5 shrink-0">{geometryTypeLabel(vertCount)}</Badge>
-                <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0" onClick={() => selectSectionPolygon(poly)} title="Editar geometría">
-                  <Pencil className="h-3 w-3" />
-                </Button>
-                <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0 text-destructive hover:bg-destructive/10" onClick={() => deleteSectionPolygon(poly.id)} title="Eliminar">
-                  <Trash2 className="h-3 w-3" />
-                </Button>
-              </div>
-            );
-          })}
+        <div className="mx-1 px-2 py-1.5 border border-border rounded-md bg-card space-y-1.5">
+          <span className="text-[10px] font-semibold text-foreground">Caras en esta sección:</span>
+          {Object.entries(groupedPolygons).map(([wsName, polys]) => (
+            <div key={wsName} className="space-y-0.5">
+              <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wide">{wsName}</span>
+              {polys.map((poly, pi) => {
+                const isActive = editingPolygonId === poly.id;
+                const vertCount = poly.vertices.length;
+                const color = PROJ_COLORS[(standalonePolygons.indexOf(poly) + (wallProjections?.length || 0)) % PROJ_COLORS.length];
+                // Extract face label from name
+                const faceLabel = poly.name.replace(wsName, '').trim();
+                return (
+                  <div key={poly.id} className={`flex items-center gap-1.5 px-1.5 py-0.5 rounded transition-colors ${isActive ? 'bg-primary/10 border border-primary/30' : 'hover:bg-accent/30'}`}>
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                    <span className="text-[10px] font-medium flex-1 truncate cursor-pointer" onClick={() => selectSectionPolygon(poly)}>
+                      {faceLabel || poly.name}
+                    </span>
+                    <Badge variant="outline" className="text-[8px] h-3.5 shrink-0">{geometryTypeLabel(vertCount)}</Badge>
+                    <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0" onClick={() => selectSectionPolygon(poly)} title="Editar">
+                      <Pencil className="h-3 w-3" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0 text-destructive hover:bg-destructive/10" onClick={() => deleteSectionPolygon(poly.id)} title="Eliminar">
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
         </div>
       )}
+
 
 
       {showPlacementDialog && wallProjections && (() => {

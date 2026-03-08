@@ -2392,6 +2392,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                     .filter(other => other.id !== editingId && other.vertical_section_id === formSectionId && other.floor_polygon && other.floor_polygon.length >= 3)
                     .map(other => ({ id: other.id, name: other.name, vertices: other.floor_polygon! }))}
                   onSwitchRoom={editingId ? switchGridEditRoom : undefined}
+                  onOtherPolygonChange={handleOtherPolygonChangeZ}
+                  onOtherPolygonRename={handleOtherPolygonRename}
                   pdfTitle="Espacio de trabajo"
                   pdfSubtitle={formName || 'Nuevo espacio'}
                 />

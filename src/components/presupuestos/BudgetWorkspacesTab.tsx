@@ -791,32 +791,56 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
 
           {/* ── Other rooms' polygons (background, clickable) with edge measurements ── */}
           {otherPolygons.map((op) => {
-            const verts = op.vertices;
+            const isSelected = selectedOtherId === op.id;
+            const verts = isSelected ? otherEditVertices : op.vertices;
             if (verts.length < 3) return null;
-            const areaVal = polygonArea(verts) * cellSizeM * cellSizeM;
-            // Build edges for measurements
+            const areaVal = polygonArea(verts) * (hScaleMm && vScaleMm ? hScale * vScale : cellSizeM * cellSizeM);
             const opEdges: Array<{ a: PolygonVertex; b: PolygonVertex }> = [];
             for (let i = 1; i < verts.length; i++) opEdges.push({ a: verts[i - 1], b: verts[i] });
             opEdges.push({ a: verts[verts.length - 1], b: verts[0] });
             const opCx = verts.reduce((s, v) => s + v.x, 0) / verts.length;
             const opCy = verts.reduce((s, v) => s + v.y, 0) / verts.length;
+            const strokeColor = isSelected ? 'hsl(var(--primary))' : 'hsl(200 80% 50%)';
+            const fillColor = isSelected ? 'hsl(var(--primary) / 0.18)' : 'hsl(200 80% 50% / 0.12)';
             return (
-              <g key={`other-${op.id}`} className="cursor-pointer" onClick={() => onSwitchRoom?.(op.id)}>
+              <g key={`other-${op.id}`} className="cursor-pointer" onClick={() => handleSelectOther(op)}>
                 <polygon
                   points={verts.map(v => { const { sx, sy } = toSvg(v.x, v.y); return `${sx},${sy}`; }).join(' ')}
-                  fill="hsl(200 80% 50% / 0.12)"
-                  stroke="hsl(200 80% 50%)"
-                  strokeWidth={1.5}
-                  strokeDasharray="4 2"
+                  fill={fillColor}
+                  stroke={strokeColor}
+                  strokeWidth={isSelected ? 2.5 : 1.5}
+                  strokeDasharray={isSelected ? 'none' : '4 2'}
                 />
+                {/* Vertices: draggable when selected, static otherwise */}
                 {verts.map((v, i) => {
                   const { sx, sy } = toSvg(v.x, v.y);
+                  if (isSelected) {
+                    const isDragging = draggingOtherIdx === i;
+                    return (
+                      <g key={`ov-${op.id}-${i}`}>
+                        <circle
+                          cx={sx} cy={sy} r={isDragging ? 7 : 6}
+                          fill={isDragging ? 'hsl(var(--chart-2))' : strokeColor}
+                          stroke="hsl(var(--background))"
+                          strokeWidth={2}
+                          className="cursor-grab active:cursor-grabbing"
+                          onClick={(e) => e.stopPropagation()}
+                          onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); setDraggingOtherIdx(i); }}
+                        />
+                        <text x={sx} y={sy - 9} textAnchor="middle"
+                          className="text-[7px] font-bold select-none pointer-events-none"
+                          fill={strokeColor}>
+                          {i + 1} ({hAxisLabel}{v.x},{vAxisLabel}{v.y})
+                        </text>
+                      </g>
+                    );
+                  }
                   return (
                     <circle key={`ov-${op.id}-${i}`} cx={sx} cy={sy} r={3}
                       fill="hsl(200 80% 50%)" opacity={0.7} />
                   );
                 })}
-                {/* Edge measurements for other polygons */}
+                {/* Edge measurements */}
                 {opEdges.map(({ a, b }, ei) => {
                   const { sx: ex1, sy: ey1 } = toSvg(a.x, a.y);
                   const { sx: ex2, sy: ey2 } = toSvg(b.x, b.y);
@@ -839,25 +863,23 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                     <text key={`oe-${op.id}-${ei}`} x={wmx} y={wmy} textAnchor="middle" dominantBaseline="central"
                       transform={`rotate(${eRot}, ${wmx}, ${wmy})`}
                       className="text-[6px] font-semibold select-none pointer-events-none"
-                      fill="hsl(200 80% 50% / 0.8)">
+                      fill={isSelected ? 'hsl(var(--primary) / 0.8)' : 'hsl(200 80% 50% / 0.8)'}>
                       {eLenMm} mm
                     </text>
                   );
                 })}
                 {(() => {
-                  const cx = opCx;
-                  const cy = opCy;
-                  const { sx, sy } = toSvg(cx, cy);
+                  const { sx, sy } = toSvg(opCx, opCy);
                   return (
                     <>
                       <text x={sx} y={sy - 5} textAnchor="middle" dominantBaseline="central"
                         className="text-[8px] font-semibold select-none pointer-events-none"
-                        fill="hsl(200 80% 50%)">
+                        fill={strokeColor}>
                         {op.name}
                       </text>
                       <text x={sx} y={sy + 7} textAnchor="middle" dominantBaseline="central"
                         className="text-[7px] select-none pointer-events-none"
-                        fill="hsl(200 80% 50%)" opacity={0.8}>
+                        fill={strokeColor} opacity={0.8}>
                         {areaVal.toFixed(2)} m²
                       </text>
                     </>

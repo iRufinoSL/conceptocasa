@@ -3089,6 +3089,37 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                         }
                       }
                     }}
+                    onVertexEdit={async (faceType, faceIndex, vertices) => {
+                      const scaleZVal = 250 / 1000; // scaleZ in meters per grid unit
+                      if (faceType === 'techo') {
+                        // Each techo vertex Z maps to a wall height: height = (Z - zBase) * scaleZ_m
+                        for (let vi = 0; vi < vertices.length; vi++) {
+                          const wallIdx = vi + 1;
+                          const wall = roomWalls.find(w => w.wall_index === wallIdx);
+                          const newHeightM = (vertices[vi].z - zBase3D) * scaleZVal;
+                          if (wall) {
+                            await supabase.from('budget_floor_plan_walls').update({ height: Math.max(0, newHeightM) }).eq('id', wall.id);
+                          }
+                        }
+                        queryClient.invalidateQueries({ queryKey: ['workspace-walls'] });
+                        toast.success('Vértices del techo actualizados — alturas de paredes recalculadas');
+                      } else if (faceType === 'pared') {
+                        // Wall face has 4 vertices: [base1, base2, top2, top1]
+                        // top vertices (index 2,3) control heights of wall faceIndex and next wall
+                        const nextIdx = (faceIndex % (poly?.length || 4)) + 1;
+                        const wallCurr = roomWalls.find(w => w.wall_index === faceIndex);
+                        const wallNext = roomWalls.find(w => w.wall_index === nextIdx);
+                        // V4 (index 3) = top of current wall vertex, V3 (index 2) = top of next wall vertex
+                        if (vertices.length >= 4) {
+                          const h1 = (vertices[3].z - zBase3D) * scaleZVal;
+                          const h2 = (vertices[2].z - zBase3D) * scaleZVal;
+                          if (wallCurr) await supabase.from('budget_floor_plan_walls').update({ height: Math.max(0, h1) }).eq('id', wallCurr.id);
+                          if (wallNext) await supabase.from('budget_floor_plan_walls').update({ height: Math.max(0, h2) }).eq('id', wallNext.id);
+                        }
+                        queryClient.invalidateQueries({ queryKey: ['workspace-walls'] });
+                        toast.success(`Alturas de paredes actualizadas desde vértices`);
+                      }
+                    }}
                     selectedFace={selected3DFace}
                   />
                 </div>

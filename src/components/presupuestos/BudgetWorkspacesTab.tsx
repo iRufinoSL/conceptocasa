@@ -3508,6 +3508,33 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
         </div>
       </div>
 
+      {/* ── 3D List View ── */}
+      {show3DList && (() => {
+        const wsEntries = rooms
+          .filter(r => r.floor_polygon && r.floor_polygon.length >= 3)
+          .map(r => {
+            const vSec = verticalSections.find(s => s.id === r.vertical_section_id);
+            const roomWalls = allWalls.filter(w => w.room_id === r.id).sort((a, b) => a.wall_index - b.wall_index);
+            return {
+              id: r.id,
+              name: r.name,
+              polygon: r.floor_polygon!,
+              height: r.height || floorPlan?.default_height || 2.5,
+              walls: roomWalls,
+              zBase: vSec ? vSec.axisValue : 0,
+              sectionName: vSec ? vSec.name : 'Sin sección',
+            };
+          });
+        return (
+          <Workspace3DListView
+            workspaces={wsEntries}
+            scaleXY={floorPlan?.block_length_mm || 625}
+            scaleZ={250}
+            onClose={() => setShow3DList(false)}
+          />
+        );
+      })()}
+
       {/* ── Creation/Edit form ── */}
       {showForm && (
         <div className="border rounded-lg p-3 space-y-3 bg-muted/30">

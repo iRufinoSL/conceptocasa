@@ -2104,6 +2104,54 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                   data-pdf-vertex-label=""
                 >{hLabel}{v.x},{vLabel}{v.y}</text>
               ))}
+              {/* Edge face type labels (P#/Suelo/Techo) for elevation sections */}
+              {isElevation && verts.length >= 3 && !isEditingThisPoly && verts.map((v, ei) => {
+                const next = verts[(ei + 1) % verts.length];
+                const { sx: x1, sy: y1 } = toSvg(v.x, v.y);
+                const { sx: x2, sy: y2 } = toSvg(next.x, next.y);
+                const emx = (x1 + x2) / 2;
+                const emy = (y1 + y2) / 2;
+                const edgeLabel = poly.vertices[ei]?.label || `P${ei + 1}`;
+                const edx = x2 - x1;
+                const edy = y2 - y1;
+                const elen = Math.sqrt(edx * edx + edy * edy) || 1;
+                let enx = edy / elen;
+                let eny = -edx / elen;
+                if ((cxSvg - emx) * enx + (cySvg - emy) * eny < 0) { enx = -enx; eny = -eny; }
+                const labelX = emx + enx * 20;
+                const labelY = emy + eny * 20;
+                const bgColor = edgeLabel === 'Suelo' ? 'hsl(30 80% 50% / 0.9)' : edgeLabel === 'Techo' ? 'hsl(210 70% 55% / 0.9)' : 'hsl(var(--muted-foreground) / 0.7)';
+                return (
+                  <g key={`efl-${ei}`} data-pdf-wall-number="">
+                    <rect x={labelX - 18} y={labelY - 6} width={36} height={12} rx={3}
+                      fill={bgColor} className="cursor-pointer"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const faceTypes = [`P${ei + 1}`, 'Suelo', 'Techo'];
+                        const currentIdx = faceTypes.indexOf(edgeLabel);
+                        const nextFaceLabel = faceTypes[(currentIdx + 1) % faceTypes.length];
+                        if (!allSections || !onSectionsChange) return;
+                        const updatedSections = allSections.map(s => {
+                          if (s.id !== section.id) return s;
+                          const polys = (s.polygons || []).map(p => {
+                            if (p.id !== poly.id) return p;
+                            const newVerts = [...p.vertices];
+                            newVerts[ei] = { ...newVerts[ei], label: nextFaceLabel };
+                            return { ...p, vertices: newVerts };
+                          });
+                          return { ...s, polygons: polys };
+                        });
+                        onSectionsChange(updatedSections);
+                        toast.success(`Arista ${ei + 1}: ${nextFaceLabel}`);
+                      }}
+                    />
+                    <text x={labelX} y={labelY + 1} textAnchor="middle" dominantBaseline="central"
+                      fontSize={7} fontWeight={700} fill="white"
+                      className="pointer-events-none select-none"
+                    >{edgeLabel}</text>
+                  </g>
+                );
+              })}
               {/* Name + area label */}
               <rect x={cxSvg - 30} y={cySvg - 10} width={60} height={20} rx={3}
                 fill="hsl(45 100% 50% / 0.85)" className="cursor-pointer"

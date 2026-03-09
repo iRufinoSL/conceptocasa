@@ -2764,6 +2764,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     toast.success('Polígono de sección guardado');
     setActiveSectionView(prev => ({ ...prev, [roomId]: null }));
     queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces', budgetId] });
+    restoreReturnTo3D();
   };
 
   const saveGridEditorPolygon = async (roomId: string) => {

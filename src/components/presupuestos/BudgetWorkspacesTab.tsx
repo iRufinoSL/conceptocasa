@@ -1995,6 +1995,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
   const [view3DId, setView3DId] = useState<string | null>(null);
   const [selected3DFace, setSelected3DFace] = useState<string | null>(null);
   const [show3DList, setShow3DList] = useState(false);
+  const [returnTo3D, setReturnTo3D] = useState<{ type: 'list' } | { type: 'single'; workspaceId: string } | null>(null);
   const [gridEditVertices, setGridEditVertices] = useState<PolygonVertex[]>([]);
   const [activeSectionView, setActiveSectionView] = useState<Record<string, { sectionId: string; type: 'vertical' | 'longitudinal' | 'transversal' | 'inclined' } | null>>({});
   const [sectionEditVertices, setSectionEditVertices] = useState<PolygonVertex[]>([]);
@@ -2665,6 +2666,13 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
       return;
     }
 
+    // Remember where to return after 2D editing
+    if (show3DList) {
+      setReturnTo3D({ type: 'list' });
+    } else if (view3DId) {
+      setReturnTo3D({ type: 'single', workspaceId: view3DId });
+    }
+
     // Close 3D views
     setShow3DList(false);
     setView3DId(null);
@@ -2756,6 +2764,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     toast.success('Polígono de sección guardado');
     setActiveSectionView(prev => ({ ...prev, [roomId]: null }));
     queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces', budgetId] });
+    restoreReturnTo3D();
   };
 
   const saveGridEditorPolygon = async (roomId: string) => {
@@ -2779,7 +2788,19 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     await refetch();
     queryClient.invalidateQueries({ queryKey: ['workspace-walls'] });
     queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces', budgetId] });
+    restoreReturnTo3D();
   };
+
+  /** Restore 3D view after 2D editing if navigated from 3D */
+  const restoreReturnTo3D = useCallback(() => {
+    if (!returnTo3D) return;
+    if (returnTo3D.type === 'list') {
+      setShow3DList(true);
+    } else if (returnTo3D.type === 'single') {
+      setView3DId(returnTo3D.workspaceId);
+    }
+    setReturnTo3D(null);
+  }, [returnTo3D]);
 
   // Rename workspace inline
   const handleRename = async (roomId: string) => {
@@ -3311,7 +3332,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                     )}
                   </div>
                   <div className="flex gap-1">
-                    <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => setGridEditId(null)}>
+                    <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => { setGridEditId(null); restoreReturnTo3D(); }}>
                       Cancelar
                     </Button>
                     <Button size="sm" className="h-6 text-[10px] gap-1" onClick={() => saveGridEditorPolygon(r.id)} disabled={gridEditVertices.length < 3}>
@@ -3457,7 +3478,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                       )}
                     </div>
                     <div className="flex gap-1">
-                      <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => setActiveSectionView(prev => ({ ...prev, [r.id]: null }))}>
+                      <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => { setActiveSectionView(prev => ({ ...prev, [r.id]: null })); restoreReturnTo3D(); }}>
                         Cancelar
                       </Button>
                       <Button variant="outline" size="sm" className="h-6 text-[10px] gap-1" onClick={() => {

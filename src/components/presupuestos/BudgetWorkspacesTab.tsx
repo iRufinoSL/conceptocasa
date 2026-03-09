@@ -2657,6 +2657,67 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     setExpandedIds(prev => { const next = new Set(prev); next.add(roomId); return next; });
   };
 
+  /** Navigate from 3D face double-click to the corresponding 2D section editor */
+  const handleFaceNavigateTo2D = useCallback((info: { workspaceId: string; workspaceName: string; faceType: string; faceIndex: number }) => {
+    const room = rooms.find(r => r.id === info.workspaceId);
+    if (!room) {
+      toast.error('Espacio de trabajo no encontrado');
+      return;
+    }
+
+    // Close 3D views
+    setShow3DList(false);
+    setView3DId(null);
+    setSelected3DFace(null);
+
+    if (info.faceType === 'suelo' || info.faceType === 'techo') {
+      // Open the Z grid editor (floor polygon editor)
+      openGridEditor(room);
+      toast.info(`Editando ${info.faceType === 'suelo' ? 'suelo' : 'techo'} de "${room.name}" en sección Z`);
+      return;
+    }
+
+    if (info.faceType === 'pared' && room.floor_polygon && room.floor_polygon.length >= 3) {
+      const poly = room.floor_polygon;
+      const wallIdx = info.faceIndex - 1; // 0-based
+      const nextIdx = (wallIdx + 1) % poly.length;
+      const v1 = poly[wallIdx];
+      const v2 = poly[nextIdx];
+      const dx = Math.abs(v2.x - v1.x);
+      const dy = Math.abs(v2.y - v1.y);
+
+      // Determine wall orientation: horizontal walls (along X) → Y section, vertical walls (along Y) → X section
+      const isHorizontal = dx >= dy;
+      const sectionsToSearch = isHorizontal ? longitudinalSections : transversalSections;
+      const axisKey = isHorizontal ? 'y' : 'x';
+      const wallAxisVal = isHorizontal ? v1.y : v1.x; // The constant axis value of this wall edge
+
+      // Find the closest matching section
+      let bestSection: CustomSection | null = null;
+      let bestDist = Infinity;
+      for (const s of sectionsToSearch) {
+        const dist = Math.abs(s.axisValue - wallAxisVal);
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestSection = s;
+        }
+      }
+
+      if (bestSection && bestDist <= 1) {
+        openSectionEditor(room.id, bestSection);
+        toast.info(`Editando pared P${info.faceIndex} de "${room.name}" en sección ${isHorizontal ? 'Y' : 'X'}=${bestSection.axisValue}`);
+      } else {
+        // No matching section found, fall back to Z editor
+        openGridEditor(room);
+        toast.info(`No hay sección ${isHorizontal ? 'Y' : 'X'} para P${info.faceIndex}. Abriendo editor Z de "${room.name}"`);
+      }
+      return;
+    }
+
+    // Fallback
+    openGridEditor(room);
+  }, [rooms, longitudinalSections, transversalSections, openGridEditor, openSectionEditor]);
+
   /** Save the edited Y/X section polygon back to custom_corners */
   const saveSectionPolygon = async (roomId: string) => {
     const view = activeSectionView[roomId];

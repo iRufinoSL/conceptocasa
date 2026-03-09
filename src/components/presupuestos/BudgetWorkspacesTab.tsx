@@ -3478,7 +3478,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                       )}
                     </div>
                     <div className="flex gap-1">
-                      <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => setActiveSectionView(prev => ({ ...prev, [r.id]: null }))}>
+                      <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => { setActiveSectionView(prev => ({ ...prev, [r.id]: null })); restoreReturnTo3D(); }}>
                         Cancelar
                       </Button>
                       <Button variant="outline" size="sm" className="h-6 text-[10px] gap-1" onClick={() => {

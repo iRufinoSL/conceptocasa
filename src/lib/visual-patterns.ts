@@ -6,7 +6,7 @@
 export interface VisualPattern {
   id: string;
   label: string;
-  category: 'estructura' | 'aislamiento' | 'revestimiento' | 'suelo' | 'cubierta' | 'varios';
+  category: 'estructura' | 'aislamiento' | 'revestimiento' | 'suelo' | 'cubierta' | 'varios' | 'color';
   /** SVG pattern element content (inside <pattern>) */
   svgContent: string;
   /** Pattern unit size */

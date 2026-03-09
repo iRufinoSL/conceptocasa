@@ -170,7 +170,9 @@ function MultiPrism({ ws, scaleXY, scaleZ, offsetX, offsetZ, onFaceDoubleClick }
     const top = base.map((v, i) => {
       const wall = ws.walls.find(w => w.wall_index === i + 1);
       const h = wall?.height != null ? wall.height : ws.height;
-      return new THREE.Vector3(v.x, ws.zBase * zScaleM + h, v.z);
+      // Quantize to Z-grid so shared coordinates across workspaces coincide exactly
+      const zTopUnits = ws.zBase + Math.round(h / zScaleM);
+      return new THREE.Vector3(v.x, zTopUnits * zScaleM, v.z);
     });
 
     const n = ws.polygon.length;

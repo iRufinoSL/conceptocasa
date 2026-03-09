@@ -233,6 +233,7 @@ export const PATTERN_CATEGORIES = [
   { id: 'suelo', label: 'Suelo' },
   { id: 'cubierta', label: 'Cubierta' },
   { id: 'varios', label: 'Varios' },
+  { id: 'color', label: 'Color' },
 ] as const;
 
 export function getPatternById(id: string | null | undefined): VisualPattern | undefined {

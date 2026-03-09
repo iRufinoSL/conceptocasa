@@ -13,13 +13,14 @@ Cada cara/ámbito tiene un objeto automático obligatorio con `layer_order = 0` 
 - **Permite asignar un patrón visual** haciendo clic → selector inline con dropdown de patrones
 
 ### Patrones visuales (visual_pattern)
-Campo `visual_pattern` en `budget_wall_objects` almacena el ID del patrón SVG. Catálogo definido en `src/lib/visual-patterns.ts` con 18 patrones en 6 categorías:
+Campo `visual_pattern` en `budget_wall_objects` almacena el ID del patrón SVG. Catálogo definido en `src/lib/visual-patterns.ts` con 21 patrones en 7 categorías:
 - **Estructura**: bloques, ladrillo, hormigón, hormigón armado, madera, piedra
 - **Aislamiento**: aislante térmico, lana mineral, poliestireno (EPS)
 - **Revestimiento**: yeso/enlucido, cerámica/azulejo, vidrio
 - **Suelo**: tierra/relleno, grava
 - **Cubierta**: membrana impermeable, teja
 - **Varios**: metal/acero, aire/cámara, vacío/sin relleno
+- **Color**: blanco, amarillo, azul tenue
 
 El selector muestra miniaturas SVG inline. Los patrones se renderizan como `<pattern>` en el SVG de las secciones y se aplican como `fill="url(#wall-pattern-{id})"` a los polígonos de los espacios de trabajo en secciones Y/X y verticales Z.
 

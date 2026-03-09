@@ -1310,6 +1310,13 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
         </div>
       )}
 
+  // Helper: get visual pattern for a standalone polygon by matching workspace name to rooms
+  const getStandalonePolygonPattern = (poly: SectionPolygon): string | undefined => {
+    const wsName = poly.name.replace(/\s*\((?:Suelo|Techo|Pared\s*\d*)\)\s*$/, '').replace(/\s+P\d+$/, '').trim();
+    const room = rooms?.find(r => r.name === wsName);
+    if (room) return wallPatterns.get(room.id);
+    return undefined;
+  };
 
 
       {showPlacementDialog && wallProjections && (() => {

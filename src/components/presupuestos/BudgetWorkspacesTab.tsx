@@ -3592,6 +3592,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
             scaleXY={floorPlan?.block_length_mm || 625}
             scaleZ={250}
             onClose={() => setShow3DList(false)}
+            onFaceDoubleClick={handleFaceNavigateTo2D}
           />
         );
       })()}

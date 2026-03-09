@@ -112,7 +112,8 @@ function getWorkspacePolygon(
 ): PolygonVertex[] {
   // Check for saved polygon
   const saved = section.polygons?.find(p => p.id === proj.workspaceId);
-  if (saved && saved.vertices.length >= 1) {
+  if (saved) {
+    if (saved.vertices.length === 0) return []; // Hidden marker
     return saved.vertices.map(v => ({ x: v.x, y: v.y }));
   }
   // Default rectangular projection
@@ -613,8 +614,8 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
   // ── Face types ──
   const FACE_OPTIONS_BY_SECTION: Record<string, string[]> = {
     vertical: ['Suelo', 'Techo'],
-    longitudinal: ['Pared'],
-    transversal: ['Pared'],
+    longitudinal: ['Pared', 'Suelo', 'Techo'],
+    transversal: ['Pared', 'Suelo', 'Techo'],
   };
 
   const getDefaultFaceType = () => {
@@ -783,6 +784,14 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
     return groups;
   })();
 
+
+  // Helper: get visual pattern for a standalone polygon by matching workspace name to rooms
+  const getStandalonePolygonPattern = (poly: SectionPolygon): string | undefined => {
+    const wsName = poly.name.replace(/\s*\((?:Suelo|Techo|Pared\s*\d*)\)\s*$/, '').replace(/\s+P\d+$/, '').trim();
+    const room = rooms?.find(r => r.name === wsName);
+    if (room) return wallPatterns.get(room.id);
+    return undefined;
+  };
 
   const renderWorkspaceGeometry = (
     verts: PolygonVertex[],
@@ -1310,7 +1319,6 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
       )}
 
 
-
       {showPlacementDialog && wallProjections && (() => {
         const diagProj = wallProjections.find(p => p.workspaceId === showPlacementDialog);
         if (!diagProj) return null;
@@ -1337,20 +1345,67 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
           {wallProjections.map((proj, pi) => {
             const isActive = selectedWorkspaceId === proj.workspaceId;
             const savedPoly = section.polygons?.find(p => p.id === proj.workspaceId);
-            const vertCount = savedPoly?.vertices.length ?? 4;
+            const isHidden = savedPoly?.vertices.length === 0;
+            const vertCount = isHidden ? 0 : (savedPoly?.vertices.length ?? 4);
             return (
-              <button
+              <div
                 key={proj.workspaceId}
-                className={`flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded border transition-colors ${isActive ? 'bg-primary/15 border-primary font-semibold' : 'hover:bg-accent/50'}`}
+                className={`flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded border transition-colors ${isHidden ? 'opacity-40' : ''} ${isActive ? 'bg-primary/15 border-primary font-semibold' : 'hover:bg-accent/50'}`}
                 style={{ borderColor: isActive ? undefined : PROJ_COLORS[pi % PROJ_COLORS.length] }}
-                onClick={() => selectWorkspace(proj)}
-                title={isActive ? 'Deseleccionar' : `Editar ${proj.workspaceName}`}
               >
                 <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: PROJ_COLORS[pi % PROJ_COLORS.length] }} />
-                {proj.workspaceName}
-                <span className="text-muted-foreground ml-0.5">({geometryTypeLabel(vertCount)})</span>
+                <button
+                  className="truncate"
+                  onClick={() => !isHidden && selectWorkspace(proj)}
+                  title={isHidden ? 'Oculto' : isActive ? 'Deseleccionar' : `Editar ${proj.workspaceName}`}
+                >
+                  {proj.workspaceName}
+                </button>
+                {!isHidden && <span className="text-muted-foreground ml-0.5">({geometryTypeLabel(vertCount)})</span>}
                 {isActive && <span className="text-primary ml-0.5">✎</span>}
-              </button>
+                {isElevation && (
+                  isHidden ? (
+                    <button className="ml-0.5 text-muted-foreground hover:text-foreground" title="Mostrar"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!allSections || !onSectionsChange) return;
+                        const updatedSections = allSections.map(s => {
+                          if (s.id !== section.id) return s;
+                          return { ...s, polygons: (s.polygons || []).filter(p => p.id !== proj.workspaceId) };
+                        });
+                        onSectionsChange(updatedSections);
+                        toast.success(`${proj.workspaceName} restaurado`);
+                      }}
+                    >
+                      <EyeOff className="h-3 w-3" />
+                    </button>
+                  ) : (
+                    <button className="ml-0.5 text-destructive/60 hover:text-destructive" title="Ocultar en esta sección"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!allSections || !onSectionsChange) return;
+                        const hiddenEntry: SectionPolygon = { id: proj.workspaceId, name: proj.workspaceName, vertices: [] };
+                        const updatedSections = allSections.map(s => {
+                          if (s.id !== section.id) return s;
+                          const polys = [...(s.polygons || [])];
+                          const existingIdx = polys.findIndex(p => p.id === proj.workspaceId);
+                          if (existingIdx >= 0) polys[existingIdx] = hiddenEntry;
+                          else polys.push(hiddenEntry);
+                          return { ...s, polygons: polys };
+                        });
+                        onSectionsChange(updatedSections);
+                        if (selectedWorkspaceId === proj.workspaceId) {
+                          setSelectedWorkspaceId(null);
+                          setEditVertices([]);
+                        }
+                        toast.success(`${proj.workspaceName} ocultado`);
+                      }}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  )
+                )}
+              </div>
             );
           })}
         </div>
@@ -1433,6 +1488,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
             r={4}
             fill="hsl(var(--primary))"
             opacity={0.8}
+            data-pdf-vertex-label=""
           />
         )}
 
@@ -2002,13 +2058,19 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
 
           return (
             <g key={`sp-${poly.id}`}>
-              <polygon points={points}
-                fill={hslWithAlpha(color, isEditingThisPoly ? 0.25 : 0.12)}
-                stroke={color} strokeWidth={isEditingThisPoly ? 2.5 : 1.5}
-                strokeDasharray={isEditingThisPoly ? 'none' : '4 2'}
-                className="cursor-pointer"
-                onClick={() => !isEditingThisPoly && selectSectionPolygon(poly)}
-              />
+              {(() => {
+                const patId = getStandalonePolygonPattern(poly);
+                const pat = patId ? getPatternById(patId) : undefined;
+                return (
+                  <polygon points={points}
+                    fill={pat ? `url(#wall-pattern-${pat.id})` : hslWithAlpha(color, isEditingThisPoly ? 0.25 : 0.12)}
+                    stroke={color} strokeWidth={isEditingThisPoly ? 2.5 : 1.5}
+                    strokeDasharray={isEditingThisPoly ? 'none' : '4 2'}
+                    className="cursor-pointer"
+                    onClick={() => !isEditingThisPoly && selectSectionPolygon(poly)}
+                  />
+                );
+              })()}
               {/* Edge measurements */}
               {verts.map((v, ei) => {
                 const next = verts[(ei + 1) % verts.length];
@@ -2042,6 +2104,54 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                   data-pdf-vertex-label=""
                 >{hLabel}{v.x},{vLabel}{v.y}</text>
               ))}
+              {/* Edge face type labels (P#/Suelo/Techo) for elevation sections */}
+              {isElevation && verts.length >= 3 && !isEditingThisPoly && verts.map((v, ei) => {
+                const next = verts[(ei + 1) % verts.length];
+                const { sx: x1, sy: y1 } = toSvg(v.x, v.y);
+                const { sx: x2, sy: y2 } = toSvg(next.x, next.y);
+                const emx = (x1 + x2) / 2;
+                const emy = (y1 + y2) / 2;
+                const edgeLabel = poly.vertices[ei]?.label || `P${ei + 1}`;
+                const edx = x2 - x1;
+                const edy = y2 - y1;
+                const elen = Math.sqrt(edx * edx + edy * edy) || 1;
+                let enx = edy / elen;
+                let eny = -edx / elen;
+                if ((cxSvg - emx) * enx + (cySvg - emy) * eny < 0) { enx = -enx; eny = -eny; }
+                const labelX = emx + enx * 20;
+                const labelY = emy + eny * 20;
+                const bgColor = edgeLabel === 'Suelo' ? 'hsl(30 80% 50% / 0.9)' : edgeLabel === 'Techo' ? 'hsl(210 70% 55% / 0.9)' : 'hsl(var(--muted-foreground) / 0.7)';
+                return (
+                  <g key={`efl-${ei}`} data-pdf-wall-number="">
+                    <rect x={labelX - 18} y={labelY - 6} width={36} height={12} rx={3}
+                      fill={bgColor} className="cursor-pointer"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const faceTypes = [`P${ei + 1}`, 'Suelo', 'Techo'];
+                        const currentIdx = faceTypes.indexOf(edgeLabel);
+                        const nextFaceLabel = faceTypes[(currentIdx + 1) % faceTypes.length];
+                        if (!allSections || !onSectionsChange) return;
+                        const updatedSections = allSections.map(s => {
+                          if (s.id !== section.id) return s;
+                          const polys = (s.polygons || []).map(p => {
+                            if (p.id !== poly.id) return p;
+                            const newVerts = [...p.vertices];
+                            newVerts[ei] = { ...newVerts[ei], label: nextFaceLabel };
+                            return { ...p, vertices: newVerts };
+                          });
+                          return { ...s, polygons: polys };
+                        });
+                        onSectionsChange(updatedSections);
+                        toast.success(`Arista ${ei + 1}: ${nextFaceLabel}`);
+                      }}
+                    />
+                    <text x={labelX} y={labelY + 1} textAnchor="middle" dominantBaseline="central"
+                      fontSize={7} fontWeight={700} fill="white"
+                      className="pointer-events-none select-none"
+                    >{edgeLabel}</text>
+                  </g>
+                );
+              })}
               {/* Name + area label */}
               <rect x={cxSvg - 30} y={cySvg - 10} width={60} height={20} rx={3}
                 fill="hsl(45 100% 50% / 0.85)" className="cursor-pointer"

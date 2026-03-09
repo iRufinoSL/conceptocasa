@@ -2727,6 +2727,120 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
   }, [rooms, longitudinalSections, transversalSections, openGridEditor, openSectionEditor]);
 
   /** Save the edited Y/X section polygon back to custom_corners */
+  /** Get the max Z value from a section polygon at a given horizontal position */
+  const getMaxZFromSectionPoly = (verts: PolygonVertex[], xPos: number): number | null => {
+    const zValues: number[] = [];
+    for (let i = 0; i < verts.length; i++) {
+      const j = (i + 1) % verts.length;
+      const a = verts[i], b = verts[j];
+      if ((a.x <= xPos + 0.3 && b.x >= xPos - 0.3) || (a.x >= xPos - 0.3 && b.x <= xPos + 0.3)) {
+        if (Math.abs(a.x - b.x) < 0.001) {
+          zValues.push(a.y, b.y);
+        } else {
+          const t = Math.max(0, Math.min(1, (xPos - a.x) / (b.x - a.x)));
+          zValues.push(a.y + t * (b.y - a.y));
+        }
+      }
+      if (Math.abs(a.x - xPos) < 0.3) {
+        zValues.push(a.y);
+      }
+    }
+    if (zValues.length === 0) return null;
+    return Math.max(...zValues);
+  };
+
+  /** Sync section polygon heights back to wall heights in the database */
+  const syncSectionToWallHeights = async (roomId: string, sectionPolyVerts: PolygonVertex[], section: CustomSection) => {
+    const room = rooms.find(r => r.id === roomId);
+    if (!room || !room.floor_polygon || room.floor_polygon.length < 3) return;
+    const poly = room.floor_polygon;
+    const vSection = verticalSections.find(s => s.id === room.vertical_section_id);
+    const zBase = vSection ? vSection.axisValue : 0;
+    const zScaleBlocks = (floorPlan?.block_height_mm || 250) / 1000; // meters per Z unit
+
+    // Which building axis maps to section horizontal (x)?
+    // Transversal cuts at X=val → shows Y on horizontal, Z on vertical
+    // Longitudinal cuts at Y=val → shows X on horizontal, Z on vertical
+    const isTransversal = section.sectionType === 'transversal';
+    const cutAxis: 'x' | 'y' = isTransversal ? 'x' : 'y';
+    const projAxis: 'x' | 'y' = isTransversal ? 'y' : 'x';
+    const axisVal = section.axisValue;
+
+    // Only update vertices that lie on edges crossing this section
+    const updates: { wallIndex: number; heightM: number }[] = [];
+
+    for (let i = 0; i < poly.length; i++) {
+      const vertex = poly[i];
+      // Check if this vertex is on the section cut line (within tolerance)
+      if (Math.abs(vertex[cutAxis] - axisVal) > 1) continue;
+
+      const projPos = vertex[projAxis]; // position along section horizontal
+      const zTop = getMaxZFromSectionPoly(sectionPolyVerts, projPos);
+
+      if (zTop !== null) {
+        const heightZ = zTop - zBase;
+        const heightM = heightZ * zScaleBlocks;
+        updates.push({ wallIndex: i + 1, heightM: Math.max(0, heightM) });
+      }
+    }
+
+    if (updates.length === 0) {
+      // Also try: find vertices on edges that CROSS the section (not just on the line)
+      // For vertices at corners of the section cut
+      for (let i = 0; i < poly.length; i++) {
+        const j = (i + 1) % poly.length;
+        const a = poly[i], b = poly[j];
+        const aOnCut = Math.abs(a[cutAxis] - axisVal) <= 1;
+        const bOnCut = Math.abs(b[cutAxis] - axisVal) <= 1;
+
+        if (aOnCut && !updates.some(u => u.wallIndex === i + 1)) {
+          const projPos = a[projAxis];
+          const zTop = getMaxZFromSectionPoly(sectionPolyVerts, projPos);
+          if (zTop !== null) {
+            updates.push({ wallIndex: i + 1, heightM: Math.max(0, (zTop - zBase) * zScaleBlocks) });
+          }
+        }
+        if (bOnCut && !updates.some(u => u.wallIndex === j + 1)) {
+          const projPos = b[projAxis];
+          const zTop = getMaxZFromSectionPoly(sectionPolyVerts, projPos);
+          if (zTop !== null) {
+            updates.push({ wallIndex: j + 1, heightM: Math.max(0, (zTop - zBase) * zScaleBlocks) });
+          }
+        }
+      }
+    }
+
+    // Check if the section polygon has peak vertices at positions not corresponding to workspace vertices
+    const existingProjPositions = new Set(
+      poly.filter(v => Math.abs(v[cutAxis] - axisVal) <= 1).map(v => v[projAxis])
+    );
+    const sectionPeaks = sectionPolyVerts.filter(sv => {
+      if (sv.y <= zBase + 0.5) return false; // Not a peak (at base level)
+      // Check if this position matches any workspace vertex
+      for (const pos of existingProjPositions) {
+        if (Math.abs(sv.x - pos) < 0.5) return false;
+      }
+      return true;
+    });
+
+    if (sectionPeaks.length > 0) {
+      toast.info(`ℹ️ El polígono de sección tiene ${sectionPeaks.length} vértice(s) de cumbrera sin vértice base correspondiente. Considera añadir vértices al polígono base para una representación 3D exacta.`);
+    }
+
+    // Apply updates
+    for (const u of updates) {
+      await supabase.from('budget_floor_plan_walls')
+        .update({ height: u.heightM })
+        .eq('room_id', roomId)
+        .eq('wall_index', u.wallIndex);
+    }
+
+    if (updates.length > 0) {
+      queryClient.invalidateQueries({ queryKey: ['workspace-walls'] });
+      toast.info(`🔄 ${updates.length} altura(s) de pared sincronizadas con el 3D`);
+    }
+  };
+
   const saveSectionPolygon = async (roomId: string) => {
     const view = activeSectionView[roomId];
     if (!view || !floorPlan?.id) return;
@@ -2761,7 +2875,12 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     parsed.customSections = sections;
     const { error } = await supabase.from('budget_floor_plans').update({ custom_corners: parsed }).eq('id', floorPlan.id);
     if (error) { toast.error('Error al guardar'); return; }
-    toast.success('Polígono de sección guardado');
+
+    // Sync section polygon heights → wall heights for 3D consistency
+    const section = sections[sIdx];
+    await syncSectionToWallHeights(roomId, sectionEditVertices, section);
+
+    toast.success('Polígono de sección guardado y 3D sincronizado');
     setActiveSectionView(prev => ({ ...prev, [roomId]: null }));
     queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces', budgetId] });
     restoreReturnTo3D();

@@ -558,11 +558,12 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
 }
 
 /** Face properties editing panel (shown on double-click) */
-function FaceEditPanel({ data, onClose, onSave, onVertexSave }: {
+function FaceEditPanel({ data, onClose, onSave, onVertexSave, onNavigateTo2D }: {
   data: FaceEditData;
   onClose: () => void;
   onSave: (updates: { wallType?: string; height?: number }) => void;
   onVertexSave?: (vertices: { x: number; y: number; z: number }[]) => void;
+  onNavigateTo2D?: () => void;
 }) {
   const [wallType, setWallType] = useState(data.wallType || 'exterior');
   const [heightVal, setHeightVal] = useState(String(data.heightM || ''));

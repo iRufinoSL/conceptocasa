@@ -737,6 +737,14 @@ export function Workspace3DViewer({ name, polygon, height, walls, scaleXY, scale
     }
   }, [onVertexEdit, polygon, walls, height, zBase, scaleZ, scaleXY]);
 
+  if (!polygon || polygon.length < 3) {
+    return (
+      <div className="flex items-center justify-center h-64 bg-muted/30 rounded-lg border text-sm text-muted-foreground">
+        Se necesitan al menos 3 vértices para la vista 3D
+      </div>
+    );
+  }
+
   const containerClass = isFullscreen
     ? 'fixed inset-0 z-50 bg-background flex flex-col'
     : 'space-y-2';

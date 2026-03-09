@@ -2666,6 +2666,13 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
       return;
     }
 
+    // Remember where to return after 2D editing
+    if (show3DList) {
+      setReturnTo3D({ type: 'list' });
+    } else if (view3DId) {
+      setReturnTo3D({ type: 'single', workspaceId: view3DId });
+    }
+
     // Close 3D views
     setShow3DList(false);
     setView3DId(null);

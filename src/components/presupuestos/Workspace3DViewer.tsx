@@ -716,7 +716,7 @@ function CenteredOrbitControls({ orbitRef }: { orbitRef: React.RefObject<any> })
   );
 }
 
-export function Workspace3DViewer({ name, polygon, height, walls, scaleXY, scaleZ = 250, zBase = 0, onFaceClick, onFaceEdit, onVertexEdit, selectedFace }: Workspace3DViewerProps) {
+export function Workspace3DViewer({ name, polygon, height, walls, scaleXY, scaleZ = 250, zBase = 0, onFaceClick, onFaceEdit, onVertexEdit, onNavigateTo2D, selectedFace }: Workspace3DViewerProps) {
   const [editingFace, setEditingFace] = useState<FaceEditData | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showNodes, setShowNodes] = useState(false);

@@ -601,6 +601,7 @@ export function Workspace3DViewer({ name, polygon, height, walls, scaleXY, scale
             }}
             onVertexSave={onVertexEdit ? (verts) => {
               onVertexEdit(editingFace.faceType, editingFace.faceIndex, verts);
+              setEditingFace(null); // close panel so 3D refreshes with new data
             } : undefined}
           />
         </div>

@@ -112,7 +112,8 @@ function getWorkspacePolygon(
 ): PolygonVertex[] {
   // Check for saved polygon
   const saved = section.polygons?.find(p => p.id === proj.workspaceId);
-  if (saved && saved.vertices.length >= 1) {
+  if (saved) {
+    if (saved.vertices.length === 0) return []; // Hidden marker
     return saved.vertices.map(v => ({ x: v.x, y: v.y }));
   }
   // Default rectangular projection

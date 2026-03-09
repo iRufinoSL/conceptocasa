@@ -1991,6 +1991,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
   const [collapsedSectionTypes, setCollapsedSectionTypes] = useState<Set<string>>(new Set());
   const [selectedWallMap, setSelectedWallMap] = useState<Record<string, number | null>>({});
   const [gridEditId, setGridEditId] = useState<string | null>(null);
+  const [view3DId, setView3DId] = useState<string | null>(null);
+  const [selected3DFace, setSelected3DFace] = useState<string | null>(null);
   const [gridEditVertices, setGridEditVertices] = useState<PolygonVertex[]>([]);
   const [activeSectionView, setActiveSectionView] = useState<Record<string, { sectionId: string; type: 'vertical' | 'longitudinal' | 'transversal' | 'inclined' } | null>>({});
   const [sectionEditVertices, setSectionEditVertices] = useState<PolygonVertex[]>([]);

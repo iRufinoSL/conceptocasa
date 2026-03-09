@@ -2756,7 +2756,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     const poly = room.floor_polygon;
     const vSection = verticalSections.find(s => s.id === room.vertical_section_id);
     const zBase = vSection ? vSection.axisValue : 0;
-    const zScaleBlocks = (floorPlan?.block_height_mm || 250) / 1000; // meters per Z unit
+    const zScaleBlocks = 250 / 1000; // scaleZ=250mm per Z unit → 0.25 meters per Z unit
 
     // Which building axis maps to section horizontal (x)?
     // Transversal cuts at X=val → shows Y on horizontal, Z on vertical

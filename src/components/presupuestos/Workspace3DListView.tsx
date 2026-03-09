@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useCallback } from 'react';
-import { Canvas, ThreeEvent } from '@react-three/fiber';
+import { Canvas, ThreeEvent, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls, Text, Line } from '@react-three/drei';
 import * as THREE from 'three';
 import { Button } from '@/components/ui/button';

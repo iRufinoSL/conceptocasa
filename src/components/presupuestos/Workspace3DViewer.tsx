@@ -41,6 +41,7 @@ interface Workspace3DViewerProps {
   onFaceClick?: (faceType: string, faceIndex: number) => void;
   onFaceEdit?: (faceType: string, faceIndex: number, data: { wallType?: string; height?: number }) => void;
   onVertexEdit?: (faceType: string, faceIndex: number, vertices: { x: number; y: number; z: number }[]) => void;
+  onNavigateTo2D?: (faceType: string, faceIndex: number) => void;
   selectedFace?: string | null;
 }
 
@@ -557,11 +558,12 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
 }
 
 /** Face properties editing panel (shown on double-click) */
-function FaceEditPanel({ data, onClose, onSave, onVertexSave }: {
+function FaceEditPanel({ data, onClose, onSave, onVertexSave, onNavigateTo2D }: {
   data: FaceEditData;
   onClose: () => void;
   onSave: (updates: { wallType?: string; height?: number }) => void;
   onVertexSave?: (vertices: { x: number; y: number; z: number }[]) => void;
+  onNavigateTo2D?: () => void;
 }) {
   const [wallType, setWallType] = useState(data.wallType || 'exterior');
   const [heightVal, setHeightVal] = useState(String(data.heightM || ''));
@@ -665,7 +667,17 @@ function FaceEditPanel({ data, onClose, onSave, onVertexSave }: {
         </div>
       )}
 
-      <div className="flex gap-1">
+      <div className="flex gap-1 flex-wrap">
+        {onNavigateTo2D && (
+          <Button
+            variant="secondary"
+            size="sm"
+            className="h-6 text-[10px] gap-1"
+            onClick={onNavigateTo2D}
+          >
+            📐 Editar en 2D
+          </Button>
+        )}
         <Button
           size="sm"
           className="h-6 text-[10px]"
@@ -704,7 +716,7 @@ function CenteredOrbitControls({ orbitRef }: { orbitRef: React.RefObject<any> })
   );
 }
 
-export function Workspace3DViewer({ name, polygon, height, walls, scaleXY, scaleZ = 250, zBase = 0, onFaceClick, onFaceEdit, onVertexEdit, selectedFace }: Workspace3DViewerProps) {
+export function Workspace3DViewer({ name, polygon, height, walls, scaleXY, scaleZ = 250, zBase = 0, onFaceClick, onFaceEdit, onVertexEdit, onNavigateTo2D, selectedFace }: Workspace3DViewerProps) {
   const [editingFace, setEditingFace] = useState<FaceEditData | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showNodes, setShowNodes] = useState(false);
@@ -811,6 +823,10 @@ export function Workspace3DViewer({ name, polygon, height, walls, scaleXY, scale
             }}
             onVertexSave={onVertexEdit ? (verts) => {
               onVertexEdit(editingFace.faceType, editingFace.faceIndex, verts);
+              setEditingFace(null);
+            } : undefined}
+            onNavigateTo2D={onNavigateTo2D ? () => {
+              onNavigateTo2D(editingFace.faceType, editingFace.faceIndex);
               setEditingFace(null);
             } : undefined}
           />

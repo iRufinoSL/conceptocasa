@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Pencil, Trash2, Plus, ChevronDown, ChevronRight, ChevronLeft, ChevronUp, Triangle, Pyramid, Cuboid, Grid3x3, MapPin, X, MousePointerClick, List, Layers, Save, RefreshCw, Expand, MousePointer, Box } from 'lucide-react';
 import { Workspace3DViewer } from './Workspace3DViewer';
+import { Workspace3DListView } from './Workspace3DListView';
 import { WallObjectsPanel } from './WallObjectsPanel';
 import { GridPdfExport } from './GridPdfExport';
 import { DeleteWithBackupDialog } from '@/components/DeleteWithBackupDialog';
@@ -1993,6 +1994,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
   const [gridEditId, setGridEditId] = useState<string | null>(null);
   const [view3DId, setView3DId] = useState<string | null>(null);
   const [selected3DFace, setSelected3DFace] = useState<string | null>(null);
+  const [show3DList, setShow3DList] = useState(false);
   const [gridEditVertices, setGridEditVertices] = useState<PolygonVertex[]>([]);
   const [activeSectionView, setActiveSectionView] = useState<Record<string, { sectionId: string; type: 'vertical' | 'longitudinal' | 'transversal' | 'inclined' } | null>>({});
   const [sectionEditVertices, setSectionEditVertices] = useState<PolygonVertex[]>([]);
@@ -3490,6 +3492,11 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold">Espacios de trabajo</h3>
         <div className="flex items-center gap-1">
+          {rooms.length > 0 && (
+            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setShow3DList(true)}>
+              <Box className="h-3 w-3" /> Listado 3D
+            </Button>
+          )}
           <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={async () => { await refetchAll(); toast.success('Datos actualizados'); }} title="Actualizar datos">
             <RefreshCw className="h-3 w-3" /> Actualizar
           </Button>
@@ -3500,6 +3507,33 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
           )}
         </div>
       </div>
+
+      {/* ── 3D List View ── */}
+      {show3DList && (() => {
+        const wsEntries = rooms
+          .filter(r => r.floor_polygon && r.floor_polygon.length >= 3)
+          .map(r => {
+            const vSec = verticalSections.find(s => s.id === r.vertical_section_id);
+            const roomWalls = allWalls.filter(w => w.room_id === r.id).sort((a, b) => a.wall_index - b.wall_index);
+            return {
+              id: r.id,
+              name: r.name,
+              polygon: r.floor_polygon!,
+              height: r.height || floorPlan?.default_height || 2.5,
+              walls: roomWalls,
+              zBase: vSec ? vSec.axisValue : 0,
+              sectionName: vSec ? vSec.name : 'Sin sección',
+            };
+          });
+        return (
+          <Workspace3DListView
+            workspaces={wsEntries}
+            scaleXY={floorPlan?.block_length_mm || 625}
+            scaleZ={250}
+            onClose={() => setShow3DList(false)}
+          />
+        );
+      })()}
 
       {/* ── Creation/Edit form ── */}
       {showForm && (

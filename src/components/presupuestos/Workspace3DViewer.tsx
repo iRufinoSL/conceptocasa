@@ -167,22 +167,25 @@ function FaceMesh({ vertices, color, label, labelPosition, labelRotation, isSele
   );
 }
 
-/** Edge length label at midpoint of an edge */
-function EdgeLengthLabel({ from, to, lengthMm }: { from: THREE.Vector3; to: THREE.Vector3; lengthMm: number }) {
+/** Edge length label at midpoint of an edge with axis coordinates */
+function EdgeLengthLabel({ from, to, lengthMm, axisLabel }: { from: THREE.Vector3; to: THREE.Vector3; lengthMm: number; axisLabel?: string }) {
   const mid = useMemo(() => new THREE.Vector3().addVectors(from, to).multiplyScalar(0.5), [from, to]);
   const displayVal = lengthMm >= 1000 ? `${(lengthMm / 1000).toFixed(2)}m` : `${Math.round(lengthMm)}mm`;
+  const label = axisLabel ? `${displayVal}\n${axisLabel}` : displayVal;
   return (
     <Text
       position={[mid.x, mid.y + 0.04, mid.z]}
-      fontSize={0.06}
+      fontSize={0.05}
       color="#0066cc"
       fontWeight={600}
       anchorX="center"
       anchorY="bottom"
       outlineWidth={0.006}
       outlineColor="#ffffff"
+      textAlign="center"
+      lineHeight={1.3}
     >
-      {displayVal}
+      {label}
     </Text>
   );
 }
@@ -328,9 +331,10 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
 
   // Compute edge lengths for all visible edges
   const edgeLengths = useMemo(() => {
-    const items: { from: THREE.Vector3; to: THREE.Vector3; lengthMm: number }[] = [];
+    const items: { from: THREE.Vector3; to: THREE.Vector3; lengthMm: number; axisLabel: string }[] = [];
     const n = baseVerts3D.length;
     const sMxy = scaleXY; // mm per grid unit
+    const zScaleBlocks = scaleZ / 1000;
 
     // Base edges
     for (let i = 0; i < n; i++) {
@@ -338,7 +342,8 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
       const dx = (polygon[next].x - polygon[i].x) * sMxy;
       const dy = (polygon[next].y - polygon[i].y) * sMxy;
       const len = Math.sqrt(dx * dx + dy * dy);
-      items.push({ from: baseVerts3D[i], to: baseVerts3D[next], lengthMm: len });
+      items.push({ from: baseVerts3D[i], to: baseVerts3D[next], lengthMm: len,
+        axisLabel: `X${polygon[i].x},Y${polygon[i].y}→X${polygon[next].x},Y${polygon[next].y}` });
     }
     // Top edges
     for (let i = 0; i < n; i++) {
@@ -346,15 +351,20 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
       const dx = (polygon[next].x - polygon[i].x) * sMxy;
       const dy = (polygon[next].y - polygon[i].y) * sMxy;
       const len = Math.sqrt(dx * dx + dy * dy);
-      items.push({ from: topVerts3D[i], to: topVerts3D[next], lengthMm: len });
+      items.push({ from: topVerts3D[i], to: topVerts3D[next], lengthMm: len,
+        axisLabel: `X${polygon[i].x},Y${polygon[i].y}→X${polygon[next].x},Y${polygon[next].y}` });
     }
     // Vertical edges
     for (let i = 0; i < n; i++) {
       const hDiff = topVerts3D[i].y - baseVerts3D[i].y; // in meters
-      items.push({ from: baseVerts3D[i], to: topVerts3D[i], lengthMm: Math.abs(hDiff) * 1000 });
+      const wall = walls.find(w => w.wall_index === i + 1);
+      const hM = wall?.height != null ? wall.height : height;
+      const zTopVal = zBase + Math.round(hM / zScaleBlocks);
+      items.push({ from: baseVerts3D[i], to: topVerts3D[i], lengthMm: Math.abs(hDiff) * 1000,
+        axisLabel: `Z${zBase}→Z${zTopVal}` });
     }
     return items;
-  }, [baseVerts3D, topVerts3D, polygon, scaleXY]);
+  }, [baseVerts3D, topVerts3D, polygon, scaleXY, scaleZ, walls, height, zBase]);
 
   const handleFaceDoubleClick = useCallback((face: typeof faces[0]) => {
     if (!onFaceDoubleClick) return;
@@ -389,7 +399,7 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
       })}
       {/* Edge length labels */}
       {edgeLengths.map((el, i) => (
-        <EdgeLengthLabel key={`elen-${i}`} from={el.from} to={el.to} lengthMm={el.lengthMm} />
+        <EdgeLengthLabel key={`elen-${i}`} from={el.from} to={el.to} lengthMm={el.lengthMm} axisLabel={el.axisLabel} />
       ))}
       {/* Vertical edge lines */}
       {baseVerts3D.map((bv, i) => (

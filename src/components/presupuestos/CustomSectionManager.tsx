@@ -2058,13 +2058,19 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
 
           return (
             <g key={`sp-${poly.id}`}>
-              <polygon points={points}
-                fill={hslWithAlpha(color, isEditingThisPoly ? 0.25 : 0.12)}
-                stroke={color} strokeWidth={isEditingThisPoly ? 2.5 : 1.5}
-                strokeDasharray={isEditingThisPoly ? 'none' : '4 2'}
-                className="cursor-pointer"
-                onClick={() => !isEditingThisPoly && selectSectionPolygon(poly)}
-              />
+              {(() => {
+                const patId = getStandalonePolygonPattern(poly);
+                const pat = patId ? getPatternById(patId) : undefined;
+                return (
+                  <polygon points={points}
+                    fill={pat ? `url(#wall-pattern-${pat.id})` : hslWithAlpha(color, isEditingThisPoly ? 0.25 : 0.12)}
+                    stroke={color} strokeWidth={isEditingThisPoly ? 2.5 : 1.5}
+                    strokeDasharray={isEditingThisPoly ? 'none' : '4 2'}
+                    className="cursor-pointer"
+                    onClick={() => !isEditingThisPoly && selectSectionPolygon(poly)}
+                  />
+                );
+              })()}
               {/* Edge measurements */}
               {verts.map((v, ei) => {
                 const next = verts[(ei + 1) % verts.length];

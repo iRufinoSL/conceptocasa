@@ -3030,7 +3030,47 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                       Define secciones Y/X en la pestaña Secciones para ver cortes
                     </span>
                   )}
+
+                  {/* 3D viewer button */}
+                  {poly && poly.length >= 3 && (
+                    <Button
+                      variant={view3DId === r.id ? 'default' : 'outline'}
+                      size="sm"
+                      className="h-6 text-[10px] gap-1"
+                      onClick={() => {
+                        if (view3DId === r.id) {
+                          setView3DId(null);
+                          setSelected3DFace(null);
+                        } else {
+                          setView3DId(r.id);
+                          setGridEditId(null);
+                          setActiveSectionView(prev => ({ ...prev, [r.id]: null }));
+                          setSelected3DFace(null);
+                        }
+                      }}
+                    >
+                      <Box className="h-3 w-3" /> 3D
+                    </Button>
+                  )}
                 </div>
+              </div>
+            )}
+
+            {/* 3D Workspace Viewer */}
+            {view3DId === r.id && poly && poly.length >= 3 && (
+              <div className="border rounded-lg p-2 bg-background">
+                <Workspace3DViewer
+                  name={r.name}
+                  polygon={poly}
+                  height={r.height || floorPlan?.default_height || 2.5}
+                  walls={roomWalls}
+                  scaleXY={floorPlan?.block_length_mm || 625}
+                  onFaceClick={(faceType, faceIndex) => {
+                    const key = `${faceType}_${faceIndex}`;
+                    setSelected3DFace(prev => prev === key ? null : key);
+                  }}
+                  selectedFace={selected3DFace}
+                />
               </div>
             )}
 

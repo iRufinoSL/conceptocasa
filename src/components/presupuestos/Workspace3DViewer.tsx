@@ -41,6 +41,7 @@ interface Workspace3DViewerProps {
   onFaceClick?: (faceType: string, faceIndex: number) => void;
   onFaceEdit?: (faceType: string, faceIndex: number, data: { wallType?: string; height?: number }) => void;
   onVertexEdit?: (faceType: string, faceIndex: number, vertices: { x: number; y: number; z: number }[]) => void;
+  onNavigateTo2D?: (faceType: string, faceIndex: number) => void;
   selectedFace?: string | null;
 }
 

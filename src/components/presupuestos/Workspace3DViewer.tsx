@@ -399,7 +399,7 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
       })}
       {/* Edge length labels */}
       {edgeLengths.map((el, i) => (
-        <EdgeLengthLabel key={`elen-${i}`} from={el.from} to={el.to} lengthMm={el.lengthMm} />
+        <EdgeLengthLabel key={`elen-${i}`} from={el.from} to={el.to} lengthMm={el.lengthMm} axisLabel={el.axisLabel} />
       ))}
       {/* Vertical edge lines */}
       {baseVerts3D.map((bv, i) => (

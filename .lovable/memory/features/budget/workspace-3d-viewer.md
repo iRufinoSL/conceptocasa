@@ -10,6 +10,12 @@ Tanto en el visor individual como en el Listado 3D, hacer doble clic sobre una c
 - Si no hay sección compatible, cae al editor Z como fallback
 - El panel de propiedades 3D incluye un botón "📐 Editar en 2D" para la misma navegación
 
+### Retorno automático al 3D
+Al navegar desde el 3D al editor 2D (doble clic en cara), el sistema recuerda el origen (`returnTo3D` state: `list` o `single+workspaceId`). Al guardar o cancelar en el editor 2D, se restaura automáticamente la vista 3D desde la que se activó.
+
+### Sincronización Sección 2D → 3D (wall heights)
+Al guardar un polígono de sección (Y/X), el sistema sincroniza automáticamente las alturas de las paredes (`wall.height`) con las coordenadas Z del polígono editado. Para cada vértice del espacio de trabajo que esté en la línea de corte de la sección, se extrae la Z máxima del polígono de sección en esa posición y se actualiza la altura de la pared correspondiente. Si el polígono de sección tiene vértices de cumbrera sin vértice base correspondiente, se muestra un aviso para añadir vértices al polígono base.
+
 ### Nodos arrastrables
 Botón "🔵 Nodos" activa/desactiva esferas interactivas en cada vértice del prisma (base=verde, superior=azul). Los nodos superiores se pueden arrastrar libremente para modificar la altura/Z del vértice en tiempo real. El arrastre desactiva temporalmente OrbitControls y al soltar persiste el cambio vía onVertexEdit. Los nodos base son visibles pero actualmente solo informativos.
 

@@ -64,6 +64,50 @@ const WALL_TYPES = [
   { value: 'interior_invisible', label: 'Int. invisible' },
 ];
 
+/** Origin axes with colored arrows and X/Y/Z labels at (0,0,0) */
+function OriginAxes({ size = 1.2 }: { size?: number }) {
+  const coneRadius = 0.05;
+  const coneHeight = 0.15;
+  const axisRadius = 0.015;
+  const axes = [
+    { dir: [1, 0, 0] as [number, number, number], color: '#c0392b', label: 'X' },
+    { dir: [0, 0, 1] as [number, number, number], color: '#27ae60', label: 'Y' },
+    { dir: [0, 1, 0] as [number, number, number], color: '#2980b9', label: 'Z' },
+  ];
+  return (
+    <group>
+      <mesh position={[0, 0, 0]}>
+        <sphereGeometry args={[0.04, 16, 16]} />
+        <meshStandardMaterial color="#333333" />
+      </mesh>
+      {axes.map(({ dir, color, label }) => {
+        const mid: [number, number, number] = [dir[0] * size / 2, dir[1] * size / 2, dir[2] * size / 2];
+        const conePos: [number, number, number] = [dir[0] * (size + coneHeight / 2), dir[1] * (size + coneHeight / 2), dir[2] * (size + coneHeight / 2)];
+        const labelPos: [number, number, number] = [dir[0] * (size + coneHeight + 0.12), dir[1] * (size + coneHeight + 0.12), dir[2] * (size + coneHeight + 0.12)];
+        const quat = new THREE.Quaternion();
+        quat.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(...dir).normalize());
+        const euler = new THREE.Euler().setFromQuaternion(quat);
+        return (
+          <group key={label}>
+            <mesh position={mid} rotation={euler}>
+              <cylinderGeometry args={[axisRadius, axisRadius, size, 8]} />
+              <meshStandardMaterial color={color} />
+            </mesh>
+            <mesh position={conePos} rotation={euler}>
+              <coneGeometry args={[coneRadius, coneHeight, 12]} />
+              <meshStandardMaterial color={color} />
+            </mesh>
+            <Text position={labelPos} fontSize={0.12} color={color} fontWeight={700}
+              anchorX="center" anchorY="middle" outlineWidth={0.008} outlineColor="#ffffff">
+              {label}
+            </Text>
+          </group>
+        );
+      })}
+    </group>
+  );
+}
+
 function getWallColor(wallType?: string): string {
   if (!wallType) return FACE_COLORS.pared_default;
   if (wallType.includes('exterior')) return FACE_COLORS.pared_exterior;
@@ -812,6 +856,7 @@ export function Workspace3DViewer({ name, polygon, height, walls, scaleXY, scale
           />
           <CenteredOrbitControls orbitRef={orbitRef} />
           <gridHelper args={[6, 12, '#888888', '#cccccc']} />
+          <OriginAxes size={1.2} />
         </Canvas>
       </div>
 

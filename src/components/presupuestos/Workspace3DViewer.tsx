@@ -1,5 +1,5 @@
-import React, { useRef, useState, useMemo, useCallback } from 'react';
-import { Canvas, useThree, ThreeEvent } from '@react-three/fiber';
+import React, { useRef, useState, useMemo, useCallback, useEffect } from 'react';
+import { Canvas, useThree, useFrame, ThreeEvent } from '@react-three/fiber';
 import { OrbitControls, Text, Line } from '@react-three/drei';
 import * as THREE from 'three';
 import { Button } from '@/components/ui/button';
@@ -122,7 +122,6 @@ function FaceMesh({ vertices, color, label, labelPosition, labelRotation, isSele
 
   const displayColor = isSelected ? FACE_COLORS.selected : (hovered ? '#ffaa44' : color);
 
-  // Multi-line label: "T1\nÁtico 1\n3.25 m²"
   const fullLabel = `${label}\n${workspaceName}\n${areaM2.toFixed(2)} m²`;
 
   return (
@@ -208,15 +207,128 @@ function CornerLabel({ position, text }: { position: THREE.Vector3; text: string
   );
 }
 
+/** Draggable vertex node sphere */
+function DraggableVertex({ 
+  position, 
+  vertexIndex, 
+  isTop,
+  onDragEnd,
+  label,
+  orbitRef,
+}: { 
+  position: THREE.Vector3; 
+  vertexIndex: number;
+  isTop: boolean;
+  onDragEnd: (vertexIndex: number, isTop: boolean, newPos: THREE.Vector3) => void;
+  label: string;
+  orbitRef: React.RefObject<any>;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const meshRef = useRef<THREE.Mesh>(null);
+  const { camera, gl, raycaster } = useThree();
+  const dragPlane = useRef(new THREE.Plane());
+  const offset = useRef(new THREE.Vector3());
+
+  const onPointerDown = useCallback((e: ThreeEvent<PointerEvent>) => {
+    e.stopPropagation();
+    (e as any).nativeEvent?.stopImmediatePropagation?.();
+    
+    // Disable orbit controls during drag
+    if (orbitRef.current) orbitRef.current.enabled = false;
+    
+    setDragging(true);
+    gl.domElement.style.cursor = 'grabbing';
+    
+    // Create drag plane perpendicular to camera
+    const camDir = new THREE.Vector3();
+    camera.getWorldDirection(camDir);
+    dragPlane.current.setFromNormalAndCoplanarPoint(camDir, position);
+    
+    // Calculate offset
+    const intersection = new THREE.Vector3();
+    raycaster.ray.intersectPlane(dragPlane.current, intersection);
+    offset.current.subVectors(position, intersection);
+    
+    gl.domElement.setPointerCapture((e as any).nativeEvent.pointerId);
+  }, [camera, gl, position, raycaster, orbitRef]);
+
+  const onPointerMove = useCallback((e: ThreeEvent<PointerEvent>) => {
+    if (!dragging) return;
+    e.stopPropagation();
+    
+    const intersection = new THREE.Vector3();
+    raycaster.ray.intersectPlane(dragPlane.current, intersection);
+    if (intersection && meshRef.current) {
+      const newPos = intersection.add(offset.current);
+      meshRef.current.position.copy(newPos);
+    }
+  }, [dragging, raycaster]);
+
+  const onPointerUp = useCallback((e: ThreeEvent<PointerEvent>) => {
+    if (!dragging) return;
+    e.stopPropagation();
+    setDragging(false);
+    gl.domElement.style.cursor = 'auto';
+    
+    // Re-enable orbit controls
+    if (orbitRef.current) orbitRef.current.enabled = true;
+    
+    if (meshRef.current) {
+      onDragEnd(vertexIndex, isTop, meshRef.current.position.clone());
+    }
+    
+    gl.domElement.releasePointerCapture((e as any).nativeEvent.pointerId);
+  }, [dragging, gl, vertexIndex, isTop, onDragEnd, orbitRef]);
+
+  return (
+    <group>
+      <mesh
+        ref={meshRef}
+        position={position}
+        onPointerOver={() => { setHovered(true); gl.domElement.style.cursor = 'grab'; }}
+        onPointerOut={() => { if (!dragging) { setHovered(false); gl.domElement.style.cursor = 'auto'; } }}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+      >
+        <sphereGeometry args={[hovered || dragging ? 0.06 : 0.04, 16, 16]} />
+        <meshStandardMaterial 
+          color={dragging ? '#ff0000' : (hovered ? '#ff6600' : (isTop ? '#0066ff' : '#006600'))}
+          emissive={dragging ? '#ff0000' : '#000000'}
+          emissiveIntensity={dragging ? 0.3 : 0}
+        />
+      </mesh>
+      {(hovered || dragging) && (
+        <Text
+          position={[position.x, position.y + 0.1, position.z]}
+          fontSize={0.06}
+          color="#000000"
+          fontWeight={700}
+          anchorX="center"
+          anchorY="bottom"
+          outlineWidth={0.006}
+          outlineColor="#ffffff"
+        >
+          {label}
+        </Text>
+      )}
+    </group>
+  );
+}
+
 interface PrismModelProps extends Omit<Workspace3DViewerProps, 'name' | 'onFaceEdit' | 'onVertexEdit'> {
   onFaceDoubleClick?: (face: FaceEditData) => void;
   workspaceName: string;
+  showDraggableNodes?: boolean;
+  onNodeDrag?: (vertexIndex: number, isTop: boolean, newPos: THREE.Vector3) => void;
+  orbitRef?: React.RefObject<any>;
 }
 
-function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase = 0, onFaceClick, onFaceDoubleClick, selectedFace, workspaceName }: PrismModelProps) {
+function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase = 0, onFaceClick, onFaceDoubleClick, selectedFace, workspaceName, showDraggableNodes, onNodeDrag, orbitRef }: PrismModelProps) {
   const groupRef = useRef<THREE.Group>(null);
 
-  const { baseVerts3D, topVerts3D, heightM, cornerLabels } = useMemo(() => {
+  const { baseVerts3D, topVerts3D, heightM, cornerLabels, cx, cz } = useMemo(() => {
     const sMxy = scaleXY / 1000;
     const heightM = height;
 
@@ -251,7 +363,7 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
       });
     }
 
-    return { baseVerts3D: centered, topVerts3D: top, heightM, cornerLabels: labels };
+    return { baseVerts3D: centered, topVerts3D: top, heightM, cornerLabels: labels, cx, cz };
   }, [polygon, height, walls, scaleXY, scaleZ, zBase]);
 
   const faces = useMemo(() => {
@@ -329,14 +441,13 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
     return result;
   }, [baseVerts3D, topVerts3D, walls, polygon, zBase, height, scaleZ]);
 
-  // Compute edge lengths for all visible edges
+  // Compute edge lengths
   const edgeLengths = useMemo(() => {
     const items: { from: THREE.Vector3; to: THREE.Vector3; lengthMm: number; axisLabel: string }[] = [];
     const n = baseVerts3D.length;
-    const sMxy = scaleXY; // mm per grid unit
+    const sMxy = scaleXY;
     const zScaleBlocks = scaleZ / 1000;
 
-    // Base edges
     for (let i = 0; i < n; i++) {
       const next = (i + 1) % n;
       const dx = (polygon[next].x - polygon[i].x) * sMxy;
@@ -345,7 +456,6 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
       items.push({ from: baseVerts3D[i], to: baseVerts3D[next], lengthMm: len,
         axisLabel: `X${polygon[i].x},Y${polygon[i].y}→X${polygon[next].x},Y${polygon[next].y}` });
     }
-    // Top edges
     for (let i = 0; i < n; i++) {
       const next = (i + 1) % n;
       const dx = (polygon[next].x - polygon[i].x) * sMxy;
@@ -354,9 +464,8 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
       items.push({ from: topVerts3D[i], to: topVerts3D[next], lengthMm: len,
         axisLabel: `X${polygon[i].x},Y${polygon[i].y}→X${polygon[next].x},Y${polygon[next].y}` });
     }
-    // Vertical edges
     for (let i = 0; i < n; i++) {
-      const hDiff = topVerts3D[i].y - baseVerts3D[i].y; // in meters
+      const hDiff = topVerts3D[i].y - baseVerts3D[i].y;
       const wall = walls.find(w => w.wall_index === i + 1);
       const hM = wall?.height != null ? wall.height : height;
       const zTopVal = zBase + Math.round(hM / zScaleBlocks);
@@ -375,6 +484,30 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
       vertices: face.realVertices,
     });
   }, [faces, walls, height, onFaceDoubleClick]);
+
+  // Draggable node labels
+  const nodeLabels = useMemo(() => {
+    if (!showDraggableNodes) return [];
+    const zScaleBlocks = scaleZ / 1000;
+    const n = polygon.length;
+    const result: { pos: THREE.Vector3; idx: number; isTop: boolean; label: string }[] = [];
+    for (let i = 0; i < n; i++) {
+      result.push({
+        pos: baseVerts3D[i].clone(),
+        idx: i, isTop: false,
+        label: `V${i + 1} base (X${polygon[i].x},Y${polygon[i].y},Z${zBase})`,
+      });
+      const wall = walls.find(w => w.wall_index === i + 1);
+      const hM = wall?.height != null ? wall.height : height;
+      const zTopVal = zBase + Math.round(hM / zScaleBlocks);
+      result.push({
+        pos: topVerts3D[i].clone(),
+        idx: i, isTop: true,
+        label: `V${i + 1} top (X${polygon[i].x},Y${polygon[i].y},Z${zTopVal})`,
+      });
+    }
+    return result;
+  }, [showDraggableNodes, baseVerts3D, topVerts3D, polygon, zBase, height, walls, scaleZ]);
 
   return (
     <group ref={groupRef}>
@@ -397,16 +530,26 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
           />
         );
       })}
-      {/* Edge length labels */}
       {edgeLengths.map((el, i) => (
         <EdgeLengthLabel key={`elen-${i}`} from={el.from} to={el.to} lengthMm={el.lengthMm} axisLabel={el.axisLabel} />
       ))}
-      {/* Vertical edge lines */}
       {baseVerts3D.map((bv, i) => (
         <Line key={`edge-${i}`} points={[bv, topVerts3D[i]]} color="#555555" lineWidth={1} />
       ))}
-      {cornerLabels.map((cl, i) => (
+      {!showDraggableNodes && cornerLabels.map((cl, i) => (
         <CornerLabel key={`corner-${i}`} position={cl.pos} text={cl.text} />
+      ))}
+      {/* Draggable vertex nodes */}
+      {showDraggableNodes && orbitRef && nodeLabels.map((nl, i) => (
+        <DraggableVertex
+          key={`dv-${i}`}
+          position={nl.pos}
+          vertexIndex={nl.idx}
+          isTop={nl.isTop}
+          label={nl.label}
+          onDragEnd={onNodeDrag || (() => {})}
+          orbitRef={orbitRef}
+        />
       ))}
       <axesHelper args={[0.5]} />
     </group>
@@ -544,9 +687,55 @@ function FaceEditPanel({ data, onClose, onSave, onVertexSave }: {
   );
 }
 
+/** Custom OrbitControls with centered target and smooth zoom */
+function CenteredOrbitControls({ orbitRef }: { orbitRef: React.RefObject<any> }) {
+  return (
+    <OrbitControls
+      ref={orbitRef}
+      enableDamping
+      dampingFactor={0.15}
+      zoomSpeed={0.5}
+      rotateSpeed={0.8}
+      panSpeed={0.6}
+      minDistance={0.5}
+      maxDistance={30}
+      target={[0, 0, 0]}
+    />
+  );
+}
+
 export function Workspace3DViewer({ name, polygon, height, walls, scaleXY, scaleZ = 250, zBase = 0, onFaceClick, onFaceEdit, onVertexEdit, selectedFace }: Workspace3DViewerProps) {
   const [editingFace, setEditingFace] = useState<FaceEditData | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showNodes, setShowNodes] = useState(false);
+  const orbitRef = useRef<any>(null);
+
+  const handleNodeDrag = useCallback((vertexIndex: number, isTop: boolean, newPos: THREE.Vector3) => {
+    if (!onVertexEdit) return;
+    const zScaleBlocks = scaleZ / 1000;
+    const sMxy = (scaleXY || 625) / 1000;
+    
+    // Recompute centered offset
+    const base = polygon.map(v => new THREE.Vector3(v.x * sMxy, 0, v.y * sMxy));
+    const cx = base.reduce((s, v) => s + v.x, 0) / base.length;
+    const cz = base.reduce((s, v) => s + v.z, 0) / base.length;
+
+    if (isTop) {
+      // Convert the new Y position back to a Z coordinate change
+      const allVerts = polygon.map((v, i) => {
+        const wall = walls.find(w => w.wall_index === i + 1);
+        const hM = wall?.height != null ? wall.height : height;
+        const zTopVal = zBase + Math.round(hM / zScaleBlocks);
+        if (i === vertexIndex) {
+          // New height from dragged Y position
+          const newZTop = zBase + Math.round(newPos.y / zScaleBlocks);
+          return { x: v.x, y: v.y, z: newZTop };
+        }
+        return { x: v.x, y: v.y, z: zTopVal };
+      });
+      onVertexEdit('techo', 1, allVerts);
+    }
+  }, [onVertexEdit, polygon, walls, height, zBase, scaleZ, scaleXY]);
 
   if (!polygon || polygon.length < 3) {
     return (
@@ -564,10 +753,18 @@ export function Workspace3DViewer({ name, polygon, height, walls, scaleXY, scale
 
   return (
     <div className={containerClass}>
-      <div className="flex items-center gap-2 p-1">
+      <div className="flex items-center gap-2 p-1 flex-wrap">
         <span className="text-xs font-semibold">🧊 Vista 3D — {name}</span>
         <span className="text-[9px] text-muted-foreground">Arrastra para rotar · Scroll para zoom · Doble clic en cara para editar</span>
-        <div className="ml-auto">
+        <div className="ml-auto flex gap-1">
+          <Button
+            variant={showNodes ? 'default' : 'outline'}
+            size="sm"
+            className="h-6 text-[9px] gap-1 px-2"
+            onClick={() => setShowNodes(n => !n)}
+          >
+            🔵 Nodos
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -595,8 +792,11 @@ export function Workspace3DViewer({ name, polygon, height, walls, scaleXY, scale
             onFaceDoubleClick={(faceData) => setEditingFace(faceData)}
             selectedFace={selectedFace}
             workspaceName={name}
+            showDraggableNodes={showNodes}
+            onNodeDrag={handleNodeDrag}
+            orbitRef={orbitRef}
           />
-          <OrbitControls enableDamping dampingFactor={0.1} />
+          <CenteredOrbitControls orbitRef={orbitRef} />
           <gridHelper args={[6, 12, '#888888', '#cccccc']} />
         </Canvas>
       </div>
@@ -611,7 +811,7 @@ export function Workspace3DViewer({ name, polygon, height, walls, scaleXY, scale
             }}
             onVertexSave={onVertexEdit ? (verts) => {
               onVertexEdit(editingFace.faceType, editingFace.faceIndex, verts);
-              setEditingFace(null); // close panel so 3D refreshes with new data
+              setEditingFace(null);
             } : undefined}
           />
         </div>
@@ -624,6 +824,12 @@ export function Workspace3DViewer({ name, polygon, height, walls, scaleXY, scale
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded" style={{ background: FACE_COLORS.pared_exterior }} /> Pared ext.</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded" style={{ background: FACE_COLORS.pared_interior }} /> Pared int.</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded" style={{ background: FACE_COLORS.selected }} /> Seleccionada</span>
+        {showNodes && (
+          <>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full" style={{ background: '#006600' }} /> Nodo base</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full" style={{ background: '#0066ff' }} /> Nodo superior</span>
+          </>
+        )}
       </div>
     </div>
   );

@@ -1,26 +1,13 @@
 # Memory: features/budget/workspace-3d-viewer
 Updated: now
 
-The 3D workspace viewer (Three.js/@react-three/fiber) renders each workspace as a solid prism with:
+El visor 3D interactivo (Three.js) proporciona una verificación espacial completa del Espacio de trabajo en modo ventana o pantalla completa. Permite visualizar las coordenadas XYZ en las 8 esquinas del prisma, longitudes de arista en tiempo real (mm) y etiquetas descriptivas de cada cara (S1, P1-Pn, T1) incluyendo el nombre y superficie (m²). Mediante doble clic sobre una cara, se accede a un panel de propiedades que habilita la edición técnica de tipos de pared, alturas y coordenadas numéricas exactas de los vértices.
 
-### Face labeling & colors
-- S1 (Suelo/Brown), P1-Pn (Paredes/Green|Orange|Gray by type), T1 (Techo/Blue)
-- Selected faces highlighted in red; hover shows orange
+### Nodos arrastrables
+Botón "🔵 Nodos" activa/desactiva esferas interactivas en cada vértice del prisma (base=verde, superior=azul). Los nodos superiores se pueden arrastrar libremente para modificar la altura/Z del vértice en tiempo real. El arrastre desactiva temporalmente OrbitControls y al soltar persiste el cambio vía onVertexEdit. Los nodos base son visibles pero actualmente solo informativos.
 
-### XYZ corner coordinate labels
-Each vertex of the prism displays its real-world coordinate as `(Xn,Yn,Zn)` where:
-- X,Y come from the polygon vertices (grid units)
-- Z-base comes from the workspace's vertical section axisValue
-- Z-top is computed from zBase + height/scaleZ
+### Navegación mejorada
+OrbitControls configurado con: zoomSpeed=0.5 (más suave), dampingFactor=0.15, rotateSpeed=0.8, panSpeed=0.6, target centrado en [0,0,0], rango de distancia 0.5-30.
 
-### Double-click face editing
-Double-clicking any face opens a `FaceEditPanel` below the 3D canvas showing:
-- Real vertex coordinates of that face
-- Wall type selector (for paredes only)
-- Height editor (for paredes only)
-- Save persists changes to `budget_floor_plan_walls` table
-
-### Props
-- `zBase`: Z axis value from workspace's vertical section (default 0)
-- `scaleZ`: mm per Z grid unit (default 250)
-- `onFaceEdit`: callback for persisting wall type/height changes
+### Doble clic en Listado 3D
+En el `Workspace3DListView`, hacer doble clic sobre cualquier cara de un prisma emite un callback `onFaceDoubleClick` con workspaceId, workspaceName, faceType y faceIndex, permitiendo al componente padre navegar al espacio de trabajo o abrir el panel de propiedades correspondiente.

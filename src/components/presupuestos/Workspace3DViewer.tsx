@@ -167,22 +167,25 @@ function FaceMesh({ vertices, color, label, labelPosition, labelRotation, isSele
   );
 }
 
-/** Edge length label at midpoint of an edge */
-function EdgeLengthLabel({ from, to, lengthMm }: { from: THREE.Vector3; to: THREE.Vector3; lengthMm: number }) {
+/** Edge length label at midpoint of an edge with axis coordinates */
+function EdgeLengthLabel({ from, to, lengthMm, axisLabel }: { from: THREE.Vector3; to: THREE.Vector3; lengthMm: number; axisLabel?: string }) {
   const mid = useMemo(() => new THREE.Vector3().addVectors(from, to).multiplyScalar(0.5), [from, to]);
   const displayVal = lengthMm >= 1000 ? `${(lengthMm / 1000).toFixed(2)}m` : `${Math.round(lengthMm)}mm`;
+  const label = axisLabel ? `${displayVal}\n${axisLabel}` : displayVal;
   return (
     <Text
       position={[mid.x, mid.y + 0.04, mid.z]}
-      fontSize={0.06}
+      fontSize={0.05}
       color="#0066cc"
       fontWeight={600}
       anchorX="center"
       anchorY="bottom"
       outlineWidth={0.006}
       outlineColor="#ffffff"
+      textAlign="center"
+      lineHeight={1.3}
     >
-      {displayVal}
+      {label}
     </Text>
   );
 }

@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Pencil, Trash2, Plus, ChevronDown, ChevronRight, ChevronLeft, ChevronUp, Triangle, Pyramid, Cuboid, Grid3x3, MapPin, X, MousePointerClick, List, Layers, Save, RefreshCw, Expand, MousePointer } from 'lucide-react';
+import { Pencil, Trash2, Plus, ChevronDown, ChevronRight, ChevronLeft, ChevronUp, Triangle, Pyramid, Cuboid, Grid3x3, MapPin, X, MousePointerClick, List, Layers, Save, RefreshCw, Expand, MousePointer, Box } from 'lucide-react';
+import { Workspace3DViewer } from './Workspace3DViewer';
 import { WallObjectsPanel } from './WallObjectsPanel';
 import { GridPdfExport } from './GridPdfExport';
 import { DeleteWithBackupDialog } from '@/components/DeleteWithBackupDialog';
@@ -1990,6 +1991,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
   const [collapsedSectionTypes, setCollapsedSectionTypes] = useState<Set<string>>(new Set());
   const [selectedWallMap, setSelectedWallMap] = useState<Record<string, number | null>>({});
   const [gridEditId, setGridEditId] = useState<string | null>(null);
+  const [view3DId, setView3DId] = useState<string | null>(null);
+  const [selected3DFace, setSelected3DFace] = useState<string | null>(null);
   const [gridEditVertices, setGridEditVertices] = useState<PolygonVertex[]>([]);
   const [activeSectionView, setActiveSectionView] = useState<Record<string, { sectionId: string; type: 'vertical' | 'longitudinal' | 'transversal' | 'inclined' } | null>>({});
   const [sectionEditVertices, setSectionEditVertices] = useState<PolygonVertex[]>([]);
@@ -3027,7 +3030,47 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                       Define secciones Y/X en la pestaña Secciones para ver cortes
                     </span>
                   )}
+
+                  {/* 3D viewer button */}
+                  {poly && poly.length >= 3 && (
+                    <Button
+                      variant={view3DId === r.id ? 'default' : 'outline'}
+                      size="sm"
+                      className="h-6 text-[10px] gap-1"
+                      onClick={() => {
+                        if (view3DId === r.id) {
+                          setView3DId(null);
+                          setSelected3DFace(null);
+                        } else {
+                          setView3DId(r.id);
+                          setGridEditId(null);
+                          setActiveSectionView(prev => ({ ...prev, [r.id]: null }));
+                          setSelected3DFace(null);
+                        }
+                      }}
+                    >
+                      <Box className="h-3 w-3" /> 3D
+                    </Button>
+                  )}
                 </div>
+              </div>
+            )}
+
+            {/* 3D Workspace Viewer */}
+            {view3DId === r.id && poly && poly.length >= 3 && (
+              <div className="border rounded-lg p-2 bg-background">
+                <Workspace3DViewer
+                  name={r.name}
+                  polygon={poly}
+                  height={r.height || floorPlan?.default_height || 2.5}
+                  walls={roomWalls}
+                  scaleXY={floorPlan?.block_length_mm || 625}
+                  onFaceClick={(faceType, faceIndex) => {
+                    const key = `${faceType}_${faceIndex}`;
+                    setSelected3DFace(prev => prev === key ? null : key);
+                  }}
+                  selectedFace={selected3DFace}
+                />
               </div>
             )}
 

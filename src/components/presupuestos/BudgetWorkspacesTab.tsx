@@ -2787,7 +2787,19 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
     await refetch();
     queryClient.invalidateQueries({ queryKey: ['workspace-walls'] });
     queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces', budgetId] });
+    restoreReturnTo3D();
   };
+
+  /** Restore 3D view after 2D editing if navigated from 3D */
+  const restoreReturnTo3D = useCallback(() => {
+    if (!returnTo3D) return;
+    if (returnTo3D.type === 'list') {
+      setShow3DList(true);
+    } else if (returnTo3D.type === 'single') {
+      setView3DId(returnTo3D.workspaceId);
+    }
+    setReturnTo3D(null);
+  }, [returnTo3D]);
 
   // Rename workspace inline
   const handleRename = async (roomId: string) => {

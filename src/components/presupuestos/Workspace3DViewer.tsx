@@ -1,12 +1,12 @@
 import React, { useRef, useState, useMemo, useCallback } from 'react';
-import { Canvas, useFrame, useThree, ThreeEvent } from '@react-three/fiber';
+import { Canvas, useThree, ThreeEvent } from '@react-three/fiber';
 import { OrbitControls, Text, Line } from '@react-three/drei';
 import * as THREE from 'three';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { X } from 'lucide-react';
+import { X, Maximize2, Minimize2 } from 'lucide-react';
 
 interface PolygonVertex {
   x: number;
@@ -22,7 +22,7 @@ interface WallData {
 }
 
 interface FaceEditData {
-  faceType: string; // suelo, pared, techo
+  faceType: string;
   faceIndex: number;
   label: string;
   wallType?: string;
@@ -40,6 +40,7 @@ interface Workspace3DViewerProps {
   zBase?: number;
   onFaceClick?: (faceType: string, faceIndex: number) => void;
   onFaceEdit?: (faceType: string, faceIndex: number, data: { wallType?: string; height?: number }) => void;
+  onVertexEdit?: (faceType: string, faceIndex: number, vertices: { x: number; y: number; z: number }[]) => void;
   selectedFace?: string | null;
 }
 
@@ -70,6 +71,19 @@ function getWallColor(wallType?: string): string {
   return FACE_COLORS.pared_default;
 }
 
+/** Calculate area of a 3D polygon using cross product */
+function calcFaceAreaM2(vertices: THREE.Vector3[]): number {
+  if (vertices.length < 3) return 0;
+  let area = 0;
+  const v0 = vertices[0];
+  for (let i = 1; i < vertices.length - 1; i++) {
+    const a = new THREE.Vector3().subVectors(vertices[i], v0);
+    const b = new THREE.Vector3().subVectors(vertices[i + 1], v0);
+    area += a.cross(b).length() / 2;
+  }
+  return area;
+}
+
 interface FaceMeshProps {
   vertices: THREE.Vector3[];
   color: string;
@@ -80,9 +94,11 @@ interface FaceMeshProps {
   onClick: () => void;
   onDoubleClick: () => void;
   opacity?: number;
+  workspaceName: string;
+  areaM2: number;
 }
 
-function FaceMesh({ vertices, color, label, labelPosition, labelRotation, isSelected, onClick, onDoubleClick, opacity = 0.7 }: FaceMeshProps) {
+function FaceMesh({ vertices, color, label, labelPosition, labelRotation, isSelected, onClick, onDoubleClick, opacity = 0.7, workspaceName, areaM2 }: FaceMeshProps) {
   const [hovered, setHovered] = useState(false);
 
   const geometry = useMemo(() => {
@@ -105,6 +121,9 @@ function FaceMesh({ vertices, color, label, labelPosition, labelRotation, isSele
   }, [vertices]);
 
   const displayColor = isSelected ? FACE_COLORS.selected : (hovered ? '#ffaa44' : color);
+
+  // Multi-line label: "T1\nÁtico 1\n3.25 m²"
+  const fullLabel = `${label}\n${workspaceName}\n${areaM2.toFixed(2)} m²`;
 
   return (
     <group>
@@ -132,21 +151,42 @@ function FaceMesh({ vertices, color, label, labelPosition, labelRotation, isSele
       <Text
         position={labelPosition}
         rotation={labelRotation}
-        fontSize={0.15}
+        fontSize={0.1}
         color={isSelected ? '#ff0000' : '#000000'}
         fontWeight={700}
         anchorX="center"
         anchorY="middle"
-        outlineWidth={0.01}
+        outlineWidth={0.008}
         outlineColor="#ffffff"
+        textAlign="center"
+        lineHeight={1.4}
       >
-        {label}
+        {fullLabel}
       </Text>
     </group>
   );
 }
 
-/** Small coordinate label at a 3D corner */
+/** Edge length label at midpoint of an edge */
+function EdgeLengthLabel({ from, to, lengthMm }: { from: THREE.Vector3; to: THREE.Vector3; lengthMm: number }) {
+  const mid = useMemo(() => new THREE.Vector3().addVectors(from, to).multiplyScalar(0.5), [from, to]);
+  const displayVal = lengthMm >= 1000 ? `${(lengthMm / 1000).toFixed(2)}m` : `${Math.round(lengthMm)}mm`;
+  return (
+    <Text
+      position={[mid.x, mid.y + 0.04, mid.z]}
+      fontSize={0.06}
+      color="#0066cc"
+      fontWeight={600}
+      anchorX="center"
+      anchorY="bottom"
+      outlineWidth={0.006}
+      outlineColor="#ffffff"
+    >
+      {displayVal}
+    </Text>
+  );
+}
+
 function CornerLabel({ position, text }: { position: THREE.Vector3; text: string }) {
   return (
     <Text
@@ -165,14 +205,15 @@ function CornerLabel({ position, text }: { position: THREE.Vector3; text: string
   );
 }
 
-interface PrismModelProps extends Omit<Workspace3DViewerProps, 'name' | 'onFaceEdit'> {
+interface PrismModelProps extends Omit<Workspace3DViewerProps, 'name' | 'onFaceEdit' | 'onVertexEdit'> {
   onFaceDoubleClick?: (face: FaceEditData) => void;
+  workspaceName: string;
 }
 
-function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase = 0, onFaceClick, onFaceDoubleClick, selectedFace }: PrismModelProps) {
+function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase = 0, onFaceClick, onFaceDoubleClick, selectedFace, workspaceName }: PrismModelProps) {
   const groupRef = useRef<THREE.Group>(null);
 
-  const { baseVerts3D, topVerts3D, center, heightM, cornerLabels } = useMemo(() => {
+  const { baseVerts3D, topVerts3D, heightM, cornerLabels } = useMemo(() => {
     const sMxy = scaleXY / 1000;
     const heightM = height;
 
@@ -187,20 +228,17 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
       return new THREE.Vector3(v.x, h, v.z);
     });
 
-    // Compute real XYZ coordinate labels for each corner
-    const zScaleBlocks = scaleZ / 1000; // meters per Z block
+    const zScaleBlocks = scaleZ / 1000;
     const labels: { pos: THREE.Vector3; text: string }[] = [];
     const n = polygon.length;
     for (let i = 0; i < n; i++) {
       const vx = polygon[i].x;
       const vy = polygon[i].y;
-      // Base corner
       const zBaseLabel = zBase;
       labels.push({
         pos: new THREE.Vector3(centered[i].x, centered[i].y - 0.05, centered[i].z),
         text: `(X${vx},Y${vy},Z${zBaseLabel})`,
       });
-      // Top corner
       const wall = walls.find(w => w.wall_index === i + 1);
       const hM = wall?.height != null ? wall.height : heightM;
       const zTopVal = zBase + Math.round(hM / zScaleBlocks);
@@ -210,19 +248,14 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
       });
     }
 
-    return { baseVerts3D: centered, topVerts3D: top, center: new THREE.Vector3(cx, 0, cz), heightM, cornerLabels: labels };
+    return { baseVerts3D: centered, topVerts3D: top, heightM, cornerLabels: labels };
   }, [polygon, height, walls, scaleXY, scaleZ, zBase]);
 
   const faces = useMemo(() => {
     const result: Array<{
-      type: string;
-      index: number;
-      label: string;
-      vertices: THREE.Vector3[];
-      labelPos: THREE.Vector3;
-      labelRot?: [number, number, number];
-      color: string;
-      realVertices: { x: number; y: number; z: number }[];
+      type: string; index: number; label: string;
+      vertices: THREE.Vector3[]; labelPos: THREE.Vector3; labelRot?: [number, number, number];
+      color: string; realVertices: { x: number; y: number; z: number }[];
     }> = [];
 
     const n = baseVerts3D.length;
@@ -232,15 +265,12 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
 
     // Suelo (S1)
     const floorCenter = new THREE.Vector3(
-      baseVerts3D.reduce((s, v) => s + v.x, 0) / n,
-      -0.01,
+      baseVerts3D.reduce((s, v) => s + v.x, 0) / n, -0.01,
       baseVerts3D.reduce((s, v) => s + v.z, 0) / n
     );
     result.push({
       type: 'suelo', index: 1, label: 'S1',
-      vertices: [...baseVerts3D],
-      labelPos: floorCenter,
-      labelRot: [-Math.PI / 2, 0, 0],
+      vertices: [...baseVerts3D], labelPos: floorCenter, labelRot: [-Math.PI / 2, 0, 0],
       color: FACE_COLORS.suelo,
       realVertices: polygon.map(v => ({ x: v.x, y: v.y, z: zBase })),
     });
@@ -248,18 +278,12 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
     // Paredes (P1, P2, ...)
     for (let i = 0; i < n; i++) {
       const next = (i + 1) % n;
-      const b1 = baseVerts3D[i];
-      const b2 = baseVerts3D[next];
-      const t1 = topVerts3D[i];
-      const t2 = topVerts3D[next];
-
+      const b1 = baseVerts3D[i]; const b2 = baseVerts3D[next];
+      const t1 = topVerts3D[i]; const t2 = topVerts3D[next];
       const wallVerts = [b1, b2, t2, t1];
       const wallCenter = new THREE.Vector3(
-        (b1.x + b2.x + t1.x + t2.x) / 4,
-        (b1.y + b2.y + t1.y + t2.y) / 4,
-        (b1.z + b2.z + t1.z + t2.z) / 4
+        (b1.x + b2.x + t1.x + t2.x) / 4, (b1.y + b2.y + t1.y + t2.y) / 4, (b1.z + b2.z + t1.z + t2.z) / 4
       );
-
       const midBase = new THREE.Vector3((b1.x + b2.x) / 2, 0, (b1.z + b2.z) / 2);
       const outward = midBase.clone().normalize().multiplyScalar(0.05);
       wallCenter.add(outward);
@@ -271,8 +295,7 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
 
       result.push({
         type: 'pared', index: i + 1, label: `P${i + 1}`,
-        vertices: wallVerts,
-        labelPos: wallCenter,
+        vertices: wallVerts, labelPos: wallCenter,
         color: getWallColor(wall?.wall_type),
         realVertices: [
           { x: polygon[i].x, y: polygon[i].y, z: zBase },
@@ -291,9 +314,7 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
     );
     result.push({
       type: 'techo', index: 1, label: 'T1',
-      vertices: [...topVerts3D],
-      labelPos: topCenter,
-      labelRot: [-Math.PI / 2, 0, 0],
+      vertices: [...topVerts3D], labelPos: topCenter, labelRot: [-Math.PI / 2, 0, 0],
       color: FACE_COLORS.techo,
       realVertices: polygon.map((v, i) => {
         const wall = walls.find(w => w.wall_index === i + 1);
@@ -305,24 +326,42 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
     return result;
   }, [baseVerts3D, topVerts3D, walls, polygon, zBase, height, scaleZ]);
 
-  const edgeLines = useMemo(() => {
-    const lines: THREE.Vector3[][] = [];
+  // Compute edge lengths for all visible edges
+  const edgeLengths = useMemo(() => {
+    const items: { from: THREE.Vector3; to: THREE.Vector3; lengthMm: number }[] = [];
     const n = baseVerts3D.length;
+    const sMxy = scaleXY; // mm per grid unit
+
+    // Base edges
     for (let i = 0; i < n; i++) {
-      lines.push([baseVerts3D[i], topVerts3D[i]]);
+      const next = (i + 1) % n;
+      const dx = (polygon[next].x - polygon[i].x) * sMxy;
+      const dy = (polygon[next].y - polygon[i].y) * sMxy;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      items.push({ from: baseVerts3D[i], to: baseVerts3D[next], lengthMm: len });
     }
-    return lines;
-  }, [baseVerts3D, topVerts3D]);
+    // Top edges
+    for (let i = 0; i < n; i++) {
+      const next = (i + 1) % n;
+      const dx = (polygon[next].x - polygon[i].x) * sMxy;
+      const dy = (polygon[next].y - polygon[i].y) * sMxy;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      items.push({ from: topVerts3D[i], to: topVerts3D[next], lengthMm: len });
+    }
+    // Vertical edges
+    for (let i = 0; i < n; i++) {
+      const hDiff = topVerts3D[i].y - baseVerts3D[i].y; // in meters
+      items.push({ from: baseVerts3D[i], to: topVerts3D[i], lengthMm: Math.abs(hDiff) * 1000 });
+    }
+    return items;
+  }, [baseVerts3D, topVerts3D, polygon, scaleXY]);
 
   const handleFaceDoubleClick = useCallback((face: typeof faces[0]) => {
     if (!onFaceDoubleClick) return;
     const wallData = face.type === 'pared' ? walls.find(w => w.wall_index === face.index) : undefined;
     onFaceDoubleClick({
-      faceType: face.type,
-      faceIndex: face.index,
-      label: face.label,
-      wallType: wallData?.wall_type,
-      heightM: wallData?.height ?? height,
+      faceType: face.type, faceIndex: face.index, label: face.label,
+      wallType: wallData?.wall_type, heightM: wallData?.height ?? height,
       vertices: face.realVertices,
     });
   }, [faces, walls, height, onFaceDoubleClick]);
@@ -331,6 +370,7 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
     <group ref={groupRef}>
       {faces.map((face) => {
         const faceKey = `${face.type}_${face.index}`;
+        const areaM2 = calcFaceAreaM2(face.vertices);
         return (
           <FaceMesh
             key={faceKey}
@@ -342,13 +382,19 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
             isSelected={selectedFace === faceKey}
             onClick={() => onFaceClick?.(face.type, face.index)}
             onDoubleClick={() => handleFaceDoubleClick(face)}
+            workspaceName={workspaceName}
+            areaM2={areaM2}
           />
         );
       })}
-      {edgeLines.map((line, i) => (
-        <Line key={`edge-${i}`} points={line} color="#555555" lineWidth={1} />
+      {/* Edge length labels */}
+      {edgeLengths.map((el, i) => (
+        <EdgeLengthLabel key={`elen-${i}`} from={el.from} to={el.to} lengthMm={el.lengthMm} />
       ))}
-      {/* Corner coordinate labels */}
+      {/* Vertical edge lines */}
+      {baseVerts3D.map((bv, i) => (
+        <Line key={`edge-${i}`} points={[bv, topVerts3D[i]]} color="#555555" lineWidth={1} />
+      ))}
       {cornerLabels.map((cl, i) => (
         <CornerLabel key={`corner-${i}`} position={cl.pos} text={cl.text} />
       ))}
@@ -358,13 +404,23 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
 }
 
 /** Face properties editing panel (shown on double-click) */
-function FaceEditPanel({ data, onClose, onSave }: {
+function FaceEditPanel({ data, onClose, onSave, onVertexSave }: {
   data: FaceEditData;
   onClose: () => void;
   onSave: (updates: { wallType?: string; height?: number }) => void;
+  onVertexSave?: (vertices: { x: number; y: number; z: number }[]) => void;
 }) {
   const [wallType, setWallType] = useState(data.wallType || 'exterior');
   const [heightVal, setHeightVal] = useState(String(data.heightM || ''));
+  const [editVerts, setEditVerts] = useState(data.vertices.map(v => ({ ...v })));
+
+  const updateVert = (idx: number, axis: 'x' | 'y' | 'z', val: string) => {
+    setEditVerts(prev => {
+      const next = [...prev];
+      next[idx] = { ...next[idx], [axis]: parseFloat(val) || 0 };
+      return next;
+    });
+  };
 
   return (
     <div className="border rounded-lg p-3 bg-card space-y-3">
@@ -377,16 +433,50 @@ function FaceEditPanel({ data, onClose, onSave }: {
         </Button>
       </div>
 
-      {/* Vertices display */}
+      {/* Editable vertices */}
       <div className="space-y-1">
-        <span className="text-[9px] font-medium text-muted-foreground">Vértices (coordenadas reales)</span>
-        <div className="grid grid-cols-2 gap-1">
-          {data.vertices.map((v, i) => (
-            <div key={i} className="text-[9px] bg-muted/50 rounded px-1.5 py-0.5 font-mono">
-              V{i + 1}: (X{v.x}, Y{v.y}, Z{v.z})
+        <span className="text-[9px] font-medium text-muted-foreground">Vértices (coordenadas editables)</span>
+        <div className="space-y-1">
+          {editVerts.map((v, i) => (
+            <div key={i} className="flex items-center gap-1">
+              <span className="text-[9px] font-mono w-6 text-muted-foreground">V{i + 1}:</span>
+              <span className="text-[8px] text-muted-foreground">X</span>
+              <Input
+                type="number"
+                step="1"
+                value={v.x}
+                onChange={e => updateVert(i, 'x', e.target.value)}
+                className="h-5 text-[9px] w-14 px-1 font-mono"
+              />
+              <span className="text-[8px] text-muted-foreground">Y</span>
+              <Input
+                type="number"
+                step="1"
+                value={v.y}
+                onChange={e => updateVert(i, 'y', e.target.value)}
+                className="h-5 text-[9px] w-14 px-1 font-mono"
+              />
+              <span className="text-[8px] text-muted-foreground">Z</span>
+              <Input
+                type="number"
+                step="1"
+                value={v.z}
+                onChange={e => updateVert(i, 'z', e.target.value)}
+                className="h-5 text-[9px] w-14 px-1 font-mono"
+              />
             </div>
           ))}
         </div>
+        {onVertexSave && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-5 text-[9px] mt-1"
+            onClick={() => onVertexSave(editVerts)}
+          >
+            Aplicar vértices
+          </Button>
+        )}
       </div>
 
       {/* Wall type selector (only for paredes) */}
@@ -444,8 +534,9 @@ function FaceEditPanel({ data, onClose, onSave }: {
   );
 }
 
-export function Workspace3DViewer({ name, polygon, height, walls, scaleXY, scaleZ = 250, zBase = 0, onFaceClick, onFaceEdit, selectedFace }: Workspace3DViewerProps) {
+export function Workspace3DViewer({ name, polygon, height, walls, scaleXY, scaleZ = 250, zBase = 0, onFaceClick, onFaceEdit, onVertexEdit, selectedFace }: Workspace3DViewerProps) {
   const [editingFace, setEditingFace] = useState<FaceEditData | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   if (!polygon || polygon.length < 3) {
     return (
@@ -455,13 +546,30 @@ export function Workspace3DViewer({ name, polygon, height, walls, scaleXY, scale
     );
   }
 
+  const containerClass = isFullscreen
+    ? 'fixed inset-0 z-50 bg-background flex flex-col'
+    : 'space-y-2';
+
+  const canvasHeight = isFullscreen ? 'flex-1' : 'h-80';
+
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2">
+    <div className={containerClass}>
+      <div className="flex items-center gap-2 p-1">
         <span className="text-xs font-semibold">🧊 Vista 3D — {name}</span>
         <span className="text-[9px] text-muted-foreground">Arrastra para rotar · Scroll para zoom · Doble clic en cara para editar</span>
+        <div className="ml-auto">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-6 text-[9px] gap-1 px-2"
+            onClick={() => setIsFullscreen(f => !f)}
+          >
+            {isFullscreen ? <Minimize2 className="h-3 w-3" /> : <Maximize2 className="h-3 w-3" />}
+            {isFullscreen ? 'Salir' : 'Pantalla completa'}
+          </Button>
+        </div>
       </div>
-      <div className="h-80 rounded-lg border bg-gradient-to-b from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 overflow-hidden">
+      <div className={`${canvasHeight} rounded-lg border bg-gradient-to-b from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 overflow-hidden`}>
         <Canvas camera={{ position: [3, 3, 3], fov: 50 }}>
           <ambientLight intensity={0.6} />
           <directionalLight position={[5, 8, 5]} intensity={0.8} />
@@ -476,25 +584,30 @@ export function Workspace3DViewer({ name, polygon, height, walls, scaleXY, scale
             onFaceClick={onFaceClick}
             onFaceDoubleClick={(faceData) => setEditingFace(faceData)}
             selectedFace={selectedFace}
+            workspaceName={name}
           />
           <OrbitControls enableDamping dampingFactor={0.1} />
           <gridHelper args={[6, 12, '#888888', '#cccccc']} />
         </Canvas>
       </div>
 
-      {/* Face edit panel (shown on double-click) */}
       {editingFace && (
-        <FaceEditPanel
-          data={editingFace}
-          onClose={() => setEditingFace(null)}
-          onSave={(updates) => {
-            onFaceEdit?.(editingFace.faceType, editingFace.faceIndex, updates);
-          }}
-        />
+        <div className={isFullscreen ? 'p-2 max-w-xl mx-auto w-full' : ''}>
+          <FaceEditPanel
+            data={editingFace}
+            onClose={() => setEditingFace(null)}
+            onSave={(updates) => {
+              onFaceEdit?.(editingFace.faceType, editingFace.faceIndex, updates);
+            }}
+            onVertexSave={onVertexEdit ? (verts) => {
+              onVertexEdit(editingFace.faceType, editingFace.faceIndex, verts);
+            } : undefined}
+          />
+        </div>
       )}
 
       {/* Legend */}
-      <div className="flex flex-wrap gap-2 text-[9px]">
+      <div className="flex flex-wrap gap-2 text-[9px] px-1">
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded" style={{ background: FACE_COLORS.suelo }} /> Suelo</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded" style={{ background: FACE_COLORS.techo }} /> Techo</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded" style={{ background: FACE_COLORS.pared_exterior }} /> Pared ext.</span>

@@ -614,8 +614,8 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
   // ── Face types ──
   const FACE_OPTIONS_BY_SECTION: Record<string, string[]> = {
     vertical: ['Suelo', 'Techo'],
-    longitudinal: ['Pared'],
-    transversal: ['Pared'],
+    longitudinal: ['Pared', 'Suelo', 'Techo'],
+    transversal: ['Pared', 'Suelo', 'Techo'],
   };
 
   const getDefaultFaceType = () => {

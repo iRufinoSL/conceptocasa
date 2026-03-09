@@ -331,6 +331,7 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
 
   const { baseVerts3D, topVerts3D, heightM, cornerLabels, cx, cz } = useMemo(() => {
     const sMxy = scaleXY / 1000;
+    const zScaleBlocks = scaleZ / 1000;
     const heightM = height;
 
     const base = polygon.map(v => new THREE.Vector3(v.x * sMxy, 0, v.y * sMxy));
@@ -346,8 +347,6 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
       const quantizedH = (zTopUnits - zBase) * zScaleBlocks;
       return new THREE.Vector3(v.x, quantizedH, v.z);
     });
-
-    const zScaleBlocks = scaleZ / 1000;
     const labels: { pos: THREE.Vector3; text: string }[] = [];
     const n = polygon.length;
     for (let i = 0; i < n; i++) {

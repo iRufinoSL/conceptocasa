@@ -3332,7 +3332,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                     )}
                   </div>
                   <div className="flex gap-1">
-                    <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => setGridEditId(null)}>
+                    <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => { setGridEditId(null); restoreReturnTo3D(); }}>
                       Cancelar
                     </Button>
                     <Button size="sm" className="h-6 text-[10px] gap-1" onClick={() => saveGridEditorPolygon(r.id)} disabled={gridEditVertices.length < 3}>

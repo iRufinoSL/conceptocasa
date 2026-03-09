@@ -667,7 +667,17 @@ function FaceEditPanel({ data, onClose, onSave, onVertexSave, onNavigateTo2D }: 
         </div>
       )}
 
-      <div className="flex gap-1">
+      <div className="flex gap-1 flex-wrap">
+        {onNavigateTo2D && (
+          <Button
+            variant="secondary"
+            size="sm"
+            className="h-6 text-[10px] gap-1"
+            onClick={onNavigateTo2D}
+          >
+            📐 Editar en 2D
+          </Button>
+        )}
         <Button
           size="sm"
           className="h-6 text-[10px]"

@@ -710,14 +710,6 @@ export function Workspace3DViewer({ name, polygon, height, walls, scaleXY, scale
   const [showNodes, setShowNodes] = useState(false);
   const orbitRef = useRef<any>(null);
 
-  if (!polygon || polygon.length < 3) {
-    return (
-      <div className="flex items-center justify-center h-64 bg-muted/30 rounded-lg border text-sm text-muted-foreground">
-        Se necesitan al menos 3 vértices para la vista 3D
-      </div>
-    );
-  }
-
   const handleNodeDrag = useCallback((vertexIndex: number, isTop: boolean, newPos: THREE.Vector3) => {
     if (!onVertexEdit) return;
     const zScaleBlocks = scaleZ / 1000;

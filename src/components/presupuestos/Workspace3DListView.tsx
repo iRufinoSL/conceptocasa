@@ -302,6 +302,7 @@ export function Workspace3DListView({ workspaces, scaleXY, scaleZ, onClose, onFa
       {/* Toolbar */}
       <div className="flex items-center gap-2 p-2 border-b bg-muted/30 flex-wrap">
         <span className="text-xs font-semibold">🧊 Listado 3D</span>
+        <span className="text-[9px] text-muted-foreground hidden sm:inline">Doble clic en una cara → editar en 2D</span>
         <div className="flex gap-1">
           <Button variant={viewMode === 'complete' ? 'default' : 'outline'} size="sm" className="h-6 text-[10px] gap-1"
             onClick={() => { setViewMode('complete'); setSelectedSection(null); setSelectedWs(null); }}>

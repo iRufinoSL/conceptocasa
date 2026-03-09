@@ -825,6 +825,10 @@ export function Workspace3DViewer({ name, polygon, height, walls, scaleXY, scale
               onVertexEdit(editingFace.faceType, editingFace.faceIndex, verts);
               setEditingFace(null);
             } : undefined}
+            onNavigateTo2D={onNavigateTo2D ? () => {
+              onNavigateTo2D(editingFace.faceType, editingFace.faceIndex);
+              setEditingFace(null);
+            } : undefined}
           />
         </div>
       )}

@@ -3492,6 +3492,11 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold">Espacios de trabajo</h3>
         <div className="flex items-center gap-1">
+          {rooms.length > 0 && (
+            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setShow3DList(true)}>
+              <Box className="h-3 w-3" /> Listado 3D
+            </Button>
+          )}
           <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={async () => { await refetchAll(); toast.success('Datos actualizados'); }} title="Actualizar datos">
             <RefreshCw className="h-3 w-3" /> Actualizar
           </Button>

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useCallback } from 'react';
-import { Canvas, ThreeEvent } from '@react-three/fiber';
+import { Canvas, ThreeEvent, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls, Text, Line } from '@react-three/drei';
 import * as THREE from 'three';
 import { Button } from '@/components/ui/button';
@@ -89,12 +89,15 @@ function CornerLabel({ position, text }: { position: THREE.Vector3; text: string
   );
 }
 
-/** Interactive face mesh for list view */
-function InteractiveFace({ vertices, color, label, labelPos, labelRot, onDoubleClick }: {
+/** Interactive face mesh for list view with proximity transparency */
+function InteractiveFace({ vertices, color, label, labelPos, labelRot, onDoubleClick, proximityOpacity }: {
   vertices: THREE.Vector3[]; color: string; label: string; labelPos: THREE.Vector3;
-  labelRot?: [number, number, number]; onDoubleClick: () => void;
+  labelRot?: [number, number, number]; onDoubleClick: () => void; proximityOpacity?: number;
 }) {
   const [hovered, setHovered] = useState(false);
+  const meshRef = useRef<THREE.Mesh>(null);
+  const matRef = useRef<THREE.MeshStandardMaterial>(null);
+  const { camera } = useThree();
 
   const geometry = useMemo(() => {
     const geo = new THREE.BufferGeometry();
@@ -110,19 +113,37 @@ function InteractiveFace({ vertices, color, label, labelPos, labelRot, onDoubleC
     return geo;
   }, [vertices]);
 
+  // Proximity transparency: faces close to camera become transparent
+  useFrame(() => {
+    if (!meshRef.current || !matRef.current) return;
+    const center = new THREE.Vector3();
+    vertices.forEach(v => center.add(v));
+    center.divideScalar(vertices.length);
+    const dist = camera.position.distanceTo(center);
+    // Faces within 1.5 units → fully transparent; beyond 4 → normal opacity
+    const proximityFade = THREE.MathUtils.clamp((dist - 1.0) / 3.0, 0, 1);
+    const baseOpacity = hovered ? 0.8 : 0.6;
+    matRef.current.opacity = baseOpacity * proximityFade;
+    // Also hide edges and labels when very close
+    meshRef.current.visible = proximityFade > 0.05;
+  });
+
   return (
     <group>
       <mesh
+        ref={meshRef}
         geometry={geometry}
         onDoubleClick={(e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); onDoubleClick(); }}
         onPointerOver={() => setHovered(true)}
         onPointerOut={() => setHovered(false)}
       >
         <meshStandardMaterial
+          ref={matRef}
           color={hovered ? '#ffaa44' : color}
           transparent
           opacity={hovered ? 0.8 : 0.6}
           side={THREE.DoubleSide}
+          depthWrite={false}
         />
       </mesh>
       {vertices.length > 1 && (
@@ -149,7 +170,9 @@ function MultiPrism({ ws, scaleXY, scaleZ, offsetX, offsetZ, onFaceDoubleClick }
     const top = base.map((v, i) => {
       const wall = ws.walls.find(w => w.wall_index === i + 1);
       const h = wall?.height != null ? wall.height : ws.height;
-      return new THREE.Vector3(v.x, ws.zBase * zScaleM + h, v.z);
+      // Quantize to Z-grid so shared coordinates across workspaces coincide exactly
+      const zTopUnits = ws.zBase + Math.round(h / zScaleM);
+      return new THREE.Vector3(v.x, zTopUnits * zScaleM, v.z);
     });
 
     const n = ws.polygon.length;

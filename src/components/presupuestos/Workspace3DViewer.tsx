@@ -341,7 +341,10 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
     const top = centered.map((v, i) => {
       const wall = walls.find(w => w.wall_index === i + 1);
       const h = wall?.height != null ? wall.height : heightM;
-      return new THREE.Vector3(v.x, h, v.z);
+      // Quantize to Z-grid so shared coordinates across workspaces coincide exactly
+      const zTopUnits = zBase + Math.round(h / zScaleBlocks);
+      const quantizedH = (zTopUnits - zBase) * zScaleBlocks;
+      return new THREE.Vector3(v.x, quantizedH, v.z);
     });
 
     const zScaleBlocks = scaleZ / 1000;

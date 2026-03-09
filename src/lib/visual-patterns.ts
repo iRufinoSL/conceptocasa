@@ -6,7 +6,7 @@
 export interface VisualPattern {
   id: string;
   label: string;
-  category: 'estructura' | 'aislamiento' | 'revestimiento' | 'suelo' | 'cubierta' | 'varios';
+  category: 'estructura' | 'aislamiento' | 'revestimiento' | 'suelo' | 'cubierta' | 'varios' | 'color';
   /** SVG pattern element content (inside <pattern>) */
   svgContent: string;
   /** Pattern unit size */
@@ -196,6 +196,34 @@ export const VISUAL_PATTERNS: VisualPattern[] = [
     fgColor: 'transparent',
     svgContent: `<rect width="10" height="10" fill="none"/>`,
   },
+  // ── Color (sólidos) ──
+  {
+    id: 'blanco',
+    label: 'Blanco',
+    category: 'color',
+    width: 8, height: 8,
+    bgColor: '#ffffff',
+    fgColor: '#e0e0e0',
+    svgContent: `<rect width="8" height="8" fill="#ffffff"/><rect width="8" height="8" fill="none" stroke="#e0e0e0" stroke-width="0.2"/>`,
+  },
+  {
+    id: 'amarillo',
+    label: 'Amarillo',
+    category: 'color',
+    width: 8, height: 8,
+    bgColor: '#fff9c4',
+    fgColor: '#f9a825',
+    svgContent: `<rect width="8" height="8" fill="#fff9c4"/>`,
+  },
+  {
+    id: 'azul_tenue',
+    label: 'Azul tenue',
+    category: 'color',
+    width: 8, height: 8,
+    bgColor: '#e3f2fd',
+    fgColor: '#90caf9',
+    svgContent: `<rect width="8" height="8" fill="#e3f2fd"/>`,
+  },
 ];
 
 export const PATTERN_CATEGORIES = [
@@ -205,6 +233,7 @@ export const PATTERN_CATEGORIES = [
   { id: 'suelo', label: 'Suelo' },
   { id: 'cubierta', label: 'Cubierta' },
   { id: 'varios', label: 'Varios' },
+  { id: 'color', label: 'Color' },
 ] as const;
 
 export function getPatternById(id: string | null | undefined): VisualPattern | undefined {

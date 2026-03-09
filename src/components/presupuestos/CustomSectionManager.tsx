@@ -1345,20 +1345,67 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
           {wallProjections.map((proj, pi) => {
             const isActive = selectedWorkspaceId === proj.workspaceId;
             const savedPoly = section.polygons?.find(p => p.id === proj.workspaceId);
-            const vertCount = savedPoly?.vertices.length ?? 4;
+            const isHidden = savedPoly?.vertices.length === 0;
+            const vertCount = isHidden ? 0 : (savedPoly?.vertices.length ?? 4);
             return (
-              <button
+              <div
                 key={proj.workspaceId}
-                className={`flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded border transition-colors ${isActive ? 'bg-primary/15 border-primary font-semibold' : 'hover:bg-accent/50'}`}
+                className={`flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded border transition-colors ${isHidden ? 'opacity-40' : ''} ${isActive ? 'bg-primary/15 border-primary font-semibold' : 'hover:bg-accent/50'}`}
                 style={{ borderColor: isActive ? undefined : PROJ_COLORS[pi % PROJ_COLORS.length] }}
-                onClick={() => selectWorkspace(proj)}
-                title={isActive ? 'Deseleccionar' : `Editar ${proj.workspaceName}`}
               >
                 <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: PROJ_COLORS[pi % PROJ_COLORS.length] }} />
-                {proj.workspaceName}
-                <span className="text-muted-foreground ml-0.5">({geometryTypeLabel(vertCount)})</span>
+                <button
+                  className="truncate"
+                  onClick={() => !isHidden && selectWorkspace(proj)}
+                  title={isHidden ? 'Oculto' : isActive ? 'Deseleccionar' : `Editar ${proj.workspaceName}`}
+                >
+                  {proj.workspaceName}
+                </button>
+                {!isHidden && <span className="text-muted-foreground ml-0.5">({geometryTypeLabel(vertCount)})</span>}
                 {isActive && <span className="text-primary ml-0.5">✎</span>}
-              </button>
+                {isElevation && (
+                  isHidden ? (
+                    <button className="ml-0.5 text-muted-foreground hover:text-foreground" title="Mostrar"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!allSections || !onSectionsChange) return;
+                        const updatedSections = allSections.map(s => {
+                          if (s.id !== section.id) return s;
+                          return { ...s, polygons: (s.polygons || []).filter(p => p.id !== proj.workspaceId) };
+                        });
+                        onSectionsChange(updatedSections);
+                        toast.success(`${proj.workspaceName} restaurado`);
+                      }}
+                    >
+                      <EyeOff className="h-3 w-3" />
+                    </button>
+                  ) : (
+                    <button className="ml-0.5 text-destructive/60 hover:text-destructive" title="Ocultar en esta sección"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!allSections || !onSectionsChange) return;
+                        const hiddenEntry: SectionPolygon = { id: proj.workspaceId, name: proj.workspaceName, vertices: [] };
+                        const updatedSections = allSections.map(s => {
+                          if (s.id !== section.id) return s;
+                          const polys = [...(s.polygons || [])];
+                          const existingIdx = polys.findIndex(p => p.id === proj.workspaceId);
+                          if (existingIdx >= 0) polys[existingIdx] = hiddenEntry;
+                          else polys.push(hiddenEntry);
+                          return { ...s, polygons: polys };
+                        });
+                        onSectionsChange(updatedSections);
+                        if (selectedWorkspaceId === proj.workspaceId) {
+                          setSelectedWorkspaceId(null);
+                          setEditVertices([]);
+                        }
+                        toast.success(`${proj.workspaceName} ocultado`);
+                      }}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  )
+                )}
+              </div>
             );
           })}
         </div>

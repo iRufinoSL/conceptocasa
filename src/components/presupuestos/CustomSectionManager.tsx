@@ -2104,8 +2104,8 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                   data-pdf-vertex-label=""
                 >{hLabel}{v.x},{vLabel}{v.y}</text>
               ))}
-              {/* Edge face type labels (P#/Suelo/Techo) for elevation sections */}
-              {isElevation && verts.length >= 3 && !isEditingThisPoly && verts.map((v, ei) => {
+              {/* Edge face type labels (P#/Suelo/Techo) for all section types */}
+              {verts.length >= 3 && !isEditingThisPoly && verts.map((v, ei) => {
                 const next = verts[(ei + 1) % verts.length];
                 const { sx: x1, sy: y1 } = toSvg(v.x, v.y);
                 const { sx: x2, sy: y2 } = toSvg(next.x, next.y);

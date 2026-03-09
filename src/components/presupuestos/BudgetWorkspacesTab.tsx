@@ -3057,22 +3057,43 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
             )}
 
             {/* 3D Workspace Viewer */}
-            {view3DId === r.id && poly && poly.length >= 3 && (
-              <div className="border rounded-lg p-2 bg-background">
-                <Workspace3DViewer
-                  name={r.name}
-                  polygon={poly}
-                  height={r.height || floorPlan?.default_height || 2.5}
-                  walls={roomWalls}
-                  scaleXY={floorPlan?.block_length_mm || 625}
-                  onFaceClick={(faceType, faceIndex) => {
-                    const key = `${faceType}_${faceIndex}`;
-                    setSelected3DFace(prev => prev === key ? null : key);
-                  }}
-                  selectedFace={selected3DFace}
-                />
-              </div>
-            )}
+            {view3DId === r.id && poly && poly.length >= 3 && (() => {
+              const vSection3D = verticalSections.find(s => s.id === r.vertical_section_id);
+              const zBase3D = vSection3D ? vSection3D.axisValue : 0;
+              return (
+                <div className="border rounded-lg p-2 bg-background">
+                  <Workspace3DViewer
+                    name={r.name}
+                    polygon={poly}
+                    height={r.height || floorPlan?.default_height || 2.5}
+                    walls={roomWalls}
+                    scaleXY={floorPlan?.block_length_mm || 625}
+                    scaleZ={250}
+                    zBase={zBase3D}
+                    onFaceClick={(faceType, faceIndex) => {
+                      const key = `${faceType}_${faceIndex}`;
+                      setSelected3DFace(prev => prev === key ? null : key);
+                    }}
+                    onFaceEdit={async (faceType, faceIndex, data) => {
+                      if (faceType === 'pared') {
+                        const wall = roomWalls.find(w => w.wall_index === faceIndex);
+                        if (wall) {
+                          const updates: Record<string, any> = {};
+                          if (data.wallType) updates.wall_type = data.wallType;
+                          if (data.height != null) updates.height = data.height;
+                          if (Object.keys(updates).length > 0) {
+                            await supabase.from('budget_floor_plan_walls').update(updates).eq('id', wall.id);
+                            queryClient.invalidateQueries({ queryKey: ['workspace-walls'] });
+                            toast.success(`Pared ${faceIndex} actualizada`);
+                          }
+                        }
+                      }
+                    }}
+                    selectedFace={selected3DFace}
+                  />
+                </div>
+              );
+            })()}
 
             {/* Inline Z grid editor */}
             {gridEditId === r.id && (

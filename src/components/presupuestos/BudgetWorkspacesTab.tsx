@@ -3183,6 +3183,14 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                         toast.success(`Alturas de paredes actualizadas desde vértices`);
                       }
                     }}
+                    onNavigateTo2D={(faceType, faceIndex) => {
+                      handleFaceNavigateTo2D({
+                        workspaceId: r.id,
+                        workspaceName: r.name,
+                        faceType,
+                        faceIndex,
+                      });
+                    }}
                     selectedFace={selected3DFace}
                   />
                 </div>

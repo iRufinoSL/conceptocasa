@@ -45,6 +45,56 @@ const FACE_COLORS: Record<string, string> = {
   selected: '#ff6b6b',
 };
 
+/** Origin axes with colored arrows and X/Y/Z labels at (0,0,0) */
+function OriginAxes({ size = 1.5 }: { size?: number }) {
+  const axisRadius = 0.015;
+  const coneRadius = 0.05;
+  const coneHeight = 0.15;
+  const axes = [
+    { dir: [1, 0, 0] as [number, number, number], color: '#c0392b', label: 'X' },  // Red - right
+    { dir: [0, 0, 1] as [number, number, number], color: '#27ae60', label: 'Y' },  // Green - depth (Y grid maps to Z in three.js)
+    { dir: [0, 1, 0] as [number, number, number], color: '#2980b9', label: 'Z' },  // Blue - up
+  ];
+  return (
+    <group>
+      {/* Origin sphere */}
+      <mesh position={[0, 0, 0]}>
+        <sphereGeometry args={[0.04, 16, 16]} />
+        <meshStandardMaterial color="#333333" />
+      </mesh>
+      {axes.map(({ dir, color, label }) => {
+        const end: [number, number, number] = [dir[0] * size, dir[1] * size, dir[2] * size];
+        const mid: [number, number, number] = [dir[0] * size / 2, dir[1] * size / 2, dir[2] * size / 2];
+        const conePos: [number, number, number] = [dir[0] * (size + coneHeight / 2), dir[1] * (size + coneHeight / 2), dir[2] * (size + coneHeight / 2)];
+        const labelPos: [number, number, number] = [dir[0] * (size + coneHeight + 0.12), dir[1] * (size + coneHeight + 0.12), dir[2] * (size + coneHeight + 0.12)];
+        // Rotation for cone: default points up (+Y), rotate to target direction
+        const quat = new THREE.Quaternion();
+        quat.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(...dir).normalize());
+        const euler = new THREE.Euler().setFromQuaternion(quat);
+        return (
+          <group key={label}>
+            {/* Shaft */}
+            <mesh position={mid} rotation={euler}>
+              <cylinderGeometry args={[axisRadius, axisRadius, size, 8]} />
+              <meshStandardMaterial color={color} />
+            </mesh>
+            {/* Arrowhead */}
+            <mesh position={conePos} rotation={euler}>
+              <coneGeometry args={[coneRadius, coneHeight, 12]} />
+              <meshStandardMaterial color={color} />
+            </mesh>
+            {/* Label */}
+            <Text position={labelPos} fontSize={0.12} color={color} fontWeight={700}
+              anchorX="center" anchorY="middle" outlineWidth={0.008} outlineColor="#ffffff">
+              {label}
+            </Text>
+          </group>
+        );
+      })}
+    </group>
+  );
+}
+
 function getWallColor(wallType?: string): string {
   if (!wallType) return FACE_COLORS.pared_default;
   if (wallType.includes('exterior')) return FACE_COLORS.pared_exterior;

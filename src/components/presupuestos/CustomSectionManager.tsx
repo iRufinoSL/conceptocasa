@@ -1488,6 +1488,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
             r={4}
             fill="hsl(var(--primary))"
             opacity={0.8}
+            data-pdf-vertex-label=""
           />
         )}
 

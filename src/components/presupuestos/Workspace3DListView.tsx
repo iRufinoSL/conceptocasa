@@ -452,7 +452,7 @@ export function Workspace3DListView({ workspaces, scaleXY, scaleZ, onClose, onFa
               maxDistance={50}
             />
             <gridHelper args={[10, 20, '#888888', '#cccccc']} />
-            <axesHelper args={[2]} />
+            <OriginAxes size={1.8} />
           </Canvas>
         ) : (
           <div className="flex items-center justify-center h-full text-sm text-muted-foreground">

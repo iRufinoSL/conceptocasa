@@ -856,6 +856,7 @@ export function Workspace3DViewer({ name, polygon, height, walls, scaleXY, scale
           />
           <CenteredOrbitControls orbitRef={orbitRef} />
           <gridHelper args={[6, 12, '#888888', '#cccccc']} />
+          <OriginAxes size={1.2} />
         </Canvas>
       </div>
 

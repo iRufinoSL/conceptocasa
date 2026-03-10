@@ -102,6 +102,11 @@
     font-family: 'Nunito Sans', sans-serif;
   }
 
+  strong, b {
+    color: hsl(var(--orange));
+    font-weight: 700;
+  }
+
   html {
     font-family: 'Nunito Sans', sans-serif;
   }

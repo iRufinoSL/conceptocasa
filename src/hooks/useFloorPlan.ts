@@ -1493,13 +1493,15 @@ export function useFloorPlan(budgetId: string) {
     }
   };
 
-  /** Helper to persist corners + manual elevations + custom sections together */
-  const persistCornersData = async (corners: CustomCorner[], elevations: ManualElevation[], sections?: any[]) => {
+  /** Helper to persist corners + manual elevations + custom sections + ridgeLine together */
+  const persistCornersData = async (corners: CustomCorner[], elevations: ManualElevation[], sections?: any[], ridge?: RidgeLine | null) => {
     if (!floorPlan) return;
     const sects = sections ?? customSections;
+    const rl = ridge !== undefined ? ridge : ridgeLine;
     // Store as wrapper object if there's any extra data; otherwise keep plain array for backward compat
-    const payload = (elevations.length > 0 || sects.length > 0)
-      ? { corners, manualElevations: elevations, customSections: sects }
+    const hasExtra = elevations.length > 0 || sects.length > 0 || rl != null;
+    const payload = hasExtra
+      ? { corners, manualElevations: elevations, customSections: sects, ...(rl ? { ridgeLine: rl } : {}) }
       : corners;
     try {
       const { error } = await supabase
@@ -1533,6 +1535,12 @@ export function useFloorPlan(budgetId: string) {
     if (!floorPlan) return;
     setCustomSectionsState(sections);
     await persistCornersData(customCorners, manualElevations, sections);
+  };
+
+  const updateRidgeLine = async (ridge: RidgeLine | null) => {
+    if (!floorPlan) return;
+    setRidgeLineState(ridge);
+    await persistCornersData(customCorners, manualElevations, undefined, ridge);
   };
 
   return {

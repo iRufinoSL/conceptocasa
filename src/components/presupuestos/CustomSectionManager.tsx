@@ -1691,8 +1691,9 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
 
         {/* Workspace floor polygons for vertical sections */}
         {section.sectionType === 'vertical' && rooms && (() => {
-          const sectionRooms = rooms
-            .filter(r => r.verticalSectionId === section.id && r.floorPolygon && r.floorPolygon.length >= 3);
+          const sectionRooms = isOverview
+            ? rooms.filter(r => r.floorPolygon && r.floorPolygon.length >= 3 && allZSections?.some(s => s.id === r.verticalSectionId))
+            : rooms.filter(r => r.verticalSectionId === section.id && r.floorPolygon && r.floorPolygon.length >= 3);
 
           if (sectionRooms.length === 0) return null;
 

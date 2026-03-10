@@ -1315,7 +1315,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                     // Default: center X, full Y range
                     const defaultX = planData ? planData.width / 2 : 5;
                     const defaultYEnd = planData ? (planData.length || 10) : 10;
-                    onRidgeLineChange({ x1: defaultX, y1: 0, x2: defaultX, y2: defaultYEnd });
+                    onRidgeLineChange({ x1: defaultX, y1: 0, x2: defaultX, y2: defaultYEnd, z: planData ? Math.round((planData.defaultHeight * 1000) / (planData.blockHeightMm || 250)) + 4 : 14 });
                     toast.success('Cumbrera creada — ajusta las coordenadas');
                   }}
                 >

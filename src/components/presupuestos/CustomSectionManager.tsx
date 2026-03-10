@@ -281,7 +281,9 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
   const scaleHm = scaleH / 1000;
   const scaleVm = scaleV / 1000;
 
-  const zoomOptions = [1, 1.5, 2, 2.5, 3];
+  const ZOOM_STEP = 0.25;
+  const ZOOM_MIN = 0.5;
+  const ZOOM_MAX = 4;
 
   // Convert grid coords to SVG pixel coords
   const toSvg = useCallback((gx: number, gy: number) => ({

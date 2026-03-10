@@ -2485,7 +2485,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
               <rect x={cxSvg - 30} y={cySvg - 10} width={60} height={20} rx={3}
                 fill="hsl(45 100% 50% / 0.85)" className="cursor-pointer"
                 data-pdf-workspace-name=""
-                onClick={() => !isEditingThisPoly && selectSectionPolygon(poly)} />
+                 onClick={() => !isEditingThisPoly && openWorkspacePropsFromPoly(poly)} />
               <text x={cxSvg} y={cySvg - 1} textAnchor="middle" fontSize={fontSize} fontWeight={700}
                 fill="hsl(0 0% 10%)" className="pointer-events-none select-none"
                 data-pdf-workspace-name=""

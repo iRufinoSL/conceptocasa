@@ -379,6 +379,7 @@ function Scene({ plan, rooms }: { plan: FloorPlanData; rooms: RoomData[] }) {
         </group>
       ))}
       <Roof plan={plan} rooms={rooms} />
+      <InfiniteAxes3D labelDistance={Math.max(bounds.w, bounds.l) * 0.3} />
       <OrbitControls
         target={[bounds.cx, plan.defaultHeight / 2, bounds.cz]}
         maxPolarAngle={Math.PI / 2.1}

@@ -2583,7 +2583,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
   );
 }
 
-export function CustomSectionManager({ sectionType, sections, onSectionsChange, scaleConfig, wallProjectionsBySection, rooms, budgetName }: CustomSectionManagerProps) {
+export function CustomSectionManager({ sectionType, sections, onSectionsChange, scaleConfig, wallProjectionsBySection, rooms, budgetName, onNavigateToWallSection, forcedVisibleGridId }: CustomSectionManagerProps) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState('');
   const [newAxisValue, setNewAxisValue] = useState('0');

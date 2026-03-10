@@ -639,12 +639,12 @@ const Landing = () => {
               className="space-y-6"
             >
               <span className="text-sm text-primary font-semibold uppercase tracking-widest">Contacto</span>
-              <h2 className="text-3xl md:text-4xl font-bold text-foreground">
+               <h2 className="text-3xl md:text-4xl font-bold text-foreground">
                 Hablemos de tu{" "}
-                <span className="font-display italic text-primary">ilusión</span>
+                <span className="font-display italic text-primary">idea</span>
               </h2>
               <p className="text-muted-foreground text-lg">
-                Cada casa que construimos empieza con una conversación. Cuéntanos tu sueño 
+                Cada casa que construimos empieza con una conversación. Cuéntanos tu idea y visión 
                 y te ayudaremos a convertirlo en un hogar saludable, eficiente y hecho solo para ti.
               </p>
 

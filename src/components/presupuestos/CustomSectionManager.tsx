@@ -464,27 +464,43 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
   }, [scaleH, scaleV]);
 
   // ── Double-click on wall number → navigate to the section containing this wall ──
-  const handleWallDoubleClick = useCallback((
+  const wallClickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
+  const handleWallNumberClick = useCallback((
     room: RoomData,
     wallIndex: number,
     vertexA: { x: number; y: number },
     vertexB: { x: number; y: number },
+    svgMidX: number,
+    svgMidY: number,
   ) => {
-    if (!onNavigateToWallSection) return;
-    const dxGrid = Math.abs(vertexB.x - vertexA.x);
-    const dyGrid = Math.abs(vertexB.y - vertexA.y);
-    const isHorizontal = dxGrid >= dyGrid;
-    const edgeAxisValue = isHorizontal
-      ? Math.round((vertexA.y + vertexB.y) / 2)
-      : Math.round((vertexA.x + vertexB.x) / 2);
-    onNavigateToWallSection({
-      roomId: room.id,
-      roomName: room.name,
-      wallIndex,
-      isHorizontal,
-      edgeAxisValue,
-    });
-  }, [onNavigateToWallSection]);
+    if (wallClickTimerRef.current) {
+      // Second click within 300ms → navigate
+      clearTimeout(wallClickTimerRef.current);
+      wallClickTimerRef.current = null;
+      if (!onNavigateToWallSection) return;
+      const dxGrid = Math.abs(vertexB.x - vertexA.x);
+      const dyGrid = Math.abs(vertexB.y - vertexA.y);
+      const isHorizontal = dxGrid >= dyGrid;
+      const edgeAxisValue = isHorizontal
+        ? Math.round((vertexA.y + vertexB.y) / 2)
+        : Math.round((vertexA.x + vertexB.x) / 2);
+      onNavigateToWallSection({
+        roomId: room.id,
+        roomName: room.name,
+        wallIndex,
+        isHorizontal,
+        edgeAxisValue,
+        sourceSectionType: section.sectionType,
+      });
+    } else {
+      // First click → wait 300ms then do single-click action
+      wallClickTimerRef.current = setTimeout(() => {
+        wallClickTimerRef.current = null;
+        handleWallEdgeClick(room, wallIndex, vertexA, vertexB, svgMidX, svgMidY);
+      }, 300);
+    }
+  }, [onNavigateToWallSection, handleWallEdgeClick, section.sectionType]);
 
   // Assign wall to an existing section → auto-generate rectangle
   const assignWallToSection = useCallback((targetSectionId: string) => {

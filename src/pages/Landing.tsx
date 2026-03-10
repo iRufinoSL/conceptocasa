@@ -227,6 +227,7 @@ const Landing = () => {
               <button onClick={() => scrollToSection('inicio')} className="text-sm text-muted-foreground hover:text-primary transition-colors">Inicio</button>
               <button onClick={() => scrollToSection('filosofia')} className="text-sm text-muted-foreground hover:text-primary transition-colors">Filosofía</button>
               <button onClick={() => scrollToSection('pilares')} className="text-sm text-muted-foreground hover:text-primary transition-colors">Salud y Hogar</button>
+              <Link to="/sistema-constructivo" className="text-sm text-muted-foreground hover:text-primary transition-colors">Sistema Constructivo</Link>
               <button onClick={() => scrollToSection('compromiso')} className="text-sm text-muted-foreground hover:text-primary transition-colors">Tu Proyecto</button>
               <button onClick={() => scrollToSection('proceso')} className="text-sm text-muted-foreground hover:text-primary transition-colors">Proceso</button>
               <button onClick={() => scrollToSection('contacto')} className="text-sm text-muted-foreground hover:text-primary transition-colors">Contacto</button>
@@ -251,6 +252,7 @@ const Landing = () => {
                 <button onClick={() => scrollToSection('inicio')} className="text-left text-sm text-muted-foreground hover:text-primary">Inicio</button>
                 <button onClick={() => scrollToSection('filosofia')} className="text-left text-sm text-muted-foreground hover:text-primary">Filosofía</button>
                 <button onClick={() => scrollToSection('pilares')} className="text-left text-sm text-muted-foreground hover:text-primary">Salud y Hogar</button>
+                <Link to="/sistema-constructivo" className="text-left text-sm text-muted-foreground hover:text-primary">Sistema Constructivo</Link>
                 <button onClick={() => scrollToSection('compromiso')} className="text-left text-sm text-muted-foreground hover:text-primary">Tu Proyecto</button>
                 <button onClick={() => scrollToSection('proceso')} className="text-left text-sm text-muted-foreground hover:text-primary">Proceso</button>
                 <button onClick={() => scrollToSection('contacto')} className="text-left text-sm text-muted-foreground hover:text-primary">Contacto</button>

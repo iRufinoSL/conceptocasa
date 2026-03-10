@@ -27,6 +27,7 @@ import SmsRedirect from "./pages/SmsRedirect";
 import NotFound from "./pages/NotFound";
 import FloorPlanPopout from "./pages/FloorPlanPopout";
 import Soluciones from "./pages/Soluciones";
+import SistemaConstructivo from "./pages/SistemaConstructivo";
 import Brain from "./pages/Brain";
 
 const queryClient = new QueryClient();
@@ -53,6 +54,7 @@ const App = () => {
             <Route path="/install" element={<Install />} />
             <Route path="/r/:type/:id" element={<SmsRedirect />} />
             <Route path="/soluciones" element={<Soluciones />} />
+            <Route path="/sistema-constructivo" element={<SistemaConstructivo />} />
             <Route path="/floorplan-popout" element={<ProtectedRoute appName="presupuestos"><FloorPlanPopout /></ProtectedRoute>} />
             
             {/* Protected routes - require authentication */}

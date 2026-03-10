@@ -13,6 +13,7 @@ import casaHormigonCelular from "@/assets/casa-hormigon-celular.jpg";
 import detalleSip from "@/assets/detalle-sip.jpg";
 import detalleLsf from "@/assets/detalle-lsf.jpg";
 import detalleHormigonCelular from "@/assets/detalle-hormigon-celular.jpg";
+import bloqueSystem3e from "@/assets/bloque-system3e.jpg";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 30 },

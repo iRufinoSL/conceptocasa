@@ -503,7 +503,7 @@ const Landing = () => {
                     forma de generar confianza.
                   </p>
                   <ul className="space-y-2 text-sm text-muted-foreground">
-                    <li className="flex items-center gap-2"><Sparkles className="w-4 h-4 text-primary" /> Ilusión y visión de futuro</li>
+                    <li className="flex items-center gap-2"><Sparkles className="w-4 h-4 text-primary" /> Idea y visión de futuro</li>
                     <li className="flex items-center gap-2"><Sparkles className="w-4 h-4 text-primary" /> Experiencia demostrada</li>
                     <li className="flex items-center gap-2"><Sparkles className="w-4 h-4 text-primary" /> Conocimiento sin reservas</li>
                   </ul>

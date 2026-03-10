@@ -778,6 +778,20 @@ const Landing = () => {
                     {isSubmitting ? <><Loader2 className="w-4 h-4 animate-spin" /> Enviando...</> : <>Enviar mensaje <ArrowRight className="w-4 h-4" /></>}
                   </Button>
                 </form>
+
+                <div className="mt-6 pt-6 border-t border-border/50 text-center">
+                  <p className="text-sm text-muted-foreground mb-3">¿Ya sabes lo que necesitas? Cuéntanos los detalles de tu vivienda ideal.</p>
+                  <Button 
+                    className="bg-orange hover:bg-orange/90 text-orange-foreground gap-2 w-full"
+                    onClick={() => {
+                      trackButtonClick('housing_profile_contact');
+                      setShowHousingForm(true);
+                    }}
+                  >
+                    <Home className="w-4 h-4" />
+                    Perfil de la vivienda
+                  </Button>
+                </div>
               </Card>
             </motion.div>
           </div>

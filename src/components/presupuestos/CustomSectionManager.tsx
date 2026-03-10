@@ -2592,6 +2592,16 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
   const [editAxisValue, setEditAxisValue] = useState('0');
   const [visibleGridId, setVisibleGridId] = useState<string | null>(null);
 
+  // React to forced navigation from parent
+  React.useEffect(() => {
+    if (forcedVisibleGridId) {
+      const matchesThisType = filtered.some(s => s.id === forcedVisibleGridId);
+      if (matchesThisType) {
+        setVisibleGridId(forcedVisibleGridId);
+      }
+    }
+  }, [forcedVisibleGridId]);
+
   const axisConfig = AXIS_MAP[sectionType];
   const filtered = sections.filter(s => s.sectionType === sectionType);
 

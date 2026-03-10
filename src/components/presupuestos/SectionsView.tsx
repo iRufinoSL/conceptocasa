@@ -488,6 +488,12 @@ function Workspace3DWireframe({ rooms, floors, planData, scaleConfig, ridgeLine 
       allPoints.push(project(bv.x, bv.y, v.zTopM));
     });
   });
+  // Include ridge endpoints in viewBox calculation
+  if (ridgeLine) {
+    const rz = (ridgeLine.z ?? 0) * scaleZm;
+    allPoints.push(project(ridgeLine.x1 * scaleXm, ridgeLine.y1 * scaleYm, rz));
+    allPoints.push(project(ridgeLine.x2 * scaleXm, ridgeLine.y2 * scaleYm, rz));
+  }
 
   const minPx = Math.min(...allPoints.map(p => p.px)) - 40;
   const maxPx = Math.max(...allPoints.map(p => p.px)) + 40;
@@ -601,9 +607,9 @@ function Workspace3DWireframe({ rooms, floors, planData, scaleConfig, ridgeLine 
 
           {/* Ridge line in 3D */}
           {ridgeLine && (() => {
-            const maxZm = Math.max(...volumes.map(v => v.zTopM), 2);
-            const p1 = project(ridgeLine.x1 * scaleXm, ridgeLine.y1 * scaleYm, maxZm);
-            const p2 = project(ridgeLine.x2 * scaleXm, ridgeLine.y2 * scaleYm, maxZm);
+            const ridgeZm = (ridgeLine.z ?? 0) * scaleZm;
+            const p1 = project(ridgeLine.x1 * scaleXm, ridgeLine.y1 * scaleYm, ridgeZm);
+            const p2 = project(ridgeLine.x2 * scaleXm, ridgeLine.y2 * scaleYm, ridgeZm);
             const mid = { px: (p1.px + p2.px) / 2, py: (p1.py + p2.py) / 2 };
             return (
               <g className="pointer-events-none">

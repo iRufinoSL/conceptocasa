@@ -328,6 +328,18 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
     setShowPlacementDialog(proj.workspaceId);
   };
 
+  // Open workspace properties panel (single click on polygon fill)
+  const openWorkspaceProps = (proj: SectionWallProjection) => {
+    if (onOpenWorkspaceProperties) {
+      onOpenWorkspaceProperties({
+        workspaceId: proj.workspaceId,
+        workspaceName: proj.workspaceName,
+        sectionType: section.sectionType,
+        sectionName: section.name,
+      });
+    }
+  };
+
   // Start editing with automatic placement (use default polygon)
   const startAutomatic = (workspaceId: string) => {
     const proj = wallProjections?.find(p => p.workspaceId === workspaceId);

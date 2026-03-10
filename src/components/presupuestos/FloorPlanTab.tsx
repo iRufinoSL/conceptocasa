@@ -814,6 +814,7 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
     addFloor, updateFloor, deleteFloor,
     addBlockGroup, deleteBlockGroup, updateBlockGroup, shiftGrid,
     customSections, updateCustomSections,
+    ridgeLine, updateRidgeLine,
   } = useFloorPlan(budgetId);
 
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);

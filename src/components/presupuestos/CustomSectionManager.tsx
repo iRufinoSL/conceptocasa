@@ -208,9 +208,11 @@ interface SectionGridProps {
   /** Configurable ridge line */
   ridgeLine?: import('@/hooks/useFloorPlan').RidgeLine | null;
   onRidgeLineChange?: (ridge: import('@/hooks/useFloorPlan').RidgeLine | null) => void;
+  /** Open workspace properties panel */
+  onOpenWorkspaceProperties?: (info: { workspaceId: string; workspaceName: string; sectionType: string; sectionName: string }) => void;
 }
 
-function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections, allSections, onSectionsChange, onNavigateToWallSection, planData, isOverview, allZSections, ridgeLine, onRidgeLineChange }: SectionGridProps) {
+function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections, allSections, onSectionsChange, onNavigateToWallSection, planData, isOverview, allZSections, ridgeLine, onRidgeLineChange, onOpenWorkspaceProperties }: SectionGridProps) {
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const [gridMin, setGridMin] = useState(GRID_MIN);

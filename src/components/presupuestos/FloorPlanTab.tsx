@@ -1289,6 +1289,7 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin, onNavigateTo3
           onCustomSectionsChange={updateCustomSections}
           ridgeLine={ridgeLine}
           onRidgeLineChange={updateRidgeLine}
+          onNavigateTo3D={onNavigateTo3D}
           onRefresh={async () => { await refetch(); }}
           focusWallId={elevationReturnContext?.wallId}
           renderSelectedRoom={selectedRoom && planData ? () => {

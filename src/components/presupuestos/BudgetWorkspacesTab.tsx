@@ -2022,6 +2022,14 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
   const [wallPanelRoomName, setWallPanelRoomName] = useState('');
   const [wallPanelRoomId, setWallPanelRoomId] = useState<string | null>(null);
 
+  // Auto-show 3D list when navigated from Plano > Vista 3D
+  useEffect(() => {
+    if (autoShow3D) {
+      setShow3DList(true);
+      onAutoShow3DHandled?.();
+    }
+  }, [autoShow3D, onAutoShow3DHandled]);
+
   const { data: floorPlan } = useQuery({
     queryKey: ['floor-plan-for-workspaces', budgetId],
     queryFn: async () => {

@@ -61,6 +61,10 @@ interface CustomSectionManagerProps {
   wallProjectionsBySection?: Map<string, SectionWallProjection[]>;
   rooms?: RoomData[];
   budgetName?: string;
+  /** Navigate to the section that contains a wall (double-click on wall number) */
+  onNavigateToWallSection?: (wallInfo: { roomId: string; roomName: string; wallIndex: number; isHorizontal: boolean; edgeAxisValue: number }) => void;
+  /** Force this section's grid to be visible (set externally for navigation) */
+  forcedVisibleGridId?: string | null;
 }
 
 const AXIS_MAP: Record<string, { axis: 'X' | 'Y' | 'Z'; label: string; placeholder: string }> = {

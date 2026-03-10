@@ -162,7 +162,7 @@ export function GridPdfExport({ title, subtitle, containerRef, size = 'sm', hAxi
       }
 
       // Generous padding to include all external measurement lines
-      const cropPad = 50;
+      const cropPad = 65;
       cropTop = Math.max(0, cropTop - cropPad);
       cropLeft = Math.max(0, cropLeft - cropPad);
       cropRight = Math.min(canvas.width, cropRight + cropPad);

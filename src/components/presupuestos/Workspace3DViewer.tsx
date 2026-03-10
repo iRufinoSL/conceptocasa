@@ -634,16 +634,7 @@ function FaceEditPanel({ data, onClose, onSave, onVertexSave, onNavigateTo2D }: 
             </div>
           ))}
         </div>
-        {onVertexSave && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-5 text-[9px] mt-1"
-            onClick={() => onVertexSave(editVerts)}
-          >
-            Aplicar vértices
-          </Button>
-        )}
+        {/* Vertex save is now integrated into main Guardar button */}
       </div>
 
       {/* Wall type selector (only for paredes) */}
@@ -694,10 +685,20 @@ function FaceEditPanel({ data, onClose, onSave, onVertexSave, onNavigateTo2D }: 
           size="sm"
           className="h-6 text-[10px]"
           onClick={() => {
-            onSave({
-              wallType: data.faceType === 'pared' ? wallType : undefined,
-              height: data.faceType === 'pared' ? parseFloat(heightVal) || undefined : undefined,
-            });
+            // Check if vertices were modified
+            const vertsChanged = editVerts.some((v, i) => 
+              v.x !== data.vertices[i]?.x || v.y !== data.vertices[i]?.y || v.z !== data.vertices[i]?.z
+            );
+            // Save vertex changes first (this updates wall heights from Z coords)
+            if (vertsChanged && onVertexSave) {
+              onVertexSave(editVerts);
+            } else {
+              // Only save wallType/height if no vertex changes
+              onSave({
+                wallType: data.faceType === 'pared' ? wallType : undefined,
+                height: data.faceType === 'pared' ? parseFloat(heightVal) || undefined : undefined,
+              });
+            }
             onClose();
           }}
         >

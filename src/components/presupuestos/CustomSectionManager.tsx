@@ -934,7 +934,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
           <rect x={sx - 25} y={sy + 10} width={50} height={14} rx={3}
             fill="hsl(45 100% 50% / 0.85)"
             className={isEditingThis ? '' : 'cursor-pointer'}
-            onClick={() => !isEditingThis && selectWorkspace(proj)}
+             onClick={() => !isEditingThis && openWorkspaceProps(proj)}
           />
           <text x={sx} y={sy + 19} textAnchor="middle" fontSize={fontSize} fontWeight={700}
             fill="hsl(0 0% 10%)" className="pointer-events-none select-none"

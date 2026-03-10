@@ -2789,6 +2789,7 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
                 wallProjections={wallProjectionsBySection?.get(section.id)}
                 allSections={sections}
                 onSectionsChange={onSectionsChange}
+                onNavigateToWallSection={onNavigateToWallSection}
               />
             )}
           </div>

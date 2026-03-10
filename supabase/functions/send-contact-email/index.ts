@@ -30,6 +30,23 @@ function getCorsHeaders(origin: string | null): Record<string, string> {
   };
 }
 
+interface FloorData {
+  planta: number;
+  m2: string;
+  habPequenas: string;
+  habMedianas: string;
+  habGrandes: string;
+  banosMedianos: string;
+  banosGrandes: string;
+  salonM2: string;
+  cocina: string;
+  despensaM2: string;
+  lavanderiaM2: string;
+  porcheTechadoM2: string;
+  patioSinTechoM2: string;
+  terrazasM2: string;
+}
+
 interface ContactEmailRequest {
   name: string;
   email: string;
@@ -48,7 +65,7 @@ interface ContactEmailRequest {
   formaGeometrica?: string;
   tipoTejado?: string;
   usoBajoCubierta?: string;
-  // Per-floor room types
+  // Per-floor room types (legacy)
   planta1HabPequenas?: string;
   planta1HabMedianas?: string;
   planta1HabGrandes?: string;
@@ -58,6 +75,8 @@ interface ContactEmailRequest {
   planta3HabPequenas?: string;
   planta3HabMedianas?: string;
   planta3HabGrandes?: string;
+  // New per-floor data
+  floorsData?: FloorData[];
   numHabitacionesTotal?: string;
   numHabitacionesConBano?: string;
   numBanosTotal?: string;
@@ -113,7 +132,31 @@ function checkRateLimit(ip: string): { allowed: boolean; remaining: number } {
   return { allowed: true, remaining: RATE_LIMIT_MAX - record.count };
 }
 
-// HTML entity encoding to prevent XSS
+// Build per-floor HTML for emails
+function buildFloorsHtml(floorsData: FloorData[] | undefined, requestData: any): string {
+  if (!floorsData || floorsData.length === 0) return '';
+  
+  return floorsData.map(floor => {
+    const cocinaLabel = floor.cocina === 'separada' ? 'Separada' : floor.cocina === 'junto-salon' ? 'Junto a salón' : 'No especificada';
+    return `
+      <div style="background-color: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; margin: 8px 0;">
+        <h4 style="color: #E97A2B; margin: 0 0 8px 0; font-size: 14px;">Planta ${floor.planta}</h4>
+        ${floor.m2 ? `<p style="margin: 2px 0; font-size: 13px;"><strong>M²:</strong> ${escapeHtml(floor.m2)}</p>` : ''}
+        <p style="margin: 2px 0; font-size: 13px;"><strong>Habitaciones:</strong> ${floor.habGrandes || 0} grandes, ${floor.habMedianas || 0} medianas, ${floor.habPequenas || 0} pequeñas</p>
+        <p style="margin: 2px 0; font-size: 13px;"><strong>Baños:</strong> ${floor.banosMedianos || 0} medianos, ${floor.banosGrandes || 0} grandes</p>
+        ${floor.salonM2 ? `<p style="margin: 2px 0; font-size: 13px;"><strong>Salón:</strong> ${escapeHtml(floor.salonM2)} m²</p>` : ''}
+        <p style="margin: 2px 0; font-size: 13px;"><strong>Cocina:</strong> ${cocinaLabel}</p>
+        ${floor.despensaM2 ? `<p style="margin: 2px 0; font-size: 13px;"><strong>Despensa:</strong> ${escapeHtml(floor.despensaM2)} m²</p>` : ''}
+        ${floor.lavanderiaM2 ? `<p style="margin: 2px 0; font-size: 13px;"><strong>Lavandería:</strong> ${escapeHtml(floor.lavanderiaM2)} m²</p>` : ''}
+        ${floor.porcheTechadoM2 ? `<p style="margin: 2px 0; font-size: 13px;"><strong>Porche techado:</strong> ${escapeHtml(floor.porcheTechadoM2)} m²</p>` : ''}
+        ${floor.patioSinTechoM2 ? `<p style="margin: 2px 0; font-size: 13px;"><strong>Patio sin techo:</strong> ${escapeHtml(floor.patioSinTechoM2)} m²</p>` : ''}
+        ${floor.terrazasM2 ? `<p style="margin: 2px 0; font-size: 13px;"><strong>Terrazas:</strong> ${escapeHtml(floor.terrazasM2)} m²</p>` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+
 function escapeHtml(text: string): string {
   const map: { [key: string]: string } = {
     '&': '&amp;',
@@ -333,18 +376,40 @@ const handler = async (req: Request): Promise<Response> => {
       if (requestData.m2Planta3) m2PorPlantaParts.push(`Planta 3: ${requestData.m2Planta3}`);
       const m2PorPlanta = m2PorPlantaParts.length > 0 ? m2PorPlantaParts.join(', ') : null;
       
-      // Build espacios_detalle JSONB with per-floor room types and bajo cubierta
+      // Build espacios_detalle JSONB with per-floor data
       const espaciosDetalle: Record<string, any> = {
         usoBajoCubierta: requestData.usoBajoCubierta || null,
         plantas: {} as Record<string, any>,
       };
       const numPlantasInt = parseInt(requestData.numPlantas || '0') || 0;
-      for (let i = 1; i <= Math.min(numPlantasInt, 3); i++) {
-        espaciosDetalle.plantas[`planta${i}`] = {
-          habPequenas: parseInt((requestData as any)[`planta${i}HabPequenas`] || '0') || 0,
-          habMedianas: parseInt((requestData as any)[`planta${i}HabMedianas`] || '0') || 0,
-          habGrandes: parseInt((requestData as any)[`planta${i}HabGrandes`] || '0') || 0,
-        };
+      
+      // Use new floorsData if available, otherwise fall back to legacy fields
+      if (requestData.floorsData && requestData.floorsData.length > 0) {
+        for (const floor of requestData.floorsData) {
+          espaciosDetalle.plantas[`planta${floor.planta}`] = {
+            m2: floor.m2 || null,
+            habPequenas: parseInt(floor.habPequenas || '0') || 0,
+            habMedianas: parseInt(floor.habMedianas || '0') || 0,
+            habGrandes: parseInt(floor.habGrandes || '0') || 0,
+            banosMedianos: parseInt(floor.banosMedianos || '0') || 0,
+            banosGrandes: parseInt(floor.banosGrandes || '0') || 0,
+            salonM2: floor.salonM2 || null,
+            cocina: floor.cocina || null,
+            despensaM2: floor.despensaM2 || null,
+            lavanderiaM2: floor.lavanderiaM2 || null,
+            porcheTechadoM2: floor.porcheTechadoM2 || null,
+            patioSinTechoM2: floor.patioSinTechoM2 || null,
+            terrazasM2: floor.terrazasM2 || null,
+          };
+        }
+      } else {
+        for (let i = 1; i <= Math.min(numPlantasInt, 3); i++) {
+          espaciosDetalle.plantas[`planta${i}`] = {
+            habPequenas: parseInt((requestData as any)[`planta${i}HabPequenas`] || '0') || 0,
+            habMedianas: parseInt((requestData as any)[`planta${i}HabMedianas`] || '0') || 0,
+            habGrandes: parseInt((requestData as any)[`planta${i}HabGrandes`] || '0') || 0,
+          };
+        }
       }
 
       const { error: profileError } = await supabase
@@ -579,50 +644,39 @@ ${requestData.message || 'Sin mensaje adicional'}
                   
                   const adminHousingProfileHtml = `
                     <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                      <h2 style="color: #333; margin-bottom: 16px; border-bottom: 2px solid #ddd; padding-bottom: 8px;">📋 Perfil de Vivienda Recibido</h2>
+                      <h2 style="color: #E97A2B; margin-bottom: 16px; border-bottom: 2px solid #E97A2B; padding-bottom: 8px;">📋 Perfil de Vivienda Recibido</h2>
                       
-                      <h3 style="color: #555; margin-top: 16px;">👤 Datos de Contacto</h3>
+                      <h3 style="color: #E97A2B; margin-top: 16px;">👤 Datos de Contacto</h3>
                       <p style="margin: 4px 0;"><strong>Nombre:</strong> ${safeName}</p>
                       <p style="margin: 4px 0;"><strong>Email:</strong> ${safeEmail}</p>
                       <p style="margin: 4px 0;"><strong>Teléfono:</strong> ${safePhone}</p>
                       
-                      <h3 style="color: #555; margin-top: 16px;">📍 Ubicación</h3>
+                      <h3 style="color: #E97A2B; margin-top: 16px;">📍 Ubicación</h3>
                       <p style="margin: 4px 0;"><strong>Población:</strong> ${escapeHtml(poblacion || 'No especificado')}</p>
                       <p style="margin: 4px 0;"><strong>Provincia:</strong> ${escapeHtml(provincia || 'No especificado')}</p>
                       ${requestData.tieneTerreno ? `<p style="margin: 4px 0;"><strong>Dispone de terreno:</strong> ${escapeHtml(requestData.tieneTerreno)}</p>` : ''}
                       ${requestData.coordenadasGoogleMaps ? `<p style="margin: 4px 0;"><strong>Coordenadas:</strong> ${escapeHtml(requestData.coordenadasGoogleMaps)}</p>` : ''}
                       ${requestData.googleMapsUrl ? `<p style="margin: 4px 0;"><strong>URL Google Maps:</strong> <a href="${escapeHtml(requestData.googleMapsUrl)}">${escapeHtml(requestData.googleMapsUrl)}</a></p>` : ''}
                       
-                      <h3 style="color: #555; margin-top: 16px;">🏗️ Estructura</h3>
+                      <h3 style="color: #E97A2B; margin-top: 16px;">🏗️ Estructura</h3>
                       <p style="margin: 4px 0;"><strong>Número de plantas:</strong> ${escapeHtml(requestData.numPlantas || 'No especificado')}</p>
-                      ${requestData.m2Planta1 ? `<p style="margin: 4px 0;"><strong>M² planta 1:</strong> ${escapeHtml(requestData.m2Planta1)}</p>` : ''}
-                      ${requestData.m2Planta2 ? `<p style="margin: 4px 0;"><strong>M² planta 2:</strong> ${escapeHtml(requestData.m2Planta2)}</p>` : ''}
-                      ${requestData.m2Planta3 ? `<p style="margin: 4px 0;"><strong>M² planta 3:</strong> ${escapeHtml(requestData.m2Planta3)}</p>` : ''}
                       <p style="margin: 4px 0;"><strong>Forma geométrica:</strong> ${escapeHtml(requestData.formaGeometrica || 'No especificado')}</p>
                       <p style="margin: 4px 0;"><strong>Tipo de tejado:</strong> ${escapeHtml(requestData.tipoTejado || 'No especificado')}</p>
                       
-                      <h3 style="color: #555; margin-top: 16px;">🛏️ Distribución</h3>
-                      <p style="margin: 4px 0;"><strong>Total habitaciones:</strong> ${escapeHtml(requestData.numHabitacionesTotal || 'No especificado')}</p>
-                      <p style="margin: 4px 0;"><strong>Habitaciones con baño:</strong> ${escapeHtml(requestData.numHabitacionesConBano || 'No especificado')}</p>
-                      <p style="margin: 4px 0;"><strong>Habitaciones con vestidor:</strong> ${escapeHtml(requestData.numHabitacionesConVestidor || 'No especificado')}</p>
-                      <p style="margin: 4px 0;"><strong>Total baños:</strong> ${escapeHtml(requestData.numBanosTotal || 'No especificado')}</p>
-                      <p style="margin: 4px 0;"><strong>Tipo de salón:</strong> ${escapeHtml(requestData.tipoSalon || 'No especificado')}</p>
-                      <p style="margin: 4px 0;"><strong>Tipo de cocina:</strong> ${escapeHtml(requestData.tipoCocina || 'No especificado')}</p>
-                      ${requestData.lavanderia ? `<p style="margin: 4px 0;"><strong>Lavandería:</strong> ${escapeHtml(requestData.lavanderia)}</p>` : ''}
-                      ${requestData.despensa ? `<p style="margin: 4px 0;"><strong>Despensa:</strong> ${escapeHtml(requestData.despensa)}</p>` : ''}
+                      <h3 style="color: #E97A2B; margin-top: 16px;">🏠 Distribución por Planta</h3>
+                      ${buildFloorsHtml(requestData.floorsData, requestData)}
                       
-                      <h3 style="color: #555; margin-top: 16px;">🌳 Espacios Exteriores</h3>
-                      ${requestData.porcheCubierto ? `<p style="margin: 4px 0;"><strong>Porche cubierto:</strong> ${escapeHtml(requestData.porcheCubierto)}</p>` : ''}
-                      ${requestData.patioDescubierto ? `<p style="margin: 4px 0;"><strong>Patio descubierto:</strong> ${escapeHtml(requestData.patioDescubierto)}</p>` : ''}
+                      <h3 style="color: #E97A2B; margin-top: 16px;">🌳 Otros Espacios</h3>
                       ${requestData.garaje ? `<p style="margin: 4px 0;"><strong>Garaje:</strong> ${escapeHtml(requestData.garaje)}</p>` : ''}
+                      ${requestData.inclinacionTerreno ? `<p style="margin: 4px 0;"><strong>Inclinación del terreno:</strong> ${escapeHtml(requestData.inclinacionTerreno)}</p>` : ''}
                       
-                      <h3 style="color: #555; margin-top: 16px;">🎨 Estilo y Presupuesto</h3>
+                      <h3 style="color: #E97A2B; margin-top: 16px;">🎨 Estilo y Presupuesto</h3>
                       <p style="margin: 4px 0;"><strong>Estilos preferidos:</strong> ${escapeHtml(estilos)}</p>
                       <p style="margin: 4px 0;"><strong>Presupuesto global:</strong> ${escapeHtml(requestData.presupuestoGlobal || 'No especificado')}</p>
                       ${requestData.fechaIdealFinalizacion ? `<p style="margin: 4px 0;"><strong>Fecha ideal finalización:</strong> ${escapeHtml(requestData.fechaIdealFinalizacion)}</p>` : ''}
                       
                       ${requestData.message ? `
-                      <h3 style="color: #555; margin-top: 16px;">💬 Mensaje Adicional</h3>
+                      <h3 style="color: #E97A2B; margin-top: 16px;">💬 Mensaje Adicional</h3>
                       <p style="margin: 4px 0;">${safeMessage}</p>
                       ` : ''}
                     </div>
@@ -763,43 +817,32 @@ ${requestData.message || 'Sin mensaje adicional'}
         
         housingProfileHtml = `
           <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
-            <h2 style="color: #333; margin-bottom: 16px; border-bottom: 2px solid #ddd; padding-bottom: 8px;">📋 Tu Perfil de Vivienda</h2>
+            <h2 style="color: #E97A2B; margin-bottom: 16px; border-bottom: 2px solid #E97A2B; padding-bottom: 8px;">📋 Tu Perfil de Vivienda</h2>
             
-            <h3 style="color: #555; margin-top: 16px;">📍 Ubicación</h3>
+            <h3 style="color: #E97A2B; margin-top: 16px;">📍 Ubicación</h3>
             <p style="margin: 4px 0;"><strong>Población:</strong> ${escapeHtml(poblacion || 'No especificado')}</p>
             <p style="margin: 4px 0;"><strong>Provincia:</strong> ${escapeHtml(provincia || 'No especificado')}</p>
             ${requestData.tieneTerreno ? `<p style="margin: 4px 0;"><strong>Dispone de terreno:</strong> ${escapeHtml(requestData.tieneTerreno)}</p>` : ''}
             
-            <h3 style="color: #555; margin-top: 16px;">🏗️ Estructura</h3>
+            <h3 style="color: #E97A2B; margin-top: 16px;">🏗️ Estructura</h3>
             <p style="margin: 4px 0;"><strong>Número de plantas:</strong> ${escapeHtml(requestData.numPlantas || 'No especificado')}</p>
-            ${requestData.m2Planta1 ? `<p style="margin: 4px 0;"><strong>M² planta 1:</strong> ${escapeHtml(requestData.m2Planta1)}</p>` : ''}
-            ${requestData.m2Planta2 ? `<p style="margin: 4px 0;"><strong>M² planta 2:</strong> ${escapeHtml(requestData.m2Planta2)}</p>` : ''}
-            ${requestData.m2Planta3 ? `<p style="margin: 4px 0;"><strong>M² planta 3:</strong> ${escapeHtml(requestData.m2Planta3)}</p>` : ''}
             <p style="margin: 4px 0;"><strong>Forma geométrica:</strong> ${escapeHtml(requestData.formaGeometrica || 'No especificado')}</p>
             <p style="margin: 4px 0;"><strong>Tipo de tejado:</strong> ${escapeHtml(requestData.tipoTejado || 'No especificado')}</p>
             
-            <h3 style="color: #555; margin-top: 16px;">🛏️ Distribución</h3>
-            <p style="margin: 4px 0;"><strong>Total habitaciones:</strong> ${escapeHtml(requestData.numHabitacionesTotal || 'No especificado')}</p>
-            <p style="margin: 4px 0;"><strong>Habitaciones con baño:</strong> ${escapeHtml(requestData.numHabitacionesConBano || 'No especificado')}</p>
-            <p style="margin: 4px 0;"><strong>Habitaciones con vestidor:</strong> ${escapeHtml(requestData.numHabitacionesConVestidor || 'No especificado')}</p>
-            <p style="margin: 4px 0;"><strong>Total baños:</strong> ${escapeHtml(requestData.numBanosTotal || 'No especificado')}</p>
-            <p style="margin: 4px 0;"><strong>Tipo de salón:</strong> ${escapeHtml(requestData.tipoSalon || 'No especificado')}</p>
-            <p style="margin: 4px 0;"><strong>Tipo de cocina:</strong> ${escapeHtml(requestData.tipoCocina || 'No especificado')}</p>
-            ${requestData.lavanderia ? `<p style="margin: 4px 0;"><strong>Lavandería:</strong> ${escapeHtml(requestData.lavanderia)}</p>` : ''}
-            ${requestData.despensa ? `<p style="margin: 4px 0;"><strong>Despensa:</strong> ${escapeHtml(requestData.despensa)}</p>` : ''}
+            <h3 style="color: #E97A2B; margin-top: 16px;">🏠 Distribución por Planta</h3>
+            ${buildFloorsHtml(requestData.floorsData, requestData)}
             
-            <h3 style="color: #555; margin-top: 16px;">🌳 Espacios Exteriores</h3>
-            ${requestData.porcheCubierto ? `<p style="margin: 4px 0;"><strong>Porche cubierto:</strong> ${escapeHtml(requestData.porcheCubierto)}</p>` : ''}
-            ${requestData.patioDescubierto ? `<p style="margin: 4px 0;"><strong>Patio descubierto:</strong> ${escapeHtml(requestData.patioDescubierto)}</p>` : ''}
+            <h3 style="color: #E97A2B; margin-top: 16px;">🌳 Otros Espacios</h3>
             ${requestData.garaje ? `<p style="margin: 4px 0;"><strong>Garaje:</strong> ${escapeHtml(requestData.garaje)}</p>` : ''}
+            ${requestData.inclinacionTerreno ? `<p style="margin: 4px 0;"><strong>Inclinación del terreno:</strong> ${escapeHtml(requestData.inclinacionTerreno)}</p>` : ''}
             
-            <h3 style="color: #555; margin-top: 16px;">🎨 Estilo y Presupuesto</h3>
+            <h3 style="color: #E97A2B; margin-top: 16px;">🎨 Estilo y Presupuesto</h3>
             <p style="margin: 4px 0;"><strong>Estilos preferidos:</strong> ${escapeHtml(estilos)}</p>
             <p style="margin: 4px 0;"><strong>Presupuesto global:</strong> ${escapeHtml(requestData.presupuestoGlobal || 'No especificado')}</p>
             ${requestData.fechaIdealFinalizacion ? `<p style="margin: 4px 0;"><strong>Fecha ideal finalización:</strong> ${escapeHtml(requestData.fechaIdealFinalizacion)}</p>` : ''}
             
             ${requestData.message ? `
-            <h3 style="color: #555; margin-top: 16px;">💬 Mensaje Adicional</h3>
+            <h3 style="color: #E97A2B; margin-top: 16px;">💬 Mensaje Adicional</h3>
             <p style="margin: 4px 0;">${safeMessage}</p>
             ` : ''}
           </div>

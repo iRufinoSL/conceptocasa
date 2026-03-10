@@ -1655,6 +1655,40 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
           {section.axis}={section.axisValue}
         </text>
 
+        {/* ── Ridge axis (cumbrera) — dashed red line on Z sections ── */}
+        {section.sectionType === 'vertical' && planData && planData.roofType !== 'plana' && (() => {
+          // Ridge runs along the center of X (for dos_aguas: full Y length at X=width/2)
+          const ridgeX = planData.width / 2; // grid units (block count)
+          const hIdx = getHIndex(ridgeX);
+          if (hIdx < 0 || hIdx > gridCount) return null;
+          const ridgeSvgX = margin.left + hIdx * cellSize;
+          const gridTop = margin.top;
+          const gridBottom = margin.top + gridCount * cellSize;
+          const ridgeWidthMm = Math.round(ridgeX * scaleH);
+          return (
+            <g className="pointer-events-none">
+              <line
+                x1={ridgeSvgX} y1={gridTop}
+                x2={ridgeSvgX} y2={gridBottom}
+                stroke="hsl(0 70% 50%)"
+                strokeWidth={1.5}
+                strokeDasharray="8 4"
+                opacity={0.7}
+              />
+              <text
+                x={ridgeSvgX}
+                y={gridTop - 6}
+                textAnchor="middle"
+                fontSize={7}
+                fontWeight={700}
+                fill="hsl(0 70% 45%)"
+              >
+                CUMBRERA X{ridgeX}
+              </text>
+            </g>
+          );
+        })()}
+
         {/* Workspace floor polygons for vertical sections */}
         {section.sectionType === 'vertical' && rooms && (() => {
           const sectionRooms = rooms

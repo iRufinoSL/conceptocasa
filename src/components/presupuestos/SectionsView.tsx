@@ -46,6 +46,7 @@ interface SectionsViewProps {
   onRidgeLineChange?: (ridge: RidgeLine | null) => void;
   renderSelectedRoom?: () => React.ReactNode;
   onRefresh?: () => Promise<void>;
+  onNavigateTo3D?: () => void;
 }
 
 const SECTION_GROUPS = [

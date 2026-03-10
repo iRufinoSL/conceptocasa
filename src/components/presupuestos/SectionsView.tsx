@@ -243,6 +243,7 @@ export function SectionsView(props: SectionsViewProps) {
     new Set(['vertical', 'longitudinal', 'transversal'])
   );
   const [show3D, setShow3D] = useState(false);
+  const [focusSectionId, setFocusSectionId] = useState<string | null>(null);
 
   const toggleGroup = (type: string) => {
     setExpandedGroups(prev => {
@@ -266,6 +267,44 @@ export function SectionsView(props: SectionsViewProps) {
     computeWallProjections(allSections, props.rooms, props.floors, props.planData),
     [allSections, props.rooms, props.floors, props.planData]
   );
+
+  // ── Navigate to a section containing a wall (double-click on wall number) ──
+  const handleNavigateToWallSection = useCallback((wallInfo: {
+    roomId: string; roomName: string; wallIndex: number;
+    isHorizontal: boolean; edgeAxisValue: number;
+  }) => {
+    // Horizontal walls (along X) → longitudinal (Y) sections
+    // Vertical walls (along Y) → transversal (X) sections
+    const targetType = wallInfo.isHorizontal ? 'longitudinal' : 'transversal';
+    const candidates = allSections.filter(s => s.sectionType === targetType);
+
+    // Find the closest matching section by axis value
+    let bestSection: CustomSection | null = null;
+    let bestDist = Infinity;
+    for (const s of candidates) {
+      const dist = Math.abs(s.axisValue - wallInfo.edgeAxisValue);
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestSection = s;
+      }
+    }
+
+    if (bestSection && bestDist <= 1) {
+      // Expand the target group and focus the section grid
+      setExpandedGroups(prev => {
+        const next = new Set(prev);
+        next.add(targetType);
+        return next;
+      });
+      setFocusSectionId(bestSection.id);
+      toast.info(`Navegando a P${wallInfo.wallIndex + 1} de "${wallInfo.roomName}" en sección ${wallInfo.isHorizontal ? 'Y' : 'X'}=${bestSection.axisValue}`);
+
+      // Clear focus after a short delay to allow re-triggering
+      setTimeout(() => setFocusSectionId(null), 500);
+    } else {
+      toast.warning(`No hay sección ${wallInfo.isHorizontal ? 'Longitudinal (Y)' : 'Transversal (X)'} para P${wallInfo.wallIndex + 1}. Crea una sección en ${wallInfo.isHorizontal ? 'Y' : 'X'}=${wallInfo.edgeAxisValue}`);
+    }
+  }, [allSections]);
 
   return (
     <div className="space-y-2">
@@ -328,6 +367,8 @@ export function SectionsView(props: SectionsViewProps) {
                   wallProjectionsBySection={wallProjections}
                   rooms={props.rooms}
                   budgetName={props.budgetName}
+                  onNavigateToWallSection={handleNavigateToWallSection}
+                  forcedVisibleGridId={focusSectionId}
                 />
               </div>
             )}

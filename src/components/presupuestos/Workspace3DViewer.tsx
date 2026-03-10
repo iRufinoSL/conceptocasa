@@ -730,24 +730,32 @@ export function Workspace3DViewer({ name, polygon, height, walls, scaleXY, scale
   const [showNodes, setShowNodes] = useState(false);
   const orbitRef = useRef<any>(null);
 
+  // Compute centroid for camera/orbit targeting
+  const centroid = useMemo(() => {
+    if (!polygon || polygon.length < 3) return [0, 0, 0] as [number, number, number];
+    const sMxy = (scaleXY || 625) / 1000;
+    const zScaleBlocks = (scaleZ || 250) / 1000;
+    const zBaseM = zBase * zScaleBlocks;
+    const cx = polygon.reduce((s, v) => s + v.x * sMxy, 0) / polygon.length;
+    const cz = polygon.reduce((s, v) => s + v.y * sMxy, 0) / polygon.length;
+    const avgTopH = walls.length > 0
+      ? walls.reduce((s, w) => s + (w.height != null ? w.height : height), 0) / walls.length
+      : height;
+    const topZ = zBase + Math.round(avgTopH / zScaleBlocks);
+    const cy = (zBaseM + topZ * zScaleBlocks) / 2;
+    return [cx, cy, cz] as [number, number, number];
+  }, [polygon, height, walls, scaleXY, scaleZ, zBase]);
+
   const handleNodeDrag = useCallback((vertexIndex: number, isTop: boolean, newPos: THREE.Vector3) => {
     if (!onVertexEdit) return;
     const zScaleBlocks = scaleZ / 1000;
-    const sMxy = (scaleXY || 625) / 1000;
-    
-    // Recompute centered offset
-    const base = polygon.map(v => new THREE.Vector3(v.x * sMxy, 0, v.y * sMxy));
-    const cx = base.reduce((s, v) => s + v.x, 0) / base.length;
-    const cz = base.reduce((s, v) => s + v.z, 0) / base.length;
 
     if (isTop) {
-      // Convert the new Y position back to a Z coordinate change
       const allVerts = polygon.map((v, i) => {
         const wall = walls.find(w => w.wall_index === i + 1);
         const hM = wall?.height != null ? wall.height : height;
         const zTopVal = zBase + Math.round(hM / zScaleBlocks);
         if (i === vertexIndex) {
-          // New height from dragged Y position
           const newZTop = zBase + Math.round(newPos.y / zScaleBlocks);
           return { x: v.x, y: v.y, z: newZTop };
         }
@@ -770,6 +778,9 @@ export function Workspace3DViewer({ name, polygon, height, walls, scaleXY, scale
     : 'space-y-2';
 
   const canvasHeight = isFullscreen ? 'flex-1' : 'h-80';
+
+  // Camera offset from centroid
+  const camPos: [number, number, number] = [centroid[0] + 3, centroid[1] + 3, centroid[2] + 3];
 
   return (
     <div className={containerClass}>
@@ -797,7 +808,7 @@ export function Workspace3DViewer({ name, polygon, height, walls, scaleXY, scale
         </div>
       </div>
       <div className={`${canvasHeight} rounded-lg border bg-gradient-to-b from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 overflow-hidden`}>
-        <Canvas camera={{ position: [3, 3, 3], fov: 50 }}>
+        <Canvas camera={{ position: camPos, fov: 50 }}>
           <ambientLight intensity={0.6} />
           <directionalLight position={[5, 8, 5]} intensity={0.8} />
           <directionalLight position={[-3, 4, -3]} intensity={0.3} />
@@ -816,8 +827,8 @@ export function Workspace3DViewer({ name, polygon, height, walls, scaleXY, scale
             onNodeDrag={handleNodeDrag}
             orbitRef={orbitRef}
           />
-          <CenteredOrbitControls orbitRef={orbitRef} />
-          <gridHelper args={[6, 12, '#888888', '#cccccc']} />
+          <CenteredOrbitControls orbitRef={orbitRef} target={centroid} />
+          <gridHelper args={[20, 40, '#888888', '#cccccc']} />
           <InfiniteAxes3D labelDistance={1.2} />
         </Canvas>
       </div>

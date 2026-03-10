@@ -349,6 +349,7 @@ export function SectionsView(props: SectionsViewProps) {
           floors={props.floors}
           planData={props.planData}
           scaleConfig={scaleConfig}
+          ridgeLine={props.ridgeLine}
         />
       )}
 

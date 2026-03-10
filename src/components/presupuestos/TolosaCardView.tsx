@@ -266,6 +266,7 @@ export function TolosaCardView({
         <div
           className={`rounded-xl border-2 ${palette.border} ${palette.bg} min-w-[200px] max-w-[280px] cursor-pointer hover:shadow-lg transition-all relative select-none group/card ${isFocused ? 'ring-2 ring-primary shadow-lg' : ''}`}
           onClick={(e) => { if (!isEditing) handleCardClick(e, item); }}
+          onDoubleClick={(e) => { if (!isEditing && hasChildren) { e.stopPropagation(); setDrillRootId(item.id); setFocusedId(item.id); } }}
         >
           {/* Header */}
           <div className={`flex items-center justify-between gap-1 px-2.5 py-1.5 rounded-t-[10px] ${palette.header}`}>

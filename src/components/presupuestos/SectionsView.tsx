@@ -488,6 +488,12 @@ function Workspace3DWireframe({ rooms, floors, planData, scaleConfig, ridgeLine 
       allPoints.push(project(bv.x, bv.y, v.zTopM));
     });
   });
+  // Include ridge endpoints in viewBox calculation
+  if (ridgeLine) {
+    const rz = (ridgeLine.z ?? 0) * scaleZm;
+    allPoints.push(project(ridgeLine.x1 * scaleXm, ridgeLine.y1 * scaleYm, rz));
+    allPoints.push(project(ridgeLine.x2 * scaleXm, ridgeLine.y2 * scaleYm, rz));
+  }
 
   const minPx = Math.min(...allPoints.map(p => p.px)) - 40;
   const maxPx = Math.max(...allPoints.map(p => p.px)) + 40;

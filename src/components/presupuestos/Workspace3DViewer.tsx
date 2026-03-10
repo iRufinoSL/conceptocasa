@@ -707,8 +707,8 @@ function FaceEditPanel({ data, onClose, onSave, onVertexSave, onNavigateTo2D }: 
   );
 }
 
-/** Custom OrbitControls with centered target and smooth zoom */
-function CenteredOrbitControls({ orbitRef }: { orbitRef: React.RefObject<any> }) {
+/** Custom OrbitControls with dynamic target and smooth zoom */
+function CenteredOrbitControls({ orbitRef, target }: { orbitRef: React.RefObject<any>; target?: [number, number, number] }) {
   return (
     <OrbitControls
       ref={orbitRef}
@@ -719,7 +719,7 @@ function CenteredOrbitControls({ orbitRef }: { orbitRef: React.RefObject<any> })
       panSpeed={0.6}
       minDistance={0.5}
       maxDistance={30}
-      target={[0, 0, 0]}
+      target={target || [0, 0, 0]}
     />
   );
 }

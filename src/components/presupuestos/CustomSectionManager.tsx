@@ -2356,8 +2356,8 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
             const lineLenMm = Math.round(Math.sqrt(((verts[1].x - verts[0].x) * scaleHm) ** 2 + ((verts[1].y - verts[0].y) * scaleVm) ** 2) * 1000);
             return (
               <g key={`sp-${poly.id}`}>
-                <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={color} strokeWidth={isEditingThisPoly ? 3 : 2}
-                  className="cursor-pointer" onClick={() => !isEditingThisPoly && selectSectionPolygon(poly)} />
+                 <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={color} strokeWidth={isEditingThisPoly ? 3 : 2}
+                   className="cursor-pointer" onClick={() => !isEditingThisPoly && openWorkspacePropsFromPoly(poly)} />
                 <text x={mx} y={my - 8} textAnchor="middle" fontSize={fontSize} fontWeight={700} fill={color}
                   className="pointer-events-none select-none">{lineLenMm} mm</text>
                 <rect x={mx - 25} y={my + 3} width={50} height={14} rx={3}

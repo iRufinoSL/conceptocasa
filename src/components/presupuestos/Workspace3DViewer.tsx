@@ -332,33 +332,36 @@ interface PrismModelProps extends Omit<Workspace3DViewerProps, 'name' | 'onFaceE
 function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase = 0, onFaceClick, onFaceDoubleClick, selectedFace, workspaceName, showDraggableNodes, onNodeDrag, orbitRef }: PrismModelProps) {
   const groupRef = useRef<THREE.Group>(null);
 
-  const { baseVerts3D, topVerts3D, heightM, cornerLabels, cx, cz } = useMemo(() => {
+  const { baseVerts3D, topVerts3D, heightM, cornerLabels, centroid } = useMemo(() => {
     const sMxy = scaleXY / 1000;
     const zScaleBlocks = scaleZ / 1000;
     const heightM = height;
+    const zBaseM = zBase * zScaleBlocks;
 
-    const base = polygon.map(v => new THREE.Vector3(v.x * sMxy, 0, v.y * sMxy));
+    // Place vertices at their REAL XYZ positions (no centering)
+    const base = polygon.map(v => new THREE.Vector3(v.x * sMxy, zBaseM, v.y * sMxy));
 
-    const cx = base.reduce((s, v) => s + v.x, 0) / base.length;
-    const cz = base.reduce((s, v) => s + v.z, 0) / base.length;
-    const centered = base.map(v => new THREE.Vector3(v.x - cx, 0, v.z - cz));
-    const top = centered.map((v, i) => {
+    const top = base.map((v, i) => {
       const wall = walls.find(w => w.wall_index === i + 1);
       const h = wall?.height != null ? wall.height : heightM;
-      // Quantize to Z-grid so shared coordinates across workspaces coincide exactly
       const zTopUnits = zBase + Math.round(h / zScaleBlocks);
-      const quantizedH = (zTopUnits - zBase) * zScaleBlocks;
+      const quantizedH = zTopUnits * zScaleBlocks;
       return new THREE.Vector3(v.x, quantizedH, v.z);
     });
+
+    // Centroid for camera targeting
+    const cx = base.reduce((s, v) => s + v.x, 0) / base.length;
+    const cy = (base[0].y + top[0].y) / 2;
+    const cz = base.reduce((s, v) => s + v.z, 0) / base.length;
+
     const labels: { pos: THREE.Vector3; text: string }[] = [];
     const n = polygon.length;
     for (let i = 0; i < n; i++) {
       const vx = polygon[i].x;
       const vy = polygon[i].y;
-      const zBaseLabel = zBase;
       labels.push({
-        pos: new THREE.Vector3(centered[i].x, centered[i].y - 0.05, centered[i].z),
-        text: `(X${vx},Y${vy},Z${zBaseLabel})`,
+        pos: new THREE.Vector3(base[i].x, base[i].y - 0.05, base[i].z),
+        text: `(X${vx},Y${vy},Z${zBase})`,
       });
       const wall = walls.find(w => w.wall_index === i + 1);
       const hM = wall?.height != null ? wall.height : heightM;
@@ -369,7 +372,7 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
       });
     }
 
-    return { baseVerts3D: centered, topVerts3D: top, heightM, cornerLabels: labels, cx, cz };
+    return { baseVerts3D: base, topVerts3D: top, heightM, cornerLabels: labels, centroid: new THREE.Vector3(cx, cy, cz) };
   }, [polygon, height, walls, scaleXY, scaleZ, zBase]);
 
   const faces = useMemo(() => {

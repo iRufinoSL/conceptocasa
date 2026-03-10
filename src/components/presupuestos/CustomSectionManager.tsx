@@ -1207,19 +1207,20 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
           {section.sectionType === 'transversal' && `Vista transversal X=${section.axisValue} — Origen (0,0) abajo-izq`}
         </span>
         <div className="flex items-center gap-1.5 flex-wrap">
-          {/* Zoom controls */}
+          {/* Zoom controls +/- */}
           <div className="flex items-center gap-0.5 border border-border rounded px-1.5 py-0.5">
-            <span className="text-[8px] text-muted-foreground font-medium">Zoom:</span>
-            {zoomOptions.map(z => (
-              <Button
-                key={z}
-                variant={zoomLevel === z ? 'default' : 'ghost'}
-                size="sm"
-                className="h-4 px-1.5 text-[8px] min-w-0"
-                onClick={() => setZoomLevel(z)}
-              >
-                {z}x
-              </Button>
+            <Button variant="ghost" size="sm" className="h-5 w-5 p-0" disabled={zoomLevel <= ZOOM_MIN}
+              onClick={() => setZoomLevel(z => Math.max(ZOOM_MIN, +(z - ZOOM_STEP).toFixed(2)))} title="Reducir zoom">
+              <ZoomOut className="h-3 w-3" />
+            </Button>
+            <span className="text-[9px] font-mono text-muted-foreground min-w-[32px] text-center">{zoomLevel}x</span>
+            <Button variant="ghost" size="sm" className="h-5 w-5 p-0" disabled={zoomLevel >= ZOOM_MAX}
+              onClick={() => setZoomLevel(z => Math.min(ZOOM_MAX, +(z + ZOOM_STEP).toFixed(2)))} title="Ampliar zoom">
+              <ZoomIn className="h-3 w-3" />
+            </Button>
+            {[1, 2, 3].map(z => (
+              <Button key={z} variant={zoomLevel === z ? 'default' : 'ghost'} size="sm"
+                className="h-4 px-1.5 text-[8px] min-w-0" onClick={() => setZoomLevel(z)}>{z}x</Button>
             ))}
           </div>
           {/* Grid range controls */}

@@ -667,7 +667,6 @@ const Landing = () => {
                     <div className="font-medium">+34 690 123 533</div>
                   </div>
                 </a>
-                </a>
               </div>
             </motion.div>
 

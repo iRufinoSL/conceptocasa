@@ -1553,6 +1553,8 @@ export function useFloorPlan(budgetId: string) {
     updateManualElevations,
     customSections,
     updateCustomSections,
+    ridgeLine,
+    updateRidgeLine,
     loading,
     saving,
     createFloorPlan,

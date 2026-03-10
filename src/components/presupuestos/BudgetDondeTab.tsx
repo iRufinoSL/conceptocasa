@@ -50,7 +50,12 @@ export function BudgetDondeTab({ budgetId, budgetName, isAdmin }: BudgetDondeTab
           </CollapsibleTrigger>
           <CollapsibleContent className="pt-4">
             {id === 'plano' && (
-              <FloorPlanTab budgetId={budgetId} budgetName={budgetName} isAdmin={isAdmin} />
+              <FloorPlanTab budgetId={budgetId} budgetName={budgetName} isAdmin={isAdmin}
+                onNavigateTo3D={() => {
+                  setAutoShow3D(true);
+                  setOpenSection('espacios-trabajo');
+                }}
+              />
             )}
             {id === 'areas-trabajo' && (
               <BudgetWorkAreasTab budgetId={budgetId} isAdmin={isAdmin} />

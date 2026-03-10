@@ -2518,6 +2518,16 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
         />
       )}
 
+      {/* Destinations View */}
+      {viewMode === 'destinations' && (
+        <BudgetDestinationsManager
+          budgetId={budgetId}
+          activities={activities.map(a => ({ id: a.id, name: a.name, code: a.code }))}
+          isAdmin={isAdmin}
+          canEdit={permissions.canEdit}
+        />
+      )}
+
       {/* Grouped by Phase View */}
       {viewMode === 'grouped' && (
         <div className="space-y-2">

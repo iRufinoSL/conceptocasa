@@ -164,6 +164,27 @@ interface WallAssignInfo {
   svgMidY: number;
 }
 
+/** Remove degenerate edges: merge vertices closer than threshold grid units */
+function cleanDegenerateVertices(vertices: Array<{ x: number; y: number }>, threshold = 0.01): Array<{ x: number; y: number }> {
+  if (vertices.length < 2) return vertices;
+  const cleaned: Array<{ x: number; y: number }> = [];
+  for (const v of vertices) {
+    const last = cleaned[cleaned.length - 1];
+    if (!last || Math.hypot(v.x - last.x, v.y - last.y) > threshold) {
+      cleaned.push(v);
+    }
+  }
+  // Check last vs first
+  if (cleaned.length > 1) {
+    const first = cleaned[0];
+    const last = cleaned[cleaned.length - 1];
+    if (Math.hypot(last.x - first.x, last.y - first.y) <= threshold) {
+      cleaned.pop();
+    }
+  }
+  return cleaned;
+}
+
 interface SectionGridProps {
   section: CustomSection;
   scaleConfig?: ScaleConfig;
@@ -172,9 +193,10 @@ interface SectionGridProps {
   wallProjections?: SectionWallProjection[];
   allSections?: CustomSection[];
   onSectionsChange?: (sections: CustomSection[]) => void;
+  onNavigateToWallSection?: (wallInfo: { roomId: string; roomName: string; wallIndex: number; isHorizontal: boolean; edgeAxisValue: number }) => void;
 }
 
-function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections, allSections, onSectionsChange }: SectionGridProps) {
+function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections, allSections, onSectionsChange, onNavigateToWallSection }: SectionGridProps) {
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const [gridMin, setGridMin] = useState(GRID_MIN);

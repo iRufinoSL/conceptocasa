@@ -65,14 +65,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setRolesLoading(true);
 
       try {
-        console.log('[auth] Loading roles for user:', userId);
+        if (import.meta.env.DEV) console.log('[auth] Loading roles for user');
         
         const { data: rolesData, error: rolesError } = await supabase
           .from('user_roles')
           .select('role')
           .eq('user_id', userId);
 
-        console.log('[auth] Roles response:', { rolesData, rolesError });
+        if (import.meta.env.DEV) console.log('[auth] Roles response:', { rolesError });
 
         if (!isMounted) return;
 

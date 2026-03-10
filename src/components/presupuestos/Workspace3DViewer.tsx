@@ -557,7 +557,7 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
           orbitRef={orbitRef}
         />
       ))}
-      <axesHelper args={[0.5]} />
+      
     </group>
   );
 }

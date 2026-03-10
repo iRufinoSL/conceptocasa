@@ -13,7 +13,7 @@ import {
   Home, Ruler, Layers, Landmark, PenTool, RulerIcon, FolderOpen,
   CalendarDays, MessageSquare, Calculator, BarChart3, Timer, Settings,
   ArrowUp, ArrowDown, ArrowLeft, ArrowRight, List, LayoutGrid, ShoppingCart, Eye,
-  ArrowLeftCircle
+  ArrowLeftCircle, Search
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { TolosaCardView } from './TolosaCardView';
@@ -157,6 +157,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
   const [previousViewMode, setPreviousViewMode] = useState<'list' | 'cards' | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ item: TolosItem; descendants: TolosItem[] } | null>(null);
   const [graphAddName, setGraphAddName] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
 
   const bumpMeasurementVersion = useCallback((itemId: string) => {
     setMeasurementVersions(prev => ({ ...prev, [itemId]: (prev[itemId] || 0) + 1 }));
@@ -443,16 +444,45 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
   }, [items]);
 
   const isItemVisible = useCallback((item: TolosItem): boolean => {
-    if (!showOnlyExecuted) return true;
-    if (item.is_executed === false) return false;
-    // Check if any ancestor code is inactive (cascading)
-    const codeParts = item.code.split('.');
-    for (let i = codeParts.length - 1; i >= 1; i--) {
-      const parentCode = codeParts.slice(0, i).join('.');
-      if (inactiveCodes.has(parentCode)) return false;
+    if (!showOnlyExecuted) {
+      // still apply search
+    } else {
+      if (item.is_executed === false) return false;
+      // Check if any ancestor code is inactive (cascading)
+      const codeParts = item.code.split('.');
+      for (let i = codeParts.length - 1; i >= 1; i--) {
+        const parentCode = codeParts.slice(0, i).join('.');
+        if (inactiveCodes.has(parentCode)) return false;
+      }
+    }
+    // Search filter
+    if (searchTerm.trim()) {
+      const q = searchTerm.toLowerCase();
+      const fields = [item.code, item.name, item.description, item.address_street, item.address_city, item.address_postal_code, item.address_province, item.cadastral_reference];
+      const matchesSelf = fields.some(f => f && f.toLowerCase().includes(q));
+      // Also show if any descendant matches (so tree isn't broken)
+      if (!matchesSelf) {
+        const hasMatchingDescendant = (parentId: string): boolean => {
+          const children = items.filter(i => i.parent_id === parentId);
+          return children.some(c => {
+            const cf = [c.code, c.name, c.description, c.address_street, c.address_city, c.address_postal_code, c.address_province, c.cadastral_reference];
+            return cf.some(f => f && f.toLowerCase().includes(q)) || hasMatchingDescendant(c.id);
+          });
+        };
+        // Also show if any ancestor matches (so context is preserved)
+        const hasMatchingAncestor = (parentId: string | null): boolean => {
+          if (!parentId) return false;
+          const parent = items.find(i => i.id === parentId);
+          if (!parent) return false;
+          const pf = [parent.code, parent.name, parent.description, parent.address_street, parent.address_city];
+          if (pf.some(f => f && f.toLowerCase().includes(q))) return true;
+          return hasMatchingAncestor(parent.parent_id);
+        };
+        if (!hasMatchingDescendant(item.id) && !hasMatchingAncestor(item.parent_id)) return false;
+      }
     }
     return true;
-  }, [showOnlyExecuted, inactiveCodes]);
+  }, [showOnlyExecuted, inactiveCodes, searchTerm, items]);
 
   const rootItems = items.filter(i => !i.parent_id && isItemVisible(i));
   const getChildren = (parentId: string) => items.filter(i => i.parent_id === parentId && isItemVisible(i));
@@ -1993,6 +2023,20 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
               <LayoutGrid className="h-4 w-4" />
               <span className="hidden sm:inline">Gráfico</span>
             </button>
+          </div>
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar actividades..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="pl-9 h-9 w-48"
+            />
+            {searchTerm && (
+              <button onClick={() => setSearchTerm('')} className="absolute right-2 top-1/2 -translate-y-1/2">
+                <X className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+              </button>
+            )}
           </div>
           <Button onClick={() => { setAddingParentId('root'); setNewName(''); setNewDescription(''); }} className="gap-2">
             <Plus className="h-4 w-4" /> Nuevo QUÉ?

@@ -444,16 +444,45 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
   }, [items]);
 
   const isItemVisible = useCallback((item: TolosItem): boolean => {
-    if (!showOnlyExecuted) return true;
-    if (item.is_executed === false) return false;
-    // Check if any ancestor code is inactive (cascading)
-    const codeParts = item.code.split('.');
-    for (let i = codeParts.length - 1; i >= 1; i--) {
-      const parentCode = codeParts.slice(0, i).join('.');
-      if (inactiveCodes.has(parentCode)) return false;
+    if (!showOnlyExecuted) {
+      // still apply search
+    } else {
+      if (item.is_executed === false) return false;
+      // Check if any ancestor code is inactive (cascading)
+      const codeParts = item.code.split('.');
+      for (let i = codeParts.length - 1; i >= 1; i--) {
+        const parentCode = codeParts.slice(0, i).join('.');
+        if (inactiveCodes.has(parentCode)) return false;
+      }
+    }
+    // Search filter
+    if (searchTerm.trim()) {
+      const q = searchTerm.toLowerCase();
+      const fields = [item.code, item.name, item.description, item.address_street, item.address_city, item.address_postal_code, item.address_province, item.cadastral_reference];
+      const matchesSelf = fields.some(f => f && f.toLowerCase().includes(q));
+      // Also show if any descendant matches (so tree isn't broken)
+      if (!matchesSelf) {
+        const hasMatchingDescendant = (parentId: string): boolean => {
+          const children = items.filter(i => i.parent_id === parentId);
+          return children.some(c => {
+            const cf = [c.code, c.name, c.description, c.address_street, c.address_city, c.address_postal_code, c.address_province, c.cadastral_reference];
+            return cf.some(f => f && f.toLowerCase().includes(q)) || hasMatchingDescendant(c.id);
+          });
+        };
+        // Also show if any ancestor matches (so context is preserved)
+        const hasMatchingAncestor = (parentId: string | null): boolean => {
+          if (!parentId) return false;
+          const parent = items.find(i => i.id === parentId);
+          if (!parent) return false;
+          const pf = [parent.code, parent.name, parent.description, parent.address_street, parent.address_city];
+          if (pf.some(f => f && f.toLowerCase().includes(q))) return true;
+          return hasMatchingAncestor(parent.parent_id);
+        };
+        if (!hasMatchingDescendant(item.id) && !hasMatchingAncestor(item.parent_id)) return false;
+      }
     }
     return true;
-  }, [showOnlyExecuted, inactiveCodes]);
+  }, [showOnlyExecuted, inactiveCodes, searchTerm, items]);
 
   const rootItems = items.filter(i => !i.parent_id && isItemVisible(i));
   const getChildren = (parentId: string) => items.filter(i => i.parent_id === parentId && isItemVisible(i));

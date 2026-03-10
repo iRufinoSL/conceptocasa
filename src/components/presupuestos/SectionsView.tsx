@@ -6,7 +6,7 @@ import { Grid3x3, ArrowLeftRight, ArrowUpDown, AlertTriangle, ChevronDown, Chevr
 import { toast } from 'sonner';
 import { CustomSectionManager, type CustomSection, type ScaleConfig, type SectionWallProjection } from './CustomSectionManager';
 import type { FloorPlanData, RoomData, FloorLevel, WallType } from '@/lib/floor-plan-calculations';
-import type { CustomCorner, ManualElevation } from '@/hooks/useFloorPlan';
+import type { CustomCorner, ManualElevation, RidgeLine } from '@/hooks/useFloorPlan';
 
 interface SectionsViewProps {
   planData: FloorPlanData;

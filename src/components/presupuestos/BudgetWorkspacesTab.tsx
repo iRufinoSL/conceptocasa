@@ -3302,22 +3302,40 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
                           const newHeightM = (vertices[vi].z - zBase3D) * scaleZVal;
                           if (wall) {
                             await supabase.from('budget_floor_plan_walls').update({ height: Math.max(0, newHeightM) }).eq('id', wall.id);
+                          } else {
+                            // Create wall record if it doesn't exist
+                            await supabase.from('budget_floor_plan_walls').insert({
+                              room_id: r.id,
+                              wall_index: wallIdx,
+                              wall_type: 'exterior',
+                              height: Math.max(0, newHeightM),
+                            });
                           }
                         }
                         queryClient.invalidateQueries({ queryKey: ['workspace-walls'] });
                         toast.success('Vértices del techo actualizados — alturas de paredes recalculadas');
                       } else if (faceType === 'pared') {
                         // Wall face has 4 vertices: [base1, base2, top2, top1]
-                        // top vertices (index 2,3) control heights of wall faceIndex and next wall
                         const nextIdx = (faceIndex % (poly?.length || 4)) + 1;
                         const wallCurr = roomWalls.find(w => w.wall_index === faceIndex);
                         const wallNext = roomWalls.find(w => w.wall_index === nextIdx);
-                        // V4 (index 3) = top of current wall vertex, V3 (index 2) = top of next wall vertex
                         if (vertices.length >= 4) {
                           const h1 = (vertices[3].z - zBase3D) * scaleZVal;
                           const h2 = (vertices[2].z - zBase3D) * scaleZVal;
-                          if (wallCurr) await supabase.from('budget_floor_plan_walls').update({ height: Math.max(0, h1) }).eq('id', wallCurr.id);
-                          if (wallNext) await supabase.from('budget_floor_plan_walls').update({ height: Math.max(0, h2) }).eq('id', wallNext.id);
+                          if (wallCurr) {
+                            await supabase.from('budget_floor_plan_walls').update({ height: Math.max(0, h1) }).eq('id', wallCurr.id);
+                          } else {
+                            await supabase.from('budget_floor_plan_walls').insert({
+                              room_id: r.id, wall_index: faceIndex, wall_type: 'exterior', height: Math.max(0, h1),
+                            });
+                          }
+                          if (wallNext) {
+                            await supabase.from('budget_floor_plan_walls').update({ height: Math.max(0, h2) }).eq('id', wallNext.id);
+                          } else {
+                            await supabase.from('budget_floor_plan_walls').insert({
+                              room_id: r.id, wall_index: nextIdx, wall_type: 'exterior', height: Math.max(0, h2),
+                            });
+                          }
                         }
                         queryClient.invalidateQueries({ queryKey: ['workspace-walls'] });
                         toast.success(`Alturas de paredes actualizadas desde vértices`);

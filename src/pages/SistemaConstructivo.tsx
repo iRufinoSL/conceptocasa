@@ -7,7 +7,7 @@ import { ArrowLeft, ArrowRight, Layers, Shield, Zap, Clock, Leaf, Hammer, Thermo
 import sistemaMasSeccion from "@/assets/sistema-mas-seccion.jpg";
 import casaSip from "@/assets/casa-sip.jpg";
 import casaLsf from "@/assets/casa-lsf.jpg";
-import casaAsgard from "@/assets/casa-asgard.jpg";
+
 import casaSystem3e from "@/assets/casa-system3e.jpg";
 import casaHormigonCelular from "@/assets/casa-hormigon-celular.jpg";
 import detalleSip from "@/assets/detalle-sip.jpg";
@@ -57,37 +57,22 @@ const systems: ConstructionSystem[] = [
     id: "lsf",
     name: "LSF",
     fullName: "Light Steel Frame",
-    description: "Estructura de perfiles de acero galvanizado conformados en frío de espesor reducido (0.8-2.5 mm). Sistema ligero, reciclable y de gran precisión dimensional que permite altos niveles de aislamiento.",
+    description: "Estructura basada en perfiles y paneles de acero galvanizado, desde perfiles conformados en frío (0.8-2.5 mm) hasta paneles herméticos de grandes dimensiones (hasta 10 m²) con aislamiento integrado de alta densidad. Sistema ligero (10-30 kg/m²), reciclable, de gran precisión dimensional y alta capacidad de carga estructural. La fabricación industrializada permite integrar canalizaciones eléctricas, fontanería y comunicaciones directamente en los paneles.",
     features: [
-      "Perfiles galvanizados 100% reciclables",
+      "Estructura de acero galvanizado 100% reciclable",
       "Peso un 60% menor que construcción tradicional",
+      "Paneles herméticos con aislamiento integrado de alta densidad",
+      "Grandes dimensiones: hasta 10 m² por panel",
       "Gran precisión dimensional (fabricación CNC)",
-      "Resistente a termitas e insectos",
-      "No se deforma ni contrae con humedad",
-      "Compatible con cualquier acabado exterior"
+      "Integra canalizaciones eléctricas y fontanería en panel",
+      "Protección contra radiación electromagnética (efecto jaula de Faraday)",
+      "Resistente a termitas, insectos y humedad",
+      "Compatible con cualquier acabado exterior",
+      "Construcción rápida, limpia y sin residuos, hasta 5 plantas"
     ],
     houseImage: casaLsf,
     detailImages: [detalleLsf],
     highlight: "60% más ligero"
-  },
-  {
-    id: "asgard",
-    name: "Sistema Asgard",
-    fullName: "Panel de acero con aislamiento de alta densidad",
-    description: "Sistema basado en paneles de estructura de acero galvanizado con aislamiento integrado de alta densidad. Paneles completamente herméticos, de grandes dimensiones (hasta 10 m²), ligeros (10-30 kg/m²) y con alta capacidad de carga estructural. Fabricación industrializada con procesos sofisticados que integran canalizaciones eléctricas, fontanería y comunicaciones.",
-    features: [
-      "Estructura de acero galvanizado reciclable",
-      "Panel hermético con aislamiento integrado",
-      "Ligero: 10-30 kg/m² con alta capacidad de carga",
-      "Grandes dimensiones: hasta 10 m² por panel",
-      "Integra canalizaciones eléctricas y fontanería",
-      "Protección contra radiación electromagnética (jaula de Faraday)",
-      "Construcción rápida, limpia y sin residuos",
-      "Flexible: se adapta a cualquier estilo, hasta 5 plantas"
-    ],
-    houseImage: casaAsgard,
-    detailImages: [],
-    highlight: "Panel acero hermético"
   },
   {
     id: "system3e",

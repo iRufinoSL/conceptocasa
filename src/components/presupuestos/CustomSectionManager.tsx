@@ -196,9 +196,13 @@ interface SectionGridProps {
   allSections?: CustomSection[];
   onSectionsChange?: (sections: CustomSection[]) => void;
   onNavigateToWallSection?: (wallInfo: { roomId: string; roomName: string; wallIndex: number; isHorizontal: boolean; edgeAxisValue: number; sourceSectionType: string }) => void;
+  planData?: import('@/lib/floor-plan-calculations').FloorPlanData;
+  /** If true, show all rooms across all Z sections (overview mode) */
+  isOverview?: boolean;
+  allZSections?: CustomSection[];
 }
 
-function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections, allSections, onSectionsChange, onNavigateToWallSection }: SectionGridProps) {
+function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections, allSections, onSectionsChange, onNavigateToWallSection, planData, isOverview, allZSections }: SectionGridProps) {
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const [gridMin, setGridMin] = useState(GRID_MIN);

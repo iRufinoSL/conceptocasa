@@ -1028,10 +1028,10 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
             <polygon points={points}
               fill={pat ? `url(#wall-pattern-${pat.id})` : hslWithAlpha(color, isEditingThis ? 0.25 : 0.12)}
               stroke="none"
-              className={isEditingThis || isVerticalSection ? '' : 'cursor-pointer'}
-              style={{ pointerEvents: isVerticalSection ? 'none' : undefined }}
-              onClick={() => !isEditingThis && !isVerticalSection && selectWorkspace(proj)}
-            />
+               className={isEditingThis || isVerticalSection ? '' : 'cursor-pointer'}
+               style={{ pointerEvents: isVerticalSection ? 'none' : undefined }}
+               onClick={() => !isEditingThis && !isVerticalSection && openWorkspaceProps(proj)}
+             />
           );
         })()}
 

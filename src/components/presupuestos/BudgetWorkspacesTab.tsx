@@ -1985,7 +1985,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
 
 // ─── Main Component ──────────────────────────────────────────────
 
-export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabProps) {
+export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3DHandled }: BudgetWorkspacesTabProps) {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);

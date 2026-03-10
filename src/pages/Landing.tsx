@@ -309,7 +309,7 @@ const Landing = () => {
             >
               <Button 
                 size="lg" 
-                className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 gap-2"
+                className="bg-orange hover:bg-orange/90 text-orange-foreground px-8 gap-2"
                 onClick={() => scrollToSection('contacto')}
               >
                 Solicita información técnica

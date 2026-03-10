@@ -2894,6 +2894,7 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
               planData={planData}
               isOverview={true}
               allZSections={filtered}
+              ridgeLine={ridgeLine}
             />
           </div>
         );

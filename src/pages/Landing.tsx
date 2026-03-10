@@ -227,6 +227,7 @@ const Landing = () => {
               <button onClick={() => scrollToSection('inicio')} className="text-sm text-muted-foreground hover:text-primary transition-colors">Inicio</button>
               <button onClick={() => scrollToSection('filosofia')} className="text-sm text-muted-foreground hover:text-primary transition-colors">Filosofía</button>
               <button onClick={() => scrollToSection('pilares')} className="text-sm text-muted-foreground hover:text-primary transition-colors">Salud y Hogar</button>
+              <Link to="/sistema-constructivo" className="text-sm text-muted-foreground hover:text-primary transition-colors">Sistema Constructivo</Link>
               <button onClick={() => scrollToSection('compromiso')} className="text-sm text-muted-foreground hover:text-primary transition-colors">Tu Proyecto</button>
               <button onClick={() => scrollToSection('proceso')} className="text-sm text-muted-foreground hover:text-primary transition-colors">Proceso</button>
               <button onClick={() => scrollToSection('contacto')} className="text-sm text-muted-foreground hover:text-primary transition-colors">Contacto</button>

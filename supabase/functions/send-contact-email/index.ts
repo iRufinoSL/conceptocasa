@@ -30,6 +30,23 @@ function getCorsHeaders(origin: string | null): Record<string, string> {
   };
 }
 
+interface FloorData {
+  planta: number;
+  m2: string;
+  habPequenas: string;
+  habMedianas: string;
+  habGrandes: string;
+  banosMedianos: string;
+  banosGrandes: string;
+  salonM2: string;
+  cocina: string;
+  despensaM2: string;
+  lavanderiaM2: string;
+  porcheTechadoM2: string;
+  patioSinTechoM2: string;
+  terrazasM2: string;
+}
+
 interface ContactEmailRequest {
   name: string;
   email: string;
@@ -48,7 +65,7 @@ interface ContactEmailRequest {
   formaGeometrica?: string;
   tipoTejado?: string;
   usoBajoCubierta?: string;
-  // Per-floor room types
+  // Per-floor room types (legacy)
   planta1HabPequenas?: string;
   planta1HabMedianas?: string;
   planta1HabGrandes?: string;
@@ -58,6 +75,8 @@ interface ContactEmailRequest {
   planta3HabPequenas?: string;
   planta3HabMedianas?: string;
   planta3HabGrandes?: string;
+  // New per-floor data
+  floorsData?: FloorData[];
   numHabitacionesTotal?: string;
   numHabitacionesConBano?: string;
   numBanosTotal?: string;

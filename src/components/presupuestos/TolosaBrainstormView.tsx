@@ -13,7 +13,7 @@ import {
   Home, Ruler, Layers, Landmark, PenTool, RulerIcon, FolderOpen,
   CalendarDays, MessageSquare, Calculator, BarChart3, Timer, Settings,
   ArrowUp, ArrowDown, ArrowLeft, ArrowRight, List, LayoutGrid, ShoppingCart, Eye,
-  ArrowLeftCircle
+  ArrowLeftCircle, Search
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { TolosaCardView } from './TolosaCardView';

@@ -157,6 +157,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
   const [previousViewMode, setPreviousViewMode] = useState<'list' | 'cards' | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ item: TolosItem; descendants: TolosItem[] } | null>(null);
   const [graphAddName, setGraphAddName] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
 
   const bumpMeasurementVersion = useCallback((itemId: string) => {
     setMeasurementVersions(prev => ({ ...prev, [itemId]: (prev[itemId] || 0) + 1 }));

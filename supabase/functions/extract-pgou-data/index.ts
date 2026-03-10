@@ -36,6 +36,28 @@ serve(async (req) => {
       );
     }
 
+    // --- Budget ownership verification (when budgetId provided) ---
+    if (budgetId) {
+      const authHeader = req.headers.get('Authorization');
+      if (!authHeader?.startsWith('Bearer ')) {
+        return new Response(JSON.stringify({ success: false, error: 'No autorizado' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const sbUrl = Deno.env.get('SUPABASE_URL')!;
+      const sbAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+      const userClient = createClient(sbUrl, sbAnonKey, { global: { headers: { Authorization: authHeader } } });
+      const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(authHeader.replace('Bearer ', ''));
+      if (claimsError || !claimsData?.claims) {
+        return new Response(JSON.stringify({ success: false, error: 'No autorizado' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const sbServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const adminClient = createClient(sbUrl, sbServiceKey);
+      const { data: accessCheck } = await adminClient.rpc('has_presupuesto_access', { _user_id: claimsData.claims.sub, _presupuesto_id: budgetId });
+      if (!accessCheck) {
+        return new Response(JSON.stringify({ success: false, error: 'Sin acceso a este presupuesto' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+    }
+    // --- End ownership verification ---
+
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
       return new Response(

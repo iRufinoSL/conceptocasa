@@ -19,6 +19,8 @@ import type { CustomSection } from './CustomSectionManager';
 interface BudgetWorkspacesTabProps {
   budgetId: string;
   isAdmin: boolean;
+  autoShow3D?: boolean;
+  onAutoShow3DHandled?: () => void;
 }
 
 interface PolygonVertex {

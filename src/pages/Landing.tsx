@@ -264,6 +264,8 @@ const Landing = () => {
         </div>
       </nav>
 
+      <FloatingTOC />
+
       {/* Hero Section */}
       <section id="inicio" className="relative min-h-screen flex items-center overflow-hidden pt-16">
         <div className="absolute inset-0">

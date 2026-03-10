@@ -408,6 +408,17 @@ const Landing = () => {
               </div>
             </motion.div>
           </div>
+
+          <div className="text-center mt-12">
+            <Button 
+              size="lg" 
+              className="bg-orange hover:bg-orange/90 text-orange-foreground gap-2"
+              onClick={() => scrollToSection('contacto')}
+            >
+              Contacto
+              <ArrowRight className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
       </section>
 
@@ -459,6 +470,17 @@ const Landing = () => {
                 </Card>
               </motion.div>
             ))}
+          </div>
+
+          <div className="text-center mt-12">
+            <Button 
+              size="lg" 
+              className="bg-orange hover:bg-orange/90 text-orange-foreground gap-2"
+              onClick={() => scrollToSection('contacto')}
+            >
+              Contacto
+              <ArrowRight className="w-4 h-4" />
+            </Button>
           </div>
         </div>
       </section>
@@ -541,6 +563,32 @@ const Landing = () => {
               </Card>
             </motion.div>
           </div>
+
+          <div className="flex flex-col sm:flex-row gap-4 justify-center mt-12">
+            <Button 
+              size="lg" 
+              className="bg-orange hover:bg-orange/90 text-orange-foreground gap-2"
+              onClick={() => scrollToSection('contacto')}
+            >
+              Contacto
+              <ArrowRight className="w-4 h-4" />
+            </Button>
+            <Button 
+              size="lg" 
+              variant="outline"
+              className="border-orange/30 text-orange hover:bg-orange/10 gap-2"
+              onClick={() => {
+                toast({
+                  title: "Estamos desarrollando tu acceso",
+                  description: "Pronto tendrás acceso a To.Lo.Sa.systems. Te redirigimos a Contacto.",
+                });
+                setTimeout(() => scrollToSection('contacto'), 1500);
+              }}
+            >
+              <Lock className="w-4 h-4" />
+              Acceso a To.Lo.Sa.systems
+            </Button>
+          </div>
         </div>
       </section>
 
@@ -614,15 +662,14 @@ const Landing = () => {
               </Button>
               <Button
                 size="lg"
-                variant="outline"
-                className="border-primary-foreground/30 text-primary-foreground hover:bg-primary-foreground/10"
+                className="bg-orange hover:bg-orange/90 text-orange-foreground gap-2"
                 onClick={() => {
                   trackButtonClick('housing_profile_cta');
                   setShowHousingForm(true);
                 }}
               >
-                <Home className="w-4 h-4 mr-2" />
-                Define tu vivienda ideal
+                <Home className="w-4 h-4" />
+                Perfil de la vivienda
               </Button>
             </div>
           </motion.div>
@@ -731,6 +778,20 @@ const Landing = () => {
                     {isSubmitting ? <><Loader2 className="w-4 h-4 animate-spin" /> Enviando...</> : <>Enviar mensaje <ArrowRight className="w-4 h-4" /></>}
                   </Button>
                 </form>
+
+                <div className="mt-6 pt-6 border-t border-border/50 text-center">
+                  <p className="text-sm text-muted-foreground mb-3">¿Ya sabes lo que necesitas? Cuéntanos los detalles de tu vivienda ideal.</p>
+                  <Button 
+                    className="bg-orange hover:bg-orange/90 text-orange-foreground gap-2 w-full"
+                    onClick={() => {
+                      trackButtonClick('housing_profile_contact');
+                      setShowHousingForm(true);
+                    }}
+                  >
+                    <Home className="w-4 h-4" />
+                    Perfil de la vivienda
+                  </Button>
+                </div>
               </Card>
             </motion.div>
           </div>

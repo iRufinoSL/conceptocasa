@@ -2,6 +2,7 @@ import { useMemo, useEffect, useState } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, Text } from '@react-three/drei';
 import * as THREE from 'three';
+import { InfiniteAxes3D } from './InfiniteAxes3D';
 import type { FloorPlanData, RoomData } from '@/lib/floor-plan-calculations';
 import { autoClassifyWalls, isExteriorType, isInvisibleType } from '@/lib/floor-plan-calculations';
 
@@ -378,6 +379,7 @@ function Scene({ plan, rooms }: { plan: FloorPlanData; rooms: RoomData[] }) {
         </group>
       ))}
       <Roof plan={plan} rooms={rooms} />
+      <InfiniteAxes3D labelDistance={Math.max(bounds.w, bounds.l) * 0.3} />
       <OrbitControls
         target={[bounds.cx, plan.defaultHeight / 2, bounds.cz]}
         maxPolarAngle={Math.PI / 2.1}

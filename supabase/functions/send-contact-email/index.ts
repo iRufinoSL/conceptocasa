@@ -132,7 +132,31 @@ function checkRateLimit(ip: string): { allowed: boolean; remaining: number } {
   return { allowed: true, remaining: RATE_LIMIT_MAX - record.count };
 }
 
-// HTML entity encoding to prevent XSS
+// Build per-floor HTML for emails
+function buildFloorsHtml(floorsData: FloorData[] | undefined, requestData: any): string {
+  if (!floorsData || floorsData.length === 0) return '';
+  
+  return floorsData.map(floor => {
+    const cocinaLabel = floor.cocina === 'separada' ? 'Separada' : floor.cocina === 'junto-salon' ? 'Junto a salón' : 'No especificada';
+    return `
+      <div style="background-color: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; margin: 8px 0;">
+        <h4 style="color: #E97A2B; margin: 0 0 8px 0; font-size: 14px;">Planta ${floor.planta}</h4>
+        ${floor.m2 ? `<p style="margin: 2px 0; font-size: 13px;"><strong>M²:</strong> ${escapeHtml(floor.m2)}</p>` : ''}
+        <p style="margin: 2px 0; font-size: 13px;"><strong>Habitaciones:</strong> ${floor.habGrandes || 0} grandes, ${floor.habMedianas || 0} medianas, ${floor.habPequenas || 0} pequeñas</p>
+        <p style="margin: 2px 0; font-size: 13px;"><strong>Baños:</strong> ${floor.banosMedianos || 0} medianos, ${floor.banosGrandes || 0} grandes</p>
+        ${floor.salonM2 ? `<p style="margin: 2px 0; font-size: 13px;"><strong>Salón:</strong> ${escapeHtml(floor.salonM2)} m²</p>` : ''}
+        <p style="margin: 2px 0; font-size: 13px;"><strong>Cocina:</strong> ${cocinaLabel}</p>
+        ${floor.despensaM2 ? `<p style="margin: 2px 0; font-size: 13px;"><strong>Despensa:</strong> ${escapeHtml(floor.despensaM2)} m²</p>` : ''}
+        ${floor.lavanderiaM2 ? `<p style="margin: 2px 0; font-size: 13px;"><strong>Lavandería:</strong> ${escapeHtml(floor.lavanderiaM2)} m²</p>` : ''}
+        ${floor.porcheTechadoM2 ? `<p style="margin: 2px 0; font-size: 13px;"><strong>Porche techado:</strong> ${escapeHtml(floor.porcheTechadoM2)} m²</p>` : ''}
+        ${floor.patioSinTechoM2 ? `<p style="margin: 2px 0; font-size: 13px;"><strong>Patio sin techo:</strong> ${escapeHtml(floor.patioSinTechoM2)} m²</p>` : ''}
+        ${floor.terrazasM2 ? `<p style="margin: 2px 0; font-size: 13px;"><strong>Terrazas:</strong> ${escapeHtml(floor.terrazasM2)} m²</p>` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+
 function escapeHtml(text: string): string {
   const map: { [key: string]: string } = {
     '&': '&amp;',

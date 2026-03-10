@@ -449,7 +449,7 @@ const Landing = () => {
                       <h3 className="font-semibold text-foreground text-lg">{pillar.title}</h3>
                       <p className="text-sm text-muted-foreground leading-relaxed">{pillar.description}</p>
                       <div className="pt-2 border-t border-border/50">
-                        <span className="text-2xl font-bold text-primary">{pillar.stat}</span>
+                        <span className="text-2xl font-bold text-orange">{pillar.stat}</span>
                         <span className="text-xs text-muted-foreground ml-2">{pillar.statLabel}</span>
                       </div>
                     </div>

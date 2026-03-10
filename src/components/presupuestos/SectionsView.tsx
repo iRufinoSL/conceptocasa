@@ -41,6 +41,8 @@ interface SectionsViewProps {
   focusWallId?: string;
   customSections?: CustomSection[];
   onCustomSectionsChange?: (sections: CustomSection[]) => void;
+  ridgeLine?: RidgeLine | null;
+  onRidgeLineChange?: (ridge: RidgeLine | null) => void;
   renderSelectedRoom?: () => React.ReactNode;
   onRefresh?: () => Promise<void>;
 }

@@ -1333,46 +1333,61 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
               )}
             </div>
             {hasRidge && (
-              <div className="grid grid-cols-4 gap-1.5">
-                <div>
-                  <label className="text-[8px] text-muted-foreground block">X₁</label>
-                  <Input
-                    type="number"
-                    step="0.1"
-                    className="h-6 text-[10px] px-1"
-                    value={rl.x1}
-                    onChange={e => onRidgeLineChange({ ...rl, x1: parseFloat(e.target.value) || 0 })}
-                  />
+              <div className="space-y-1.5">
+                <div className="grid grid-cols-5 gap-1.5">
+                  <div>
+                    <label className="text-[8px] text-muted-foreground block">X₁</label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      className="h-6 text-[10px] px-1"
+                      value={rl.x1}
+                      onChange={e => onRidgeLineChange({ ...rl, x1: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[8px] text-muted-foreground block">Y₁</label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      className="h-6 text-[10px] px-1"
+                      value={rl.y1}
+                      onChange={e => onRidgeLineChange({ ...rl, y1: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[8px] text-muted-foreground block">X₂</label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      className="h-6 text-[10px] px-1"
+                      value={rl.x2}
+                      onChange={e => onRidgeLineChange({ ...rl, x2: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[8px] text-muted-foreground block">Y₂</label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      className="h-6 text-[10px] px-1"
+                      value={rl.y2}
+                      onChange={e => onRidgeLineChange({ ...rl, y2: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[8px] text-destructive font-semibold block">Z (altura)</label>
+                    <Input
+                      type="number"
+                      step="1"
+                      className="h-6 text-[10px] px-1 border-destructive/40"
+                      value={rl.z}
+                      onChange={e => onRidgeLineChange({ ...rl, z: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="text-[8px] text-muted-foreground block">Y₁</label>
-                  <Input
-                    type="number"
-                    step="0.1"
-                    className="h-6 text-[10px] px-1"
-                    value={rl.y1}
-                    onChange={e => onRidgeLineChange({ ...rl, y1: parseFloat(e.target.value) || 0 })}
-                  />
-                </div>
-                <div>
-                  <label className="text-[8px] text-muted-foreground block">X₂</label>
-                  <Input
-                    type="number"
-                    step="0.1"
-                    className="h-6 text-[10px] px-1"
-                    value={rl.x2}
-                    onChange={e => onRidgeLineChange({ ...rl, x2: parseFloat(e.target.value) || 0 })}
-                  />
-                </div>
-                <div>
-                  <label className="text-[8px] text-muted-foreground block">Y₂</label>
-                  <Input
-                    type="number"
-                    step="0.1"
-                    className="h-6 text-[10px] px-1"
-                    value={rl.y2}
-                    onChange={e => onRidgeLineChange({ ...rl, y2: parseFloat(e.target.value) || 0 })}
-                  />
+                <div className="text-[8px] text-muted-foreground">
+                  Altura Z: {rl.z} bloques = {Math.round(rl.z * (scaleConfig?.scaleZ || 250))} mm
                 </div>
               </div>
             )}

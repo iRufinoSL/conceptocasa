@@ -138,6 +138,7 @@ export function useFloorPlan(budgetId: string) {
   const [customCorners, setCustomCornersState] = useState<CustomCorner[]>([]);
   const [manualElevations, setManualElevationsState] = useState<ManualElevation[]>([]);
   const [customSections, setCustomSectionsState] = useState<any[]>([]);
+  const [ridgeLine, setRidgeLineState] = useState<RidgeLine | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, _setSaving] = useState(false);
   const savingRef = useRef(false);

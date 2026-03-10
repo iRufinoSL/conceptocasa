@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { motion } from "framer-motion";
 import { ArrowLeft, ArrowRight, Layers, Shield, Zap, Clock, Leaf, Hammer, ThermometerSun, Weight } from "lucide-react";
 
-import sistemaMasPoliterm from "@/assets/sistema-mas-politerm.jpg";
+import sistemaMasSeccion from "@/assets/sistema-mas-seccion.jpg";
 import casaSip from "@/assets/casa-sip.jpg";
 import casaLsf from "@/assets/casa-lsf.jpg";
 import casaAsgard from "@/assets/casa-asgard.jpg";

@@ -33,7 +33,6 @@ interface HousingProfileFormProps {
   onOpenChange: (open: boolean) => void;
 }
 
-// Helper to format file size
 const formatFileSize = (bytes: number): string => {
   if (bytes === 0) return '0 Bytes';
   const k = 1024;
@@ -42,12 +41,45 @@ const formatFileSize = (bytes: number): string => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 };
 
+interface FloorData {
+  m2: string;
+  habPequenas: string;
+  habMedianas: string;
+  habGrandes: string;
+  banosMedianos: string;
+  banosGrandes: string;
+  salonM2: string;
+  cocina: string;
+  despensaM2: string;
+  lavanderiaM2: string;
+  porcheTechadoM2: string;
+  patioSinTechoM2: string;
+  terrazasM2: string;
+}
+
+const emptyFloor: FloorData = {
+  m2: "",
+  habPequenas: "",
+  habMedianas: "",
+  habGrandes: "",
+  banosMedianos: "",
+  banosGrandes: "",
+  salonM2: "",
+  cocina: "",
+  despensaM2: "",
+  lavanderiaM2: "",
+  porcheTechadoM2: "",
+  patioSinTechoM2: "",
+  terrazasM2: "",
+};
+
+const sectionHeaderClass = "text-lg font-semibold text-orange border-b border-orange/30 pb-2";
+
 const HousingProfileForm = ({ open, onOpenChange }: HousingProfileFormProps) => {
   const { toast } = useToast();
   const { honeypotProps, validateSubmission, recordSubmission, isBlocked, blockReason } = useBotProtection();
   const { trackFormStart, trackFormSubmit } = useWebsiteTracking();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showStyleSelector, setShowStyleSelector] = useState(false);
   const [attachments, setAttachments] = useState<File[]>([]);
   const [isUploadingFiles, setIsUploadingFiles] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -56,34 +88,11 @@ const HousingProfileForm = ({ open, onOpenChange }: HousingProfileFormProps) => 
     email: "",
     phone: "",
     message: "",
-    // Campos específicos del perfil de vivienda
     numPlantas: "",
-    m2Planta1: "",
-    m2Planta2: "",
-    m2Planta3: "",
-    // Habitaciones por planta (pequeñas, medianas, grandes)
-    planta1HabPequenas: "",
-    planta1HabMedianas: "",
-    planta1HabGrandes: "",
-    planta2HabPequenas: "",
-    planta2HabMedianas: "",
-    planta2HabGrandes: "",
-    planta3HabPequenas: "",
-    planta3HabMedianas: "",
-    planta3HabGrandes: "",
+    floors: [{ ...emptyFloor }, { ...emptyFloor }, { ...emptyFloor }] as FloorData[],
     formaGeometrica: "",
     tipoTejado: "",
     usoBajoCubierta: "",
-    numHabitacionesTotal: "",
-    numHabitacionesConBano: "",
-    numBanosTotal: "",
-    numHabitacionesConVestidor: "",
-    tipoSalon: "",
-    tipoCocina: "",
-    lavanderia: "",
-    despensa: "",
-    porcheCubierto: "",
-    patioDescubierto: "",
     garaje: "",
     tieneTerreno: "",
     inclinacionTerreno: "",
@@ -104,6 +113,18 @@ const HousingProfileForm = ({ open, onOpenChange }: HousingProfileFormProps) => 
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  const handleFloorChange = (floorIndex: number, field: keyof FloorData, value: string) => {
+    setFormData(prev => {
+      const newFloors = [...prev.floors];
+      newFloors[floorIndex] = { ...newFloors[floorIndex], [field]: value };
+      return { ...prev, floors: newFloors };
+    });
+  };
+
+  const handleFloorSelectChange = (floorIndex: number, field: keyof FloorData, value: string) => {
+    handleFloorChange(floorIndex, field, value);
+  };
+
   const toggleStyle = (styleId: string) => {
     setFormData(prev => ({
       ...prev,
@@ -116,37 +137,24 @@ const HousingProfileForm = ({ open, onOpenChange }: HousingProfileFormProps) => 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
-    
     const newFiles = Array.from(files);
-    const maxSize = 10 * 1024 * 1024; // 10MB
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf', 
+    const maxSize = 10 * 1024 * 1024;
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf',
       'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
-    
     const validFiles = newFiles.filter(file => {
       if (file.size > maxSize) {
-        toast({
-          title: "Archivo demasiado grande",
-          description: `${file.name} excede el límite de 10MB`,
-          variant: "destructive",
-        });
+        toast({ title: "Archivo demasiado grande", description: `${file.name} excede el límite de 10MB`, variant: "destructive" });
         return false;
       }
       if (!allowedTypes.includes(file.type)) {
-        toast({
-          title: "Tipo de archivo no permitido",
-          description: `${file.name} no es un tipo de archivo válido`,
-          variant: "destructive",
-        });
+        toast({ title: "Tipo de archivo no permitido", description: `${file.name} no es un tipo de archivo válido`, variant: "destructive" });
         return false;
       }
       return true;
     });
-    
     setAttachments(prev => [...prev, ...validFiles]);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const removeAttachment = (index: number) => {
@@ -155,25 +163,15 @@ const HousingProfileForm = ({ open, onOpenChange }: HousingProfileFormProps) => 
 
   const uploadAttachments = async (): Promise<string[]> => {
     if (attachments.length === 0) return [];
-    
     setIsUploadingFiles(true);
     const uploadedPaths: string[] = [];
-    
     try {
       for (const file of attachments) {
         const timestamp = Date.now();
         const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
         const filePath = `housing-profile/${timestamp}_${sanitizedName}`;
-        
-        const { error } = await supabase.storage
-          .from('contact-attachments')
-          .upload(filePath, file);
-        
-        if (error) {
-          console.error('Error uploading file:', error);
-          throw error;
-        }
-        
+        const { error } = await supabase.storage.from('contact-attachments').upload(filePath, file);
+        if (error) throw error;
         uploadedPaths.push(filePath);
       }
       return uploadedPaths;
@@ -182,17 +180,28 @@ const HousingProfileForm = ({ open, onOpenChange }: HousingProfileFormProps) => 
     }
   };
 
+  const numPlantas = parseInt(formData.numPlantas) || 0;
+
+  const buildFloorSummary = (floor: FloorData, index: number): string => {
+    const lines: string[] = [`PLANTA ${index + 1}:`];
+    if (floor.m2) lines.push(`- M² por planta: ${floor.m2}`);
+    lines.push(`- Habitaciones: ${floor.habPequenas || 0} pequeñas, ${floor.habMedianas || 0} medianas, ${floor.habGrandes || 0} grandes`);
+    lines.push(`- Baños: ${floor.banosMedianos || 0} medianos, ${floor.banosGrandes || 0} grandes`);
+    if (floor.salonM2) lines.push(`- Salón: ${floor.salonM2} m²`);
+    if (floor.cocina) lines.push(`- Cocina: ${floor.cocina === 'separada' ? 'Separada' : 'Junto a salón'}`);
+    if (floor.despensaM2) lines.push(`- Despensa: ${floor.despensaM2} m²`);
+    if (floor.lavanderiaM2) lines.push(`- Lavandería: ${floor.lavanderiaM2} m²`);
+    if (floor.porcheTechadoM2) lines.push(`- Porche techado: ${floor.porcheTechadoM2} m²`);
+    if (floor.patioSinTechoM2) lines.push(`- Patio sin techo: ${floor.patioSinTechoM2} m²`);
+    if (floor.terrazasM2) lines.push(`- Terrazas: ${floor.terrazasM2} m²`);
+    return lines.join('\n');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    // Bot protection validation
     const validation = validateSubmission();
     if (!validation.isValid) {
-      toast({
-        title: "Error de validación",
-        description: validation.error || "Por favor, inténtalo de nuevo.",
-        variant: "destructive",
-      });
+      toast({ title: "Error de validación", description: validation.error || "Por favor, inténtalo de nuevo.", variant: "destructive" });
       return;
     }
 
@@ -202,6 +211,11 @@ const HousingProfileForm = ({ open, onOpenChange }: HousingProfileFormProps) => 
       .map(id => projectStyles.find(s => s.id === id)?.label)
       .filter(Boolean)
       .join(", ");
+
+    const floorSummaries = [];
+    for (let i = 0; i < numPlantas && i < 3; i++) {
+      floorSummaries.push(buildFloorSummary(formData.floors[i], i));
+    }
 
     const messageBody = `
 PERFIL DE VIVIENDA - SOLICITUD DETALLADA
@@ -213,29 +227,13 @@ DATOS DE CONTACTO:
 
 CARACTERÍSTICAS DE LA VIVIENDA:
 - Número de plantas: ${formData.numPlantas || "No especificado"}
-- M² planta 1: ${formData.m2Planta1 || "No especificado"}${parseInt(formData.numPlantas) >= 2 ? `\n- M² planta 2: ${formData.m2Planta2 || "No especificado"}` : ''}${parseInt(formData.numPlantas) >= 3 ? `\n- M² planta 3: ${formData.m2Planta3 || "No especificado"}` : ''}
 - Forma geométrica de la planta: ${formData.formaGeometrica || "No especificado"}
 - Tipo de tejado: ${formData.tipoTejado || "No especificado"}
 ${(formData.tipoTejado === '2-caidas' || formData.tipoTejado === '4-caidas') ? `- Uso bajo cubierta: ${formData.usoBajoCubierta || "No especificado"}` : ''}
 
-HABITACIONES POR PLANTA:
-${parseInt(formData.numPlantas) >= 1 ? `- Planta 1: ${formData.planta1HabPequenas || 0} pequeñas, ${formData.planta1HabMedianas || 0} medianas, ${formData.planta1HabGrandes || 0} grandes` : ''}
-${parseInt(formData.numPlantas) >= 2 ? `- Planta 2: ${formData.planta2HabPequenas || 0} pequeñas, ${formData.planta2HabMedianas || 0} medianas, ${formData.planta2HabGrandes || 0} grandes` : ''}
-${parseInt(formData.numPlantas) >= 3 ? `- Planta 3: ${formData.planta3HabPequenas || 0} pequeñas, ${formData.planta3HabMedianas || 0} medianas, ${formData.planta3HabGrandes || 0} grandes` : ''}
+${floorSummaries.join('\n\n')}
 
-DISTRIBUCIÓN:
-- Nº habitaciones total: ${formData.numHabitacionesTotal || "No especificado"}
-- Nº habitaciones con baño: ${formData.numHabitacionesConBano || "No especificado"}
-- Nº baños en total: ${formData.numBanosTotal || "No especificado"}
-- Nº habitaciones con vestidor: ${formData.numHabitacionesConVestidor || "No especificado"}
-- Salón: ${formData.tipoSalon || "No especificado"}
-- Cocina: ${formData.tipoCocina || "No especificado"}
-- Lavandería: ${formData.lavanderia || "No especificado"}
-- Despensa: ${formData.despensa || "No especificado"}
-
-ESPACIOS EXTERIORES:
-- Porche cubierto: ${formData.porcheCubierto || "No especificado"}
-- Patio descubierto: ${formData.patioDescubierto || "No especificado"}
+OTROS ESPACIOS:
 - Garaje: ${formData.garaje || "No especificado"}
 - Tiene terreno: ${formData.tieneTerreno || "No especificado"}
 
@@ -257,61 +255,50 @@ ${formData.message || "Sin mensaje adicional"}
     `.trim();
 
     try {
-      // Track form start
       trackFormStart('housing_profile');
-      
-      // Upload attachments first
       const attachmentPaths = await uploadAttachments();
-      
-      // Prepend +34 to phone if not already present
       const phoneWithPrefix = formData.phone.startsWith('+') ? formData.phone : `+34${formData.phone.replace(/\s/g, '')}`;
-      
-      // Get UTM params for CRM tracking
       const utmParams = getStoredUtmParams();
-      
+
+      // Build flat fields for backward compat + new per-floor data
+      const floorsData = formData.floors.slice(0, numPlantas).map((f, i) => ({
+        planta: i + 1,
+        ...f
+      }));
+
       const { error } = await supabase.functions.invoke('send-contact-email', {
         body: {
           name: formData.name,
           email: formData.email,
           phone: phoneWithPrefix,
-          subject: "Perfil de Vivienda - Solicitud Detallada",
+          subject: "Perfil de Vivienda",
           message: messageBody,
-          // Flag to indicate this is a housing profile
           isHousingProfile: true,
-          // Attachments
           attachmentPaths: attachmentPaths.length > 0 ? attachmentPaths : undefined,
           attachmentNames: attachments.length > 0 ? attachments.map(f => f.name) : undefined,
-          // UTM params for CRM tracking
           utm_source: utmParams.utm_source,
           utm_medium: utmParams.utm_medium,
           utm_campaign: utmParams.utm_campaign,
-          // Send all form fields for database storage
+          // Legacy flat fields for backward compat
           numPlantas: formData.numPlantas,
-          m2Planta1: formData.m2Planta1,
-          m2Planta2: formData.m2Planta2,
-          m2Planta3: formData.m2Planta3,
+          m2Planta1: formData.floors[0]?.m2 || "",
+          m2Planta2: formData.floors[1]?.m2 || "",
+          m2Planta3: formData.floors[2]?.m2 || "",
           formaGeometrica: formData.formaGeometrica,
           tipoTejado: formData.tipoTejado,
           usoBajoCubierta: formData.usoBajoCubierta,
-          planta1HabPequenas: formData.planta1HabPequenas,
-          planta1HabMedianas: formData.planta1HabMedianas,
-          planta1HabGrandes: formData.planta1HabGrandes,
-          planta2HabPequenas: formData.planta2HabPequenas,
-          planta2HabMedianas: formData.planta2HabMedianas,
-          planta2HabGrandes: formData.planta2HabGrandes,
-          planta3HabPequenas: formData.planta3HabPequenas,
-          planta3HabMedianas: formData.planta3HabMedianas,
-          planta3HabGrandes: formData.planta3HabGrandes,
-          numHabitacionesTotal: formData.numHabitacionesTotal,
-          numHabitacionesConBano: formData.numHabitacionesConBano,
-          numBanosTotal: formData.numBanosTotal,
-          numHabitacionesConVestidor: formData.numHabitacionesConVestidor,
-          tipoSalon: formData.tipoSalon,
-          tipoCocina: formData.tipoCocina,
-          lavanderia: formData.lavanderia,
-          despensa: formData.despensa,
-          porcheCubierto: formData.porcheCubierto,
-          patioDescubierto: formData.patioDescubierto,
+          planta1HabPequenas: formData.floors[0]?.habPequenas || "",
+          planta1HabMedianas: formData.floors[0]?.habMedianas || "",
+          planta1HabGrandes: formData.floors[0]?.habGrandes || "",
+          planta2HabPequenas: formData.floors[1]?.habPequenas || "",
+          planta2HabMedianas: formData.floors[1]?.habMedianas || "",
+          planta2HabGrandes: formData.floors[1]?.habGrandes || "",
+          planta3HabPequenas: formData.floors[2]?.habPequenas || "",
+          planta3HabMedianas: formData.floors[2]?.habMedianas || "",
+          planta3HabGrandes: formData.floors[2]?.habGrandes || "",
+          // New per-floor fields
+          floorsData: floorsData,
+          // Global fields that remain
           garaje: formData.garaje,
           tieneTerreno: formData.tieneTerreno,
           inclinacionTerreno: formData.inclinacionTerreno,
@@ -320,89 +307,164 @@ ${formData.message || "Sin mensaje adicional"}
           googleMapsUrl: formData.googleMapsUrl,
           presupuestoGlobal: formData.presupuestoGlobal,
           estiloConstructivo: formData.estiloConstructivo,
-          fechaIdealFinalizacion: formData.fechaIdealFinalizacion
+          fechaIdealFinalizacion: formData.fechaIdealFinalizacion,
+          // Remove old global fields - keep them empty for compat
+          numHabitacionesTotal: "",
+          numHabitacionesConBano: "",
+          numBanosTotal: "",
+          numHabitacionesConVestidor: "",
+          tipoSalon: "",
+          tipoCocina: "",
+          lavanderia: "",
+          despensa: "",
+          porcheCubierto: "",
+          patioDescubierto: "",
         }
       });
 
       if (error) throw error;
-
-      // Track form submission
       trackFormSubmit('housing_profile');
-
-      // Record successful submission for rate limiting
       recordSubmission();
 
-      toast({
-        title: "¡Gracias por su información!",
-        description: "Estaremos en contacto pronto.",
-      });
+      toast({ title: "¡Gracias por su información!", description: "Estaremos en contacto pronto." });
 
-      // Reset form
       setFormData({
-        name: "",
-        email: "",
-        phone: "",
-        message: "",
+        name: "", email: "", phone: "", message: "",
         numPlantas: "",
-        m2Planta1: "",
-        m2Planta2: "",
-        m2Planta3: "",
-        planta1HabPequenas: "",
-        planta1HabMedianas: "",
-        planta1HabGrandes: "",
-        planta2HabPequenas: "",
-        planta2HabMedianas: "",
-        planta2HabGrandes: "",
-        planta3HabPequenas: "",
-        planta3HabMedianas: "",
-        planta3HabGrandes: "",
-        formaGeometrica: "",
-        tipoTejado: "",
-        usoBajoCubierta: "",
-        numHabitacionesTotal: "",
-        numHabitacionesConBano: "",
-        numBanosTotal: "",
-        numHabitacionesConVestidor: "",
-        tipoSalon: "",
-        tipoCocina: "",
-        lavanderia: "",
-        despensa: "",
-        porcheCubierto: "",
-        patioDescubierto: "",
-        garaje: "",
-        tieneTerreno: "",
-        inclinacionTerreno: "",
-        poblacionProvincia: "",
-        coordenadasGoogleMaps: "",
-        googleMapsUrl: "",
-        presupuestoGlobal: "",
-        estiloConstructivo: [],
-        fechaIdealFinalizacion: "",
+        floors: [{ ...emptyFloor }, { ...emptyFloor }, { ...emptyFloor }],
+        formaGeometrica: "", tipoTejado: "", usoBajoCubierta: "",
+        garaje: "", tieneTerreno: "", inclinacionTerreno: "",
+        poblacionProvincia: "", coordenadasGoogleMaps: "", googleMapsUrl: "",
+        presupuestoGlobal: "", estiloConstructivo: [], fechaIdealFinalizacion: "",
       });
       setAttachments([]);
       onOpenChange(false);
     } catch (error: any) {
       console.error("Error sending housing profile:", error);
-      toast({
-        title: "Error al enviar",
-        description: error.message || "Hubo un problema al enviar su solicitud. Inténtelo de nuevo.",
-        variant: "destructive",
-      });
+      toast({ title: "Error al enviar", description: error.message || "Hubo un problema al enviar su solicitud.", variant: "destructive" });
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const renderFloorSection = (floorIndex: number) => {
+    const floor = formData.floors[floorIndex];
+    return (
+      <div key={floorIndex} className="p-4 rounded-lg border border-orange/20 bg-orange/5 space-y-4">
+        <p className="font-semibold text-orange">Planta {floorIndex + 1}</p>
+
+        {/* M² */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs font-medium text-foreground">M² por planta</label>
+            <Input
+              value={floor.m2}
+              onChange={(e) => handleFloorChange(floorIndex, 'm2', e.target.value)}
+              className="mt-1 h-8 text-sm"
+              placeholder="Ej: 80"
+              type="number"
+              min="0"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-foreground">Salón m²</label>
+            <Input
+              value={floor.salonM2}
+              onChange={(e) => handleFloorChange(floorIndex, 'salonM2', e.target.value)}
+              className="mt-1 h-8 text-sm"
+              placeholder="Ej: 30"
+              type="number"
+              min="0"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-foreground">Cocina</label>
+            <Select value={floor.cocina} onValueChange={(v) => handleFloorSelectChange(floorIndex, 'cocina', v)}>
+              <SelectTrigger className="mt-1 h-8 text-sm">
+                <SelectValue placeholder="Seleccionar..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="separada">Separada</SelectItem>
+                <SelectItem value="junto-salon">Junto a salón</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {/* Habitaciones */}
+        <div>
+          <label className="text-xs font-medium text-orange">Habitaciones</label>
+          <div className="grid grid-cols-3 gap-3 mt-1">
+            <div>
+              <label className="text-xs text-muted-foreground">Grandes</label>
+              <Input value={floor.habGrandes} onChange={(e) => handleFloorChange(floorIndex, 'habGrandes', e.target.value)} className="mt-1 h-8 text-sm" placeholder="0" type="number" min="0" max="20" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Medianas</label>
+              <Input value={floor.habMedianas} onChange={(e) => handleFloorChange(floorIndex, 'habMedianas', e.target.value)} className="mt-1 h-8 text-sm" placeholder="0" type="number" min="0" max="20" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Pequeñas</label>
+              <Input value={floor.habPequenas} onChange={(e) => handleFloorChange(floorIndex, 'habPequenas', e.target.value)} className="mt-1 h-8 text-sm" placeholder="0" type="number" min="0" max="20" />
+            </div>
+          </div>
+        </div>
+
+        {/* Baños */}
+        <div>
+          <label className="text-xs font-medium text-orange">Baños</label>
+          <div className="grid grid-cols-2 gap-3 mt-1">
+            <div>
+              <label className="text-xs text-muted-foreground">Baño mediano</label>
+              <Input value={floor.banosMedianos} onChange={(e) => handleFloorChange(floorIndex, 'banosMedianos', e.target.value)} className="mt-1 h-8 text-sm" placeholder="0" type="number" min="0" max="10" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Baño grande</label>
+              <Input value={floor.banosGrandes} onChange={(e) => handleFloorChange(floorIndex, 'banosGrandes', e.target.value)} className="mt-1 h-8 text-sm" placeholder="0" type="number" min="0" max="10" />
+            </div>
+          </div>
+        </div>
+
+        {/* Otros espacios de la planta */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className="text-xs font-medium text-foreground">Despensa m²</label>
+            <Input value={floor.despensaM2} onChange={(e) => handleFloorChange(floorIndex, 'despensaM2', e.target.value)} className="mt-1 h-8 text-sm" placeholder="0" type="number" min="0" />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-foreground">Lavandería m²</label>
+            <Input value={floor.lavanderiaM2} onChange={(e) => handleFloorChange(floorIndex, 'lavanderiaM2', e.target.value)} className="mt-1 h-8 text-sm" placeholder="0" type="number" min="0" />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-foreground">Porche techado m²</label>
+            <Input value={floor.porcheTechadoM2} onChange={(e) => handleFloorChange(floorIndex, 'porcheTechadoM2', e.target.value)} className="mt-1 h-8 text-sm" placeholder="0" type="number" min="0" />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-foreground">Patio sin techo m²</label>
+            <Input value={floor.patioSinTechoM2} onChange={(e) => handleFloorChange(floorIndex, 'patioSinTechoM2', e.target.value)} className="mt-1 h-8 text-sm" placeholder="0" type="number" min="0" />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs font-medium text-foreground">Terrazas m²</label>
+            <Input value={floor.terrazasM2} onChange={(e) => handleFloorChange(floorIndex, 'terrazasM2', e.target.value)} className="mt-1 h-8 text-sm" placeholder="0" type="number" min="0" />
+          </div>
+        </div>
+      </div>
+    );
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] p-0">
         <DialogHeader className="p-6 pb-0">
-          <DialogTitle className="text-2xl">Gestión de Proyectos - Perfil de Vivienda</DialogTitle>
+          <DialogTitle className="text-2xl text-orange">Perfil de Vivienda</DialogTitle>
           <DialogDescription>
             Complete los datos de su vivienda ideal y le prepararemos una propuesta personalizada
           </DialogDescription>
         </DialogHeader>
-        
+
         <ScrollArea className="max-h-[calc(90vh-100px)] px-6 pb-6">
           {isBlocked ? (
             <div className="text-center py-8">
@@ -410,69 +472,38 @@ ${formData.message || "Sin mensaje adicional"}
             </div>
           ) : (
           <form onSubmit={handleSubmit} className="space-y-6 pt-4">
-            {/* Honeypot field for bot protection - hidden from users */}
             <input {...honeypotProps} type="text" />
-            
-            {/* Datos de contacto básicos */}
+
+            {/* Datos de contacto */}
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-foreground border-b pb-2">Datos de Contacto</h3>
+              <h3 className={sectionHeaderClass}>Datos de Contacto</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="text-sm font-medium text-foreground">Nombre *</label>
-                  <Input 
-                    name="name"
-                    value={formData.name}
-                    onChange={handleInputChange}
-                    className="mt-1" 
-                    placeholder="Tu nombre completo" 
-                    required 
-                    maxLength={100}
-                  />
+                  <Input name="name" value={formData.name} onChange={handleInputChange} className="mt-1" placeholder="Tu nombre completo" required maxLength={100} />
                 </div>
                 <div>
                   <label className="text-sm font-medium text-foreground">Email *</label>
-                  <Input 
-                    type="email" 
-                    name="email"
-                    value={formData.email}
-                    onChange={handleInputChange}
-                    className="mt-1" 
-                    placeholder="tu@email.com" 
-                    required 
-                    maxLength={255}
-                  />
+                  <Input type="email" name="email" value={formData.email} onChange={handleInputChange} className="mt-1" placeholder="tu@email.com" required maxLength={255} />
                 </div>
                 <div>
                   <label className="text-sm font-medium text-foreground">Teléfono *</label>
                   <div className="flex mt-1">
-                    <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-input bg-muted text-muted-foreground text-sm">
-                      +34
-                    </span>
-                    <Input 
-                      type="tel" 
-                      name="phone"
-                      value={formData.phone}
-                      onChange={handleInputChange}
-                      className="rounded-l-none" 
-                      placeholder="600 000 000" 
-                      required 
-                      maxLength={15}
-                    />
+                    <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-input bg-muted text-muted-foreground text-sm">+34</span>
+                    <Input type="tel" name="phone" value={formData.phone} onChange={handleInputChange} className="rounded-l-none" placeholder="600 000 000" required maxLength={15} />
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Estructura de la vivienda */}
+            {/* Estructura */}
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-foreground border-b pb-2">Estructura de la Vivienda</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <h3 className={sectionHeaderClass}>Estructura de la Vivienda</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="text-sm font-medium text-foreground">¿Cuántas plantas?</label>
                   <Select value={formData.numPlantas} onValueChange={(v) => handleSelectChange("numPlantas", v)}>
-                    <SelectTrigger className="mt-1">
-                      <SelectValue placeholder="Seleccionar..." />
-                    </SelectTrigger>
+                    <SelectTrigger className="mt-1"><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="1">1 planta</SelectItem>
                       <SelectItem value="2">2 plantas</SelectItem>
@@ -480,51 +511,10 @@ ${formData.message || "Sin mensaje adicional"}
                     </SelectContent>
                   </Select>
                 </div>
-                {parseInt(formData.numPlantas) >= 1 && (
-                  <div>
-                    <label className="text-sm font-medium text-foreground">M² habitables planta 1</label>
-                    <Input 
-                      name="m2Planta1"
-                      value={formData.m2Planta1}
-                      onChange={handleInputChange}
-                      className="mt-1" 
-                      placeholder="Ej: 80" 
-                      maxLength={50}
-                    />
-                  </div>
-                )}
-                {parseInt(formData.numPlantas) >= 2 && (
-                  <div>
-                    <label className="text-sm font-medium text-foreground">M² habitables planta 2</label>
-                    <Input 
-                      name="m2Planta2"
-                      value={formData.m2Planta2}
-                      onChange={handleInputChange}
-                      className="mt-1" 
-                      placeholder="Ej: 60" 
-                      maxLength={50}
-                    />
-                  </div>
-                )}
-                {parseInt(formData.numPlantas) >= 3 && (
-                  <div>
-                    <label className="text-sm font-medium text-foreground">M² habitables planta 3</label>
-                    <Input 
-                      name="m2Planta3"
-                      value={formData.m2Planta3}
-                      onChange={handleInputChange}
-                      className="mt-1" 
-                      placeholder="Ej: 40" 
-                      maxLength={50}
-                    />
-                  </div>
-                )}
                 <div>
                   <label className="text-sm font-medium text-foreground">Forma geométrica</label>
                   <Select value={formData.formaGeometrica} onValueChange={(v) => handleSelectChange("formaGeometrica", v)}>
-                    <SelectTrigger className="mt-1">
-                      <SelectValue placeholder="Seleccionar..." />
-                    </SelectTrigger>
+                    <SelectTrigger className="mt-1"><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="cuadrada">Cuadrada</SelectItem>
                       <SelectItem value="rectangular">Rectangular</SelectItem>
@@ -536,9 +526,7 @@ ${formData.message || "Sin mensaje adicional"}
                 <div>
                   <label className="text-sm font-medium text-foreground">Tipo de tejado</label>
                   <Select value={formData.tipoTejado} onValueChange={(v) => handleSelectChange("tipoTejado", v)}>
-                    <SelectTrigger className="mt-1">
-                      <SelectValue placeholder="Seleccionar..." />
-                    </SelectTrigger>
+                    <SelectTrigger className="mt-1"><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="plano">Plano</SelectItem>
                       <SelectItem value="1-caida">1 caída</SelectItem>
@@ -550,68 +538,11 @@ ${formData.message || "Sin mensaje adicional"}
                 </div>
               </div>
 
-              {/* Habitaciones por planta */}
-              {parseInt(formData.numPlantas) >= 1 && (
-                <div className="space-y-3 mt-4">
-                  <p className="text-sm font-medium text-foreground">Tipo y cantidad de habitaciones por planta</p>
-                  
-                  {[1, 2, 3].filter(n => parseInt(formData.numPlantas) >= n).map(planta => (
-                    <div key={planta} className="p-3 rounded-lg border bg-muted/30">
-                      <p className="text-sm font-medium text-foreground mb-2">Planta {planta}</p>
-                      <div className="grid grid-cols-3 gap-3">
-                        <div>
-                          <label className="text-xs text-muted-foreground">Pequeñas</label>
-                          <Input
-                            name={`planta${planta}HabPequenas`}
-                            value={(formData as any)[`planta${planta}HabPequenas`]}
-                            onChange={handleInputChange}
-                            className="mt-1 h-8 text-sm"
-                            placeholder="0"
-                            type="number"
-                            min="0"
-                            max="20"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs text-muted-foreground">Medianas</label>
-                          <Input
-                            name={`planta${planta}HabMedianas`}
-                            value={(formData as any)[`planta${planta}HabMedianas`]}
-                            onChange={handleInputChange}
-                            className="mt-1 h-8 text-sm"
-                            placeholder="0"
-                            type="number"
-                            min="0"
-                            max="20"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs text-muted-foreground">Grandes</label>
-                          <Input
-                            name={`planta${planta}HabGrandes`}
-                            value={(formData as any)[`planta${planta}HabGrandes`]}
-                            onChange={handleInputChange}
-                            className="mt-1 h-8 text-sm"
-                            placeholder="0"
-                            type="number"
-                            min="0"
-                            max="20"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Bajo cubierta - solo si tejado a 2 o 4 caídas */}
               {(formData.tipoTejado === '2-caidas' || formData.tipoTejado === '4-caidas') && (
-                <div className="mt-4">
+                <div>
                   <label className="text-sm font-medium text-foreground">¿Qué hacer con el espacio Bajo Cubierta?</label>
                   <Select value={formData.usoBajoCubierta} onValueChange={(v) => handleSelectChange("usoBajoCubierta", v)}>
-                    <SelectTrigger className="mt-1">
-                      <SelectValue placeholder="Seleccionar..." />
-                    </SelectTrigger>
+                    <SelectTrigger className="mt-1"><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="habitable">Habitable</SelectItem>
                       <SelectItem value="almacenaje">Almacenaje</SelectItem>
@@ -622,171 +553,40 @@ ${formData.message || "Sin mensaje adicional"}
               )}
             </div>
 
-            {/* Distribución */}
+            {/* Distribución por planta */}
+            {numPlantas >= 1 && (
+              <div className="space-y-4">
+                <h3 className={sectionHeaderClass}>Distribución por Planta</h3>
+                <p className="text-sm text-muted-foreground">
+                  Detalle la distribución de cada planta: habitaciones, baños, cocina, salón y espacios complementarios.
+                </p>
+                {Array.from({ length: Math.min(numPlantas, 3) }, (_, i) => renderFloorSection(i))}
+              </div>
+            )}
+
+            {/* Otros espacios */}
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-foreground border-b pb-2">Distribución</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div>
-                  <label className="text-sm font-medium text-foreground">Nº habitaciones total</label>
-                  <Input 
-                    name="numHabitacionesTotal"
-                    value={formData.numHabitacionesTotal}
-                    onChange={handleInputChange}
-                    className="mt-1" 
-                    placeholder="Ej: 4" 
-                    maxLength={50}
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-foreground">Nº habitaciones con baño</label>
-                  <Input 
-                    name="numHabitacionesConBano"
-                    value={formData.numHabitacionesConBano}
-                    onChange={handleInputChange}
-                    className="mt-1" 
-                    placeholder="Ej: 2" 
-                    maxLength={50}
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-foreground">¿Cuántos baños en total?</label>
-                  <Input 
-                    name="numBanosTotal"
-                    value={formData.numBanosTotal}
-                    onChange={handleInputChange}
-                    className="mt-1" 
-                    placeholder="Ej: 3" 
-                    maxLength={50}
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-foreground">Habitaciones con vestidor</label>
-                  <Input 
-                    name="numHabitacionesConVestidor"
-                    value={formData.numHabitacionesConVestidor}
-                    onChange={handleInputChange}
-                    className="mt-1" 
-                    placeholder="Ej: 1" 
-                    maxLength={50}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="text-sm font-medium text-foreground">Salón</label>
-                  <Select value={formData.tipoSalon} onValueChange={(v) => handleSelectChange("tipoSalon", v)}>
-                    <SelectTrigger className="mt-1">
-                      <SelectValue placeholder="Seleccionar..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="con-cocina">Con cocina</SelectItem>
-                      <SelectItem value="separado-cocina">Separado de cocina</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-foreground">Cocina</label>
-                  <Select value={formData.tipoCocina} onValueChange={(v) => handleSelectChange("tipoCocina", v)}>
-                    <SelectTrigger className="mt-1">
-                      <SelectValue placeholder="Seleccionar..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="aislada">Aislada</SelectItem>
-                      <SelectItem value="comedor-independiente">Comedor independiente</SelectItem>
-                      <SelectItem value="con-comedor">Con comedor</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-foreground">Lavandería</label>
-                  <Input 
-                    name="lavanderia"
-                    value={formData.lavanderia}
-                    onChange={handleInputChange}
-                    className="mt-1" 
-                    placeholder="Ej: Sí, 6m²" 
-                    maxLength={100}
-                  />
-                </div>
-              </div>
-
+              <h3 className={sectionHeaderClass}>Otros Espacios</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm font-medium text-foreground">Despensa</label>
-                  <Input 
-                    name="despensa"
-                    value={formData.despensa}
-                    onChange={handleInputChange}
-                    className="mt-1" 
-                    placeholder="Ej: Sí, pequeña" 
-                    maxLength={100}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Espacios exteriores */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-foreground border-b pb-2">Espacios Exteriores</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div>
-                  <label className="text-sm font-medium text-foreground">Porche cubierto</label>
-                  <Input 
-                    name="porcheCubierto"
-                    value={formData.porcheCubierto}
-                    onChange={handleInputChange}
-                    className="mt-1" 
-                    placeholder="Ej: Sí, 20m²" 
-                    maxLength={100}
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-foreground">Patio descubierto</label>
-                  <Input 
-                    name="patioDescubierto"
-                    value={formData.patioDescubierto}
-                    onChange={handleInputChange}
-                    className="mt-1" 
-                    placeholder="Ej: Sí, 30m²" 
-                    maxLength={100}
-                  />
-                </div>
-                <div>
                   <label className="text-sm font-medium text-foreground">Garaje</label>
-                  <Input 
-                    name="garaje"
-                    value={formData.garaje}
-                    onChange={handleInputChange}
-                    className="mt-1" 
-                    placeholder="Ej: 2 plazas" 
-                    maxLength={100}
-                  />
+                  <Input name="garaje" value={formData.garaje} onChange={handleInputChange} className="mt-1" placeholder="Ej: 2 plazas" maxLength={100} />
                 </div>
                 <div>
                   <label className="text-sm font-medium text-foreground">¿Tiene terreno?</label>
-                  <Input 
-                    name="tieneTerreno"
-                    value={formData.tieneTerreno}
-                    onChange={handleInputChange}
-                    className="mt-1" 
-                    placeholder="Ej: Sí, 500m²" 
-                    maxLength={100}
-                  />
+                  <Input name="tieneTerreno" value={formData.tieneTerreno} onChange={handleInputChange} className="mt-1" placeholder="Ej: Sí, 500m²" maxLength={100} />
                 </div>
               </div>
             </div>
 
             {/* Planeidad del terreno */}
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-foreground border-b pb-2">Planeidad del Terreno</h3>
+              <h3 className={sectionHeaderClass}>Planeidad del Terreno</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="text-sm font-medium text-foreground">Inclinación del terreno</label>
                   <Select value={formData.inclinacionTerreno} onValueChange={(v) => handleSelectChange("inclinacionTerreno", v)}>
-                    <SelectTrigger className="mt-1">
-                      <SelectValue placeholder="Seleccionar..." />
-                    </SelectTrigger>
+                    <SelectTrigger className="mt-1"><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="plano">Plano</SelectItem>
                       <SelectItem value="inclinado">Inclinado</SelectItem>
@@ -799,107 +599,60 @@ ${formData.message || "Sin mensaje adicional"}
 
             {/* Ubicación y presupuesto */}
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-foreground border-b pb-2">Ubicación, Presupuesto y Plazo</h3>
+              <h3 className={sectionHeaderClass}>Ubicación, Presupuesto y Plazo</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium text-foreground">¿En qué población o provincia?</label>
-                  <Input 
-                    name="poblacionProvincia"
-                    value={formData.poblacionProvincia}
-                    onChange={handleInputChange}
-                    className="mt-1" 
-                    placeholder="Ej: Santander, Cantabria" 
-                    maxLength={200}
-                  />
+                  <Input name="poblacionProvincia" value={formData.poblacionProvincia} onChange={handleInputChange} className="mt-1" placeholder="Ej: Santander, Cantabria" maxLength={200} />
                 </div>
                 <div>
                   <label className="text-sm font-medium text-foreground">Coordenadas Google Maps</label>
-                  <Input 
-                    name="coordenadasGoogleMaps"
-                    value={formData.coordenadasGoogleMaps}
-                    onChange={handleInputChange}
-                    className="mt-1" 
-                    placeholder="Ej: 43.4623, -3.8099" 
-                    maxLength={100}
-                  />
+                  <Input name="coordenadasGoogleMaps" value={formData.coordenadasGoogleMaps} onChange={handleInputChange} className="mt-1" placeholder="Ej: 43.4623, -3.8099" maxLength={100} />
                 </div>
               </div>
-              <div className="grid grid-cols-1 gap-4">
-                <div>
-                  <label className="text-sm font-medium text-foreground">URL Google Maps</label>
-                  <Input 
-                    name="googleMapsUrl"
-                    value={formData.googleMapsUrl}
-                    onChange={handleInputChange}
-                    className="mt-1" 
-                    placeholder="Ej: https://maps.app.goo.gl/8AdCwzRX1mNpCVPq8" 
-                    maxLength={500}
-                  />
-                </div>
+              <div>
+                <label className="text-sm font-medium text-foreground">URL Google Maps</label>
+                <Input name="googleMapsUrl" value={formData.googleMapsUrl} onChange={handleInputChange} className="mt-1" placeholder="Ej: https://maps.app.goo.gl/..." maxLength={500} />
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium text-foreground">Presupuesto global (incl. impuestos, licencias y proyecto)</label>
-                  <Input 
-                    name="presupuestoGlobal"
-                    value={formData.presupuestoGlobal}
-                    onChange={handleInputChange}
-                    className="mt-1" 
-                    placeholder="Ej: 250.000€" 
-                    maxLength={100}
-                  />
+                  <Input name="presupuestoGlobal" value={formData.presupuestoGlobal} onChange={handleInputChange} className="mt-1" placeholder="Ej: 250.000€" maxLength={100} />
                 </div>
                 <div>
                   <label className="text-sm font-medium text-foreground">Fecha ideal de finalización</label>
-                  <Input 
-                    type="date"
-                    name="fechaIdealFinalizacion"
-                    value={formData.fechaIdealFinalizacion}
-                    onChange={handleInputChange}
-                    className="mt-1" 
-                  />
+                  <Input type="date" name="fechaIdealFinalizacion" value={formData.fechaIdealFinalizacion} onChange={handleInputChange} className="mt-1" />
                 </div>
               </div>
             </div>
 
             {/* Estilo constructivo */}
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-foreground border-b pb-2">Estilo Constructivo Preferido</h3>
+              <h3 className={sectionHeaderClass}>Estilo Constructivo Preferido</h3>
               <p className="text-sm text-muted-foreground">Seleccione los estilos que más le gusten. Puede elegir varios.</p>
-              
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {projectStyles.map((style) => (
-                  <Card 
+                  <Card
                     key={style.id}
                     className={`cursor-pointer overflow-hidden transition-all hover:shadow-lg ${
-                      formData.estiloConstructivo.includes(style.id) 
-                        ? "ring-2 ring-primary" 
-                        : ""
+                      formData.estiloConstructivo.includes(style.id) ? "ring-2 ring-orange" : ""
                     }`}
                     onClick={() => toggleStyle(style.id)}
                   >
                     {style.image ? (
                       <div className="relative h-24">
-                        <img 
-                          src={style.image} 
-                          alt={style.label} 
-                          className="w-full h-full object-cover" 
-                        />
+                        <img src={style.image} alt={style.label} className="w-full h-full object-cover" />
                         {formData.estiloConstructivo.includes(style.id) && (
-                          <div className="absolute inset-0 bg-primary/40 flex items-center justify-center">
-                            <Check className="w-8 h-8 text-primary-foreground" />
+                          <div className="absolute inset-0 bg-orange/40 flex items-center justify-center">
+                            <Check className="w-8 h-8 text-white" />
                           </div>
                         )}
                       </div>
                     ) : (
                       <div className={`h-24 flex items-center justify-center ${
-                        formData.estiloConstructivo.includes(style.id) 
-                          ? "bg-primary/20" 
-                          : "bg-muted"
+                        formData.estiloConstructivo.includes(style.id) ? "bg-orange/20" : "bg-muted"
                       }`}>
-                        {formData.estiloConstructivo.includes(style.id) && (
-                          <Check className="w-8 h-8 text-primary" />
-                        )}
+                        {formData.estiloConstructivo.includes(style.id) && <Check className="w-8 h-8 text-orange" />}
                       </div>
                     )}
                     <div className="p-2 text-center">
@@ -908,105 +661,58 @@ ${formData.message || "Sin mensaje adicional"}
                   </Card>
                 ))}
               </div>
-              
               {formData.estiloConstructivo.length > 0 && (
-                <p className="text-sm text-primary">
-                  Seleccionados: {formData.estiloConstructivo
-                    .map(id => projectStyles.find(s => s.id === id)?.label)
-                    .join(", ")}
+                <p className="text-sm text-orange">
+                  Seleccionados: {formData.estiloConstructivo.map(id => projectStyles.find(s => s.id === id)?.label).join(", ")}
                 </p>
               )}
             </div>
 
             {/* Mensaje adicional */}
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-foreground border-b pb-2">Información Adicional</h3>
+              <h3 className={sectionHeaderClass}>Información Adicional</h3>
               <div>
                 <label className="text-sm font-medium text-foreground">Mensaje (opcional)</label>
-                <Textarea 
-                  name="message"
-                  value={formData.message}
-                  onChange={handleInputChange}
-                  className="mt-1 min-h-[100px]" 
-                  placeholder="¿Algo más que quiera comentarnos sobre su proyecto?" 
-                  maxLength={2000}
-                />
+                <Textarea name="message" value={formData.message} onChange={handleInputChange} className="mt-1 min-h-[100px]" placeholder="¿Algo más que quiera comentarnos sobre su proyecto?" maxLength={2000} />
               </div>
             </div>
 
-            {/* File Attachments Section */}
+            {/* Archivos adjuntos */}
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-foreground border-b pb-2">Archivos Adjuntos (opcional)</h3>
-              <div className="border-2 border-dashed border-primary/30 rounded-lg p-4 bg-primary/5">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.doc,.docx,.xls,.xlsx"
-                  onChange={handleFileSelect}
-                  className="hidden"
-                />
-                
+              <h3 className={sectionHeaderClass}>Archivos Adjuntos (opcional)</h3>
+              <div className="border-2 border-dashed border-orange/30 rounded-lg p-4 bg-orange/5">
+                <input ref={fileInputRef} type="file" multiple accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.doc,.docx,.xls,.xlsx" onChange={handleFileSelect} className="hidden" />
                 {attachments.length === 0 ? (
-                  <div 
-                    className="flex flex-col items-center justify-center py-6 cursor-pointer"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <Paperclip className="h-10 w-10 text-primary/60 mb-3" />
-                    <p className="text-sm text-muted-foreground text-center font-medium">
-                      Haz clic para adjuntar documentos
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Planos, fotos del terreno, referencias visuales...
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      PDF, imágenes, Word, Excel (máx. 10MB por archivo)
-                    </p>
+                  <div className="flex flex-col items-center justify-center py-6 cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+                    <Paperclip className="h-10 w-10 text-orange/60 mb-3" />
+                    <p className="text-sm text-muted-foreground text-center font-medium">Haz clic para adjuntar documentos</p>
+                    <p className="text-xs text-muted-foreground mt-1">Planos, fotos del terreno, referencias visuales...</p>
+                    <p className="text-xs text-muted-foreground">PDF, imágenes, Word, Excel (máx. 10MB por archivo)</p>
                   </div>
                 ) : (
                   <div className="space-y-2">
                     {attachments.map((file, index) => (
                       <div key={index} className="flex items-center gap-2 bg-background p-2 rounded">
-                        <File className="h-4 w-4 text-primary flex-shrink-0" />
+                        <File className="h-4 w-4 text-orange flex-shrink-0" />
                         <span className="text-sm truncate flex-1">{file.name}</span>
                         <span className="text-xs text-muted-foreground">{formatFileSize(file.size)}</span>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeAttachment(index)}
-                          className="h-6 w-6 p-0"
-                        >
+                        <Button type="button" variant="ghost" size="sm" onClick={() => removeAttachment(index)} className="h-6 w-6 p-0">
                           <X className="h-4 w-4" />
                         </Button>
                       </div>
                     ))}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="w-full mt-2"
-                    >
-                      <Paperclip className="h-4 w-4 mr-2" />
-                      Añadir más archivos
+                    <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} className="w-full mt-2">
+                      <Paperclip className="h-4 w-4 mr-2" /> Añadir más archivos
                     </Button>
                   </div>
                 )}
               </div>
             </div>
 
-            <Button 
-              type="submit" 
-              className="w-full bg-primary hover:bg-primary/90 text-lg py-6"
-              disabled={isSubmitting || isUploadingFiles}
-            >
+            <Button type="submit" className="w-full bg-orange hover:bg-orange/90 text-white text-lg py-6" disabled={isSubmitting || isUploadingFiles}>
               {isSubmitting || isUploadingFiles ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  {isUploadingFiles ? "Subiendo archivos..." : "Enviando..."}
-                </>
-              ) : "Enviar"}
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />{isUploadingFiles ? "Subiendo archivos..." : "Enviando..."}</>
+              ) : "Enviar Perfil de Vivienda"}
             </Button>
           </form>
           )}

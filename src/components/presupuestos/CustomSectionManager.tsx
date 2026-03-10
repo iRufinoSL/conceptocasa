@@ -456,6 +456,29 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
     setWallAssignNewValue(String(edgeAxisValue));
   }, [scaleH, scaleV]);
 
+  // ── Double-click on wall number → navigate to the section containing this wall ──
+  const handleWallDoubleClick = useCallback((
+    room: RoomData,
+    wallIndex: number,
+    vertexA: { x: number; y: number },
+    vertexB: { x: number; y: number },
+  ) => {
+    if (!onNavigateToWallSection) return;
+    const dxGrid = Math.abs(vertexB.x - vertexA.x);
+    const dyGrid = Math.abs(vertexB.y - vertexA.y);
+    const isHorizontal = dxGrid >= dyGrid;
+    const edgeAxisValue = isHorizontal
+      ? Math.round((vertexA.y + vertexB.y) / 2)
+      : Math.round((vertexA.x + vertexB.x) / 2);
+    onNavigateToWallSection({
+      roomId: room.id,
+      roomName: room.name,
+      wallIndex,
+      isHorizontal,
+      edgeAxisValue,
+    });
+  }, [onNavigateToWallSection]);
+
   // Assign wall to an existing section → auto-generate rectangle
   const assignWallToSection = useCallback((targetSectionId: string) => {
     if (!wallAssignInfo || !allSections || !onSectionsChange) return;

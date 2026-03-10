@@ -1243,7 +1243,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
   };
 
   return (
-    <div className="mt-2">
+    <div className={isFullscreen ? 'fixed inset-0 z-50 bg-background overflow-auto p-2' : 'mt-2'}>
       <div className="flex items-center justify-between px-2 pt-1 pb-0.5 flex-wrap gap-1">
         <span className="text-[9px] text-muted-foreground">
           {section.sectionType === 'vertical' && `Vista planta Z=${section.axisValue} — Origen (0,0) arriba-izq`}

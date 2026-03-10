@@ -262,7 +262,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
   const gridCount = gridMax - gridMin + 1;
   const baseCellSize = 28;
   const cellSize = Math.round(baseCellSize * zoomLevel);
-  const margin = { top: 44, left: 52, right: 36, bottom: 44 };
+  const margin = { top: 60, left: 64, right: 48, bottom: 60 };
   const totalW = margin.left + gridCount * cellSize + margin.right;
   const totalH = margin.top + gridCount * cellSize + margin.bottom;
 

@@ -2838,6 +2838,7 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
                 allSections={sections}
                 onSectionsChange={onSectionsChange}
                 onNavigateToWallSection={onNavigateToWallSection}
+                planData={planData}
               />
             )}
           </div>

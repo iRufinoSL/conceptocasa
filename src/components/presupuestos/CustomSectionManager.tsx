@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import type { RoomData } from '@/lib/floor-plan-calculations';
-import { Plus, Trash2, Pencil, MapPin, Eye, EyeOff, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Save, RefreshCw, MousePointer, PenTool } from 'lucide-react';
+import { Plus, Minus, Trash2, Pencil, MapPin, Eye, EyeOff, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Save, RefreshCw, MousePointer, PenTool, ZoomIn, ZoomOut } from 'lucide-react';
 import { GridPdfExport } from './GridPdfExport';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -256,7 +256,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
   const gridCount = gridMax - gridMin + 1;
   const baseCellSize = 28;
   const cellSize = Math.round(baseCellSize * zoomLevel);
-  const margin = { top: 28, left: 36, right: 16, bottom: 28 };
+  const margin = { top: 44, left: 52, right: 36, bottom: 44 };
   const totalW = margin.left + gridCount * cellSize + margin.right;
   const totalH = margin.top + gridCount * cellSize + margin.bottom;
 
@@ -281,7 +281,9 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
   const scaleHm = scaleH / 1000;
   const scaleVm = scaleV / 1000;
 
-  const zoomOptions = [1, 1.5, 2, 2.5, 3];
+  const ZOOM_STEP = 0.25;
+  const ZOOM_MIN = 0.5;
+  const ZOOM_MAX = 4;
 
   // Convert grid coords to SVG pixel coords
   const toSvg = useCallback((gx: number, gy: number) => ({
@@ -1205,19 +1207,20 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
           {section.sectionType === 'transversal' && `Vista transversal X=${section.axisValue} — Origen (0,0) abajo-izq`}
         </span>
         <div className="flex items-center gap-1.5 flex-wrap">
-          {/* Zoom controls */}
+          {/* Zoom controls +/- */}
           <div className="flex items-center gap-0.5 border border-border rounded px-1.5 py-0.5">
-            <span className="text-[8px] text-muted-foreground font-medium">Zoom:</span>
-            {zoomOptions.map(z => (
-              <Button
-                key={z}
-                variant={zoomLevel === z ? 'default' : 'ghost'}
-                size="sm"
-                className="h-4 px-1.5 text-[8px] min-w-0"
-                onClick={() => setZoomLevel(z)}
-              >
-                {z}x
-              </Button>
+            <Button variant="ghost" size="sm" className="h-5 w-5 p-0" disabled={zoomLevel <= ZOOM_MIN}
+              onClick={() => setZoomLevel(z => Math.max(ZOOM_MIN, +(z - ZOOM_STEP).toFixed(2)))} title="Reducir zoom">
+              <ZoomOut className="h-3 w-3" />
+            </Button>
+            <span className="text-[9px] font-mono text-muted-foreground min-w-[32px] text-center">{zoomLevel}x</span>
+            <Button variant="ghost" size="sm" className="h-5 w-5 p-0" disabled={zoomLevel >= ZOOM_MAX}
+              onClick={() => setZoomLevel(z => Math.min(ZOOM_MAX, +(z + ZOOM_STEP).toFixed(2)))} title="Ampliar zoom">
+              <ZoomIn className="h-3 w-3" />
+            </Button>
+            {[1, 2, 3].map(z => (
+              <Button key={z} variant={zoomLevel === z ? 'default' : 'ghost'} size="sm"
+                className="h-4 px-1.5 text-[8px] min-w-0" onClick={() => setZoomLevel(z)}>{z}x</Button>
             ))}
           </div>
           {/* Grid range controls */}

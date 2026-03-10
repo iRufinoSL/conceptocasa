@@ -329,7 +329,7 @@ export function SectionsView(props: SectionsViewProps) {
   }, [allSections]);
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2 relative">
       <div className="flex justify-between items-center">
         <Button
           size="sm"

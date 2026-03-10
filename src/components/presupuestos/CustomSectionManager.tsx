@@ -2889,6 +2889,8 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
                 onSectionsChange={onSectionsChange}
                 onNavigateToWallSection={onNavigateToWallSection}
                 planData={planData}
+                ridgeLine={ridgeLine}
+                onRidgeLineChange={onRidgeLineChange}
               />
             )}
           </div>

@@ -187,7 +187,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
   const [measurementRelations, setMeasurementRelations] = useState<MeasurementRelation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState<'alphabetical' | 'grouped' | 'workarea' | 'time' | 'options'>('alphabetical');
+  const [viewMode, setViewMode] = useState<'alphabetical' | 'grouped' | 'workarea' | 'time' | 'options' | 'destinations'>('alphabetical');
   const [showOnlyActive, setShowOnlyActive] = useState(true);
   const [selectedActivityIds, setSelectedActivityIds] = useState<Set<string>>(new Set());
   const [expandedOptions, setExpandedOptions] = useState<Set<string>>(new Set());

@@ -662,15 +662,14 @@ const Landing = () => {
               </Button>
               <Button
                 size="lg"
-                variant="outline"
-                className="border-primary-foreground/30 text-primary-foreground hover:bg-primary-foreground/10"
+                className="bg-orange hover:bg-orange/90 text-orange-foreground gap-2"
                 onClick={() => {
                   trackButtonClick('housing_profile_cta');
                   setShowHousingForm(true);
                 }}
               >
-                <Home className="w-4 h-4 mr-2" />
-                Define tu vivienda ideal
+                <Home className="w-4 h-4" />
+                Perfil de la vivienda
               </Button>
             </div>
           </motion.div>

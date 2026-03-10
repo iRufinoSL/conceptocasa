@@ -2638,6 +2638,7 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
   const [editName, setEditName] = useState('');
   const [editAxisValue, setEditAxisValue] = useState('0');
   const [visibleGridId, setVisibleGridId] = useState<string | null>(null);
+  const [showOverview, setShowOverview] = useState(false);
 
   const axisConfig = AXIS_MAP[sectionType];
   const filtered = sections.filter(s => s.sectionType === sectionType);

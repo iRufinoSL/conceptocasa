@@ -1038,6 +1038,10 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                         e.stopPropagation();
                         handleWallEdgeClick(pseudoRoom, ei, v, next, emx, emy);
                       }}
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        handleWallDoubleClick(pseudoRoom, ei, v, next);
+                      }}
                     />
                     <text x={offX} y={offY} textAnchor="middle" dominantBaseline="central" fill="hsl(var(--primary-foreground))" fontSize="7" fontWeight="bold" className="pointer-events-none select-none"
                       data-pdf-wall-number=""

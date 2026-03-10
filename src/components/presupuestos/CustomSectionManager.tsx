@@ -2362,7 +2362,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                   className="pointer-events-none select-none">{lineLenMm} mm</text>
                 <rect x={mx - 25} y={my + 3} width={50} height={14} rx={3}
                   fill="hsl(45 100% 50% / 0.85)" className="cursor-pointer"
-                  onClick={() => !isEditingThisPoly && selectSectionPolygon(poly)} />
+                  onClick={() => !isEditingThisPoly && openWorkspacePropsFromPoly(poly)} />
                 <text x={mx} y={my + 12} textAnchor="middle" fontSize={fontSize} fontWeight={700}
                   fill="hsl(0 0% 10%)" className="pointer-events-none select-none">{poly.name}</text>
                 {isEditingThisPoly && verts.map((v, vi) => {

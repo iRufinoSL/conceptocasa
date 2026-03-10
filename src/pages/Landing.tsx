@@ -563,6 +563,32 @@ const Landing = () => {
               </Card>
             </motion.div>
           </div>
+
+          <div className="flex flex-col sm:flex-row gap-4 justify-center mt-12">
+            <Button 
+              size="lg" 
+              className="bg-orange hover:bg-orange/90 text-orange-foreground gap-2"
+              onClick={() => scrollToSection('contacto')}
+            >
+              Contacto
+              <ArrowRight className="w-4 h-4" />
+            </Button>
+            <Button 
+              size="lg" 
+              variant="outline"
+              className="border-orange/30 text-orange hover:bg-orange/10 gap-2"
+              onClick={() => {
+                toast({
+                  title: "Estamos desarrollando tu acceso",
+                  description: "Pronto tendrás acceso a To.Lo.Sa.systems. Te redirigimos a Contacto.",
+                });
+                setTimeout(() => scrollToSection('contacto'), 1500);
+              }}
+            >
+              <Lock className="w-4 h-4" />
+              Acceso a To.Lo.Sa.systems
+            </Button>
+          </div>
         </div>
       </section>
 

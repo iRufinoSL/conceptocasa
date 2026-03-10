@@ -413,7 +413,7 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
         (b1.x + b2.x + t1.x + t2.x) / 4, (b1.y + b2.y + t1.y + t2.y) / 4, (b1.z + b2.z + t1.z + t2.z) / 4
       );
       const midBase = new THREE.Vector3((b1.x + b2.x) / 2, 0, (b1.z + b2.z) / 2);
-      const outward = midBase.clone().normalize().multiplyScalar(0.05);
+      const outward = midBase.clone().sub(new THREE.Vector3(baseCentroid.x, 0, baseCentroid.z)).normalize().multiplyScalar(0.05);
       wallCenter.add(outward);
 
       const wall = walls.find(w => w.wall_index === i + 1);

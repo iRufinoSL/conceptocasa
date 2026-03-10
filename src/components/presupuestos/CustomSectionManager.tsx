@@ -394,6 +394,13 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
     if (!selectedWorkspaceId || !allSections || !onSectionsChange) return;
     if (editVertices.length < 1) { toast.error('Mínimo 1 vértice (Punto)'); return; }
 
+    // Clean degenerate edges (coincident vertices)
+    const cleanedVerts = editVertices.length >= 3 ? cleanDegenerateVertices(editVertices) : editVertices;
+    if (cleanedVerts.length < 1) { toast.error('Todos los vértices son coincidentes'); return; }
+    if (cleanedVerts.length < editVertices.length) {
+      toast.info(`Se eliminaron ${editVertices.length - cleanedVerts.length} vértice(s) duplicado(s)`);
+    }
+
     const proj = wallProjections?.find(p => p.workspaceId === selectedWorkspaceId);
     const updatedSections = allSections.map(s => {
       if (s.id !== section.id) return s;
@@ -402,7 +409,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
       const polyEntry: SectionPolygon = {
         id: selectedWorkspaceId,
         name: proj?.workspaceName || 'Espacio',
-        vertices: editVertices.map(v => ({ x: v.x, y: v.y, z: 0 })),
+        vertices: cleanedVerts.map(v => ({ x: v.x, y: v.y, z: 0 })),
       };
       if (existingIdx >= 0) {
         polys[existingIdx] = polyEntry;

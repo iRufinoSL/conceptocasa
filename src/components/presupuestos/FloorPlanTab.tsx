@@ -804,7 +804,7 @@ class SpaceFormErrorBoundary extends React.Component<
 
 // FloorPlanSettingsPanel removed — merged into LevelManagerPanel
 
-export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTabProps) {
+export function FloorPlanTab({ budgetId, budgetName = '', isAdmin, onNavigateTo3D }: FloorPlanTabProps) {
   const {
     floorPlan, rooms, floors, customCorners, updateCustomCorners, manualElevations, updateManualElevations, loading, saving,
     addRoom, updateRoom, updateWall, updateWallSegmentType, deleteRoom, duplicateRoom,

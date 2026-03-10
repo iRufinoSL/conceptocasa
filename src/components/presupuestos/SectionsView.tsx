@@ -390,6 +390,8 @@ export function SectionsView(props: SectionsViewProps) {
                   onNavigateToWallSection={handleNavigateToWallSection}
                   forcedVisibleGridId={focusSectionId}
                   planData={props.planData}
+                  ridgeLine={props.ridgeLine}
+                  onRidgeLineChange={props.onRidgeLineChange}
                 />
               </div>
             )}

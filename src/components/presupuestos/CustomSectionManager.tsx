@@ -1768,10 +1768,21 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
           const y1 = rl ? rl.y1 : 0;
           const x2 = rl ? rl.x2 : (planData ? planData.width / 2 : 0);
           const y2 = rl ? rl.y2 : (planData ? planData.length || 20 : 20);
-          const svgX1 = margin.left + getHIndex(x1) * cellSize;
-          const svgY1 = margin.top + getVIndex(y1) * cellSize;
-          const svgX2 = margin.left + getHIndex(x2) * cellSize;
-          const svgY2 = margin.top + getVIndex(y2) * cellSize;
+          // Extend ridge line 3 grid cells beyond endpoints in each direction
+          const rdx = x2 - x1;
+          const rdy = y2 - y1;
+          const rLen = Math.sqrt(rdx * rdx + rdy * rdy) || 1;
+          const extCells = 3;
+          const ux = rdx / rLen;
+          const uy = rdy / rLen;
+          const ex1 = x1 - ux * extCells;
+          const ey1 = y1 - uy * extCells;
+          const ex2 = x2 + ux * extCells;
+          const ey2 = y2 + uy * extCells;
+          const svgX1 = margin.left + getHIndex(ex1) * cellSize;
+          const svgY1 = margin.top + getVIndex(ey1) * cellSize;
+          const svgX2 = margin.left + getHIndex(ex2) * cellSize;
+          const svgY2 = margin.top + getVIndex(ey2) * cellSize;
           const midSvgX = (svgX1 + svgX2) / 2;
           const midSvgY = Math.min(svgY1, svgY2) - 6;
           return (
@@ -2090,11 +2101,12 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
 
               {/* Global perimeter dimensions — OUTSIDE axis labels */}
               {hasGlobalBounds && (() => {
-                // Position outside the axis label area (above X labels, below grid, left of Y labels, right of grid)
-                const topY = margin.top - 22; // above X-axis labels
-                const bottomY = margin.top + gridCount * cellSize + 18; // below grid
-                const leftX = margin.left - 28; // left of Y-axis labels
-                const rightX = margin.left + gridCount * cellSize + 18; // right of grid
+                // Position exactly 2 grid cells away from both axes
+                const dimOffset = 2 * cellSize;
+                const topY = margin.top - dimOffset;
+                const bottomY = margin.top + gridCount * cellSize + dimOffset;
+                const leftX = margin.left - dimOffset;
+                const rightX = margin.left + gridCount * cellSize + dimOffset;
                 const midX = (globalLeft + globalRight) / 2;
                 const midY = (globalTop + globalBottom) / 2;
                 const perimFontSize = Math.round(8 * Math.max(1, zoomLevel * 0.8));

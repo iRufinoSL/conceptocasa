@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import HousingProfileForm from "@/components/landing/HousingProfileForm";
 import { useWebsiteTracking, getStoredUtmParams } from "@/hooks/useWebsiteTracking";
 import { motion } from "framer-motion";
+import { FloatingTOC } from "@/components/landing/FloatingTOC";
 import { 
   Mail, 
   Phone, 

@@ -2952,8 +2952,9 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
               planData={planData}
               isOverview={true}
               allZSections={filtered}
-              ridgeLine={ridgeLine}
-            />
+               ridgeLine={ridgeLine}
+               onOpenWorkspaceProperties={onOpenWorkspaceProperties}
+             />
           </div>
         );
       })()}

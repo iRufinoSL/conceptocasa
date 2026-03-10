@@ -387,6 +387,7 @@ export function SectionsView(props: SectionsViewProps) {
                   budgetName={props.budgetName}
                   onNavigateToWallSection={handleNavigateToWallSection}
                   forcedVisibleGridId={focusSectionId}
+                  planData={props.planData}
                 />
               </div>
             )}

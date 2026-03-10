@@ -65,6 +65,8 @@ interface CustomSectionManagerProps {
   onNavigateToWallSection?: (wallInfo: { roomId: string; roomName: string; wallIndex: number; isHorizontal: boolean; edgeAxisValue: number; sourceSectionType: string }) => void;
   /** Force this section's grid to be visible (set externally for navigation) */
   forcedVisibleGridId?: string | null;
+  /** Plan data for ridge line rendering */
+  planData?: import('@/lib/floor-plan-calculations').FloorPlanData;
 }
 
 const AXIS_MAP: Record<string, { axis: 'X' | 'Y' | 'Z'; label: string; placeholder: string }> = {
@@ -194,9 +196,13 @@ interface SectionGridProps {
   allSections?: CustomSection[];
   onSectionsChange?: (sections: CustomSection[]) => void;
   onNavigateToWallSection?: (wallInfo: { roomId: string; roomName: string; wallIndex: number; isHorizontal: boolean; edgeAxisValue: number; sourceSectionType: string }) => void;
+  planData?: import('@/lib/floor-plan-calculations').FloorPlanData;
+  /** If true, show all rooms across all Z sections (overview mode) */
+  isOverview?: boolean;
+  allZSections?: CustomSection[];
 }
 
-function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections, allSections, onSectionsChange, onNavigateToWallSection }: SectionGridProps) {
+function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections, allSections, onSectionsChange, onNavigateToWallSection, planData, isOverview, allZSections }: SectionGridProps) {
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const [gridMin, setGridMin] = useState(GRID_MIN);
@@ -256,7 +262,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
   const gridCount = gridMax - gridMin + 1;
   const baseCellSize = 28;
   const cellSize = Math.round(baseCellSize * zoomLevel);
-  const margin = { top: 44, left: 52, right: 36, bottom: 44 };
+  const margin = { top: 60, left: 64, right: 48, bottom: 60 };
   const totalW = margin.left + gridCount * cellSize + margin.right;
   const totalH = margin.top + gridCount * cellSize + margin.bottom;
 
@@ -1649,10 +1655,45 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
           {section.axis}={section.axisValue}
         </text>
 
+        {/* ── Ridge axis (cumbrera) — dashed red line on Z sections ── */}
+        {section.sectionType === 'vertical' && planData && planData.roofType !== 'plana' && (() => {
+          // Ridge runs along the center of X (for dos_aguas: full Y length at X=width/2)
+          const ridgeX = planData.width / 2; // grid units (block count)
+          const hIdx = getHIndex(ridgeX);
+          if (hIdx < 0 || hIdx > gridCount) return null;
+          const ridgeSvgX = margin.left + hIdx * cellSize;
+          const gridTop = margin.top;
+          const gridBottom = margin.top + gridCount * cellSize;
+          const ridgeWidthMm = Math.round(ridgeX * scaleH);
+          return (
+            <g className="pointer-events-none">
+              <line
+                x1={ridgeSvgX} y1={gridTop}
+                x2={ridgeSvgX} y2={gridBottom}
+                stroke="hsl(0 70% 50%)"
+                strokeWidth={1.5}
+                strokeDasharray="8 4"
+                opacity={0.7}
+              />
+              <text
+                x={ridgeSvgX}
+                y={gridTop - 6}
+                textAnchor="middle"
+                fontSize={7}
+                fontWeight={700}
+                fill="hsl(0 70% 45%)"
+              >
+                CUMBRERA X{ridgeX}
+              </text>
+            </g>
+          );
+        })()}
+
         {/* Workspace floor polygons for vertical sections */}
         {section.sectionType === 'vertical' && rooms && (() => {
-          const sectionRooms = rooms
-            .filter(r => r.verticalSectionId === section.id && r.floorPolygon && r.floorPolygon.length >= 3);
+          const sectionRooms = isOverview
+            ? rooms.filter(r => r.floorPolygon && r.floorPolygon.length >= 3 && allZSections?.some(s => s.id === r.verticalSectionId))
+            : rooms.filter(r => r.verticalSectionId === section.id && r.floorPolygon && r.floorPolygon.length >= 3);
 
           if (sectionRooms.length === 0) return null;
 
@@ -1880,59 +1921,59 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                 );
               })}
 
-              {/* Global perimeter dimensions — between axes and polygons */}
+              {/* Global perimeter dimensions — OUTSIDE axis labels */}
               {hasGlobalBounds && (() => {
-                const gridTopEdge = margin.top;
-                const gridLeftEdge = margin.left;
-                const gridBottomEdge = margin.top + gridCount * cellSize;
-                const gridRightEdge = margin.left + gridCount * cellSize;
-                // Position red lines between axis labels and polygon bounds
-                const topY = Math.max(gridTopEdge + 4, globalTop - 18);
-                const bottomY = Math.min(gridBottomEdge - 4, globalBottom + 18);
-                const leftX = Math.max(gridLeftEdge + 4, globalLeft - 18);
-                const rightX = Math.min(gridRightEdge - 4, globalRight + 18);
+                // Position outside the axis label area (above X labels, below grid, left of Y labels, right of grid)
+                const topY = margin.top - 22; // above X-axis labels
+                const bottomY = margin.top + gridCount * cellSize + 18; // below grid
+                const leftX = margin.left - 28; // left of Y-axis labels
+                const rightX = margin.left + gridCount * cellSize + 18; // right of grid
                 const midX = (globalLeft + globalRight) / 2;
                 const midY = (globalTop + globalBottom) / 2;
                 const perimFontSize = Math.round(8 * Math.max(1, zoomLevel * 0.8));
 
                 return (
                   <g className="pointer-events-none" data-pdf-dimension="">
+                    {/* Top horizontal — above axis labels */}
                     <line x1={globalLeft} y1={topY} x2={globalRight} y2={topY} stroke="hsl(0 70% 50%)" strokeWidth={1.2} />
-                    <line x1={globalLeft} y1={globalTop} x2={globalLeft} y2={topY} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
-                    <line x1={globalRight} y1={globalTop} x2={globalRight} y2={topY} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
+                    <line x1={globalLeft} y1={globalTop} x2={globalLeft} y2={topY} stroke="hsl(0 70% 50% / 0.4)" strokeWidth={0.6} strokeDasharray="2 2" />
+                    <line x1={globalRight} y1={globalTop} x2={globalRight} y2={topY} stroke="hsl(0 70% 50% / 0.4)" strokeWidth={0.6} strokeDasharray="2 2" />
                     <text x={midX} y={topY - 4} textAnchor="middle" fontSize={perimFontSize} fontWeight={700} fill="hsl(0 70% 45%)">{globalWidthMm} mm</text>
 
+                    {/* Bottom horizontal — below grid */}
                     <line x1={globalLeft} y1={bottomY} x2={globalRight} y2={bottomY} stroke="hsl(0 70% 50%)" strokeWidth={1.2} />
-                    <line x1={globalLeft} y1={globalBottom} x2={globalLeft} y2={bottomY} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
-                    <line x1={globalRight} y1={globalBottom} x2={globalRight} y2={bottomY} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
+                    <line x1={globalLeft} y1={globalBottom} x2={globalLeft} y2={bottomY} stroke="hsl(0 70% 50% / 0.4)" strokeWidth={0.6} strokeDasharray="2 2" />
+                    <line x1={globalRight} y1={globalBottom} x2={globalRight} y2={bottomY} stroke="hsl(0 70% 50% / 0.4)" strokeWidth={0.6} strokeDasharray="2 2" />
                     <text x={midX} y={bottomY + 10} textAnchor="middle" fontSize={perimFontSize} fontWeight={700} fill="hsl(0 70% 45%)">{globalWidthMm} mm</text>
 
+                    {/* Left vertical — left of axis labels */}
                     <line x1={leftX} y1={globalTop} x2={leftX} y2={globalBottom} stroke="hsl(0 70% 50%)" strokeWidth={1.2} />
-                    <line x1={globalLeft} y1={globalTop} x2={leftX} y2={globalTop} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
-                    <line x1={globalLeft} y1={globalBottom} x2={leftX} y2={globalBottom} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
+                    <line x1={globalLeft} y1={globalTop} x2={leftX} y2={globalTop} stroke="hsl(0 70% 50% / 0.4)" strokeWidth={0.6} strokeDasharray="2 2" />
+                    <line x1={globalLeft} y1={globalBottom} x2={leftX} y2={globalBottom} stroke="hsl(0 70% 50% / 0.4)" strokeWidth={0.6} strokeDasharray="2 2" />
                     <text
-                      x={leftX + 5}
+                      x={leftX - 5}
                       y={midY}
                       textAnchor="middle"
                       fontSize={perimFontSize}
                       fontWeight={700}
                       fill="hsl(0 70% 45%)"
-                      transform={`rotate(-90, ${leftX + 5}, ${midY})`}
+                      transform={`rotate(-90, ${leftX - 5}, ${midY})`}
                     >
                       {globalHeightMm} mm
                     </text>
 
+                    {/* Right vertical — right of grid */}
                     <line x1={rightX} y1={globalTop} x2={rightX} y2={globalBottom} stroke="hsl(0 70% 50%)" strokeWidth={1.2} />
-                    <line x1={globalRight} y1={globalTop} x2={rightX} y2={globalTop} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
-                    <line x1={globalRight} y1={globalBottom} x2={rightX} y2={globalBottom} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
+                    <line x1={globalRight} y1={globalTop} x2={rightX} y2={globalTop} stroke="hsl(0 70% 50% / 0.4)" strokeWidth={0.6} strokeDasharray="2 2" />
+                    <line x1={globalRight} y1={globalBottom} x2={rightX} y2={globalBottom} stroke="hsl(0 70% 50% / 0.4)" strokeWidth={0.6} strokeDasharray="2 2" />
                     <text
-                      x={rightX - 5}
+                      x={rightX + 5}
                       y={midY}
                       textAnchor="middle"
                       fontSize={perimFontSize}
                       fontWeight={700}
                       fill="hsl(0 70% 45%)"
-                      transform={`rotate(-90, ${rightX - 5}, ${midY})`}
+                      transform={`rotate(-90, ${rightX + 5}, ${midY})`}
                     >
                       {globalHeightMm} mm
                     </text>
@@ -2005,15 +2046,11 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
 
                 const { sx: gleft, sy: gtop } = toSvg(bMinX, isElevation ? bMaxY : bMinY);
                 const { sx: gright, sy: gbottom } = toSvg(bMaxX, isElevation ? bMinY : bMaxY);
-                const gridTopEdge = margin.top;
-                const gridLeftEdge = margin.left;
-                const gridBottomEdge = margin.top + gridCount * cellSize;
-                const gridRightEdge = margin.left + gridCount * cellSize;
-                // Position red lines between axis labels and polygon bounds
-                const topY = Math.max(gridTopEdge + 4, gtop - 18);
-                const bottomY = Math.min(gridBottomEdge - 4, gbottom + 18);
-                const leftX = Math.max(gridLeftEdge + 4, gleft - 18);
-                const rightX = Math.min(gridRightEdge - 4, gright + 18);
+                // Position outside the axis label area
+                const topY = margin.top - 22;
+                const bottomY = margin.top + gridCount * cellSize + 18;
+                const leftX = margin.left - 28;
+                const rightX = margin.left + gridCount * cellSize + 18;
                 const perimFontSize = Math.round(8 * Math.max(1, zoomLevel * 0.8));
                 const midX = (gleft + gright) / 2;
                 const midY = (gtop + gbottom) / 2;
@@ -2022,37 +2059,37 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                   <g className="pointer-events-none" data-pdf-dimension="">
                     {totalWidthMm > 0 && (
                       <>
-                        {/* Top horizontal */}
+                        {/* Top horizontal — above axis labels */}
                         <line x1={gleft} y1={topY} x2={gright} y2={topY} stroke="hsl(0 70% 50%)" strokeWidth={1.2} />
-                        <line x1={gleft} y1={gtop} x2={gleft} y2={topY} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.5} />
-                        <line x1={gright} y1={gtop} x2={gright} y2={topY} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.5} />
+                        <line x1={gleft} y1={gtop} x2={gleft} y2={topY} stroke="hsl(0 70% 50% / 0.4)" strokeWidth={0.6} strokeDasharray="2 2" />
+                        <line x1={gright} y1={gtop} x2={gright} y2={topY} stroke="hsl(0 70% 50% / 0.4)" strokeWidth={0.6} strokeDasharray="2 2" />
                         <text x={midX} y={topY - 4} textAnchor="middle" fontSize={perimFontSize} fontWeight={700} fill="hsl(0 70% 45%)">{totalWidthMm} mm</text>
-                        {/* Bottom horizontal */}
+                        {/* Bottom horizontal — below grid */}
                         <line x1={gleft} y1={bottomY} x2={gright} y2={bottomY} stroke="hsl(0 70% 50%)" strokeWidth={1.2} />
-                        <line x1={gleft} y1={gbottom} x2={gleft} y2={bottomY} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.5} />
-                        <line x1={gright} y1={gbottom} x2={gright} y2={bottomY} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.5} />
+                        <line x1={gleft} y1={gbottom} x2={gleft} y2={bottomY} stroke="hsl(0 70% 50% / 0.4)" strokeWidth={0.6} strokeDasharray="2 2" />
+                        <line x1={gright} y1={gbottom} x2={gright} y2={bottomY} stroke="hsl(0 70% 50% / 0.4)" strokeWidth={0.6} strokeDasharray="2 2" />
                         <text x={midX} y={bottomY + 10} textAnchor="middle" fontSize={perimFontSize} fontWeight={700} fill="hsl(0 70% 45%)">{totalWidthMm} mm</text>
                       </>
                     )}
                     {totalHeightMm > 0 && (
                       <>
-                        {/* Right vertical — left of right axis */}
+                        {/* Right vertical — right of grid */}
                         <line x1={rightX} y1={gtop} x2={rightX} y2={gbottom} stroke="hsl(0 70% 50%)" strokeWidth={1.2} />
-                        <line x1={gright} y1={gtop} x2={rightX} y2={gtop} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.5} />
-                        <line x1={gright} y1={gbottom} x2={rightX} y2={gbottom} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.5} />
+                        <line x1={gright} y1={gtop} x2={rightX} y2={gtop} stroke="hsl(0 70% 50% / 0.4)" strokeWidth={0.6} strokeDasharray="2 2" />
+                        <line x1={gright} y1={gbottom} x2={rightX} y2={gbottom} stroke="hsl(0 70% 50% / 0.4)" strokeWidth={0.6} strokeDasharray="2 2" />
                         <text
-                          x={rightX - 5} y={midY}
+                          x={rightX + 5} y={midY}
                           textAnchor="middle" fontSize={perimFontSize} fontWeight={700} fill="hsl(0 70% 45%)"
-                          transform={`rotate(-90, ${rightX - 5}, ${midY})`}
+                          transform={`rotate(-90, ${rightX + 5}, ${midY})`}
                         >{totalHeightMm} mm</text>
-                        {/* Left vertical — right of left axis */}
+                        {/* Left vertical — left of axis labels */}
                         <line x1={leftX} y1={gtop} x2={leftX} y2={gbottom} stroke="hsl(0 70% 50%)" strokeWidth={1.2} />
-                        <line x1={gleft} y1={gtop} x2={leftX} y2={gtop} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.5} />
-                        <line x1={gleft} y1={gbottom} x2={leftX} y2={gbottom} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.5} />
+                        <line x1={gleft} y1={gtop} x2={leftX} y2={gtop} stroke="hsl(0 70% 50% / 0.4)" strokeWidth={0.6} strokeDasharray="2 2" />
+                        <line x1={gleft} y1={gbottom} x2={leftX} y2={gbottom} stroke="hsl(0 70% 50% / 0.4)" strokeWidth={0.6} strokeDasharray="2 2" />
                         <text
-                          x={leftX + 5} y={midY}
+                          x={leftX - 5} y={midY}
                           textAnchor="middle" fontSize={perimFontSize} fontWeight={700} fill="hsl(0 70% 45%)"
-                          transform={`rotate(-90, ${leftX + 5}, ${midY})`}
+                          transform={`rotate(-90, ${leftX - 5}, ${midY})`}
                         >{totalHeightMm} mm</text>
                       </>
                     )}
@@ -2594,7 +2631,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
   );
 }
 
-export function CustomSectionManager({ sectionType, sections, onSectionsChange, scaleConfig, wallProjectionsBySection, rooms, budgetName, onNavigateToWallSection, forcedVisibleGridId }: CustomSectionManagerProps) {
+export function CustomSectionManager({ sectionType, sections, onSectionsChange, scaleConfig, wallProjectionsBySection, rooms, budgetName, onNavigateToWallSection, forcedVisibleGridId, planData }: CustomSectionManagerProps) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState('');
   const [newAxisValue, setNewAxisValue] = useState('0');
@@ -2602,6 +2639,7 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
   const [editName, setEditName] = useState('');
   const [editAxisValue, setEditAxisValue] = useState('0');
   const [visibleGridId, setVisibleGridId] = useState<string | null>(null);
+  const [showOverview, setShowOverview] = useState(false);
 
   const axisConfig = AXIS_MAP[sectionType];
   const filtered = sections.filter(s => s.sectionType === sectionType);
@@ -2659,12 +2697,55 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
           Secciones {TYPE_LABELS[sectionType]}
           <Badge variant="outline" className="text-[9px] h-4">{filtered.length}</Badge>
         </h4>
-        <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2" onClick={() => setShowAddForm(!showAddForm)}>
-          <Plus className="h-3 w-3 mr-1" /> Nueva Sección
-        </Button>
+        <div className="flex items-center gap-1">
+          {sectionType === 'vertical' && filtered.length > 0 && (
+            <Button
+              variant={showOverview ? 'default' : 'outline'}
+              size="sm"
+              className="h-6 text-[10px] px-2"
+              onClick={() => setShowOverview(!showOverview)}
+            >
+              <Eye className="h-3 w-3 mr-1" /> Plano General
+            </Button>
+          )}
+          <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2" onClick={() => setShowAddForm(!showAddForm)}>
+            <Plus className="h-3 w-3 mr-1" /> Nueva Sección
+          </Button>
+        </div>
       </div>
 
       <p className="text-[10px] text-muted-foreground italic">{AXIS_DESCRIPTION[sectionType]}</p>
+
+      {/* ── Overview grid: all Z sections combined ── */}
+      {sectionType === 'vertical' && showOverview && filtered.length > 0 && (() => {
+        // Create a virtual "overview" section that combines all vertical section rooms
+        const overviewSection: CustomSection = {
+          id: '__overview__',
+          name: 'Plano General',
+          sectionType: 'vertical',
+          axis: 'Z',
+          axisValue: 0,
+          polygons: [],
+        };
+        return (
+          <div className="border border-primary/30 rounded-lg p-1 bg-muted/20">
+            <div className="flex items-center gap-2 px-2 py-1">
+              <Badge variant="default" className="text-[9px] h-4">Plano General</Badge>
+              <span className="text-[10px] text-muted-foreground">Vista de todos los espacios registrados</span>
+            </div>
+            <SectionGrid
+              section={overviewSection}
+              scaleConfig={scaleConfig}
+              rooms={rooms}
+              budgetName={budgetName}
+              allSections={sections}
+              planData={planData}
+              isOverview={true}
+              allZSections={filtered}
+            />
+          </div>
+        );
+      })()}
 
       {showAddForm && (
         <Card className="border-dashed border-primary/30">
@@ -2801,6 +2882,7 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
                 allSections={sections}
                 onSectionsChange={onSectionsChange}
                 onNavigateToWallSection={onNavigateToWallSection}
+                planData={planData}
               />
             )}
           </div>

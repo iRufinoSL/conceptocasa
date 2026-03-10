@@ -1286,6 +1286,8 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
           onManualElevationsChange={updateManualElevations}
           customSections={customSections}
           onCustomSectionsChange={updateCustomSections}
+          ridgeLine={ridgeLine}
+          onRidgeLineChange={updateRidgeLine}
           onRefresh={async () => { await refetch(); }}
           focusWallId={elevationReturnContext?.wallId}
           renderSelectedRoom={selectedRoom && planData ? () => {

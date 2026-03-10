@@ -355,7 +355,7 @@ const Landing = () => {
               </h2>
               <p className="text-muted-foreground text-lg leading-relaxed">
                 Cada vivienda que ejecutamos integra un sistema completo de gestión del confort: 
-                aislamiento térmico continuo sin puentes térmicos, carpinterías de triple vidrio, 
+                aislamiento térmico continuo sin puentes térmicos, carpinterías de doble o triple vidrio, 
                 y un sistema de ventilación con filtros F7 que renueva el aire interior cada 2 horas 
                 manteniendo la temperatura estable.
               </p>

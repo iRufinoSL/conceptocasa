@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { motion } from "framer-motion";
 import { ArrowLeft, ArrowRight, Layers, Shield, Zap, Clock, Leaf, Hammer, ThermometerSun, Weight } from "lucide-react";
 
-import sistemaMasPoliterm from "@/assets/sistema-mas-politerm.jpg";
+import sistemaMasSeccion from "@/assets/sistema-mas-seccion.jpg";
 import casaSip from "@/assets/casa-sip.jpg";
 import casaLsf from "@/assets/casa-lsf.jpg";
 import casaAsgard from "@/assets/casa-asgard.jpg";
@@ -13,6 +13,7 @@ import casaHormigonCelular from "@/assets/casa-hormigon-celular.jpg";
 import detalleSip from "@/assets/detalle-sip.jpg";
 import detalleLsf from "@/assets/detalle-lsf.jpg";
 import detalleHormigonCelular from "@/assets/detalle-hormigon-celular.jpg";
+import bloqueSystem3e from "@/assets/bloque-system3e.jpg";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 30 },
@@ -98,7 +99,7 @@ const systems: ConstructionSystem[] = [
       "Muro de 38 cm = U de 0.15 W/m²K"
     ],
     houseImage: casaSystem3e,
-    detailImages: [],
+    detailImages: [bloqueSystem3e],
     highlight: "Monocapa 38 cm"
   },
   {
@@ -170,7 +171,10 @@ const SistemaConstructivo = () => {
                 Sistema MA'S
               </h2>
               <p className="text-xl text-primary font-display italic">
-                Mortero Armado Aligerado y Aislamiento
+                Mortero Armado, Aligerado y Aislado
+              </p>
+              <p className="text-lg text-muted-foreground mt-4 max-w-2xl mx-auto">
+                Te lo construimos <span className="text-orange font-semibold">"llave en mano"</span> y si quieres hacerlo tú: <span className="text-orange font-semibold">"Te suministramos los productos y la tecnología para hacerlo posible"</span>.
               </p>
             </div>
 
@@ -210,8 +214,8 @@ const SistemaConstructivo = () => {
               </div>
               <div className="relative">
                 <img
-                  src={sistemaMasPoliterm}
-                  alt="Detalle del sistema MA'S con Politerm Blu"
+                  src={sistemaMasSeccion}
+                  alt="Sección técnica del sistema MA'S: paneles antifuego exterior e interior, relleno de PolitermBlu gris y estructura interior de madera, acero o hierro"
                   className="rounded-2xl shadow-xl w-full object-cover"
                   loading="lazy"
                 />

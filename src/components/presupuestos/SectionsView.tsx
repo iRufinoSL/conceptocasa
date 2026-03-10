@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
+import { WorkspacePropertiesPanel } from './WorkspacePropertiesPanel';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';

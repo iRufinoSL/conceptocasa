@@ -402,6 +402,17 @@ export function SectionsView(props: SectionsViewProps) {
           </div>
         );
       })}
+
+      {/* Workspace properties floating panel */}
+      {workspaceProps && (
+        <WorkspacePropertiesPanel
+          workspaceId={workspaceProps.workspaceId}
+          workspaceName={workspaceProps.workspaceName}
+          sectionType={workspaceProps.sectionType}
+          sectionName={workspaceProps.sectionName}
+          onClose={() => setWorkspaceProps(null)}
+        />
+      )}
     </div>
   );
 }

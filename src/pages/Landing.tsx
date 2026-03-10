@@ -471,6 +471,17 @@ const Landing = () => {
               </motion.div>
             ))}
           </div>
+
+          <div className="text-center mt-12">
+            <Button 
+              size="lg" 
+              className="bg-orange hover:bg-orange/90 text-orange-foreground gap-2"
+              onClick={() => scrollToSection('contacto')}
+            >
+              Contacto
+              <ArrowRight className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
       </section>
 

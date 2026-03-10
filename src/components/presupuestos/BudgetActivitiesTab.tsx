@@ -14,7 +14,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, Search, Upload, Pencil, Trash2, MoreHorizontal, FileUp, File, X, Download, ChevronRight, ChevronDown, ChevronLeft, List, Layers, Copy, Package, Wrench, Truck, Briefcase, CheckSquare, Eye, ArrowUpDown, ArrowUp, ArrowDown, FileDown, Clock, MapPin, Settings2, Printer } from 'lucide-react';
+import { Plus, Search, Upload, Pencil, Trash2, MoreHorizontal, FileUp, File, X, Download, ChevronRight, ChevronDown, ChevronLeft, List, Layers, Copy, Package, Wrench, Truck, Briefcase, CheckSquare, Eye, ArrowUpDown, ArrowUp, ArrowDown, FileDown, Clock, MapPin, Settings2, Printer, Target } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { toast } from 'sonner';
@@ -31,6 +31,7 @@ import { BudgetResourceForm } from './BudgetResourceForm';
 import { ActivitiesWorkAreaGroupedView } from './ActivitiesWorkAreaGroupedView';
 import { ActivitiesBulkEditBar } from './ActivitiesBulkEditBar';
 import { ActivitiesOptionsGroupedView } from './ActivitiesOptionsGroupedView';
+import { BudgetDestinationsManager } from './BudgetDestinationsManager';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
 import { usePermissions, canAccessActivity, BudgetPermissions } from '@/hooks/usePermissions';
 import jsPDF from 'jspdf';
@@ -186,7 +187,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
   const [measurementRelations, setMeasurementRelations] = useState<MeasurementRelation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState<'alphabetical' | 'grouped' | 'workarea' | 'time' | 'options'>('alphabetical');
+  const [viewMode, setViewMode] = useState<'alphabetical' | 'grouped' | 'workarea' | 'time' | 'options' | 'destinations'>('alphabetical');
   const [showOnlyActive, setShowOnlyActive] = useState(true);
   const [selectedActivityIds, setSelectedActivityIds] = useState<Set<string>>(new Set());
   const [expandedOptions, setExpandedOptions] = useState<Set<string>>(new Set());
@@ -2009,10 +2010,19 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
               variant={viewMode === 'options' ? 'default' : 'ghost'} 
               size="sm"
               onClick={() => setViewMode('options')}
-              className="rounded-l-none border-l"
+              className="rounded-none border-l"
             >
               <Settings2 className="h-4 w-4 mr-1" />
               Por Opción
+            </Button>
+            <Button 
+              variant={viewMode === 'destinations' ? 'default' : 'ghost'} 
+              size="sm"
+              onClick={() => setViewMode('destinations')}
+              className="rounded-l-none border-l"
+            >
+              <Target className="h-4 w-4 mr-1" />
+              Destinos
             </Button>
           </div>
           <SnapshotRestoreButton budgetId={budgetId} module="actividades" onRestored={() => fetchData()} />
@@ -2505,6 +2515,16 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
               toast.error('Error al actualizar opciones');
             }
           }}
+        />
+      )}
+
+      {/* Destinations View */}
+      {viewMode === 'destinations' && (
+        <BudgetDestinationsManager
+          budgetId={budgetId}
+          activities={activities.map(a => ({ id: a.id, name: a.name, code: a.code }))}
+          isAdmin={isAdmin}
+          canEdit={permissions.canEdit}
         />
       )}
 

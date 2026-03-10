@@ -516,6 +516,42 @@ export type Database = {
           },
         ]
       }
+      budget_activity_destinations: {
+        Row: {
+          activity_id: string
+          created_at: string
+          destination_id: string
+          id: string
+        }
+        Insert: {
+          activity_id: string
+          created_at?: string
+          destination_id: string
+          id?: string
+        }
+        Update: {
+          activity_id?: string
+          created_at?: string
+          destination_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_activity_destinations_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "budget_activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_activity_destinations_destination_id_fkey"
+            columns: ["destination_id"]
+            isOneToOne: false
+            referencedRelation: "budget_destinations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       budget_activity_files: {
         Row: {
           activity_id: string
@@ -777,6 +813,44 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budget_destinations: {
+        Row: {
+          budget_id: string
+          created_at: string
+          id: string
+          internal_name: string
+          order_index: number
+          public_name: string
+          updated_at: string
+        }
+        Insert: {
+          budget_id: string
+          created_at?: string
+          id?: string
+          internal_name: string
+          order_index?: number
+          public_name: string
+          updated_at?: string
+        }
+        Update: {
+          budget_id?: string
+          created_at?: string
+          id?: string
+          internal_name?: string
+          order_index?: number
+          public_name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_destinations_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "presupuestos"
             referencedColumns: ["id"]
           },
         ]

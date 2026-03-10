@@ -67,6 +67,9 @@ interface CustomSectionManagerProps {
   forcedVisibleGridId?: string | null;
   /** Plan data for ridge line rendering */
   planData?: import('@/lib/floor-plan-calculations').FloorPlanData;
+  /** Configurable ridge line */
+  ridgeLine?: import('@/hooks/useFloorPlan').RidgeLine | null;
+  onRidgeLineChange?: (ridge: import('@/hooks/useFloorPlan').RidgeLine | null) => void;
 }
 
 const AXIS_MAP: Record<string, { axis: 'X' | 'Y' | 'Z'; label: string; placeholder: string }> = {
@@ -200,9 +203,12 @@ interface SectionGridProps {
   /** If true, show all rooms across all Z sections (overview mode) */
   isOverview?: boolean;
   allZSections?: CustomSection[];
+  /** Configurable ridge line */
+  ridgeLine?: import('@/hooks/useFloorPlan').RidgeLine | null;
+  onRidgeLineChange?: (ridge: import('@/hooks/useFloorPlan').RidgeLine | null) => void;
 }
 
-function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections, allSections, onSectionsChange, onNavigateToWallSection, planData, isOverview, allZSections }: SectionGridProps) {
+function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections, allSections, onSectionsChange, onNavigateToWallSection, planData, isOverview, allZSections, ridgeLine, onRidgeLineChange }: SectionGridProps) {
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const [gridMin, setGridMin] = useState(GRID_MIN);
@@ -1290,6 +1296,89 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
         </div>
       </div>
 
+      {/* ── Ridge line configuration (only on first Z section) ── */}
+      {section.sectionType === 'vertical' && onRidgeLineChange && (() => {
+        const rl = ridgeLine;
+        const hasRidge = rl != null;
+        return (
+          <div className="px-2 py-1.5 bg-destructive/5 border border-destructive/20 rounded-md mx-1 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-semibold text-destructive flex items-center gap-1">
+                📐 Línea de Cumbrera
+              </span>
+              {!hasRidge ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-5 text-[9px] px-2 border-destructive/30 text-destructive hover:bg-destructive/10"
+                  onClick={() => {
+                    // Default: center X, full Y range
+                    const defaultX = planData ? planData.width / 2 : 5;
+                    const defaultYEnd = planData ? (planData.length || 10) : 10;
+                    onRidgeLineChange({ x1: defaultX, y1: 0, x2: defaultX, y2: defaultYEnd });
+                    toast.success('Cumbrera creada — ajusta las coordenadas');
+                  }}
+                >
+                  <Plus className="h-3 w-3 mr-0.5" /> Crear Cumbrera
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-5 text-[9px] px-2 text-destructive hover:bg-destructive/10"
+                  onClick={() => { onRidgeLineChange(null); toast.info('Cumbrera eliminada'); }}
+                >
+                  <Trash2 className="h-3 w-3 mr-0.5" /> Eliminar
+                </Button>
+              )}
+            </div>
+            {hasRidge && (
+              <div className="grid grid-cols-4 gap-1.5">
+                <div>
+                  <label className="text-[8px] text-muted-foreground block">X₁</label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    className="h-6 text-[10px] px-1"
+                    value={rl.x1}
+                    onChange={e => onRidgeLineChange({ ...rl, x1: parseFloat(e.target.value) || 0 })}
+                  />
+                </div>
+                <div>
+                  <label className="text-[8px] text-muted-foreground block">Y₁</label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    className="h-6 text-[10px] px-1"
+                    value={rl.y1}
+                    onChange={e => onRidgeLineChange({ ...rl, y1: parseFloat(e.target.value) || 0 })}
+                  />
+                </div>
+                <div>
+                  <label className="text-[8px] text-muted-foreground block">X₂</label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    className="h-6 text-[10px] px-1"
+                    value={rl.x2}
+                    onChange={e => onRidgeLineChange({ ...rl, x2: parseFloat(e.target.value) || 0 })}
+                  />
+                </div>
+                <div>
+                  <label className="text-[8px] text-muted-foreground block">Y₂</label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    className="h-6 text-[10px] px-1"
+                    value={rl.y2}
+                    onChange={e => onRidgeLineChange({ ...rl, y2: parseFloat(e.target.value) || 0 })}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
       {/* ── New face drawing panel ── */}
       {showNewWorkspaceInput && (
         <div className="px-2 py-2 bg-accent/20 border border-accent rounded-md mx-1 space-y-2">
@@ -1655,35 +1744,98 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
           {section.axis}={section.axisValue}
         </text>
 
-        {/* ── Ridge axis (cumbrera) — dashed red line on Z sections ── */}
-        {section.sectionType === 'vertical' && planData && planData.roofType !== 'plana' && (() => {
-          // Ridge runs along the center of X (for dos_aguas: full Y length at X=width/2)
-          const ridgeX = planData.width / 2; // grid units (block count)
-          const hIdx = getHIndex(ridgeX);
-          if (hIdx < 0 || hIdx > gridCount) return null;
-          const ridgeSvgX = margin.left + hIdx * cellSize;
-          const gridTop = margin.top;
-          const gridBottom = margin.top + gridCount * cellSize;
-          const ridgeWidthMm = Math.round(ridgeX * scaleH);
+        {/* ── Ridge axis (cumbrera) — dashed red line ── */}
+        {section.sectionType === 'vertical' && (() => {
+          // Use configurable ridgeLine if available, else fallback to center
+          const rl = ridgeLine;
+          if (!rl && (!planData || planData.roofType === 'plana')) return null;
+          const x1 = rl ? rl.x1 : (planData ? planData.width / 2 : 0);
+          const y1 = rl ? rl.y1 : 0;
+          const x2 = rl ? rl.x2 : (planData ? planData.width / 2 : 0);
+          const y2 = rl ? rl.y2 : (planData ? planData.length || 20 : 20);
+          const svgX1 = margin.left + getHIndex(x1) * cellSize;
+          const svgY1 = margin.top + getVIndex(y1) * cellSize;
+          const svgX2 = margin.left + getHIndex(x2) * cellSize;
+          const svgY2 = margin.top + getVIndex(y2) * cellSize;
+          const midSvgX = (svgX1 + svgX2) / 2;
+          const midSvgY = Math.min(svgY1, svgY2) - 6;
           return (
             <g className="pointer-events-none">
               <line
-                x1={ridgeSvgX} y1={gridTop}
-                x2={ridgeSvgX} y2={gridBottom}
+                x1={svgX1} y1={svgY1}
+                x2={svgX2} y2={svgY2}
                 stroke="hsl(0 70% 50%)"
                 strokeWidth={1.5}
                 strokeDasharray="8 4"
                 opacity={0.7}
               />
+              {/* Start marker */}
+              <circle cx={svgX1} cy={svgY1} r={3} fill="hsl(0 70% 50%)" opacity={0.8} />
+              {/* End marker */}
+              <circle cx={svgX2} cy={svgY2} r={3} fill="hsl(0 70% 50%)" opacity={0.8} />
               <text
-                x={ridgeSvgX}
-                y={gridTop - 6}
+                x={midSvgX}
+                y={midSvgY}
                 textAnchor="middle"
                 fontSize={7}
                 fontWeight={700}
                 fill="hsl(0 70% 45%)"
               >
-                CUMBRERA X{ridgeX}
+                CUMBRERA ({x1},{y1})→({x2},{y2})
+              </text>
+            </g>
+          );
+        })()}
+
+        {/* ── Ridge intersection on Y/X sections ── */}
+        {(section.sectionType === 'longitudinal' || section.sectionType === 'transversal') && (() => {
+          const rl = ridgeLine;
+          if (!rl) return null;
+          // For a section at Y=val (longitudinal) or X=val (transversal), find where the ridge line intersects
+          const axisVal = section.axisValue;
+          let intersectH: number | null = null;
+          if (section.sectionType === 'longitudinal') {
+            // Section plane Y=axisVal; ridge from (x1,y1) to (x2,y2)
+            const dy = rl.y2 - rl.y1;
+            if (Math.abs(dy) > 0.001) {
+              const t = (axisVal - rl.y1) / dy;
+              if (t >= -0.1 && t <= 1.1) {
+                intersectH = rl.x1 + t * (rl.x2 - rl.x1);
+              }
+            } else if (Math.abs(rl.y1 - axisVal) < 0.5) {
+              // Ridge is parallel to section, show midpoint
+              intersectH = (rl.x1 + rl.x2) / 2;
+            }
+          } else {
+            // Section plane X=axisVal; ridge from (x1,y1) to (x2,y2)
+            const dx = rl.x2 - rl.x1;
+            if (Math.abs(dx) > 0.001) {
+              const t = (axisVal - rl.x1) / dx;
+              if (t >= -0.1 && t <= 1.1) {
+                intersectH = rl.y1 + t * (rl.y2 - rl.y1);
+              }
+            } else if (Math.abs(rl.x1 - axisVal) < 0.5) {
+              intersectH = (rl.y1 + rl.y2) / 2;
+            }
+          }
+          if (intersectH == null) return null;
+          const hIdx = getHIndex(intersectH);
+          if (hIdx < 0 || hIdx > gridCount) return null;
+          const svgX = margin.left + hIdx * cellSize;
+          const gridTop = margin.top;
+          const gridBottom = margin.top + gridCount * cellSize;
+          return (
+            <g className="pointer-events-none">
+              <line
+                x1={svgX} y1={gridTop}
+                x2={svgX} y2={gridBottom}
+                stroke="hsl(0 70% 50%)"
+                strokeWidth={1.5}
+                strokeDasharray="6 3"
+                opacity={0.5}
+              />
+              <text x={svgX} y={gridTop - 4} textAnchor="middle" fontSize={6} fontWeight={700} fill="hsl(0 70% 45%)">
+                ▽ CUMBRERA
               </text>
             </g>
           );
@@ -2631,7 +2783,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
   );
 }
 
-export function CustomSectionManager({ sectionType, sections, onSectionsChange, scaleConfig, wallProjectionsBySection, rooms, budgetName, onNavigateToWallSection, forcedVisibleGridId, planData }: CustomSectionManagerProps) {
+export function CustomSectionManager({ sectionType, sections, onSectionsChange, scaleConfig, wallProjectionsBySection, rooms, budgetName, onNavigateToWallSection, forcedVisibleGridId, planData, ridgeLine, onRidgeLineChange }: CustomSectionManagerProps) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState('');
   const [newAxisValue, setNewAxisValue] = useState('0');
@@ -2742,6 +2894,7 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
               planData={planData}
               isOverview={true}
               allZSections={filtered}
+              ridgeLine={ridgeLine}
             />
           </div>
         );
@@ -2883,6 +3036,8 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
                 onSectionsChange={onSectionsChange}
                 onNavigateToWallSection={onNavigateToWallSection}
                 planData={planData}
+                ridgeLine={ridgeLine}
+                onRidgeLineChange={onRidgeLineChange}
               />
             )}
           </div>

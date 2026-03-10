@@ -36,6 +36,14 @@ export interface ManualElevation {
   sourceValue?: number;
 }
 
+/** Ridge line defined by two points in grid coordinates (free orientation) */
+export interface RidgeLine {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
+
 interface DbFloorPlan {
   id: string;
   budget_id: string;
@@ -130,6 +138,7 @@ export function useFloorPlan(budgetId: string) {
   const [customCorners, setCustomCornersState] = useState<CustomCorner[]>([]);
   const [manualElevations, setManualElevationsState] = useState<ManualElevation[]>([]);
   const [customSections, setCustomSectionsState] = useState<any[]>([]);
+  const [ridgeLine, setRidgeLineState] = useState<RidgeLine | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, _setSaving] = useState(false);
   const savingRef = useRef(false);
@@ -172,10 +181,12 @@ export function useFloorPlan(budgetId: string) {
         setCustomCornersState(rawCorners.corners);
         setManualElevationsState(Array.isArray(rawCorners.manualElevations) ? rawCorners.manualElevations : []);
         setCustomSectionsState(Array.isArray(rawCorners.customSections) ? rawCorners.customSections : []);
+        setRidgeLineState(rawCorners.ridgeLine ?? null);
       } else {
         setCustomCornersState([]);
         setManualElevationsState([]);
         setCustomSectionsState([]);
+        setRidgeLineState(null);
       }
 
       // Fetch floors
@@ -1482,13 +1493,15 @@ export function useFloorPlan(budgetId: string) {
     }
   };
 
-  /** Helper to persist corners + manual elevations + custom sections together */
-  const persistCornersData = async (corners: CustomCorner[], elevations: ManualElevation[], sections?: any[]) => {
+  /** Helper to persist corners + manual elevations + custom sections + ridgeLine together */
+  const persistCornersData = async (corners: CustomCorner[], elevations: ManualElevation[], sections?: any[], ridge?: RidgeLine | null) => {
     if (!floorPlan) return;
     const sects = sections ?? customSections;
+    const rl = ridge !== undefined ? ridge : ridgeLine;
     // Store as wrapper object if there's any extra data; otherwise keep plain array for backward compat
-    const payload = (elevations.length > 0 || sects.length > 0)
-      ? { corners, manualElevations: elevations, customSections: sects }
+    const hasExtra = elevations.length > 0 || sects.length > 0 || rl != null;
+    const payload = hasExtra
+      ? { corners, manualElevations: elevations, customSections: sects, ...(rl ? { ridgeLine: rl } : {}) }
       : corners;
     try {
       const { error } = await supabase
@@ -1524,6 +1537,12 @@ export function useFloorPlan(budgetId: string) {
     await persistCornersData(customCorners, manualElevations, sections);
   };
 
+  const updateRidgeLine = async (ridge: RidgeLine | null) => {
+    if (!floorPlan) return;
+    setRidgeLineState(ridge);
+    await persistCornersData(customCorners, manualElevations, undefined, ridge);
+  };
+
   return {
     floorPlan,
     rooms,
@@ -1534,6 +1553,8 @@ export function useFloorPlan(budgetId: string) {
     updateManualElevations,
     customSections,
     updateCustomSections,
+    ridgeLine,
+    updateRidgeLine,
     loading,
     saving,
     createFloorPlan,

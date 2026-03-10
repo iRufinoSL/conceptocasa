@@ -6,7 +6,7 @@ import { Grid3x3, ArrowLeftRight, ArrowUpDown, AlertTriangle, ChevronDown, Chevr
 import { toast } from 'sonner';
 import { CustomSectionManager, type CustomSection, type ScaleConfig, type SectionWallProjection } from './CustomSectionManager';
 import type { FloorPlanData, RoomData, FloorLevel, WallType } from '@/lib/floor-plan-calculations';
-import type { CustomCorner, ManualElevation } from '@/hooks/useFloorPlan';
+import type { CustomCorner, ManualElevation, RidgeLine } from '@/hooks/useFloorPlan';
 
 interface SectionsViewProps {
   planData: FloorPlanData;
@@ -41,6 +41,8 @@ interface SectionsViewProps {
   focusWallId?: string;
   customSections?: CustomSection[];
   onCustomSectionsChange?: (sections: CustomSection[]) => void;
+  ridgeLine?: RidgeLine | null;
+  onRidgeLineChange?: (ridge: RidgeLine | null) => void;
   renderSelectedRoom?: () => React.ReactNode;
   onRefresh?: () => Promise<void>;
 }
@@ -347,6 +349,7 @@ export function SectionsView(props: SectionsViewProps) {
           floors={props.floors}
           planData={props.planData}
           scaleConfig={scaleConfig}
+          ridgeLine={props.ridgeLine}
         />
       )}
 
@@ -388,6 +391,8 @@ export function SectionsView(props: SectionsViewProps) {
                   onNavigateToWallSection={handleNavigateToWallSection}
                   forcedVisibleGridId={focusSectionId}
                   planData={props.planData}
+                  ridgeLine={props.ridgeLine}
+                  onRidgeLineChange={props.onRidgeLineChange}
                 />
               </div>
             )}
@@ -404,9 +409,10 @@ interface Workspace3DWireframeProps {
   floors: FloorLevel[];
   planData: FloorPlanData;
   scaleConfig: ScaleConfig;
+  ridgeLine?: import('@/hooks/useFloorPlan').RidgeLine | null;
 }
 
-function Workspace3DWireframe({ rooms, floors, planData, scaleConfig }: Workspace3DWireframeProps) {
+function Workspace3DWireframe({ rooms, floors, planData, scaleConfig, ridgeLine }: Workspace3DWireframeProps) {
   const blockHMm = planData.blockHeightMm || 250;
   const scaleXm = (scaleConfig.scaleX || 625) / 1000;
   const scaleYm = (scaleConfig.scaleY || 625) / 1000;
@@ -592,6 +598,22 @@ function Workspace3DWireframe({ rooms, floors, planData, scaleConfig }: Workspac
               </g>
             );
           })}
+
+          {/* Ridge line in 3D */}
+          {ridgeLine && (() => {
+            const maxZm = Math.max(...volumes.map(v => v.zTopM), 2);
+            const p1 = project(ridgeLine.x1 * scaleXm, ridgeLine.y1 * scaleYm, maxZm);
+            const p2 = project(ridgeLine.x2 * scaleXm, ridgeLine.y2 * scaleYm, maxZm);
+            const mid = { px: (p1.px + p2.px) / 2, py: (p1.py + p2.py) / 2 };
+            return (
+              <g className="pointer-events-none">
+                <line x1={p1.px} y1={p1.py} x2={p2.px} y2={p2.py} stroke="hsl(0 70% 50%)" strokeWidth={2} strokeDasharray="6 3" opacity={0.8} />
+                <circle cx={p1.px} cy={p1.py} r={3} fill="hsl(0 70% 50%)" />
+                <circle cx={p2.px} cy={p2.py} r={3} fill="hsl(0 70% 50%)" />
+                <text x={mid.px} y={mid.py - 6} textAnchor="middle" fontSize={7} fontWeight={700} fill="hsl(0 70% 45%)">CUMBRERA</text>
+              </g>
+            );
+          })()}
 
           {/* Z axis indicator */}
           {(() => {

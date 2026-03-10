@@ -1296,6 +1296,89 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
         </div>
       </div>
 
+      {/* ── Ridge line configuration (only on first Z section) ── */}
+      {section.sectionType === 'vertical' && onRidgeLineChange && (() => {
+        const rl = ridgeLine;
+        const hasRidge = rl != null;
+        return (
+          <div className="px-2 py-1.5 bg-destructive/5 border border-destructive/20 rounded-md mx-1 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-semibold text-destructive flex items-center gap-1">
+                📐 Línea de Cumbrera
+              </span>
+              {!hasRidge ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-5 text-[9px] px-2 border-destructive/30 text-destructive hover:bg-destructive/10"
+                  onClick={() => {
+                    // Default: center X, full Y range
+                    const defaultX = planData ? planData.width / 2 : 5;
+                    const defaultYEnd = planData ? (planData.length || 10) : 10;
+                    onRidgeLineChange({ x1: defaultX, y1: 0, x2: defaultX, y2: defaultYEnd });
+                    toast.success('Cumbrera creada — ajusta las coordenadas');
+                  }}
+                >
+                  <Plus className="h-3 w-3 mr-0.5" /> Crear Cumbrera
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-5 text-[9px] px-2 text-destructive hover:bg-destructive/10"
+                  onClick={() => { onRidgeLineChange(null); toast.info('Cumbrera eliminada'); }}
+                >
+                  <Trash2 className="h-3 w-3 mr-0.5" /> Eliminar
+                </Button>
+              )}
+            </div>
+            {hasRidge && (
+              <div className="grid grid-cols-4 gap-1.5">
+                <div>
+                  <label className="text-[8px] text-muted-foreground block">X₁</label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    className="h-6 text-[10px] px-1"
+                    value={rl.x1}
+                    onChange={e => onRidgeLineChange({ ...rl, x1: parseFloat(e.target.value) || 0 })}
+                  />
+                </div>
+                <div>
+                  <label className="text-[8px] text-muted-foreground block">Y₁</label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    className="h-6 text-[10px] px-1"
+                    value={rl.y1}
+                    onChange={e => onRidgeLineChange({ ...rl, y1: parseFloat(e.target.value) || 0 })}
+                  />
+                </div>
+                <div>
+                  <label className="text-[8px] text-muted-foreground block">X₂</label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    className="h-6 text-[10px] px-1"
+                    value={rl.x2}
+                    onChange={e => onRidgeLineChange({ ...rl, x2: parseFloat(e.target.value) || 0 })}
+                  />
+                </div>
+                <div>
+                  <label className="text-[8px] text-muted-foreground block">Y₂</label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    className="h-6 text-[10px] px-1"
+                    value={rl.y2}
+                    onChange={e => onRidgeLineChange({ ...rl, y2: parseFloat(e.target.value) || 0 })}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
       {/* ── New face drawing panel ── */}
       {showNewWorkspaceInput && (
         <div className="px-2 py-2 bg-accent/20 border border-accent rounded-md mx-1 space-y-2">

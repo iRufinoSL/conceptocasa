@@ -67,6 +67,9 @@ interface CustomSectionManagerProps {
   forcedVisibleGridId?: string | null;
   /** Plan data for ridge line rendering */
   planData?: import('@/lib/floor-plan-calculations').FloorPlanData;
+  /** Configurable ridge line */
+  ridgeLine?: import('@/hooks/useFloorPlan').RidgeLine | null;
+  onRidgeLineChange?: (ridge: import('@/hooks/useFloorPlan').RidgeLine | null) => void;
 }
 
 const AXIS_MAP: Record<string, { axis: 'X' | 'Y' | 'Z'; label: string; placeholder: string }> = {

@@ -245,8 +245,9 @@ export function SectionsView(props: SectionsViewProps) {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
     new Set(['vertical', 'longitudinal', 'transversal'])
   );
-  const [show3D, setShow3D] = useState(false);
-  const [focusSectionId, setFocusSectionId] = useState<string | null>(null);
+   const [show3D, setShow3D] = useState(false);
+   const [focusSectionId, setFocusSectionId] = useState<string | null>(null);
+   const [workspaceProps, setWorkspaceProps] = useState<{ workspaceId: string; workspaceName: string; sectionType: string; sectionName: string } | null>(null);
 
   const toggleGroup = (type: string) => {
     setExpandedGroups(prev => {

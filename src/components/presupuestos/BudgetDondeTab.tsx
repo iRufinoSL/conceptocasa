@@ -16,6 +16,7 @@ interface BudgetDondeTabProps {
 
 export function BudgetDondeTab({ budgetId, budgetName, isAdmin }: BudgetDondeTabProps) {
   const [openSection, setOpenSection] = useState<string | null>(null);
+  const [autoShow3D, setAutoShow3D] = useState(false);
 
   const sections = [
     { id: 'plano', label: 'Plano', icon: PenTool, color: 'text-teal-600' },

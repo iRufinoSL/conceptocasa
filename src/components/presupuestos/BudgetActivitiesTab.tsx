@@ -2010,10 +2010,19 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
               variant={viewMode === 'options' ? 'default' : 'ghost'} 
               size="sm"
               onClick={() => setViewMode('options')}
-              className="rounded-l-none border-l"
+              className="rounded-none border-l"
             >
               <Settings2 className="h-4 w-4 mr-1" />
               Por Opción
+            </Button>
+            <Button 
+              variant={viewMode === 'destinations' ? 'default' : 'ghost'} 
+              size="sm"
+              onClick={() => setViewMode('destinations')}
+              className="rounded-l-none border-l"
+            >
+              <Target className="h-4 w-4 mr-1" />
+              Destinos
             </Button>
           </div>
           <SnapshotRestoreButton budgetId={budgetId} module="actividades" onRestored={() => fetchData()} />

@@ -31,6 +31,7 @@ import { BudgetResourceForm } from './BudgetResourceForm';
 import { ActivitiesWorkAreaGroupedView } from './ActivitiesWorkAreaGroupedView';
 import { ActivitiesBulkEditBar } from './ActivitiesBulkEditBar';
 import { ActivitiesOptionsGroupedView } from './ActivitiesOptionsGroupedView';
+import { BudgetDestinationsManager } from './BudgetDestinationsManager';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
 import { usePermissions, canAccessActivity, BudgetPermissions } from '@/hooks/usePermissions';
 import jsPDF from 'jspdf';

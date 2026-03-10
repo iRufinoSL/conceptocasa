@@ -1196,7 +1196,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
           fill="hsl(45 100% 50% / 0.85)"
           className={isEditingThis ? '' : 'cursor-pointer'}
           data-pdf-workspace-name=""
-          onClick={() => !isEditingThis && selectWorkspace(proj)}
+           onClick={() => !isEditingThis && openWorkspaceProps(proj)}
         />
         <text x={cxSvg} y={cySvg - 1} textAnchor="middle" fontSize={fontSize} fontWeight={700}
           fill="hsl(0 0% 10%)" className="pointer-events-none select-none"

@@ -1886,59 +1886,59 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                 );
               })}
 
-              {/* Global perimeter dimensions — between axes and polygons */}
+              {/* Global perimeter dimensions — OUTSIDE axis labels */}
               {hasGlobalBounds && (() => {
-                const gridTopEdge = margin.top;
-                const gridLeftEdge = margin.left;
-                const gridBottomEdge = margin.top + gridCount * cellSize;
-                const gridRightEdge = margin.left + gridCount * cellSize;
-                // Position red lines between axis labels and polygon bounds
-                const topY = Math.max(gridTopEdge + 4, globalTop - 18);
-                const bottomY = Math.min(gridBottomEdge - 4, globalBottom + 18);
-                const leftX = Math.max(gridLeftEdge + 4, globalLeft - 18);
-                const rightX = Math.min(gridRightEdge - 4, globalRight + 18);
+                // Position outside the axis label area (above X labels, below grid, left of Y labels, right of grid)
+                const topY = margin.top - 22; // above X-axis labels
+                const bottomY = margin.top + gridCount * cellSize + 18; // below grid
+                const leftX = margin.left - 28; // left of Y-axis labels
+                const rightX = margin.left + gridCount * cellSize + 18; // right of grid
                 const midX = (globalLeft + globalRight) / 2;
                 const midY = (globalTop + globalBottom) / 2;
                 const perimFontSize = Math.round(8 * Math.max(1, zoomLevel * 0.8));
 
                 return (
                   <g className="pointer-events-none" data-pdf-dimension="">
+                    {/* Top horizontal — above axis labels */}
                     <line x1={globalLeft} y1={topY} x2={globalRight} y2={topY} stroke="hsl(0 70% 50%)" strokeWidth={1.2} />
-                    <line x1={globalLeft} y1={globalTop} x2={globalLeft} y2={topY} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
-                    <line x1={globalRight} y1={globalTop} x2={globalRight} y2={topY} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
+                    <line x1={globalLeft} y1={globalTop} x2={globalLeft} y2={topY} stroke="hsl(0 70% 50% / 0.4)" strokeWidth={0.6} strokeDasharray="2 2" />
+                    <line x1={globalRight} y1={globalTop} x2={globalRight} y2={topY} stroke="hsl(0 70% 50% / 0.4)" strokeWidth={0.6} strokeDasharray="2 2" />
                     <text x={midX} y={topY - 4} textAnchor="middle" fontSize={perimFontSize} fontWeight={700} fill="hsl(0 70% 45%)">{globalWidthMm} mm</text>
 
+                    {/* Bottom horizontal — below grid */}
                     <line x1={globalLeft} y1={bottomY} x2={globalRight} y2={bottomY} stroke="hsl(0 70% 50%)" strokeWidth={1.2} />
-                    <line x1={globalLeft} y1={globalBottom} x2={globalLeft} y2={bottomY} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
-                    <line x1={globalRight} y1={globalBottom} x2={globalRight} y2={bottomY} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
+                    <line x1={globalLeft} y1={globalBottom} x2={globalLeft} y2={bottomY} stroke="hsl(0 70% 50% / 0.4)" strokeWidth={0.6} strokeDasharray="2 2" />
+                    <line x1={globalRight} y1={globalBottom} x2={globalRight} y2={bottomY} stroke="hsl(0 70% 50% / 0.4)" strokeWidth={0.6} strokeDasharray="2 2" />
                     <text x={midX} y={bottomY + 10} textAnchor="middle" fontSize={perimFontSize} fontWeight={700} fill="hsl(0 70% 45%)">{globalWidthMm} mm</text>
 
+                    {/* Left vertical — left of axis labels */}
                     <line x1={leftX} y1={globalTop} x2={leftX} y2={globalBottom} stroke="hsl(0 70% 50%)" strokeWidth={1.2} />
-                    <line x1={globalLeft} y1={globalTop} x2={leftX} y2={globalTop} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
-                    <line x1={globalLeft} y1={globalBottom} x2={leftX} y2={globalBottom} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
+                    <line x1={globalLeft} y1={globalTop} x2={leftX} y2={globalTop} stroke="hsl(0 70% 50% / 0.4)" strokeWidth={0.6} strokeDasharray="2 2" />
+                    <line x1={globalLeft} y1={globalBottom} x2={leftX} y2={globalBottom} stroke="hsl(0 70% 50% / 0.4)" strokeWidth={0.6} strokeDasharray="2 2" />
                     <text
-                      x={leftX + 5}
+                      x={leftX - 5}
                       y={midY}
                       textAnchor="middle"
                       fontSize={perimFontSize}
                       fontWeight={700}
                       fill="hsl(0 70% 45%)"
-                      transform={`rotate(-90, ${leftX + 5}, ${midY})`}
+                      transform={`rotate(-90, ${leftX - 5}, ${midY})`}
                     >
                       {globalHeightMm} mm
                     </text>
 
+                    {/* Right vertical — right of grid */}
                     <line x1={rightX} y1={globalTop} x2={rightX} y2={globalBottom} stroke="hsl(0 70% 50%)" strokeWidth={1.2} />
-                    <line x1={globalRight} y1={globalTop} x2={rightX} y2={globalTop} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
-                    <line x1={globalRight} y1={globalBottom} x2={rightX} y2={globalBottom} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.8} />
+                    <line x1={globalRight} y1={globalTop} x2={rightX} y2={globalTop} stroke="hsl(0 70% 50% / 0.4)" strokeWidth={0.6} strokeDasharray="2 2" />
+                    <line x1={globalRight} y1={globalBottom} x2={rightX} y2={globalBottom} stroke="hsl(0 70% 50% / 0.4)" strokeWidth={0.6} strokeDasharray="2 2" />
                     <text
-                      x={rightX - 5}
+                      x={rightX + 5}
                       y={midY}
                       textAnchor="middle"
                       fontSize={perimFontSize}
                       fontWeight={700}
                       fill="hsl(0 70% 45%)"
-                      transform={`rotate(-90, ${rightX - 5}, ${midY})`}
+                      transform={`rotate(-90, ${rightX + 5}, ${midY})`}
                     >
                       {globalHeightMm} mm
                     </text>

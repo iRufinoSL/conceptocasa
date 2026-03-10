@@ -36,6 +36,14 @@ export interface ManualElevation {
   sourceValue?: number;
 }
 
+/** Ridge line defined by two points in grid coordinates (free orientation) */
+export interface RidgeLine {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
+
 interface DbFloorPlan {
   id: string;
   budget_id: string;

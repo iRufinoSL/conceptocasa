@@ -2326,7 +2326,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
               <g key={`sp-${poly.id}`}>
                 <circle cx={sx} cy={sy} r={isEditingThisPoly ? 8 : 6}
                   fill={hslWithAlpha(color, 0.6)} stroke={color} strokeWidth={2}
-                  className="cursor-pointer" onClick={() => !isEditingThisPoly && selectSectionPolygon(poly)}
+                   className="cursor-pointer" onClick={() => !isEditingThisPoly && openWorkspacePropsFromPoly(poly)}
                 />
                 <text x={sx} y={sy - 12} textAnchor="middle" fontSize={6} fontWeight={600} fill={color} className="pointer-events-none select-none">
                   {hLabel}{verts[0].x},{vLabel}{verts[0].y}

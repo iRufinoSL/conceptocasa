@@ -61,6 +61,10 @@ interface CustomSectionManagerProps {
   wallProjectionsBySection?: Map<string, SectionWallProjection[]>;
   rooms?: RoomData[];
   budgetName?: string;
+  /** Navigate to the section that contains a wall (double-click on wall number) */
+  onNavigateToWallSection?: (wallInfo: { roomId: string; roomName: string; wallIndex: number; isHorizontal: boolean; edgeAxisValue: number }) => void;
+  /** Force this section's grid to be visible (set externally for navigation) */
+  forcedVisibleGridId?: string | null;
 }
 
 const AXIS_MAP: Record<string, { axis: 'X' | 'Y' | 'Z'; label: string; placeholder: string }> = {
@@ -160,6 +164,27 @@ interface WallAssignInfo {
   svgMidY: number;
 }
 
+/** Remove degenerate edges: merge vertices closer than threshold grid units */
+function cleanDegenerateVertices(vertices: Array<{ x: number; y: number }>, threshold = 0.01): Array<{ x: number; y: number }> {
+  if (vertices.length < 2) return vertices;
+  const cleaned: Array<{ x: number; y: number }> = [];
+  for (const v of vertices) {
+    const last = cleaned[cleaned.length - 1];
+    if (!last || Math.hypot(v.x - last.x, v.y - last.y) > threshold) {
+      cleaned.push(v);
+    }
+  }
+  // Check last vs first
+  if (cleaned.length > 1) {
+    const first = cleaned[0];
+    const last = cleaned[cleaned.length - 1];
+    if (Math.hypot(last.x - first.x, last.y - first.y) <= threshold) {
+      cleaned.pop();
+    }
+  }
+  return cleaned;
+}
+
 interface SectionGridProps {
   section: CustomSection;
   scaleConfig?: ScaleConfig;
@@ -168,9 +193,10 @@ interface SectionGridProps {
   wallProjections?: SectionWallProjection[];
   allSections?: CustomSection[];
   onSectionsChange?: (sections: CustomSection[]) => void;
+  onNavigateToWallSection?: (wallInfo: { roomId: string; roomName: string; wallIndex: number; isHorizontal: boolean; edgeAxisValue: number }) => void;
 }
 
-function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections, allSections, onSectionsChange }: SectionGridProps) {
+function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections, allSections, onSectionsChange, onNavigateToWallSection }: SectionGridProps) {
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const [gridMin, setGridMin] = useState(GRID_MIN);
@@ -368,6 +394,13 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
     if (!selectedWorkspaceId || !allSections || !onSectionsChange) return;
     if (editVertices.length < 1) { toast.error('Mínimo 1 vértice (Punto)'); return; }
 
+    // Clean degenerate edges (coincident vertices)
+    const cleanedVerts = editVertices.length >= 3 ? cleanDegenerateVertices(editVertices) : editVertices;
+    if (cleanedVerts.length < 1) { toast.error('Todos los vértices son coincidentes'); return; }
+    if (cleanedVerts.length < editVertices.length) {
+      toast.info(`Se eliminaron ${editVertices.length - cleanedVerts.length} vértice(s) duplicado(s)`);
+    }
+
     const proj = wallProjections?.find(p => p.workspaceId === selectedWorkspaceId);
     const updatedSections = allSections.map(s => {
       if (s.id !== section.id) return s;
@@ -376,7 +409,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
       const polyEntry: SectionPolygon = {
         id: selectedWorkspaceId,
         name: proj?.workspaceName || 'Espacio',
-        vertices: editVertices.map(v => ({ x: v.x, y: v.y, z: 0 })),
+        vertices: cleanedVerts.map(v => ({ x: v.x, y: v.y, z: 0 })),
       };
       if (existingIdx >= 0) {
         polys[existingIdx] = polyEntry;
@@ -429,6 +462,29 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
     setWallAssignNewName('');
     setWallAssignNewValue(String(edgeAxisValue));
   }, [scaleH, scaleV]);
+
+  // ── Double-click on wall number → navigate to the section containing this wall ──
+  const handleWallDoubleClick = useCallback((
+    room: RoomData,
+    wallIndex: number,
+    vertexA: { x: number; y: number },
+    vertexB: { x: number; y: number },
+  ) => {
+    if (!onNavigateToWallSection) return;
+    const dxGrid = Math.abs(vertexB.x - vertexA.x);
+    const dyGrid = Math.abs(vertexB.y - vertexA.y);
+    const isHorizontal = dxGrid >= dyGrid;
+    const edgeAxisValue = isHorizontal
+      ? Math.round((vertexA.y + vertexB.y) / 2)
+      : Math.round((vertexA.x + vertexB.x) / 2);
+    onNavigateToWallSection({
+      roomId: room.id,
+      roomName: room.name,
+      wallIndex,
+      isHorizontal,
+      edgeAxisValue,
+    });
+  }, [onNavigateToWallSection]);
 
   // Assign wall to an existing section → auto-generate rectangle
   const assignWallToSection = useCallback((targetSectionId: string) => {
@@ -704,6 +760,13 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
     if (editVertices.length < 1) { toast.error('Mínimo 1 vértice'); return; }
     const polyName = editingPolygonName.trim() || 'Espacio';
 
+    // Clean degenerate edges (coincident vertices)
+    const cleanedVerts = editVertices.length >= 3 ? cleanDegenerateVertices(editVertices) : editVertices;
+    if (cleanedVerts.length < 1) { toast.error('Todos los vértices son coincidentes'); return; }
+    if (cleanedVerts.length < editVertices.length) {
+      toast.info(`Se eliminaron ${editVertices.length - cleanedVerts.length} vértice(s) duplicado(s)`);
+    }
+
     const updatedSections = allSections.map(s => {
       if (s.id !== section.id) return s;
       const polys = [...(s.polygons || [])];
@@ -711,7 +774,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
       const polyEntry: SectionPolygon = {
         id: editingPolygonId,
         name: polyName,
-        vertices: editVertices.map(v => ({ x: v.x, y: v.y, z: 0 })),
+        vertices: cleanedVerts.map(v => ({ x: v.x, y: v.y, z: 0 })),
       };
       if (existingIdx >= 0) {
         polys[existingIdx] = polyEntry;
@@ -988,6 +1051,10 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                       onClick={(e) => {
                         e.stopPropagation();
                         handleWallEdgeClick(pseudoRoom, ei, v, next, emx, emy);
+                      }}
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        handleWallDoubleClick(pseudoRoom, ei, v, next);
                       }}
                     />
                     <text x={offX} y={offY} textAnchor="middle" dominantBaseline="central" fill="hsl(var(--primary-foreground))" fontSize="7" fontWeight="bold" className="pointer-events-none select-none"
@@ -1721,6 +1788,10 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     handleWallEdgeClick(room, i, currGrid, nextGrid, mx, my);
+                                  }}
+                                  onDoubleClick={(e) => {
+                                    e.stopPropagation();
+                                    handleWallDoubleClick(room, i, currGrid, nextGrid);
                                   }}
                                 />
                                 <text x={offX} y={offY} textAnchor="middle" dominantBaseline="central" fill="hsl(var(--primary-foreground))" fontSize="7" fontWeight="bold" className="pointer-events-none select-none"
@@ -2512,7 +2583,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
   );
 }
 
-export function CustomSectionManager({ sectionType, sections, onSectionsChange, scaleConfig, wallProjectionsBySection, rooms, budgetName }: CustomSectionManagerProps) {
+export function CustomSectionManager({ sectionType, sections, onSectionsChange, scaleConfig, wallProjectionsBySection, rooms, budgetName, onNavigateToWallSection, forcedVisibleGridId }: CustomSectionManagerProps) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState('');
   const [newAxisValue, setNewAxisValue] = useState('0');
@@ -2520,6 +2591,16 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
   const [editName, setEditName] = useState('');
   const [editAxisValue, setEditAxisValue] = useState('0');
   const [visibleGridId, setVisibleGridId] = useState<string | null>(null);
+
+  // React to forced navigation from parent
+  React.useEffect(() => {
+    if (forcedVisibleGridId) {
+      const matchesThisType = filtered.some(s => s.id === forcedVisibleGridId);
+      if (matchesThisType) {
+        setVisibleGridId(forcedVisibleGridId);
+      }
+    }
+  }, [forcedVisibleGridId]);
 
   const axisConfig = AXIS_MAP[sectionType];
   const filtered = sections.filter(s => s.sectionType === sectionType);
@@ -2708,6 +2789,7 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
                 wallProjections={wallProjectionsBySection?.get(section.id)}
                 allSections={sections}
                 onSectionsChange={onSectionsChange}
+                onNavigateToWallSection={onNavigateToWallSection}
               />
             )}
           </div>

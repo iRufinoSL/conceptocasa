@@ -1325,6 +1325,16 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
               <Pencil className="h-3 w-3" /> Caras ({standalonePolygons.length})
             </Button>
           )}
+          {/* Fullscreen toggle */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-5 w-5 p-0"
+            onClick={() => setIsFullscreen(f => !f)}
+            title={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
+          >
+            {isFullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+          </Button>
         </div>
       </div>
 

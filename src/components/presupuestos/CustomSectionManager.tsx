@@ -193,7 +193,7 @@ interface SectionGridProps {
   wallProjections?: SectionWallProjection[];
   allSections?: CustomSection[];
   onSectionsChange?: (sections: CustomSection[]) => void;
-  onNavigateToWallSection?: (wallInfo: { roomId: string; roomName: string; wallIndex: number; isHorizontal: boolean; edgeAxisValue: number }) => void;
+  onNavigateToWallSection?: (wallInfo: { roomId: string; roomName: string; wallIndex: number; isHorizontal: boolean; edgeAxisValue: number; sourceSectionType: string }) => void;
 }
 
 function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections, allSections, onSectionsChange, onNavigateToWallSection }: SectionGridProps) {

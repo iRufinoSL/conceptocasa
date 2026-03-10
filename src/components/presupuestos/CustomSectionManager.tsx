@@ -3096,8 +3096,9 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
                 onNavigateToWallSection={onNavigateToWallSection}
                 planData={planData}
                 ridgeLine={ridgeLine}
-                onRidgeLineChange={onRidgeLineChange}
-              />
+                 onRidgeLineChange={onRidgeLineChange}
+                 onOpenWorkspaceProperties={onOpenWorkspaceProperties}
+               />
             )}
           </div>
         );

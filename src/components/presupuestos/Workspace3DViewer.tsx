@@ -332,33 +332,36 @@ interface PrismModelProps extends Omit<Workspace3DViewerProps, 'name' | 'onFaceE
 function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase = 0, onFaceClick, onFaceDoubleClick, selectedFace, workspaceName, showDraggableNodes, onNodeDrag, orbitRef }: PrismModelProps) {
   const groupRef = useRef<THREE.Group>(null);
 
-  const { baseVerts3D, topVerts3D, heightM, cornerLabels, cx, cz } = useMemo(() => {
+  const { baseVerts3D, topVerts3D, heightM, cornerLabels, centroid } = useMemo(() => {
     const sMxy = scaleXY / 1000;
     const zScaleBlocks = scaleZ / 1000;
     const heightM = height;
+    const zBaseM = zBase * zScaleBlocks;
 
-    const base = polygon.map(v => new THREE.Vector3(v.x * sMxy, 0, v.y * sMxy));
+    // Place vertices at their REAL XYZ positions (no centering)
+    const base = polygon.map(v => new THREE.Vector3(v.x * sMxy, zBaseM, v.y * sMxy));
 
-    const cx = base.reduce((s, v) => s + v.x, 0) / base.length;
-    const cz = base.reduce((s, v) => s + v.z, 0) / base.length;
-    const centered = base.map(v => new THREE.Vector3(v.x - cx, 0, v.z - cz));
-    const top = centered.map((v, i) => {
+    const top = base.map((v, i) => {
       const wall = walls.find(w => w.wall_index === i + 1);
       const h = wall?.height != null ? wall.height : heightM;
-      // Quantize to Z-grid so shared coordinates across workspaces coincide exactly
       const zTopUnits = zBase + Math.round(h / zScaleBlocks);
-      const quantizedH = (zTopUnits - zBase) * zScaleBlocks;
+      const quantizedH = zTopUnits * zScaleBlocks;
       return new THREE.Vector3(v.x, quantizedH, v.z);
     });
+
+    // Centroid for camera targeting
+    const cx = base.reduce((s, v) => s + v.x, 0) / base.length;
+    const cy = (base[0].y + top[0].y) / 2;
+    const cz = base.reduce((s, v) => s + v.z, 0) / base.length;
+
     const labels: { pos: THREE.Vector3; text: string }[] = [];
     const n = polygon.length;
     for (let i = 0; i < n; i++) {
       const vx = polygon[i].x;
       const vy = polygon[i].y;
-      const zBaseLabel = zBase;
       labels.push({
-        pos: new THREE.Vector3(centered[i].x, centered[i].y - 0.05, centered[i].z),
-        text: `(X${vx},Y${vy},Z${zBaseLabel})`,
+        pos: new THREE.Vector3(base[i].x, base[i].y - 0.05, base[i].z),
+        text: `(X${vx},Y${vy},Z${zBase})`,
       });
       const wall = walls.find(w => w.wall_index === i + 1);
       const hM = wall?.height != null ? wall.height : heightM;
@@ -369,7 +372,7 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
       });
     }
 
-    return { baseVerts3D: centered, topVerts3D: top, heightM, cornerLabels: labels, cx, cz };
+    return { baseVerts3D: base, topVerts3D: top, heightM, cornerLabels: labels, centroid: new THREE.Vector3(cx, cy, cz) };
   }, [polygon, height, walls, scaleXY, scaleZ, zBase]);
 
   const faces = useMemo(() => {
@@ -385,10 +388,14 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
     const zScaleBlocks = scaleZ / 1000;
 
     // Suelo (S1)
-    const floorCenter = new THREE.Vector3(
-      baseVerts3D.reduce((s, v) => s + v.x, 0) / n, -0.01,
+    // Centroid of base polygon for outward direction calculation
+    const baseCentroid = new THREE.Vector3(
+      baseVerts3D.reduce((s, v) => s + v.x, 0) / n,
+      baseVerts3D[0].y,
       baseVerts3D.reduce((s, v) => s + v.z, 0) / n
     );
+
+    const floorCenter = new THREE.Vector3(baseCentroid.x, baseCentroid.y - 0.01, baseCentroid.z);
     result.push({
       type: 'suelo', index: 1, label: 'S1',
       vertices: [...baseVerts3D], labelPos: floorCenter, labelRot: [-Math.PI / 2, 0, 0],
@@ -406,7 +413,7 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
         (b1.x + b2.x + t1.x + t2.x) / 4, (b1.y + b2.y + t1.y + t2.y) / 4, (b1.z + b2.z + t1.z + t2.z) / 4
       );
       const midBase = new THREE.Vector3((b1.x + b2.x) / 2, 0, (b1.z + b2.z) / 2);
-      const outward = midBase.clone().normalize().multiplyScalar(0.05);
+      const outward = midBase.clone().sub(new THREE.Vector3(baseCentroid.x, 0, baseCentroid.z)).normalize().multiplyScalar(0.05);
       wallCenter.add(outward);
 
       const wall = walls.find(w => w.wall_index === i + 1);
@@ -704,8 +711,8 @@ function FaceEditPanel({ data, onClose, onSave, onVertexSave, onNavigateTo2D }: 
   );
 }
 
-/** Custom OrbitControls with centered target and smooth zoom */
-function CenteredOrbitControls({ orbitRef }: { orbitRef: React.RefObject<any> }) {
+/** Custom OrbitControls with dynamic target and smooth zoom */
+function CenteredOrbitControls({ orbitRef, target }: { orbitRef: React.RefObject<any>; target?: [number, number, number] }) {
   return (
     <OrbitControls
       ref={orbitRef}
@@ -716,7 +723,7 @@ function CenteredOrbitControls({ orbitRef }: { orbitRef: React.RefObject<any> })
       panSpeed={0.6}
       minDistance={0.5}
       maxDistance={30}
-      target={[0, 0, 0]}
+      target={target || [0, 0, 0]}
     />
   );
 }
@@ -727,24 +734,32 @@ export function Workspace3DViewer({ name, polygon, height, walls, scaleXY, scale
   const [showNodes, setShowNodes] = useState(false);
   const orbitRef = useRef<any>(null);
 
+  // Compute centroid for camera/orbit targeting
+  const centroid = useMemo(() => {
+    if (!polygon || polygon.length < 3) return [0, 0, 0] as [number, number, number];
+    const sMxy = (scaleXY || 625) / 1000;
+    const zScaleBlocks = (scaleZ || 250) / 1000;
+    const zBaseM = zBase * zScaleBlocks;
+    const cx = polygon.reduce((s, v) => s + v.x * sMxy, 0) / polygon.length;
+    const cz = polygon.reduce((s, v) => s + v.y * sMxy, 0) / polygon.length;
+    const avgTopH = walls.length > 0
+      ? walls.reduce((s, w) => s + (w.height != null ? w.height : height), 0) / walls.length
+      : height;
+    const topZ = zBase + Math.round(avgTopH / zScaleBlocks);
+    const cy = (zBaseM + topZ * zScaleBlocks) / 2;
+    return [cx, cy, cz] as [number, number, number];
+  }, [polygon, height, walls, scaleXY, scaleZ, zBase]);
+
   const handleNodeDrag = useCallback((vertexIndex: number, isTop: boolean, newPos: THREE.Vector3) => {
     if (!onVertexEdit) return;
     const zScaleBlocks = scaleZ / 1000;
-    const sMxy = (scaleXY || 625) / 1000;
-    
-    // Recompute centered offset
-    const base = polygon.map(v => new THREE.Vector3(v.x * sMxy, 0, v.y * sMxy));
-    const cx = base.reduce((s, v) => s + v.x, 0) / base.length;
-    const cz = base.reduce((s, v) => s + v.z, 0) / base.length;
 
     if (isTop) {
-      // Convert the new Y position back to a Z coordinate change
       const allVerts = polygon.map((v, i) => {
         const wall = walls.find(w => w.wall_index === i + 1);
         const hM = wall?.height != null ? wall.height : height;
         const zTopVal = zBase + Math.round(hM / zScaleBlocks);
         if (i === vertexIndex) {
-          // New height from dragged Y position
           const newZTop = zBase + Math.round(newPos.y / zScaleBlocks);
           return { x: v.x, y: v.y, z: newZTop };
         }
@@ -767,6 +782,9 @@ export function Workspace3DViewer({ name, polygon, height, walls, scaleXY, scale
     : 'space-y-2';
 
   const canvasHeight = isFullscreen ? 'flex-1' : 'h-80';
+
+  // Camera offset from centroid
+  const camPos: [number, number, number] = [centroid[0] + 3, centroid[1] + 3, centroid[2] + 3];
 
   return (
     <div className={containerClass}>
@@ -794,7 +812,7 @@ export function Workspace3DViewer({ name, polygon, height, walls, scaleXY, scale
         </div>
       </div>
       <div className={`${canvasHeight} rounded-lg border bg-gradient-to-b from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 overflow-hidden`}>
-        <Canvas camera={{ position: [3, 3, 3], fov: 50 }}>
+        <Canvas camera={{ position: camPos, fov: 50 }}>
           <ambientLight intensity={0.6} />
           <directionalLight position={[5, 8, 5]} intensity={0.8} />
           <directionalLight position={[-3, 4, -3]} intensity={0.3} />
@@ -813,8 +831,8 @@ export function Workspace3DViewer({ name, polygon, height, walls, scaleXY, scale
             onNodeDrag={handleNodeDrag}
             orbitRef={orbitRef}
           />
-          <CenteredOrbitControls orbitRef={orbitRef} />
-          <gridHelper args={[6, 12, '#888888', '#cccccc']} />
+          <CenteredOrbitControls orbitRef={orbitRef} target={centroid} />
+          <gridHelper args={[20, 40, '#888888', '#cccccc']} />
           <InfiniteAxes3D labelDistance={1.2} />
         </Canvas>
       </div>

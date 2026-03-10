@@ -1,0 +1,1 @@
+DROP POLICY IF EXISTS "Colaborador full access tolosa_items" ON public.tolosa_items;

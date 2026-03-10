@@ -271,11 +271,21 @@ export function SectionsView(props: SectionsViewProps) {
   // ── Navigate to a section containing a wall (double-click on wall number) ──
   const handleNavigateToWallSection = useCallback((wallInfo: {
     roomId: string; roomName: string; wallIndex: number;
-    isHorizontal: boolean; edgeAxisValue: number;
+    isHorizontal: boolean; edgeAxisValue: number; sourceSectionType: string;
   }) => {
-    // Horizontal walls (along X) → longitudinal (Y) sections
-    // Vertical walls (along Y) → transversal (X) sections
-    const targetType = wallInfo.isHorizontal ? 'longitudinal' : 'transversal';
+    let targetType: string;
+
+    if (wallInfo.sourceSectionType === 'vertical') {
+      // Z section: horizontal edges → Y sections, vertical edges → X sections
+      targetType = wallInfo.isHorizontal ? 'longitudinal' : 'transversal';
+    } else if (wallInfo.sourceSectionType === 'longitudinal') {
+      // Y section: horizontal edges (along X) → Z sections, vertical edges (along Z) → X sections
+      targetType = wallInfo.isHorizontal ? 'vertical' : 'transversal';
+    } else {
+      // X section: horizontal edges (along Y) → Z sections, vertical edges (along Z) → Y sections
+      targetType = wallInfo.isHorizontal ? 'vertical' : 'longitudinal';
+    }
+
     const candidates = allSections.filter(s => s.sectionType === targetType);
 
     // Find the closest matching section by axis value
@@ -289,6 +299,8 @@ export function SectionsView(props: SectionsViewProps) {
       }
     }
 
+    const axisLabel = targetType === 'vertical' ? 'Z' : targetType === 'longitudinal' ? 'Y' : 'X';
+
     if (bestSection && bestDist <= 1) {
       // Expand the target group and focus the section grid
       setExpandedGroups(prev => {
@@ -297,12 +309,18 @@ export function SectionsView(props: SectionsViewProps) {
         return next;
       });
       setFocusSectionId(bestSection.id);
-      toast.info(`Navegando a P${wallInfo.wallIndex + 1} de "${wallInfo.roomName}" en sección ${wallInfo.isHorizontal ? 'Y' : 'X'}=${bestSection.axisValue}`);
+      toast.info(`Navegando a P${wallInfo.wallIndex + 1} de "${wallInfo.roomName}" en sección ${axisLabel}=${bestSection.axisValue}`);
+
+      // Scroll into view after a tick
+      setTimeout(() => {
+        const el = document.querySelector(`[data-section-id="${bestSection!.id}"]`);
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 100);
 
       // Clear focus after a short delay to allow re-triggering
       setTimeout(() => setFocusSectionId(null), 500);
     } else {
-      toast.warning(`No hay sección ${wallInfo.isHorizontal ? 'Longitudinal (Y)' : 'Transversal (X)'} para P${wallInfo.wallIndex + 1}. Crea una sección en ${wallInfo.isHorizontal ? 'Y' : 'X'}=${wallInfo.edgeAxisValue}`);
+      toast.warning(`No hay sección ${targetType === 'vertical' ? 'Vertical (Z)' : targetType === 'longitudinal' ? 'Longitudinal (Y)' : 'Transversal (X)'} para P${wallInfo.wallIndex + 1}. Crea una sección en ${axisLabel}=${wallInfo.edgeAxisValue}`);
     }
   }, [allSections]);
 

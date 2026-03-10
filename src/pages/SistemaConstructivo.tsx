@@ -141,7 +141,7 @@ const SistemaConstructivo = () => {
               Diseño, Ingeniería, Salud y Arquitectura
             </p>
             <p className="text-lg text-muted-foreground leading-relaxed max-w-2xl mx-auto">
-              No hay un único sistema constructivo ideal. Cada proyecto, cada clima y cada familia requiere la solución técnica que mejor se adapte a sus necesidades. Nosotros los conocemos todos y elegimos el óptimo para ti.
+              No hay un único sistema constructivo ideal. Cada proyecto, cada clima y cada familia requiere la solución técnica que mejor se adapte a sus necesidades. Nosotros los conocemos todos y elegimos el sistema constructivo óptimo, o una mezcla de todos o alguno de ellos, para ti.
             </p>
           </motion.div>
         </div>

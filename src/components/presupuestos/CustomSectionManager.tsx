@@ -61,8 +61,8 @@ interface CustomSectionManagerProps {
   wallProjectionsBySection?: Map<string, SectionWallProjection[]>;
   rooms?: RoomData[];
   budgetName?: string;
-  /** Navigate to the section that contains a wall (double-click on wall number) */
-  onNavigateToWallSection?: (wallInfo: { roomId: string; roomName: string; wallIndex: number; isHorizontal: boolean; edgeAxisValue: number }) => void;
+   /** Navigate to the section that contains a wall (double-click on wall number) */
+  onNavigateToWallSection?: (wallInfo: { roomId: string; roomName: string; wallIndex: number; isHorizontal: boolean; edgeAxisValue: number; sourceSectionType: string }) => void;
   /** Force this section's grid to be visible (set externally for navigation) */
   forcedVisibleGridId?: string | null;
 }
@@ -193,7 +193,7 @@ interface SectionGridProps {
   wallProjections?: SectionWallProjection[];
   allSections?: CustomSection[];
   onSectionsChange?: (sections: CustomSection[]) => void;
-  onNavigateToWallSection?: (wallInfo: { roomId: string; roomName: string; wallIndex: number; isHorizontal: boolean; edgeAxisValue: number }) => void;
+  onNavigateToWallSection?: (wallInfo: { roomId: string; roomName: string; wallIndex: number; isHorizontal: boolean; edgeAxisValue: number; sourceSectionType: string }) => void;
 }
 
 function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections, allSections, onSectionsChange, onNavigateToWallSection }: SectionGridProps) {
@@ -464,27 +464,43 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
   }, [scaleH, scaleV]);
 
   // ── Double-click on wall number → navigate to the section containing this wall ──
-  const handleWallDoubleClick = useCallback((
+  const wallClickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
+  const handleWallNumberClick = useCallback((
     room: RoomData,
     wallIndex: number,
     vertexA: { x: number; y: number },
     vertexB: { x: number; y: number },
+    svgMidX: number,
+    svgMidY: number,
   ) => {
-    if (!onNavigateToWallSection) return;
-    const dxGrid = Math.abs(vertexB.x - vertexA.x);
-    const dyGrid = Math.abs(vertexB.y - vertexA.y);
-    const isHorizontal = dxGrid >= dyGrid;
-    const edgeAxisValue = isHorizontal
-      ? Math.round((vertexA.y + vertexB.y) / 2)
-      : Math.round((vertexA.x + vertexB.x) / 2);
-    onNavigateToWallSection({
-      roomId: room.id,
-      roomName: room.name,
-      wallIndex,
-      isHorizontal,
-      edgeAxisValue,
-    });
-  }, [onNavigateToWallSection]);
+    if (wallClickTimerRef.current) {
+      // Second click within 300ms → navigate
+      clearTimeout(wallClickTimerRef.current);
+      wallClickTimerRef.current = null;
+      if (!onNavigateToWallSection) return;
+      const dxGrid = Math.abs(vertexB.x - vertexA.x);
+      const dyGrid = Math.abs(vertexB.y - vertexA.y);
+      const isHorizontal = dxGrid >= dyGrid;
+      const edgeAxisValue = isHorizontal
+        ? Math.round((vertexA.y + vertexB.y) / 2)
+        : Math.round((vertexA.x + vertexB.x) / 2);
+      onNavigateToWallSection({
+        roomId: room.id,
+        roomName: room.name,
+        wallIndex,
+        isHorizontal,
+        edgeAxisValue,
+        sourceSectionType: section.sectionType,
+      });
+    } else {
+      // First click → wait 300ms then do single-click action
+      wallClickTimerRef.current = setTimeout(() => {
+        wallClickTimerRef.current = null;
+        handleWallEdgeClick(room, wallIndex, vertexA, vertexB, svgMidX, svgMidY);
+      }, 300);
+    }
+  }, [onNavigateToWallSection, handleWallEdgeClick, section.sectionType]);
 
   // Assign wall to an existing section → auto-generate rectangle
   const assignWallToSection = useCallback((targetSectionId: string) => {
@@ -1045,19 +1061,15 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                 return (
                   <>
                     <circle cx={offX} cy={offY} r={6}
-                      fill={isThisWallSelected ? (isHoriz ? 'hsl(150 70% 40%)' : 'hsl(30 80% 50%)') : 'hsl(var(--muted-foreground))'}
+                      fill={isThisWallSelected ? (isHoriz ? 'hsl(150 70% 40%)' : 'hsl(30 80% 50%)') : 'hsl(210 60% 50%)'}
                       className="cursor-pointer"
                       data-pdf-wall-number=""
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleWallEdgeClick(pseudoRoom, ei, v, next, emx, emy);
-                      }}
-                      onDoubleClick={(e) => {
-                        e.stopPropagation();
-                        handleWallDoubleClick(pseudoRoom, ei, v, next);
+                        handleWallNumberClick(pseudoRoom, ei, v, next, emx, emy);
                       }}
                     />
-                    <text x={offX} y={offY} textAnchor="middle" dominantBaseline="central" fill="hsl(var(--primary-foreground))" fontSize="7" fontWeight="bold" className="pointer-events-none select-none"
+                    <text x={offX} y={offY} textAnchor="middle" dominantBaseline="central" fill="#ffffff" fontSize="7" fontWeight="bold" className="pointer-events-none select-none"
                       data-pdf-wall-number=""
                     >
                       {ei + 1}
@@ -1782,19 +1794,15 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                             return (
                               <>
                                 <circle cx={offX} cy={offY} r={6}
-                                  fill={isThisWallSelected ? (isHoriz ? 'hsl(150 70% 40%)' : 'hsl(30 80% 50%)') : 'hsl(var(--muted-foreground))'}
+                                  fill={isThisWallSelected ? (isHoriz ? 'hsl(150 70% 40%)' : 'hsl(30 80% 50%)') : 'hsl(210 60% 50%)'}
                                   className="cursor-pointer"
                                   data-pdf-wall-number=""
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    handleWallEdgeClick(room, i, currGrid, nextGrid, mx, my);
-                                  }}
-                                  onDoubleClick={(e) => {
-                                    e.stopPropagation();
-                                    handleWallDoubleClick(room, i, currGrid, nextGrid);
+                                    handleWallNumberClick(room, i, currGrid, nextGrid, mx, my);
                                   }}
                                 />
-                                <text x={offX} y={offY} textAnchor="middle" dominantBaseline="central" fill="hsl(var(--primary-foreground))" fontSize="7" fontWeight="bold" className="pointer-events-none select-none"
+                                <text x={offX} y={offY} textAnchor="middle" dominantBaseline="central" fill="#ffffff" fontSize="7" fontWeight="bold" className="pointer-events-none select-none"
                                   data-pdf-wall-number=""
                                 >
                                   {i + 1}
@@ -2592,6 +2600,9 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
   const [editAxisValue, setEditAxisValue] = useState('0');
   const [visibleGridId, setVisibleGridId] = useState<string | null>(null);
 
+  const axisConfig = AXIS_MAP[sectionType];
+  const filtered = sections.filter(s => s.sectionType === sectionType);
+
   // React to forced navigation from parent
   React.useEffect(() => {
     if (forcedVisibleGridId) {
@@ -2600,10 +2611,7 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
         setVisibleGridId(forcedVisibleGridId);
       }
     }
-  }, [forcedVisibleGridId]);
-
-  const axisConfig = AXIS_MAP[sectionType];
-  const filtered = sections.filter(s => s.sectionType === sectionType);
+  }, [forcedVisibleGridId, filtered]);
 
   const handleAdd = () => {
     if (!newName.trim()) return;
@@ -2699,7 +2707,7 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
         const gridVisible = visibleGridId === section.id;
 
         return (
-          <div key={section.id}>
+          <div key={section.id} data-section-id={section.id}>
             <div className="flex items-center justify-between px-3 py-2.5 rounded-lg border bg-card hover:bg-accent/30 transition-colors">
               <div className="flex items-center gap-2 flex-1 min-w-0">
                 {isEditing ? (

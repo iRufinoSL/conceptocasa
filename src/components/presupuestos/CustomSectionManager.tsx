@@ -70,6 +70,8 @@ interface CustomSectionManagerProps {
   /** Configurable ridge line */
   ridgeLine?: import('@/hooks/useFloorPlan').RidgeLine | null;
   onRidgeLineChange?: (ridge: import('@/hooks/useFloorPlan').RidgeLine | null) => void;
+  /** Open workspace properties panel */
+  onOpenWorkspaceProperties?: (info: { workspaceId: string; workspaceName: string; sectionType: string; sectionName: string }) => void;
 }
 
 const AXIS_MAP: Record<string, { axis: 'X' | 'Y' | 'Z'; label: string; placeholder: string }> = {
@@ -206,9 +208,11 @@ interface SectionGridProps {
   /** Configurable ridge line */
   ridgeLine?: import('@/hooks/useFloorPlan').RidgeLine | null;
   onRidgeLineChange?: (ridge: import('@/hooks/useFloorPlan').RidgeLine | null) => void;
+  /** Open workspace properties panel */
+  onOpenWorkspaceProperties?: (info: { workspaceId: string; workspaceName: string; sectionType: string; sectionName: string }) => void;
 }
 
-function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections, allSections, onSectionsChange, onNavigateToWallSection, planData, isOverview, allZSections, ridgeLine, onRidgeLineChange }: SectionGridProps) {
+function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections, allSections, onSectionsChange, onNavigateToWallSection, planData, isOverview, allZSections, ridgeLine, onRidgeLineChange, onOpenWorkspaceProperties }: SectionGridProps) {
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const [gridMin, setGridMin] = useState(GRID_MIN);
@@ -322,6 +326,33 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
     }
     // Show placement dialog
     setShowPlacementDialog(proj.workspaceId);
+  };
+
+  // Open workspace properties panel (single click on polygon fill)
+  const openWorkspaceProps = (proj: SectionWallProjection) => {
+    if (onOpenWorkspaceProperties) {
+      onOpenWorkspaceProperties({
+        workspaceId: proj.workspaceId,
+        workspaceName: proj.workspaceName,
+        sectionType: section.sectionType,
+        sectionName: section.name,
+      });
+    }
+  };
+
+  // Open workspace properties from standalone polygon (name-based lookup)
+  const openWorkspacePropsFromPoly = (poly: { name: string }) => {
+    if (!onOpenWorkspaceProperties) return;
+    const wsName = poly.name.replace(/\s*\((?:Suelo|Techo|Pared\s*\d*)\)\s*$/, '').replace(/\s+P\d+$/, '').trim();
+    const room = rooms?.find(r => r.name === wsName);
+    if (room) {
+      onOpenWorkspaceProperties({
+        workspaceId: room.id,
+        workspaceName: room.name,
+        sectionType: section.sectionType,
+        sectionName: section.name,
+      });
+    }
   };
 
   // Start editing with automatic placement (use default polygon)
@@ -908,7 +939,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
             fill={hslWithAlpha(color, 0.6)}
             stroke={color} strokeWidth={2}
             className={isEditingThis ? '' : 'cursor-pointer'}
-            onClick={() => !isEditingThis && selectWorkspace(proj)}
+             onClick={() => !isEditingThis && openWorkspaceProps(proj)}
           />
           <text x={sx} y={sy - 12} textAnchor="middle" fontSize={6} fontWeight={600} fill={color}
             className="pointer-events-none select-none"
@@ -918,7 +949,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
           <rect x={sx - 25} y={sy + 10} width={50} height={14} rx={3}
             fill="hsl(45 100% 50% / 0.85)"
             className={isEditingThis ? '' : 'cursor-pointer'}
-            onClick={() => !isEditingThis && selectWorkspace(proj)}
+             onClick={() => !isEditingThis && openWorkspaceProps(proj)}
           />
           <text x={sx} y={sy + 19} textAnchor="middle" fontSize={fontSize} fontWeight={700}
             fill="hsl(0 0% 10%)" className="pointer-events-none select-none"
@@ -955,7 +986,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
           <line x1={x1} y1={y1} x2={x2} y2={y2}
             stroke={color} strokeWidth={isEditingThis ? 3 : 2} strokeLinecap="round"
             className={isEditingThis ? '' : 'cursor-pointer'}
-            onClick={() => !isEditingThis && selectWorkspace(proj)}
+             onClick={() => !isEditingThis && openWorkspaceProps(proj)}
           />
           {verts.map((v, vi) => {
             const { sx, sy } = svgPts[vi];
@@ -974,7 +1005,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
           <rect x={mx - 25} y={my + 3} width={50} height={14} rx={3}
             fill="hsl(45 100% 50% / 0.85)"
             className={isEditingThis ? '' : 'cursor-pointer'}
-            onClick={() => !isEditingThis && selectWorkspace(proj)}
+            onClick={() => !isEditingThis && openWorkspaceProps(proj)}
           />
           <text x={mx} y={my + 12} textAnchor="middle" fontSize={fontSize} fontWeight={700}
             fill="hsl(0 0% 10%)" className="pointer-events-none select-none"
@@ -1012,10 +1043,10 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
             <polygon points={points}
               fill={pat ? `url(#wall-pattern-${pat.id})` : hslWithAlpha(color, isEditingThis ? 0.25 : 0.12)}
               stroke="none"
-              className={isEditingThis || isVerticalSection ? '' : 'cursor-pointer'}
-              style={{ pointerEvents: isVerticalSection ? 'none' : undefined }}
-              onClick={() => !isEditingThis && !isVerticalSection && selectWorkspace(proj)}
-            />
+               className={isEditingThis || isVerticalSection ? '' : 'cursor-pointer'}
+               style={{ pointerEvents: isVerticalSection ? 'none' : undefined }}
+               onClick={() => !isEditingThis && !isVerticalSection && openWorkspaceProps(proj)}
+             />
           );
         })()}
 
@@ -1180,7 +1211,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
           fill="hsl(45 100% 50% / 0.85)"
           className={isEditingThis ? '' : 'cursor-pointer'}
           data-pdf-workspace-name=""
-          onClick={() => !isEditingThis && selectWorkspace(proj)}
+           onClick={() => !isEditingThis && openWorkspaceProps(proj)}
         />
         <text x={cxSvg} y={cySvg - 1} textAnchor="middle" fontSize={fontSize} fontWeight={700}
           fill="hsl(0 0% 10%)" className="pointer-events-none select-none"
@@ -2295,14 +2326,14 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
               <g key={`sp-${poly.id}`}>
                 <circle cx={sx} cy={sy} r={isEditingThisPoly ? 8 : 6}
                   fill={hslWithAlpha(color, 0.6)} stroke={color} strokeWidth={2}
-                  className="cursor-pointer" onClick={() => !isEditingThisPoly && selectSectionPolygon(poly)}
+                   className="cursor-pointer" onClick={() => !isEditingThisPoly && openWorkspacePropsFromPoly(poly)}
                 />
                 <text x={sx} y={sy - 12} textAnchor="middle" fontSize={6} fontWeight={600} fill={color} className="pointer-events-none select-none">
                   {hLabel}{verts[0].x},{vLabel}{verts[0].y}
                 </text>
                 <rect x={sx - 25} y={sy + 10} width={50} height={14} rx={3}
                   fill="hsl(45 100% 50% / 0.85)" className="cursor-pointer"
-                  onClick={() => !isEditingThisPoly && selectSectionPolygon(poly)}
+                   onClick={() => !isEditingThisPoly && openWorkspacePropsFromPoly(poly)}
                 />
                 <text x={sx} y={sy + 19} textAnchor="middle" fontSize={fontSize} fontWeight={700}
                   fill="hsl(0 0% 10%)" className="pointer-events-none select-none">{poly.name}</text>
@@ -2325,13 +2356,13 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
             const lineLenMm = Math.round(Math.sqrt(((verts[1].x - verts[0].x) * scaleHm) ** 2 + ((verts[1].y - verts[0].y) * scaleVm) ** 2) * 1000);
             return (
               <g key={`sp-${poly.id}`}>
-                <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={color} strokeWidth={isEditingThisPoly ? 3 : 2}
-                  className="cursor-pointer" onClick={() => !isEditingThisPoly && selectSectionPolygon(poly)} />
+                 <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={color} strokeWidth={isEditingThisPoly ? 3 : 2}
+                   className="cursor-pointer" onClick={() => !isEditingThisPoly && openWorkspacePropsFromPoly(poly)} />
                 <text x={mx} y={my - 8} textAnchor="middle" fontSize={fontSize} fontWeight={700} fill={color}
                   className="pointer-events-none select-none">{lineLenMm} mm</text>
                 <rect x={mx - 25} y={my + 3} width={50} height={14} rx={3}
                   fill="hsl(45 100% 50% / 0.85)" className="cursor-pointer"
-                  onClick={() => !isEditingThisPoly && selectSectionPolygon(poly)} />
+                  onClick={() => !isEditingThisPoly && openWorkspacePropsFromPoly(poly)} />
                 <text x={mx} y={my + 12} textAnchor="middle" fontSize={fontSize} fontWeight={700}
                   fill="hsl(0 0% 10%)" className="pointer-events-none select-none">{poly.name}</text>
                 {isEditingThisPoly && verts.map((v, vi) => {
@@ -2364,8 +2395,8 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                     fill={pat ? `url(#wall-pattern-${pat.id})` : hslWithAlpha(color, isEditingThisPoly ? 0.25 : 0.12)}
                     stroke={color} strokeWidth={isEditingThisPoly ? 2.5 : 1.5}
                     strokeDasharray={isEditingThisPoly ? 'none' : '4 2'}
-                    className="cursor-pointer"
-                    onClick={() => !isEditingThisPoly && selectSectionPolygon(poly)}
+                     className="cursor-pointer"
+                     onClick={() => !isEditingThisPoly && openWorkspacePropsFromPoly(poly)}
                   />
                 );
               })()}
@@ -2454,7 +2485,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
               <rect x={cxSvg - 30} y={cySvg - 10} width={60} height={20} rx={3}
                 fill="hsl(45 100% 50% / 0.85)" className="cursor-pointer"
                 data-pdf-workspace-name=""
-                onClick={() => !isEditingThisPoly && selectSectionPolygon(poly)} />
+                 onClick={() => !isEditingThisPoly && openWorkspacePropsFromPoly(poly)} />
               <text x={cxSvg} y={cySvg - 1} textAnchor="middle" fontSize={fontSize} fontWeight={700}
                 fill="hsl(0 0% 10%)" className="pointer-events-none select-none"
                 data-pdf-workspace-name=""
@@ -2810,7 +2841,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
   );
 }
 
-export function CustomSectionManager({ sectionType, sections, onSectionsChange, scaleConfig, wallProjectionsBySection, rooms, budgetName, onNavigateToWallSection, forcedVisibleGridId, planData, ridgeLine, onRidgeLineChange }: CustomSectionManagerProps) {
+export function CustomSectionManager({ sectionType, sections, onSectionsChange, scaleConfig, wallProjectionsBySection, rooms, budgetName, onNavigateToWallSection, forcedVisibleGridId, planData, ridgeLine, onRidgeLineChange, onOpenWorkspaceProperties }: CustomSectionManagerProps) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState('');
   const [newAxisValue, setNewAxisValue] = useState('0');
@@ -2921,8 +2952,9 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
               planData={planData}
               isOverview={true}
               allZSections={filtered}
-              ridgeLine={ridgeLine}
-            />
+               ridgeLine={ridgeLine}
+               onOpenWorkspaceProperties={onOpenWorkspaceProperties}
+             />
           </div>
         );
       })()}
@@ -3064,8 +3096,9 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
                 onNavigateToWallSection={onNavigateToWallSection}
                 planData={planData}
                 ridgeLine={ridgeLine}
-                onRidgeLineChange={onRidgeLineChange}
-              />
+                 onRidgeLineChange={onRidgeLineChange}
+                 onOpenWorkspaceProperties={onOpenWorkspaceProperties}
+               />
             )}
           </div>
         );

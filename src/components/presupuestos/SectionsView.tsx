@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
+import { WorkspacePropertiesPanel } from './WorkspacePropertiesPanel';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -244,8 +245,9 @@ export function SectionsView(props: SectionsViewProps) {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
     new Set(['vertical', 'longitudinal', 'transversal'])
   );
-  const [show3D, setShow3D] = useState(false);
-  const [focusSectionId, setFocusSectionId] = useState<string | null>(null);
+   const [show3D, setShow3D] = useState(false);
+   const [focusSectionId, setFocusSectionId] = useState<string | null>(null);
+   const [workspaceProps, setWorkspaceProps] = useState<{ workspaceId: string; workspaceName: string; sectionType: string; sectionName: string } | null>(null);
 
   const toggleGroup = (type: string) => {
     setExpandedGroups(prev => {
@@ -327,7 +329,7 @@ export function SectionsView(props: SectionsViewProps) {
   }, [allSections]);
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2 relative">
       <div className="flex justify-between items-center">
         <Button
           size="sm"
@@ -391,14 +393,26 @@ export function SectionsView(props: SectionsViewProps) {
                   onNavigateToWallSection={handleNavigateToWallSection}
                   forcedVisibleGridId={focusSectionId}
                   planData={props.planData}
-                  ridgeLine={props.ridgeLine}
-                  onRidgeLineChange={props.onRidgeLineChange}
-                />
-              </div>
+                   ridgeLine={props.ridgeLine}
+                   onRidgeLineChange={props.onRidgeLineChange}
+                   onOpenWorkspaceProperties={(info) => setWorkspaceProps(info)}
+                 />
+               </div>
             )}
           </div>
         );
       })}
+
+      {/* Workspace properties floating panel */}
+      {workspaceProps && (
+        <WorkspacePropertiesPanel
+          workspaceId={workspaceProps.workspaceId}
+          workspaceName={workspaceProps.workspaceName}
+          sectionType={workspaceProps.sectionType}
+          sectionName={workspaceProps.sectionName}
+          onClose={() => setWorkspaceProps(null)}
+        />
+      )}
     </div>
   );
 }

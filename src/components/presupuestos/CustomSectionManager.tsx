@@ -61,8 +61,8 @@ interface CustomSectionManagerProps {
   wallProjectionsBySection?: Map<string, SectionWallProjection[]>;
   rooms?: RoomData[];
   budgetName?: string;
-  /** Navigate to the section that contains a wall (double-click on wall number) */
-  onNavigateToWallSection?: (wallInfo: { roomId: string; roomName: string; wallIndex: number; isHorizontal: boolean; edgeAxisValue: number }) => void;
+   /** Navigate to the section that contains a wall (double-click on wall number) */
+  onNavigateToWallSection?: (wallInfo: { roomId: string; roomName: string; wallIndex: number; isHorizontal: boolean; edgeAxisValue: number; sourceSectionType: string }) => void;
   /** Force this section's grid to be visible (set externally for navigation) */
   forcedVisibleGridId?: string | null;
 }

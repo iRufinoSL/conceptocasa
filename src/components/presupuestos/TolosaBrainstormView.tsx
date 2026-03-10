@@ -2024,6 +2024,20 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
               <span className="hidden sm:inline">Gráfico</span>
             </button>
           </div>
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar actividades..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="pl-9 h-9 w-48"
+            />
+            {searchTerm && (
+              <button onClick={() => setSearchTerm('')} className="absolute right-2 top-1/2 -translate-y-1/2">
+                <X className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+              </button>
+            )}
+          </div>
           <Button onClick={() => { setAddingParentId('root'); setNewName(''); setNewDescription(''); }} className="gap-2">
             <Plus className="h-4 w-4" /> Nuevo QUÉ?
           </Button>

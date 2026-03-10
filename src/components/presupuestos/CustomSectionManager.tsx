@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import type { RoomData } from '@/lib/floor-plan-calculations';
-import { Plus, Minus, Trash2, Pencil, MapPin, Eye, EyeOff, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Save, RefreshCw, MousePointer, PenTool, ZoomIn, ZoomOut } from 'lucide-react';
+import { Plus, Minus, Trash2, Pencil, MapPin, Eye, EyeOff, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Save, RefreshCw, MousePointer, PenTool, ZoomIn, ZoomOut, Maximize2, Minimize2 } from 'lucide-react';
 import { GridPdfExport } from './GridPdfExport';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';

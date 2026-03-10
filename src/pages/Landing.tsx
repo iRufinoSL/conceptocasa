@@ -477,8 +477,8 @@ const Landing = () => {
               <span className="font-display italic text-primary">eres protagonista</span>
             </h2>
             <p className="text-muted-foreground mt-4 max-w-2xl mx-auto text-lg">
-              Tu casa se construye contigo. No solo pones la ilusión y la inversión: 
-              participas activamente en cada decisión de diseño, materiales y acabados.
+               Tu casa se construye contigo. No solo pones la idea y la inversión: 
+               participas activamente en cada decisión de diseño, materiales y acabados.
             </p>
           </motion.div>
 
@@ -503,7 +503,7 @@ const Landing = () => {
                     forma de generar confianza.
                   </p>
                   <ul className="space-y-2 text-sm text-muted-foreground">
-                    <li className="flex items-center gap-2"><Sparkles className="w-4 h-4 text-primary" /> Ilusión y visión de futuro</li>
+                    <li className="flex items-center gap-2"><Sparkles className="w-4 h-4 text-primary" /> Idea y visión de futuro</li>
                     <li className="flex items-center gap-2"><Sparkles className="w-4 h-4 text-primary" /> Experiencia demostrada</li>
                     <li className="flex items-center gap-2"><Sparkles className="w-4 h-4 text-primary" /> Conocimiento sin reservas</li>
                   </ul>
@@ -639,12 +639,12 @@ const Landing = () => {
               className="space-y-6"
             >
               <span className="text-sm text-primary font-semibold uppercase tracking-widest">Contacto</span>
-              <h2 className="text-3xl md:text-4xl font-bold text-foreground">
+               <h2 className="text-3xl md:text-4xl font-bold text-foreground">
                 Hablemos de tu{" "}
-                <span className="font-display italic text-primary">ilusión</span>
+                <span className="font-display italic text-primary">idea</span>
               </h2>
               <p className="text-muted-foreground text-lg">
-                Cada casa que construimos empieza con una conversación. Cuéntanos tu sueño 
+                Cada casa que construimos empieza con una conversación. Cuéntanos tu idea y visión 
                 y te ayudaremos a convertirlo en un hogar saludable, eficiente y hecho solo para ti.
               </p>
 
@@ -658,13 +658,13 @@ const Landing = () => {
                     <div className="font-medium">organiza@concepto.casa</div>
                   </div>
                 </a>
-                <a href="tel:+34600000000" className="flex items-center gap-3 text-foreground hover:text-primary transition-colors">
+                <a href="tel:+34690123533" className="flex items-center gap-3 text-foreground hover:text-primary transition-colors">
                   <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
                     <Phone className="w-5 h-5 text-primary" />
                   </div>
                   <div>
                     <div className="text-sm text-muted-foreground">Teléfono</div>
-                    <div className="font-medium">Llámanos</div>
+                    <div className="font-medium">+34 690 123 533</div>
                   </div>
                 </a>
               </div>

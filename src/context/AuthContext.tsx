@@ -84,7 +84,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (import.meta.env.DEV) console.log('[auth] Setting roles count:', userRoles.length);
           setRoles(userRoles);
         } else {
-          console.log('[auth] No roles found for user');
+          if (import.meta.env.DEV) console.log('[auth] No roles found');
           setRoles([]);
         }
 

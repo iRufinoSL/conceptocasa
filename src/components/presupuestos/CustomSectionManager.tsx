@@ -70,6 +70,8 @@ interface CustomSectionManagerProps {
   /** Configurable ridge line */
   ridgeLine?: import('@/hooks/useFloorPlan').RidgeLine | null;
   onRidgeLineChange?: (ridge: import('@/hooks/useFloorPlan').RidgeLine | null) => void;
+  /** Open workspace properties panel */
+  onOpenWorkspaceProperties?: (info: { workspaceId: string; workspaceName: string; sectionType: string; sectionName: string }) => void;
 }
 
 const AXIS_MAP: Record<string, { axis: 'X' | 'Y' | 'Z'; label: string; placeholder: string }> = {

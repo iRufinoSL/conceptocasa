@@ -54,6 +54,7 @@ const App = () => {
             <Route path="/install" element={<Install />} />
             <Route path="/r/:type/:id" element={<SmsRedirect />} />
             <Route path="/soluciones" element={<Soluciones />} />
+            <Route path="/sistema-constructivo" element={<SistemaConstructivo />} />
             <Route path="/floorplan-popout" element={<ProtectedRoute appName="presupuestos"><FloorPlanPopout /></ProtectedRoute>} />
             
             {/* Protected routes - require authentication */}

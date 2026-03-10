@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef, useCallback } from 'react';
 import { Canvas, ThreeEvent, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls, Text, Line } from '@react-three/drei';
 import * as THREE from 'three';
+import { InfiniteAxes3D } from './InfiniteAxes3D';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Minimize2, Maximize2, Home, Layers, SortAsc, X } from 'lucide-react';

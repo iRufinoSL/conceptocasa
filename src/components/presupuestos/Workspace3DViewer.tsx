@@ -2,6 +2,7 @@ import React, { useRef, useState, useMemo, useCallback, useEffect } from 'react'
 import { Canvas, useThree, useFrame, ThreeEvent } from '@react-three/fiber';
 import { OrbitControls, Text, Line } from '@react-three/drei';
 import * as THREE from 'three';
+import { InfiniteAxes3D } from './InfiniteAxes3D';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';

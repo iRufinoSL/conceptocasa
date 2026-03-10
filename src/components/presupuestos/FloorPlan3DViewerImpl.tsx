@@ -2,6 +2,7 @@ import { useMemo, useEffect, useState } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, Text } from '@react-three/drei';
 import * as THREE from 'three';
+import { InfiniteAxes3D } from './InfiniteAxes3D';
 import type { FloorPlanData, RoomData } from '@/lib/floor-plan-calculations';
 import { autoClassifyWalls, isExteriorType, isInvisibleType } from '@/lib/floor-plan-calculations';
 

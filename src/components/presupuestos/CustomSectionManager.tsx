@@ -2101,11 +2101,12 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
 
               {/* Global perimeter dimensions — OUTSIDE axis labels */}
               {hasGlobalBounds && (() => {
-                // Position outside the axis label area (above X labels, below grid, left of Y labels, right of grid)
-                const topY = margin.top - 22; // above X-axis labels
-                const bottomY = margin.top + gridCount * cellSize + 18; // below grid
-                const leftX = margin.left - 28; // left of Y-axis labels
-                const rightX = margin.left + gridCount * cellSize + 18; // right of grid
+                // Position exactly 2 grid cells away from both axes
+                const dimOffset = 2 * cellSize;
+                const topY = margin.top - dimOffset;
+                const bottomY = margin.top + gridCount * cellSize + dimOffset;
+                const leftX = margin.left - dimOffset;
+                const rightX = margin.left + gridCount * cellSize + dimOffset;
                 const midX = (globalLeft + globalRight) / 2;
                 const midY = (globalTop + globalBottom) / 2;
                 const perimFontSize = Math.round(8 * Math.max(1, zoomLevel * 0.8));

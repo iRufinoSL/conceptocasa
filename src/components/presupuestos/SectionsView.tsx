@@ -599,6 +599,22 @@ function Workspace3DWireframe({ rooms, floors, planData, scaleConfig, ridgeLine 
             );
           })}
 
+          {/* Ridge line in 3D */}
+          {ridgeLine && (() => {
+            const maxZm = Math.max(...volumes.map(v => v.zTopM), 2);
+            const p1 = project(ridgeLine.x1 * scaleXm, ridgeLine.y1 * scaleYm, maxZm);
+            const p2 = project(ridgeLine.x2 * scaleXm, ridgeLine.y2 * scaleYm, maxZm);
+            const mid = { px: (p1.px + p2.px) / 2, py: (p1.py + p2.py) / 2 };
+            return (
+              <g className="pointer-events-none">
+                <line x1={p1.px} y1={p1.py} x2={p2.px} y2={p2.py} stroke="hsl(0 70% 50%)" strokeWidth={2} strokeDasharray="6 3" opacity={0.8} />
+                <circle cx={p1.px} cy={p1.py} r={3} fill="hsl(0 70% 50%)" />
+                <circle cx={p2.px} cy={p2.py} r={3} fill="hsl(0 70% 50%)" />
+                <text x={mid.px} y={mid.py - 6} textAnchor="middle" fontSize={7} fontWeight={700} fill="hsl(0 70% 45%)">CUMBRERA</text>
+              </g>
+            );
+          })()}
+
           {/* Z axis indicator */}
           {(() => {
             const z0 = project(0, 0, 0);

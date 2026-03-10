@@ -2395,8 +2395,8 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                     fill={pat ? `url(#wall-pattern-${pat.id})` : hslWithAlpha(color, isEditingThisPoly ? 0.25 : 0.12)}
                     stroke={color} strokeWidth={isEditingThisPoly ? 2.5 : 1.5}
                     strokeDasharray={isEditingThisPoly ? 'none' : '4 2'}
-                    className="cursor-pointer"
-                    onClick={() => !isEditingThisPoly && selectSectionPolygon(poly)}
+                     className="cursor-pointer"
+                     onClick={() => !isEditingThisPoly && openWorkspacePropsFromPoly(poly)}
                   />
                 );
               })()}

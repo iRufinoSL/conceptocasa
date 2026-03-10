@@ -84,7 +84,7 @@ const pillars = [
   {
     icon: Shield,
     title: "Certificación Casa Pasiva",
-    description: "El estándar más exigente del mundo en construcción sostenible. Verificado, medido y certificado.",
+    description: "Test de estanqueidad (Blower Door), termografías infrarrojas para detectar puentes térmicos, y si lo necesitas, Certificación Oficial ante el Passivhaus Institut.",
     stat: "A+++",
     statLabel: "calificación energética"
   }

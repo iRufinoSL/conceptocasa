@@ -365,7 +365,7 @@ const Landing = () => {
               </p>
               <div className="flex items-center gap-6 pt-4">
                 <div className="text-center">
-                  <div className="text-3xl font-bold text-primary">15+</div>
+                  <div className="text-3xl font-bold text-orange">15+</div>
                   <div className="text-sm text-muted-foreground">Años de experiencia</div>
                 </div>
                 <div className="w-px h-12 bg-border" />

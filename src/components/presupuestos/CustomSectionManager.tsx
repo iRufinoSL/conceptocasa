@@ -203,9 +203,12 @@ interface SectionGridProps {
   /** If true, show all rooms across all Z sections (overview mode) */
   isOverview?: boolean;
   allZSections?: CustomSection[];
+  /** Configurable ridge line */
+  ridgeLine?: import('@/hooks/useFloorPlan').RidgeLine | null;
+  onRidgeLineChange?: (ridge: import('@/hooks/useFloorPlan').RidgeLine | null) => void;
 }
 
-function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections, allSections, onSectionsChange, onNavigateToWallSection, planData, isOverview, allZSections }: SectionGridProps) {
+function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections, allSections, onSectionsChange, onNavigateToWallSection, planData, isOverview, allZSections, ridgeLine, onRidgeLineChange }: SectionGridProps) {
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const [gridMin, setGridMin] = useState(GRID_MIN);

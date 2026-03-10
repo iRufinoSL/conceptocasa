@@ -971,7 +971,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
           <line x1={x1} y1={y1} x2={x2} y2={y2}
             stroke={color} strokeWidth={isEditingThis ? 3 : 2} strokeLinecap="round"
             className={isEditingThis ? '' : 'cursor-pointer'}
-            onClick={() => !isEditingThis && selectWorkspace(proj)}
+             onClick={() => !isEditingThis && openWorkspaceProps(proj)}
           />
           {verts.map((v, vi) => {
             const { sx, sy } = svgPts[vi];

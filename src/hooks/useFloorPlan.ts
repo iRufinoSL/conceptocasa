@@ -181,10 +181,12 @@ export function useFloorPlan(budgetId: string) {
         setCustomCornersState(rawCorners.corners);
         setManualElevationsState(Array.isArray(rawCorners.manualElevations) ? rawCorners.manualElevations : []);
         setCustomSectionsState(Array.isArray(rawCorners.customSections) ? rawCorners.customSections : []);
+        setRidgeLineState(rawCorners.ridgeLine ?? null);
       } else {
         setCustomCornersState([]);
         setManualElevationsState([]);
         setCustomSectionsState([]);
+        setRidgeLineState(null);
       }
 
       // Fetch floors

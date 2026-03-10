@@ -344,7 +344,7 @@ export function TolosaCardView({
                   className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
                   title={isExpanded ? 'Colapsar hijos' : `Expandir (${children.length} hijos)`}
                 >
-                  {isExpanded ? <Minus className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
+                  {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                   <span>{children.length}</span>
                 </button>
               )}

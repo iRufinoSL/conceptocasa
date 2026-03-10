@@ -388,10 +388,14 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
     const zScaleBlocks = scaleZ / 1000;
 
     // Suelo (S1)
-    const floorCenter = new THREE.Vector3(
-      baseVerts3D.reduce((s, v) => s + v.x, 0) / n, -0.01,
+    // Centroid of base polygon for outward direction calculation
+    const baseCentroid = new THREE.Vector3(
+      baseVerts3D.reduce((s, v) => s + v.x, 0) / n,
+      baseVerts3D[0].y,
       baseVerts3D.reduce((s, v) => s + v.z, 0) / n
     );
+
+    const floorCenter = new THREE.Vector3(baseCentroid.x, baseCentroid.y - 0.01, baseCentroid.z);
     result.push({
       type: 'suelo', index: 1, label: 'S1',
       vertices: [...baseVerts3D], labelPos: floorCenter, labelRot: [-Math.PI / 2, 0, 0],

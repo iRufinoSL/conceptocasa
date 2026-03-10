@@ -218,7 +218,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
   const [gridMin, setGridMin] = useState(GRID_MIN);
   const [gridMax, setGridMax] = useState(GRID_MAX);
   const [zoomLevel, setZoomLevel] = useState(1);
-  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [editVertices, setEditVertices] = useState<PolygonVertex[]>([]);
   const [draggingIdx, setDraggingIdx] = useState<number | null>(null);
   const [drawingMode, setDrawingMode] = useState(false);

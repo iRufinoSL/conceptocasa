@@ -222,12 +222,13 @@ export function TolosaCardView({
   const handleCardClick = useCallback((e: React.MouseEvent, item: TolosItem) => {
     const children = getChildren(item.id);
     if (children.length > 0) {
-      setDrillRootId(item.id);
+      // Single click toggles expand/collapse
+      toggleExpand(item.id);
       setFocusedId(item.id);
     } else {
       onOpenFullDetail?.(item.id);
     }
-  }, [getChildren, onOpenFullDetail]);
+  }, [getChildren, onOpenFullDetail, toggleExpand]);
 
   const startEditing = (item: TolosItem) => {
     setEditingCardId(item.id);
@@ -265,6 +266,7 @@ export function TolosaCardView({
         <div
           className={`rounded-xl border-2 ${palette.border} ${palette.bg} min-w-[200px] max-w-[280px] cursor-pointer hover:shadow-lg transition-all relative select-none group/card ${isFocused ? 'ring-2 ring-primary shadow-lg' : ''}`}
           onClick={(e) => { if (!isEditing) handleCardClick(e, item); }}
+          onDoubleClick={(e) => { if (!isEditing && hasChildren) { e.stopPropagation(); setDrillRootId(item.id); setFocusedId(item.id); } }}
         >
           {/* Header */}
           <div className={`flex items-center justify-between gap-1 px-2.5 py-1.5 rounded-t-[10px] ${palette.header}`}>
@@ -342,7 +344,7 @@ export function TolosaCardView({
                   className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
                   title={isExpanded ? 'Colapsar hijos' : `Expandir (${children.length} hijos)`}
                 >
-                  {isExpanded ? <Minus className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
+                  {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                   <span>{children.length}</span>
                 </button>
               )}

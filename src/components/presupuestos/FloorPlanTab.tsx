@@ -31,6 +31,7 @@ interface FloorPlanTabProps {
   budgetId: string;
   budgetName?: string;
   isAdmin: boolean;
+  onNavigateTo3D?: () => void;
 }
 
 interface SpaceTypeDef {

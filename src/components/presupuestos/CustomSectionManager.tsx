@@ -2707,7 +2707,7 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
         const gridVisible = visibleGridId === section.id;
 
         return (
-          <div key={section.id}>
+          <div key={section.id} data-section-id={section.id}>
             <div className="flex items-center justify-between px-3 py-2.5 rounded-lg border bg-card hover:bg-accent/30 transition-colors">
               <div className="flex items-center gap-2 flex-1 min-w-0">
                 {isEditing ? (

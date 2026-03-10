@@ -65,6 +65,8 @@ interface CustomSectionManagerProps {
   onNavigateToWallSection?: (wallInfo: { roomId: string; roomName: string; wallIndex: number; isHorizontal: boolean; edgeAxisValue: number; sourceSectionType: string }) => void;
   /** Force this section's grid to be visible (set externally for navigation) */
   forcedVisibleGridId?: string | null;
+  /** Plan data for ridge line rendering */
+  planData?: import('@/lib/floor-plan-calculations').FloorPlanData;
 }
 
 const AXIS_MAP: Record<string, { axis: 'X' | 'Y' | 'Z'; label: string; placeholder: string }> = {

@@ -222,12 +222,13 @@ export function TolosaCardView({
   const handleCardClick = useCallback((e: React.MouseEvent, item: TolosItem) => {
     const children = getChildren(item.id);
     if (children.length > 0) {
-      setDrillRootId(item.id);
+      // Single click toggles expand/collapse
+      toggleExpand(item.id);
       setFocusedId(item.id);
     } else {
       onOpenFullDetail?.(item.id);
     }
-  }, [getChildren, onOpenFullDetail]);
+  }, [getChildren, onOpenFullDetail, toggleExpand]);
 
   const startEditing = (item: TolosItem) => {
     setEditingCardId(item.id);

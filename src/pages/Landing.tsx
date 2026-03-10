@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import HousingProfileForm from "@/components/landing/HousingProfileForm";
 import { useWebsiteTracking, getStoredUtmParams } from "@/hooks/useWebsiteTracking";
 import { motion } from "framer-motion";
+import { FloatingTOC } from "@/components/landing/FloatingTOC";
 import { 
   Mail, 
   Phone, 
@@ -262,6 +263,8 @@ const Landing = () => {
           )}
         </div>
       </nav>
+
+      <FloatingTOC />
 
       {/* Hero Section */}
       <section id="inicio" className="relative min-h-screen flex items-center overflow-hidden pt-16">

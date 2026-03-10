@@ -99,7 +99,7 @@ const systems: ConstructionSystem[] = [
       "Muro de 38 cm = U de 0.15 W/m²K"
     ],
     houseImage: casaSystem3e,
-    detailImages: [],
+    detailImages: [bloqueSystem3e],
     highlight: "Monocapa 38 cm"
   },
   {

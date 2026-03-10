@@ -477,8 +477,8 @@ const Landing = () => {
               <span className="font-display italic text-primary">eres protagonista</span>
             </h2>
             <p className="text-muted-foreground mt-4 max-w-2xl mx-auto text-lg">
-              Tu casa se construye contigo. No solo pones la ilusión y la inversión: 
-              participas activamente en cada decisión de diseño, materiales y acabados.
+               Tu casa se construye contigo. No solo pones la idea y la inversión: 
+               participas activamente en cada decisión de diseño, materiales y acabados.
             </p>
           </motion.div>
 

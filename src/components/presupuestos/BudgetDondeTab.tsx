@@ -16,6 +16,7 @@ interface BudgetDondeTabProps {
 
 export function BudgetDondeTab({ budgetId, budgetName, isAdmin }: BudgetDondeTabProps) {
   const [openSection, setOpenSection] = useState<string | null>(null);
+  const [autoShow3D, setAutoShow3D] = useState(false);
 
   const sections = [
     { id: 'plano', label: 'Plano', icon: PenTool, color: 'text-teal-600' },
@@ -49,7 +50,12 @@ export function BudgetDondeTab({ budgetId, budgetName, isAdmin }: BudgetDondeTab
           </CollapsibleTrigger>
           <CollapsibleContent className="pt-4">
             {id === 'plano' && (
-              <FloorPlanTab budgetId={budgetId} budgetName={budgetName} isAdmin={isAdmin} />
+              <FloorPlanTab budgetId={budgetId} budgetName={budgetName} isAdmin={isAdmin}
+                onNavigateTo3D={() => {
+                  setAutoShow3D(true);
+                  setOpenSection('espacios-trabajo');
+                }}
+              />
             )}
             {id === 'areas-trabajo' && (
               <BudgetWorkAreasTab budgetId={budgetId} isAdmin={isAdmin} />
@@ -58,7 +64,7 @@ export function BudgetDondeTab({ budgetId, budgetName, isAdmin }: BudgetDondeTab
               <BudgetSpacesTab budgetId={budgetId} isAdmin={isAdmin} />
             )}
             {id === 'espacios-trabajo' && (
-              <BudgetWorkspacesTab budgetId={budgetId} isAdmin={isAdmin} />
+              <BudgetWorkspacesTab budgetId={budgetId} isAdmin={isAdmin} autoShow3D={autoShow3D} onAutoShow3DHandled={() => setAutoShow3D(false)} />
             )}
             {id === 'objetos' && (
               <WallObjectsList budgetId={budgetId} />

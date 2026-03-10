@@ -31,6 +31,7 @@ interface FloorPlanTabProps {
   budgetId: string;
   budgetName?: string;
   isAdmin: boolean;
+  onNavigateTo3D?: () => void;
 }
 
 interface SpaceTypeDef {
@@ -803,7 +804,7 @@ class SpaceFormErrorBoundary extends React.Component<
 
 // FloorPlanSettingsPanel removed — merged into LevelManagerPanel
 
-export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTabProps) {
+export function FloorPlanTab({ budgetId, budgetName = '', isAdmin, onNavigateTo3D }: FloorPlanTabProps) {
   const {
     floorPlan, rooms, floors, customCorners, updateCustomCorners, manualElevations, updateManualElevations, loading, saving,
     addRoom, updateRoom, updateWall, updateWallSegmentType, deleteRoom, duplicateRoom,
@@ -1288,6 +1289,7 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
           onCustomSectionsChange={updateCustomSections}
           ridgeLine={ridgeLine}
           onRidgeLineChange={updateRidgeLine}
+          onNavigateTo3D={onNavigateTo3D}
           onRefresh={async () => { await refetch(); }}
           focusWallId={elevationReturnContext?.wallId}
           renderSelectedRoom={selectedRoom && planData ? () => {

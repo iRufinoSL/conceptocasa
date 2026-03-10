@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import type { RoomData } from '@/lib/floor-plan-calculations';
-import { Plus, Minus, Trash2, Pencil, MapPin, Eye, EyeOff, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Save, RefreshCw, MousePointer, PenTool, ZoomIn, ZoomOut } from 'lucide-react';
+import { Plus, Minus, Trash2, Pencil, MapPin, Eye, EyeOff, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Save, RefreshCw, MousePointer, PenTool, ZoomIn, ZoomOut, Maximize2, Minimize2 } from 'lucide-react';
 import { GridPdfExport } from './GridPdfExport';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -218,6 +218,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
   const [gridMin, setGridMin] = useState(GRID_MIN);
   const [gridMax, setGridMax] = useState(GRID_MAX);
   const [zoomLevel, setZoomLevel] = useState(1);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
   const [editVertices, setEditVertices] = useState<PolygonVertex[]>([]);
   const [draggingIdx, setDraggingIdx] = useState<number | null>(null);
@@ -1242,7 +1243,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
   };
 
   return (
-    <div className="mt-2">
+    <div className={isFullscreen ? 'fixed inset-0 z-50 bg-background overflow-auto p-2' : 'mt-2'}>
       <div className="flex items-center justify-between px-2 pt-1 pb-0.5 flex-wrap gap-1">
         <span className="text-[9px] text-muted-foreground">
           {section.sectionType === 'vertical' && `Vista planta Z=${section.axisValue} — Origen (0,0) arriba-izq`}
@@ -1324,6 +1325,16 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
               <Pencil className="h-3 w-3" /> Caras ({standalonePolygons.length})
             </Button>
           )}
+          {/* Fullscreen toggle */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-5 w-5 p-0"
+            onClick={() => setIsFullscreen(f => !f)}
+            title={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
+          >
+            {isFullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+          </Button>
         </div>
       </div>
 

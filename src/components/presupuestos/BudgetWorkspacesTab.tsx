@@ -12,13 +12,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useState, useMemo, useCallback, useRef } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
 import type { CustomSection } from './CustomSectionManager';
 
 interface BudgetWorkspacesTabProps {
   budgetId: string;
   isAdmin: boolean;
+  autoShow3D?: boolean;
+  onAutoShow3DHandled?: () => void;
 }
 
 interface PolygonVertex {
@@ -1983,7 +1985,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
 
 // ─── Main Component ──────────────────────────────────────────────
 
-export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabProps) {
+export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3DHandled }: BudgetWorkspacesTabProps) {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -2019,6 +2021,14 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin }: BudgetWorkspacesTabPr
   const [wallPanelLabel, setWallPanelLabel] = useState('');
   const [wallPanelRoomName, setWallPanelRoomName] = useState('');
   const [wallPanelRoomId, setWallPanelRoomId] = useState<string | null>(null);
+
+  // Auto-show 3D list when navigated from Plano > Vista 3D
+  useEffect(() => {
+    if (autoShow3D) {
+      setShow3DList(true);
+      onAutoShow3DHandled?.();
+    }
+  }, [autoShow3D, onAutoShow3DHandled]);
 
   const { data: floorPlan } = useQuery({
     queryKey: ['floor-plan-for-workspaces', budgetId],

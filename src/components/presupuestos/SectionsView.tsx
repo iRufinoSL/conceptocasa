@@ -46,6 +46,7 @@ interface SectionsViewProps {
   onRidgeLineChange?: (ridge: RidgeLine | null) => void;
   renderSelectedRoom?: () => React.ReactNode;
   onRefresh?: () => Promise<void>;
+  onNavigateTo3D?: () => void;
 }
 
 const SECTION_GROUPS = [
@@ -335,7 +336,13 @@ export function SectionsView(props: SectionsViewProps) {
           size="sm"
           variant={show3D ? 'default' : 'outline'}
           className="h-7 text-xs gap-1"
-          onClick={() => setShow3D(!show3D)}
+          onClick={() => {
+            if (props.onNavigateTo3D) {
+              props.onNavigateTo3D();
+            } else {
+              setShow3D(!show3D);
+            }
+          }}
         >
           <Box className="h-3 w-3" /> Vista 3D
         </Button>

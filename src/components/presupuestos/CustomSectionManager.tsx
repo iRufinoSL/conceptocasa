@@ -1661,35 +1661,98 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
           {section.axis}={section.axisValue}
         </text>
 
-        {/* ── Ridge axis (cumbrera) — dashed red line on Z sections ── */}
-        {section.sectionType === 'vertical' && planData && planData.roofType !== 'plana' && (() => {
-          // Ridge runs along the center of X (for dos_aguas: full Y length at X=width/2)
-          const ridgeX = planData.width / 2; // grid units (block count)
-          const hIdx = getHIndex(ridgeX);
-          if (hIdx < 0 || hIdx > gridCount) return null;
-          const ridgeSvgX = margin.left + hIdx * cellSize;
-          const gridTop = margin.top;
-          const gridBottom = margin.top + gridCount * cellSize;
-          const ridgeWidthMm = Math.round(ridgeX * scaleH);
+        {/* ── Ridge axis (cumbrera) — dashed red line ── */}
+        {section.sectionType === 'vertical' && (() => {
+          // Use configurable ridgeLine if available, else fallback to center
+          const rl = ridgeLine;
+          if (!rl && (!planData || planData.roofType === 'plana')) return null;
+          const x1 = rl ? rl.x1 : (planData ? planData.width / 2 : 0);
+          const y1 = rl ? rl.y1 : 0;
+          const x2 = rl ? rl.x2 : (planData ? planData.width / 2 : 0);
+          const y2 = rl ? rl.y2 : (planData ? planData.length || 20 : 20);
+          const svgX1 = margin.left + getHIndex(x1) * cellSize;
+          const svgY1 = margin.top + getVIndex(y1) * cellSize;
+          const svgX2 = margin.left + getHIndex(x2) * cellSize;
+          const svgY2 = margin.top + getVIndex(y2) * cellSize;
+          const midSvgX = (svgX1 + svgX2) / 2;
+          const midSvgY = Math.min(svgY1, svgY2) - 6;
           return (
             <g className="pointer-events-none">
               <line
-                x1={ridgeSvgX} y1={gridTop}
-                x2={ridgeSvgX} y2={gridBottom}
+                x1={svgX1} y1={svgY1}
+                x2={svgX2} y2={svgY2}
                 stroke="hsl(0 70% 50%)"
                 strokeWidth={1.5}
                 strokeDasharray="8 4"
                 opacity={0.7}
               />
+              {/* Start marker */}
+              <circle cx={svgX1} cy={svgY1} r={3} fill="hsl(0 70% 50%)" opacity={0.8} />
+              {/* End marker */}
+              <circle cx={svgX2} cy={svgY2} r={3} fill="hsl(0 70% 50%)" opacity={0.8} />
               <text
-                x={ridgeSvgX}
-                y={gridTop - 6}
+                x={midSvgX}
+                y={midSvgY}
                 textAnchor="middle"
                 fontSize={7}
                 fontWeight={700}
                 fill="hsl(0 70% 45%)"
               >
-                CUMBRERA X{ridgeX}
+                CUMBRERA ({x1},{y1})→({x2},{y2})
+              </text>
+            </g>
+          );
+        })()}
+
+        {/* ── Ridge intersection on Y/X sections ── */}
+        {(section.sectionType === 'longitudinal' || section.sectionType === 'transversal') && (() => {
+          const rl = ridgeLine;
+          if (!rl) return null;
+          // For a section at Y=val (longitudinal) or X=val (transversal), find where the ridge line intersects
+          const axisVal = section.axisValue;
+          let intersectH: number | null = null;
+          if (section.sectionType === 'longitudinal') {
+            // Section plane Y=axisVal; ridge from (x1,y1) to (x2,y2)
+            const dy = rl.y2 - rl.y1;
+            if (Math.abs(dy) > 0.001) {
+              const t = (axisVal - rl.y1) / dy;
+              if (t >= -0.1 && t <= 1.1) {
+                intersectH = rl.x1 + t * (rl.x2 - rl.x1);
+              }
+            } else if (Math.abs(rl.y1 - axisVal) < 0.5) {
+              // Ridge is parallel to section, show midpoint
+              intersectH = (rl.x1 + rl.x2) / 2;
+            }
+          } else {
+            // Section plane X=axisVal; ridge from (x1,y1) to (x2,y2)
+            const dx = rl.x2 - rl.x1;
+            if (Math.abs(dx) > 0.001) {
+              const t = (axisVal - rl.x1) / dx;
+              if (t >= -0.1 && t <= 1.1) {
+                intersectH = rl.y1 + t * (rl.y2 - rl.y1);
+              }
+            } else if (Math.abs(rl.x1 - axisVal) < 0.5) {
+              intersectH = (rl.y1 + rl.y2) / 2;
+            }
+          }
+          if (intersectH == null) return null;
+          const hIdx = getHIndex(intersectH);
+          if (hIdx < 0 || hIdx > gridCount) return null;
+          const svgX = margin.left + hIdx * cellSize;
+          const gridTop = margin.top;
+          const gridBottom = margin.top + gridCount * cellSize;
+          return (
+            <g className="pointer-events-none">
+              <line
+                x1={svgX} y1={gridTop}
+                x2={svgX} y2={gridBottom}
+                stroke="hsl(0 70% 50%)"
+                strokeWidth={1.5}
+                strokeDasharray="6 3"
+                opacity={0.5}
+              />
+              <text x={svgX} y={gridTop - 4} textAnchor="middle" fontSize={6} fontWeight={700} fill="hsl(0 70% 45%)">
+                ▽ CUMBRERA
               </text>
             </g>
           );

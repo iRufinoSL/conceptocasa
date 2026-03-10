@@ -309,7 +309,7 @@ const Landing = () => {
             >
               <Button 
                 size="lg" 
-                className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 gap-2"
+                className="bg-orange hover:bg-orange/90 text-orange-foreground px-8 gap-2"
                 onClick={() => scrollToSection('contacto')}
               >
                 Solicita información técnica
@@ -365,17 +365,17 @@ const Landing = () => {
               </p>
               <div className="flex items-center gap-6 pt-4">
                 <div className="text-center">
-                  <div className="text-3xl font-bold text-primary">15+</div>
+                  <div className="text-3xl font-bold text-orange">15+</div>
                   <div className="text-sm text-muted-foreground">Años de experiencia</div>
                 </div>
                 <div className="w-px h-12 bg-border" />
                 <div className="text-center">
-                  <div className="text-3xl font-bold text-primary">A+++</div>
+                  <div className="text-3xl font-bold text-orange">A+++</div>
                   <div className="text-sm text-muted-foreground">Calificación energética</div>
                 </div>
                 <div className="w-px h-12 bg-border" />
                 <div className="text-center">
-                  <div className="text-3xl font-bold text-primary">90%</div>
+                  <div className="text-3xl font-bold text-orange">90%</div>
                   <div className="text-sm text-muted-foreground">Menos consumo</div>
                 </div>
               </div>
@@ -449,7 +449,7 @@ const Landing = () => {
                       <h3 className="font-semibold text-foreground text-lg">{pillar.title}</h3>
                       <p className="text-sm text-muted-foreground leading-relaxed">{pillar.description}</p>
                       <div className="pt-2 border-t border-border/50">
-                        <span className="text-2xl font-bold text-primary">{pillar.stat}</span>
+                        <span className="text-2xl font-bold text-orange">{pillar.stat}</span>
                         <span className="text-xs text-muted-foreground ml-2">{pillar.statLabel}</span>
                       </div>
                     </div>
@@ -575,7 +575,7 @@ const Landing = () => {
                 custom={i}
                 className="text-center space-y-4"
               >
-                <div className="text-5xl font-bold text-primary/20 font-display">{item.step}</div>
+                <div className="text-5xl font-bold text-orange/30 font-display">{item.step}</div>
                 <h3 className="text-xl font-semibold text-foreground">{item.title}</h3>
                 <p className="text-sm text-muted-foreground leading-relaxed">{item.desc}</p>
               </motion.div>

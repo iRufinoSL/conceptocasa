@@ -658,14 +658,15 @@ const Landing = () => {
                     <div className="font-medium">organiza@concepto.casa</div>
                   </div>
                 </a>
-                <a href="tel:+34600000000" className="flex items-center gap-3 text-foreground hover:text-primary transition-colors">
+                <a href="tel:+34690123533" className="flex items-center gap-3 text-foreground hover:text-primary transition-colors">
                   <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
                     <Phone className="w-5 h-5 text-primary" />
                   </div>
                   <div>
                     <div className="text-sm text-muted-foreground">Teléfono</div>
-                    <div className="font-medium">Llámanos</div>
+                    <div className="font-medium">+34 690 123 533</div>
                   </div>
+                </a>
                 </a>
               </div>
             </motion.div>

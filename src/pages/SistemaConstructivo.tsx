@@ -68,19 +68,21 @@ const systems: ConstructionSystem[] = [
   {
     id: "asgard",
     name: "Sistema Asgard",
-    fullName: "Entramado de madera de alta prestación",
-    description: "Sistema de entramado de madera de ingeniería optimizado para casas pasivas. Combina la calidez y sostenibilidad de la madera con altos espesores de aislamiento y hermeticidad controlada.",
+    fullName: "Panel de acero con aislamiento de alta densidad",
+    description: "Sistema basado en paneles de estructura de acero galvanizado con aislamiento integrado de alta densidad. Paneles completamente herméticos, de grandes dimensiones (hasta 10 m²), ligeros (10-30 kg/m²) y con alta capacidad de carga estructural. Fabricación industrializada con procesos sofisticados que integran canalizaciones eléctricas, fontanería y comunicaciones.",
     features: [
-      "Madera certificada de bosques sostenibles",
-      "Excelente comportamiento higrotérmico",
-      "Huella de carbono negativa (almacén CO₂)",
-      "Alta capacidad de aislamiento (>300 mm)",
-      "Confort acústico superior",
-      "Adaptable a cualquier diseño arquitectónico"
+      "Estructura de acero galvanizado reciclable",
+      "Panel hermético con aislamiento integrado",
+      "Ligero: 10-30 kg/m² con alta capacidad de carga",
+      "Grandes dimensiones: hasta 10 m² por panel",
+      "Integra canalizaciones eléctricas y fontanería",
+      "Protección contra radiación electromagnética (jaula de Faraday)",
+      "Construcción rápida, limpia y sin residuos",
+      "Flexible: se adapta a cualquier estilo, hasta 5 plantas"
     ],
     houseImage: casaAsgard,
     detailImages: [],
-    highlight: "CO₂ negativo"
+    highlight: "Panel acero hermético"
   },
   {
     id: "system3e",

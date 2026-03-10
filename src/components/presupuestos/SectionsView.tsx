@@ -409,9 +409,10 @@ interface Workspace3DWireframeProps {
   floors: FloorLevel[];
   planData: FloorPlanData;
   scaleConfig: ScaleConfig;
+  ridgeLine?: import('@/hooks/useFloorPlan').RidgeLine | null;
 }
 
-function Workspace3DWireframe({ rooms, floors, planData, scaleConfig }: Workspace3DWireframeProps) {
+function Workspace3DWireframe({ rooms, floors, planData, scaleConfig, ridgeLine }: Workspace3DWireframeProps) {
   const blockHMm = planData.blockHeightMm || 250;
   const scaleXm = (scaleConfig.scaleX || 625) / 1000;
   const scaleYm = (scaleConfig.scaleY || 625) / 1000;

@@ -575,7 +575,7 @@ const Landing = () => {
                 custom={i}
                 className="text-center space-y-4"
               >
-                <div className="text-5xl font-bold text-primary/20 font-display">{item.step}</div>
+                <div className="text-5xl font-bold text-orange/30 font-display">{item.step}</div>
                 <h3 className="text-xl font-semibold text-foreground">{item.title}</h3>
                 <p className="text-sm text-muted-foreground leading-relaxed">{item.desc}</p>
               </motion.div>

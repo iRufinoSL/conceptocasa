@@ -2696,12 +2696,55 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
           Secciones {TYPE_LABELS[sectionType]}
           <Badge variant="outline" className="text-[9px] h-4">{filtered.length}</Badge>
         </h4>
-        <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2" onClick={() => setShowAddForm(!showAddForm)}>
-          <Plus className="h-3 w-3 mr-1" /> Nueva Sección
-        </Button>
+        <div className="flex items-center gap-1">
+          {sectionType === 'vertical' && filtered.length > 0 && (
+            <Button
+              variant={showOverview ? 'default' : 'outline'}
+              size="sm"
+              className="h-6 text-[10px] px-2"
+              onClick={() => setShowOverview(!showOverview)}
+            >
+              <Eye className="h-3 w-3 mr-1" /> Plano General
+            </Button>
+          )}
+          <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2" onClick={() => setShowAddForm(!showAddForm)}>
+            <Plus className="h-3 w-3 mr-1" /> Nueva Sección
+          </Button>
+        </div>
       </div>
 
       <p className="text-[10px] text-muted-foreground italic">{AXIS_DESCRIPTION[sectionType]}</p>
+
+      {/* ── Overview grid: all Z sections combined ── */}
+      {sectionType === 'vertical' && showOverview && filtered.length > 0 && (() => {
+        // Create a virtual "overview" section that combines all vertical section rooms
+        const overviewSection: CustomSection = {
+          id: '__overview__',
+          name: 'Plano General',
+          sectionType: 'vertical',
+          axis: 'Z',
+          axisValue: 0,
+          polygons: [],
+        };
+        return (
+          <div className="border border-primary/30 rounded-lg p-1 bg-muted/20">
+            <div className="flex items-center gap-2 px-2 py-1">
+              <Badge variant="default" className="text-[9px] h-4">Plano General</Badge>
+              <span className="text-[10px] text-muted-foreground">Vista de todos los espacios registrados</span>
+            </div>
+            <SectionGrid
+              section={overviewSection}
+              scaleConfig={scaleConfig}
+              rooms={rooms}
+              budgetName={budgetName}
+              allSections={sections}
+              planData={planData}
+              isOverview={true}
+              allZSections={filtered}
+            />
+          </div>
+        );
+      })()}
 
       {showAddForm && (
         <Card className="border-dashed border-primary/30">

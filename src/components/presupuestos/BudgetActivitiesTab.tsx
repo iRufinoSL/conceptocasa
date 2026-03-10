@@ -14,7 +14,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, Search, Upload, Pencil, Trash2, MoreHorizontal, FileUp, File, X, Download, ChevronRight, ChevronDown, ChevronLeft, List, Layers, Copy, Package, Wrench, Truck, Briefcase, CheckSquare, Eye, ArrowUpDown, ArrowUp, ArrowDown, FileDown, Clock, MapPin, Settings2, Printer } from 'lucide-react';
+import { Plus, Search, Upload, Pencil, Trash2, MoreHorizontal, FileUp, File, X, Download, ChevronRight, ChevronDown, ChevronLeft, List, Layers, Copy, Package, Wrench, Truck, Briefcase, CheckSquare, Eye, ArrowUpDown, ArrowUp, ArrowDown, FileDown, Clock, MapPin, Settings2, Printer, Target } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { toast } from 'sonner';

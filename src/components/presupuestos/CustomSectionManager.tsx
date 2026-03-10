@@ -340,6 +340,21 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
     }
   };
 
+  // Open workspace properties from standalone polygon (name-based lookup)
+  const openWorkspacePropsFromPoly = (poly: { name: string }) => {
+    if (!onOpenWorkspaceProperties) return;
+    const wsName = poly.name.replace(/\s*\((?:Suelo|Techo|Pared\s*\d*)\)\s*$/, '').replace(/\s+P\d+$/, '').trim();
+    const room = rooms?.find(r => r.name === wsName);
+    if (room) {
+      onOpenWorkspaceProperties({
+        workspaceId: room.id,
+        workspaceName: room.name,
+        sectionType: section.sectionType,
+        sectionName: section.name,
+      });
+    }
+  };
+
   // Start editing with automatic placement (use default polygon)
   const startAutomatic = (workspaceId: string) => {
     const proj = wallProjections?.find(p => p.workspaceId === workspaceId);

@@ -107,7 +107,7 @@ export default {
       boxShadow: {
         "card": "0 1px 3px 0 rgb(0 0 0 / 0.05), 0 1px 2px -1px rgb(0 0 0 / 0.05)",
         "card-hover": "0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.05)",
-        "accent": "0 4px 14px 0 hsl(25 95% 53% / 0.25)",
+        "accent": "0 4px 14px 0 hsl(210 45% 52% / 0.25)",
       },
     },
   },

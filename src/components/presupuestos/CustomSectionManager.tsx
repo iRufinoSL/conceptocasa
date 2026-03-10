@@ -2011,15 +2011,11 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
 
                 const { sx: gleft, sy: gtop } = toSvg(bMinX, isElevation ? bMaxY : bMinY);
                 const { sx: gright, sy: gbottom } = toSvg(bMaxX, isElevation ? bMinY : bMaxY);
-                const gridTopEdge = margin.top;
-                const gridLeftEdge = margin.left;
-                const gridBottomEdge = margin.top + gridCount * cellSize;
-                const gridRightEdge = margin.left + gridCount * cellSize;
-                // Position red lines between axis labels and polygon bounds
-                const topY = Math.max(gridTopEdge + 4, gtop - 18);
-                const bottomY = Math.min(gridBottomEdge - 4, gbottom + 18);
-                const leftX = Math.max(gridLeftEdge + 4, gleft - 18);
-                const rightX = Math.min(gridRightEdge - 4, gright + 18);
+                // Position outside the axis label area
+                const topY = margin.top - 22;
+                const bottomY = margin.top + gridCount * cellSize + 18;
+                const leftX = margin.left - 28;
+                const rightX = margin.left + gridCount * cellSize + 18;
                 const perimFontSize = Math.round(8 * Math.max(1, zoomLevel * 0.8));
                 const midX = (gleft + gright) / 2;
                 const midY = (gtop + gbottom) / 2;
@@ -2028,37 +2024,37 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                   <g className="pointer-events-none" data-pdf-dimension="">
                     {totalWidthMm > 0 && (
                       <>
-                        {/* Top horizontal */}
+                        {/* Top horizontal — above axis labels */}
                         <line x1={gleft} y1={topY} x2={gright} y2={topY} stroke="hsl(0 70% 50%)" strokeWidth={1.2} />
-                        <line x1={gleft} y1={gtop} x2={gleft} y2={topY} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.5} />
-                        <line x1={gright} y1={gtop} x2={gright} y2={topY} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.5} />
+                        <line x1={gleft} y1={gtop} x2={gleft} y2={topY} stroke="hsl(0 70% 50% / 0.4)" strokeWidth={0.6} strokeDasharray="2 2" />
+                        <line x1={gright} y1={gtop} x2={gright} y2={topY} stroke="hsl(0 70% 50% / 0.4)" strokeWidth={0.6} strokeDasharray="2 2" />
                         <text x={midX} y={topY - 4} textAnchor="middle" fontSize={perimFontSize} fontWeight={700} fill="hsl(0 70% 45%)">{totalWidthMm} mm</text>
-                        {/* Bottom horizontal */}
+                        {/* Bottom horizontal — below grid */}
                         <line x1={gleft} y1={bottomY} x2={gright} y2={bottomY} stroke="hsl(0 70% 50%)" strokeWidth={1.2} />
-                        <line x1={gleft} y1={gbottom} x2={gleft} y2={bottomY} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.5} />
-                        <line x1={gright} y1={gbottom} x2={gright} y2={bottomY} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.5} />
+                        <line x1={gleft} y1={gbottom} x2={gleft} y2={bottomY} stroke="hsl(0 70% 50% / 0.4)" strokeWidth={0.6} strokeDasharray="2 2" />
+                        <line x1={gright} y1={gbottom} x2={gright} y2={bottomY} stroke="hsl(0 70% 50% / 0.4)" strokeWidth={0.6} strokeDasharray="2 2" />
                         <text x={midX} y={bottomY + 10} textAnchor="middle" fontSize={perimFontSize} fontWeight={700} fill="hsl(0 70% 45%)">{totalWidthMm} mm</text>
                       </>
                     )}
                     {totalHeightMm > 0 && (
                       <>
-                        {/* Right vertical — left of right axis */}
+                        {/* Right vertical — right of grid */}
                         <line x1={rightX} y1={gtop} x2={rightX} y2={gbottom} stroke="hsl(0 70% 50%)" strokeWidth={1.2} />
-                        <line x1={gright} y1={gtop} x2={rightX} y2={gtop} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.5} />
-                        <line x1={gright} y1={gbottom} x2={rightX} y2={gbottom} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.5} />
+                        <line x1={gright} y1={gtop} x2={rightX} y2={gtop} stroke="hsl(0 70% 50% / 0.4)" strokeWidth={0.6} strokeDasharray="2 2" />
+                        <line x1={gright} y1={gbottom} x2={rightX} y2={gbottom} stroke="hsl(0 70% 50% / 0.4)" strokeWidth={0.6} strokeDasharray="2 2" />
                         <text
-                          x={rightX - 5} y={midY}
+                          x={rightX + 5} y={midY}
                           textAnchor="middle" fontSize={perimFontSize} fontWeight={700} fill="hsl(0 70% 45%)"
-                          transform={`rotate(-90, ${rightX - 5}, ${midY})`}
+                          transform={`rotate(-90, ${rightX + 5}, ${midY})`}
                         >{totalHeightMm} mm</text>
-                        {/* Left vertical — right of left axis */}
+                        {/* Left vertical — left of axis labels */}
                         <line x1={leftX} y1={gtop} x2={leftX} y2={gbottom} stroke="hsl(0 70% 50%)" strokeWidth={1.2} />
-                        <line x1={gleft} y1={gtop} x2={leftX} y2={gtop} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.5} />
-                        <line x1={gleft} y1={gbottom} x2={leftX} y2={gbottom} stroke="hsl(0 70% 50% / 0.5)" strokeWidth={0.5} />
+                        <line x1={gleft} y1={gtop} x2={leftX} y2={gtop} stroke="hsl(0 70% 50% / 0.4)" strokeWidth={0.6} strokeDasharray="2 2" />
+                        <line x1={gleft} y1={gbottom} x2={leftX} y2={gbottom} stroke="hsl(0 70% 50% / 0.4)" strokeWidth={0.6} strokeDasharray="2 2" />
                         <text
-                          x={leftX + 5} y={midY}
+                          x={leftX - 5} y={midY}
                           textAnchor="middle" fontSize={perimFontSize} fontWeight={700} fill="hsl(0 70% 45%)"
-                          transform={`rotate(-90, ${leftX + 5}, ${midY})`}
+                          transform={`rotate(-90, ${leftX - 5}, ${midY})`}
                         >{totalHeightMm} mm</text>
                       </>
                     )}

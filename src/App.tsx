@@ -27,6 +27,7 @@ import SmsRedirect from "./pages/SmsRedirect";
 import NotFound from "./pages/NotFound";
 import FloorPlanPopout from "./pages/FloorPlanPopout";
 import Soluciones from "./pages/Soluciones";
+import SistemaConstructivo from "./pages/SistemaConstructivo";
 import Brain from "./pages/Brain";
 
 const queryClient = new QueryClient();

@@ -1802,7 +1802,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                                     handleWallNumberClick(room, i, currGrid, nextGrid, mx, my);
                                   }}
                                 />
-                                <text x={offX} y={offY} textAnchor="middle" dominantBaseline="central" fill="hsl(var(--primary-foreground))" fontSize="7" fontWeight="bold" className="pointer-events-none select-none"
+                                <text x={offX} y={offY} textAnchor="middle" dominantBaseline="central" fill="#ffffff" fontSize="7" fontWeight="bold" className="pointer-events-none select-none"
                                   data-pdf-wall-number=""
                                 >
                                   {i + 1}

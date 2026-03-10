@@ -634,16 +634,7 @@ function FaceEditPanel({ data, onClose, onSave, onVertexSave, onNavigateTo2D }: 
             </div>
           ))}
         </div>
-        {onVertexSave && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-5 text-[9px] mt-1"
-            onClick={() => onVertexSave(editVerts)}
-          >
-            Aplicar vértices
-          </Button>
-        )}
+        {/* Vertex save is now integrated into main Guardar button */}
       </div>
 
       {/* Wall type selector (only for paredes) */}

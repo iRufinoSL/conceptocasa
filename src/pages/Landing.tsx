@@ -375,7 +375,7 @@ const Landing = () => {
                 </div>
                 <div className="w-px h-12 bg-border" />
                 <div className="text-center">
-                  <div className="text-3xl font-bold text-primary">90%</div>
+                  <div className="text-3xl font-bold text-orange">90%</div>
                   <div className="text-sm text-muted-foreground">Menos consumo</div>
                 </div>
               </div>

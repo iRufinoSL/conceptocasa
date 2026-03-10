@@ -352,18 +352,40 @@ const handler = async (req: Request): Promise<Response> => {
       if (requestData.m2Planta3) m2PorPlantaParts.push(`Planta 3: ${requestData.m2Planta3}`);
       const m2PorPlanta = m2PorPlantaParts.length > 0 ? m2PorPlantaParts.join(', ') : null;
       
-      // Build espacios_detalle JSONB with per-floor room types and bajo cubierta
+      // Build espacios_detalle JSONB with per-floor data
       const espaciosDetalle: Record<string, any> = {
         usoBajoCubierta: requestData.usoBajoCubierta || null,
         plantas: {} as Record<string, any>,
       };
       const numPlantasInt = parseInt(requestData.numPlantas || '0') || 0;
-      for (let i = 1; i <= Math.min(numPlantasInt, 3); i++) {
-        espaciosDetalle.plantas[`planta${i}`] = {
-          habPequenas: parseInt((requestData as any)[`planta${i}HabPequenas`] || '0') || 0,
-          habMedianas: parseInt((requestData as any)[`planta${i}HabMedianas`] || '0') || 0,
-          habGrandes: parseInt((requestData as any)[`planta${i}HabGrandes`] || '0') || 0,
-        };
+      
+      // Use new floorsData if available, otherwise fall back to legacy fields
+      if (requestData.floorsData && requestData.floorsData.length > 0) {
+        for (const floor of requestData.floorsData) {
+          espaciosDetalle.plantas[`planta${floor.planta}`] = {
+            m2: floor.m2 || null,
+            habPequenas: parseInt(floor.habPequenas || '0') || 0,
+            habMedianas: parseInt(floor.habMedianas || '0') || 0,
+            habGrandes: parseInt(floor.habGrandes || '0') || 0,
+            banosMedianos: parseInt(floor.banosMedianos || '0') || 0,
+            banosGrandes: parseInt(floor.banosGrandes || '0') || 0,
+            salonM2: floor.salonM2 || null,
+            cocina: floor.cocina || null,
+            despensaM2: floor.despensaM2 || null,
+            lavanderiaM2: floor.lavanderiaM2 || null,
+            porcheTechadoM2: floor.porcheTechadoM2 || null,
+            patioSinTechoM2: floor.patioSinTechoM2 || null,
+            terrazasM2: floor.terrazasM2 || null,
+          };
+        }
+      } else {
+        for (let i = 1; i <= Math.min(numPlantasInt, 3); i++) {
+          espaciosDetalle.plantas[`planta${i}`] = {
+            habPequenas: parseInt((requestData as any)[`planta${i}HabPequenas`] || '0') || 0,
+            habMedianas: parseInt((requestData as any)[`planta${i}HabMedianas`] || '0') || 0,
+            habGrandes: parseInt((requestData as any)[`planta${i}HabGrandes`] || '0') || 0,
+          };
+        }
       }
 
       const { error: profileError } = await supabase

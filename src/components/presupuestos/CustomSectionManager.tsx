@@ -1775,6 +1775,10 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                                     e.stopPropagation();
                                     handleWallEdgeClick(room, i, currGrid, nextGrid, mx, my);
                                   }}
+                                  onDoubleClick={(e) => {
+                                    e.stopPropagation();
+                                    handleWallDoubleClick(room, i, currGrid, nextGrid);
+                                  }}
                                 />
                                 <text x={offX} y={offY} textAnchor="middle" dominantBaseline="central" fill="hsl(var(--primary-foreground))" fontSize="7" fontWeight="bold" className="pointer-events-none select-none"
                                   data-pdf-wall-number=""

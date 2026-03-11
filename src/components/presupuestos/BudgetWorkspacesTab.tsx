@@ -763,6 +763,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
     setDraggingOtherIdx(null);
     setDraggingRulerIdx(null);
     setDraggingRulerEnd(null);
+    setMagnetSnap(null);
   };
 
   // Select another polygon for inline editing

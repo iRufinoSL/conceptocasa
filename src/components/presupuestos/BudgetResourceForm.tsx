@@ -179,6 +179,7 @@ export function BudgetResourceForm({
           purchase_units: null,
           purchase_unit_measure: '',
           purchase_unit_cost: null,
+          is_estimation: false,
         });
         
         // If preselected activity, fetch related_units

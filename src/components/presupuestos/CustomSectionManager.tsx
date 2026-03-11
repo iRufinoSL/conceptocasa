@@ -273,7 +273,8 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
   const gridCount = gridMax - gridMin + 1;
   const baseCellSize = 28;
   const cellSize = Math.round(baseCellSize * zoomLevel);
-  const margin = { top: 60, left: 64, right: 48, bottom: 60 };
+  const perimMarginExtra = 2 * cellSize + 30; // space for perimeter dims at 2*cellSize offset
+  const margin = { top: Math.max(60, perimMarginExtra), left: Math.max(64, perimMarginExtra), right: Math.max(48, perimMarginExtra), bottom: Math.max(60, perimMarginExtra) };
   const totalW = margin.left + gridCount * cellSize + margin.right;
   const totalH = margin.top + gridCount * cellSize + margin.bottom;
 

@@ -4954,6 +4954,7 @@ export type Database = {
           name: string
           order_index: number
           parent_id: string | null
+          phase_id: string | null
           supplier_contact_id: string | null
           updated_at: string
         }
@@ -4977,6 +4978,7 @@ export type Database = {
           name: string
           order_index?: number
           parent_id?: string | null
+          phase_id?: string | null
           supplier_contact_id?: string | null
           updated_at?: string
         }
@@ -5000,6 +5002,7 @@ export type Database = {
           name?: string
           order_index?: number
           parent_id?: string | null
+          phase_id?: string | null
           supplier_contact_id?: string | null
           updated_at?: string
         }
@@ -5023,6 +5026,13 @@ export type Database = {
             columns: ["parent_id"]
             isOneToOne: false
             referencedRelation: "tolosa_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tolosa_items_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "budget_phases"
             referencedColumns: ["id"]
           },
           {

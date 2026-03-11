@@ -35,6 +35,7 @@ interface BudgetResource {
   purchase_units: number | null;
   purchase_unit_measure: string | null;
   purchase_unit_cost: number | null;
+  is_estimation: boolean;
 }
 
 const RESOURCE_TYPES = ['Producto', 'Mano de obra', 'Alquiler', 'Servicio', 'Impuestos', 'Tarea', 'Equipo', 'Material', 'Utiles y herramientas'];

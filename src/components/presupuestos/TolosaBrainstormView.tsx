@@ -2438,7 +2438,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                         body: rows,
                         margin: { left: 14, right: 14 },
                         styles: { fontSize: 7, cellPadding: 1.5, overflow: 'linebreak' },
-                        headStyles: { fillColor: [120, 80, 180], textColor: 255, fontStyle: 'bold', fontSize: 7 },
+                        headStyles: { fillColor: [217, 119, 52], textColor: 255, fontStyle: 'bold', fontSize: 7 },
                         columnStyles: {
                           0: { cellWidth: 22 },
                           1: { cellWidth: 'auto' },
@@ -2449,7 +2449,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                         didParseCell: (data: any) => {
                           if (data.section === 'body' && data.row.index === rows.length - 1) {
                             data.cell.styles.fontStyle = 'bold';
-                            data.cell.styles.fillColor = [240, 235, 250];
+                            data.cell.styles.fillColor = [255, 237, 213];
                           }
                         },
                       });

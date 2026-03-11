@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ChevronDown, ChevronRight, Ruler, Users, MapPin, Minus, Plus, Edit2, Maximize2, Home, Check, X, ArrowRight, ArrowDown, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Ruler, Users, MapPin, Minus, Plus, Edit2, Maximize2, Home, Check, X, ArrowRight, ArrowDown, Trash2, Copy } from 'lucide-react';
 import { formatCurrency, formatNumber } from '@/lib/format-utils';
 
 interface TolosItem {
@@ -49,6 +49,7 @@ interface TolosaCardViewProps {
   onAddSibling?: (parentId: string | null, name: string) => void;
   onAddChild?: (parentId: string, name: string) => void;
   onDeleteItem?: (itemId: string) => void;
+  onDuplicate?: (item: TolosItem, asSub: boolean) => void;
   initialFocusId?: string | null;
 }
 
@@ -77,6 +78,7 @@ export function TolosaCardView({
   onAddSibling,
   onAddChild,
   onDeleteItem,
+  onDuplicate,
   initialFocusId,
 }: TolosaCardViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -250,7 +252,10 @@ export function TolosaCardView({
     const isExpanded = expandedIds.has(item.id);
     const summary = itemSummaries[item.id];
     const cuanto = getCuanto(item.id);
-    const palette = SIBLING_PALETTES[parentColorMap[item.id] ?? 0];
+    const isEst = item.code?.includes('.E') || item.name?.includes('(Est.)');
+    const palette = isEst
+      ? { bg: 'bg-amber-50 dark:bg-amber-950/40', border: 'border-amber-400 dark:border-amber-600', header: 'bg-amber-100 dark:bg-amber-900/60', line: '#fbbf24' }
+      : SIBLING_PALETTES[parentColorMap[item.id] ?? 0];
     const clientName = item.client_contact_id ? contactCache[item.client_contact_id] : null;
     const hasLocation = !!(item.address_city || item.address_street);
     const isFocused = focusedId === item.id;
@@ -278,7 +283,9 @@ export function TolosaCardView({
                 onClick={e => e.stopPropagation()}
               />
             ) : (
-              <Badge variant="outline" className="font-mono text-[10px] shrink-0 px-1.5 bg-background/50">{item.code}</Badge>
+              <Badge variant="outline" className={`font-mono text-[10px] shrink-0 px-1.5 ${isEst ? 'bg-amber-200 text-amber-800 border-amber-400 dark:bg-amber-900/60 dark:text-amber-300 dark:border-amber-700' : 'bg-background/50'}`}>
+                {isEst && <span className="mr-0.5">Est.</span>}{item.code}
+              </Badge>
             )}
             <div className="flex items-center gap-0.5 ml-auto">
               {/* Quick-add sibling → */}
@@ -326,6 +333,16 @@ export function TolosaCardView({
                   title="Editar ActividadID"
                 >
                   <Edit2 className="h-3 w-3" />
+                </button>
+              )}
+              {/* Duplicate */}
+              {onDuplicate && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onDuplicate(item, false); }}
+                  className="flex items-center px-1 py-0.5 rounded text-[10px] font-medium hover:bg-black/10 dark:hover:bg-white/10 transition-colors opacity-0 group-hover/card:opacity-60 hover:!opacity-100"
+                  title="Duplicar"
+                >
+                  <Copy className="h-3 w-3" />
                 </button>
               )}
               {/* Delete */}

@@ -23,6 +23,7 @@ import { BudgetUrbanismTab } from './BudgetUrbanismTab';
 import { BudgetMeasurementsTab } from './BudgetMeasurementsTab';
 import { TolosaMeasurementsPanel } from './TolosaMeasurementsPanel';
 import { TolosaResourcesPanel } from './TolosaResourcesPanel';
+import { EstimationResourceForm } from './EstimationResourceForm';
 import { BudgetAgendaTab } from './BudgetAgendaTab';
 import { BuyingListUnified } from './BuyingListUnified';
 import { BudgetAdministracionTab } from './BudgetAdministracionTab';
@@ -1971,6 +1972,13 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                 {/* Inline Measurements + Resources (always visible when detail open) */}
                 {isDetailOpen && (
                   <div className="mt-3 space-y-3">
+                    {isEst && (
+                      <EstimationResourceForm
+                        tolosItemId={item.id}
+                        budgetId={budgetId}
+                        isAdmin={isAdmin}
+                      />
+                    )}
                     <TolosaMeasurementsPanel
                       budgetId={budgetId}
                       tolosItemId={item.id}
@@ -2305,6 +2313,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
             handleAddFromGraph(parentId, name);
           }}
           onDeleteItem={handleDeleteById}
+          onDuplicate={(item, asSub) => openDuplicateDialog(item as any, asSub)}
         />
       ) : (
         <div className="space-y-1">
@@ -2332,6 +2341,14 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
               <div className="space-y-4">
                 {detailItem.description && (
                   <p className="text-sm text-muted-foreground">{detailItem.description}</p>
+                )}
+                {/* Estimation form */}
+                {(detailItem.code?.includes('.E') || detailItem.name?.includes('(Est.)')) && (
+                  <EstimationResourceForm
+                    tolosItemId={detailItem.id}
+                    budgetId={budgetId}
+                    isAdmin={isAdmin}
+                  />
                 )}
                 {/* Mediciones */}
                 <TolosaMeasurementsPanel

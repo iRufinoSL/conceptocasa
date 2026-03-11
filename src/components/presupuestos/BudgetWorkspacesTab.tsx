@@ -3201,6 +3201,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
     }).eq('id', otherId);
     // Smart rebuild: only recreate walls if vertex count changed
     await rebuildWallsSmart(otherId, newVertices.length);
+    // Sync polygon to customSections so Plano view updates
+    await syncFloorPolygonToSections(otherId, newVertices);
     await refetch();
     queryClient.invalidateQueries({ queryKey: ['workspace-walls'] });
   };

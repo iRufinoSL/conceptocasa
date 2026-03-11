@@ -1281,36 +1281,43 @@ export function FloorPlanGridView({
               return `${(mm / 1000).toFixed(3)}m`;
             };
 
-            const hDimLine = (x1: number, x2: number, y: number, lbl: string, key: string) => {
+            const dimLabelFontSize = Math.max(13, Math.round(13 * fontScale));
+            const hDimLine = (x1: number, x2: number, y: number, lbl: string, key: string, isTotal = false) => {
               const minX = Math.min(x1, x2);
               const maxX = Math.max(x1, x2);
               const mx = (minX + maxX) / 2;
-              const tw = Math.max(50, lbl.length * 6 + 10);
+              const tw = Math.max(60, lbl.length * 7 + 14);
+              const lineColor = isTotal ? '#dc2626' : '#2563eb';
+              const bgColor = isTotal ? 'rgba(220, 38, 38, 0.9)' : 'rgba(37, 99, 235, 0.9)';
+              const fs = isTotal ? dimLabelFontSize + 2 : dimLabelFontSize;
               dimElements.push(
-                <div key={`${key}-l`} className="absolute pointer-events-none" style={{ left: minX, top: y, width: maxX - minX, height: 1, backgroundColor: '#2563eb', zIndex: 28 }} />,
-                <div key={`${key}-t1`} className="absolute pointer-events-none" style={{ left: x1 - 1, top: y - 5, width: 1.5, height: 11, backgroundColor: '#2563eb', zIndex: 28 }} />,
-                <div key={`${key}-t2`} className="absolute pointer-events-none" style={{ left: x2 - 1, top: y - 5, width: 1.5, height: 11, backgroundColor: '#2563eb', zIndex: 28 }} />,
+                <div key={`${key}-l`} className="absolute pointer-events-none" style={{ left: minX, top: y, width: maxX - minX, height: isTotal ? 2 : 1, backgroundColor: lineColor, zIndex: 28 }} />,
+                <div key={`${key}-t1`} className="absolute pointer-events-none" style={{ left: x1 - 1, top: y - 6, width: isTotal ? 2 : 1.5, height: 13, backgroundColor: lineColor, zIndex: 28 }} />,
+                <div key={`${key}-t2`} className="absolute pointer-events-none" style={{ left: x2 - 1, top: y - 6, width: isTotal ? 2 : 1.5, height: 13, backgroundColor: lineColor, zIndex: 28 }} />,
                 <div key={`${key}-lb`} className="absolute pointer-events-none flex items-center justify-center" style={{
-                  left: mx - tw / 2, top: y - 12, width: tw, height: 22,
-                  backgroundColor: 'rgba(37, 99, 235, 0.9)', borderRadius: 3,
-                  color: 'white', fontSize: 10, fontWeight: 'bold', zIndex: 29, lineHeight: '1',
+                  left: mx - tw / 2, top: y - 14, width: tw, height: 26,
+                  backgroundColor: bgColor, borderRadius: 4,
+                  color: 'white', fontSize: fs, fontWeight: 'bold', zIndex: 29, lineHeight: '1',
                 }}>{lbl}</div>,
               );
             };
 
-            const vDimLine = (y1: number, y2: number, x: number, lbl: string, key: string) => {
+            const vDimLine = (y1: number, y2: number, x: number, lbl: string, key: string, isTotal = false) => {
               const minY = Math.min(y1, y2);
               const maxY = Math.max(y1, y2);
               const my = (minY + maxY) / 2;
-              const tw = Math.max(50, lbl.length * 6 + 10);
+              const tw = Math.max(60, lbl.length * 7 + 14);
+              const lineColor = isTotal ? '#dc2626' : '#2563eb';
+              const bgColor = isTotal ? 'rgba(220, 38, 38, 0.9)' : 'rgba(37, 99, 235, 0.9)';
+              const fs = isTotal ? dimLabelFontSize + 2 : dimLabelFontSize;
               dimElements.push(
-                <div key={`${key}-l`} className="absolute pointer-events-none" style={{ left: x, top: minY, width: 1, height: maxY - minY, backgroundColor: '#2563eb', zIndex: 28 }} />,
-                <div key={`${key}-t1`} className="absolute pointer-events-none" style={{ left: x - 5, top: y1 - 1, width: 11, height: 1.5, backgroundColor: '#2563eb', zIndex: 28 }} />,
-                <div key={`${key}-t2`} className="absolute pointer-events-none" style={{ left: x - 5, top: y2 - 1, width: 11, height: 1.5, backgroundColor: '#2563eb', zIndex: 28 }} />,
+                <div key={`${key}-l`} className="absolute pointer-events-none" style={{ left: x, top: minY, width: isTotal ? 2 : 1, height: maxY - minY, backgroundColor: lineColor, zIndex: 28 }} />,
+                <div key={`${key}-t1`} className="absolute pointer-events-none" style={{ left: x - 6, top: y1 - 1, width: 13, height: isTotal ? 2 : 1.5, backgroundColor: lineColor, zIndex: 28 }} />,
+                <div key={`${key}-t2`} className="absolute pointer-events-none" style={{ left: x - 6, top: y2 - 1, width: 13, height: isTotal ? 2 : 1.5, backgroundColor: lineColor, zIndex: 28 }} />,
                 <div key={`${key}-lb`} className="absolute pointer-events-none flex items-center justify-center" style={{
-                  left: x - tw / 2, top: my - 11, width: tw, height: 22,
-                  backgroundColor: 'rgba(37, 99, 235, 0.9)', borderRadius: 3,
-                  color: 'white', fontSize: 10, fontWeight: 'bold', zIndex: 29, lineHeight: '1',
+                  left: x - tw / 2, top: my - 13, width: tw, height: 26,
+                  backgroundColor: bgColor, borderRadius: 4,
+                  color: 'white', fontSize: fs, fontWeight: 'bold', zIndex: 29, lineHeight: '1',
                 }}>{lbl}</div>,
               );
             };

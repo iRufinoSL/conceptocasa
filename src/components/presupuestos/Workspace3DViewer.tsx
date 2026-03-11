@@ -427,9 +427,8 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
       wallCenter.add(outward);
 
       const wall = walls.find(w => w.wall_index === i + 1);
-      const hM1 = wall?.height != null ? wall.height : height;
-      const wallNext = walls.find(w => w.wall_index === next + 1);
-      const hM2 = wallNext?.height != null ? wallNext.height : height;
+      const zTopI = Math.round(topVerts3D[i].y / zScaleBlocks);
+      const zTopNext = Math.round(topVerts3D[next].y / zScaleBlocks);
 
       result.push({
         type: 'pared', index: i + 1, label: `P${i + 1}`,
@@ -438,8 +437,8 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
         realVertices: [
           { x: polygon[i].x, y: polygon[i].y, z: zBase },
           { x: polygon[next].x, y: polygon[next].y, z: zBase },
-          { x: polygon[next].x, y: polygon[next].y, z: zBase + Math.round(hM2 / zScaleBlocks) },
-          { x: polygon[i].x, y: polygon[i].y, z: zBase + Math.round(hM1 / zScaleBlocks) },
+          { x: polygon[next].x, y: polygon[next].y, z: zTopNext },
+          { x: polygon[i].x, y: polygon[i].y, z: zTopI },
         ],
       });
     }

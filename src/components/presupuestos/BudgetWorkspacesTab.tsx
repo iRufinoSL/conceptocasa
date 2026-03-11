@@ -455,7 +455,7 @@ const POLY_COLORS = [
   'hsl(280 60% 55%)',
 ];
 
-function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16, gridOffsetX = 0, gridOffsetY = 0, placedRooms = [], cellSizeM = 1, otherPolygons = [], activeRoomId, onSwitchRoom, onOtherPolygonChange, onOtherPolygonRename, onSelectOtherWorkspace, perimeterPolygon, activeName, originTopLeft = false, pdfTitle, pdfSubtitle, onWallClick, onWallSelect, hAxisLabel = 'X', vAxisLabel = 'Y', hScaleMm, vScaleMm, activeWalls = [], initialRulerLines = [], onSaveRulerLines }: GridPolygonDrawerProps) {
+function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16, gridOffsetX = 0, gridOffsetY = 0, placedRooms = [], cellSizeM = 1, otherPolygons = [], activeRoomId, onSwitchRoom, onOtherPolygonChange, onOtherPolygonRename, onSelectOtherWorkspace, perimeterPolygon, activeName, originTopLeft = false, pdfTitle, pdfSubtitle, onWallClick, onWallSelect, hAxisLabel = 'X', vAxisLabel = 'Y', hScaleMm, vScaleMm, activeWalls = [], initialRulerLines = [], onSaveRulerLines, ridgeLine, sectionType, sectionAxisValue }: GridPolygonDrawerProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null);

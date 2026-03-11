@@ -2161,6 +2161,17 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
     } catch { return []; }
   }, [floorPlan?.custom_corners]);
 
+  // Extract ridge line from custom_corners
+  const ridgeLine = useMemo<{ x1: number; y1: number; x2: number; y2: number; z: number } | null>(() => {
+    if (!floorPlan?.custom_corners) return null;
+    try {
+      const parsed = typeof floorPlan.custom_corners === 'string'
+        ? JSON.parse(floorPlan.custom_corners)
+        : floorPlan.custom_corners;
+      return parsed?.ridgeLine ?? null;
+    } catch { return null; }
+  }, [floorPlan?.custom_corners]);
+
   const verticalSections = useMemo(() => allSections.filter(s => s.sectionType === 'vertical'), [allSections]);
   const longitudinalSections = useMemo(() => allSections.filter(s => s.sectionType === 'longitudinal'), [allSections]);
   const transversalSections = useMemo(() => allSections.filter(s => s.sectionType === 'transversal'), [allSections]);

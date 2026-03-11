@@ -527,7 +527,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
     setHousingProfiles((data as ProfileInfo[]) || []);
   }, []);
 
-  useEffect(() => { fetchItems(); fetchContacts(); fetchHousingProfiles(); fetchPhases(); }, [fetchItems, fetchContacts, fetchHousingProfiles, fetchPhases]);
+  useEffect(() => { fetchItems(); fetchContacts(); fetchHousingProfiles(); fetchPhases(); fetchBudgetInfo(); }, [fetchItems, fetchContacts, fetchHousingProfiles, fetchPhases, fetchBudgetInfo]);
 
   // Build set of non-executed codes for cascading filter
   const inactiveCodes = useMemo(() => {

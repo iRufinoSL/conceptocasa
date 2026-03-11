@@ -837,6 +837,8 @@ export function Workspace3DViewer({ name, polygon, height, walls, scaleXY, scale
             showDraggableNodes={showNodes}
             onNodeDrag={handleNodeDrag}
             orbitRef={orbitRef}
+            allSections={allSections}
+            roomId={roomId}
           />
           <CenteredOrbitControls orbitRef={orbitRef} target={centroid} />
           <gridHelper args={[20, 40, '#888888', '#cccccc']} />

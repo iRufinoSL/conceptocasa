@@ -413,12 +413,17 @@ export default function PresupuestoDashboard() {
               <CardTitle className="text-2xl">{presupuesto.poblacion}</CardTitle>
             </CardHeader>
           </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Proyecto</CardDescription>
-              <CardTitle className="text-2xl">{project?.name || 'Sin proyecto'}</CardTitle>
-            </CardHeader>
-          </Card>
+          <ProjectSelector
+            currentProject={project}
+            presupuestoId={presupuesto.id}
+            isAdmin={isAdmin}
+            onProjectChanged={(newProject) => {
+              setProject(newProject);
+              if (presupuesto) {
+                setPresupuesto({ ...presupuesto, project_id: newProject?.id || null });
+              }
+            }}
+          />
           <Card>
             <CardHeader className="pb-2">
               <CardDescription>Fecha Inicio</CardDescription>

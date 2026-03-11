@@ -590,7 +590,7 @@ export function HierarchicalGanttView({
             <div
               className={cn(
                 "absolute top-6 h-5 rounded shadow-sm opacity-70 flex items-center px-2 overflow-hidden border-2 border-dashed",
-                PHASE_COLORS[colorIdx % PHASE_COLORS.length]
+                barColor
               )}
               style={plannedBarStyle}
             >

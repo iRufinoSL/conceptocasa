@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ChevronDown, ChevronRight, Ruler, Users, MapPin, Minus, Plus, Edit2, Maximize2, Home, Check, X, ArrowRight, ArrowDown, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Ruler, Users, MapPin, Minus, Plus, Edit2, Maximize2, Home, Check, X, ArrowRight, ArrowDown, Trash2, Copy } from 'lucide-react';
 import { formatCurrency, formatNumber } from '@/lib/format-utils';
 
 interface TolosItem {

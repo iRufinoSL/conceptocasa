@@ -320,31 +320,35 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
       if (allResIds.size > 0) {
         const { data: resources, error: resErr } = await supabase
           .from('budget_activity_resources')
-          .select('id, external_unit_cost, safety_margin_percent, sales_margin_percent, manual_units, related_units')
+          .select('id, external_unit_cost, safety_margin_percent, sales_margin_percent, manual_units, related_units, is_estimation')
           .in('id', Array.from(allResIds));
         if (resErr) { console.error('fetchItemSummaries resources error:', resErr); return; }
         (resources || []).forEach((r: any) => { resData[r.id] = r; });
       }
 
-      // 7. Calculate subtotals per item
-      const summaries: Record<string, { measurementUnits: number; measurementUnit: string; resourceSubtotal: number }> = {};
+      // 7. Calculate subtotals per item (split normal vs est)
+      const summaries: Record<string, { measurementUnits: number; measurementUnit: string; resourceSubtotal: number; normalSubtotal: number; estSubtotal: number }> = {};
       itemIds.forEach(itemId => {
         const meas = getInheritedMeas(itemId);
         const rids = resLinksByItem[itemId] || [];
         let subtotal = 0;
+        let normalSub = 0;
+        let estSub = 0;
         rids.forEach(rid => {
           const r = resData[rid];
           if (r) {
-            subtotal += calcResourceSubtotal({
+            const s = calcResourceSubtotal({
               externalUnitCost: r.external_unit_cost,
               safetyPercent: r.safety_margin_percent,
               salesPercent: r.sales_margin_percent,
               manualUnits: r.manual_units,
               relatedUnits: r.manual_units != null ? r.related_units : meas.total,
             });
+            subtotal += s;
+            if (r.is_estimation) { estSub += s; } else { normalSub += s; }
           }
         });
-        summaries[itemId] = { measurementUnits: meas.total, measurementUnit: meas.unit, resourceSubtotal: subtotal };
+        summaries[itemId] = { measurementUnits: meas.total, measurementUnit: meas.unit, resourceSubtotal: subtotal, normalSubtotal: normalSub, estSubtotal: estSub };
       });
 
       // Only update state if values actually changed (prevent re-render cascade)
@@ -354,16 +358,30 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
           const n = summaries[id];
           if (!p && !n) return false;
           if (!p || !n) return true;
-          return p.measurementUnits !== n.measurementUnits || p.measurementUnit !== n.measurementUnit || p.resourceSubtotal !== n.resourceSubtotal;
+          return p.measurementUnits !== n.measurementUnits || p.measurementUnit !== n.measurementUnit || p.resourceSubtotal !== n.resourceSubtotal || p.normalSubtotal !== n.normalSubtotal || p.estSubtotal !== n.estSubtotal;
         });
         return changed ? summaries : prev;
       });
 
       const newSubtotals: Record<string, number> = {};
-      itemIds.forEach(id => { newSubtotals[id] = summaries[id]?.resourceSubtotal || 0; });
+      const newNormal: Record<string, number> = {};
+      const newEst: Record<string, number> = {};
+      itemIds.forEach(id => {
+        newSubtotals[id] = summaries[id]?.resourceSubtotal || 0;
+        newNormal[id] = summaries[id]?.normalSubtotal || 0;
+        newEst[id] = summaries[id]?.estSubtotal || 0;
+      });
       setItemSubtotals(prev => {
         const changed = itemIds.some(id => (prev[id] || 0) !== (newSubtotals[id] || 0));
         return changed ? newSubtotals : prev;
+      });
+      setItemSubtotalsNormal(prev => {
+        const changed = itemIds.some(id => (prev[id] || 0) !== (newNormal[id] || 0));
+        return changed ? newNormal : prev;
+      });
+      setItemSubtotalsEst(prev => {
+        const changed = itemIds.some(id => (prev[id] || 0) !== (newEst[id] || 0));
+        return changed ? newEst : prev;
       });
     } catch (err) {
       console.error('fetchItemSummaries unexpected error:', err);

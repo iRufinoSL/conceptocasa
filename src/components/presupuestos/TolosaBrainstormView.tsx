@@ -23,6 +23,7 @@ import { BudgetUrbanismTab } from './BudgetUrbanismTab';
 import { BudgetMeasurementsTab } from './BudgetMeasurementsTab';
 import { TolosaMeasurementsPanel } from './TolosaMeasurementsPanel';
 import { TolosaResourcesPanel } from './TolosaResourcesPanel';
+import { EstimationResourceForm } from './EstimationResourceForm';
 import { BudgetAgendaTab } from './BudgetAgendaTab';
 import { BuyingListUnified } from './BuyingListUnified';
 import { BudgetAdministracionTab } from './BudgetAdministracionTab';

@@ -594,11 +594,11 @@ export function FloorPlanGridView({
   const renderGrid = (overrideCellSize?: number) => {
     const CS = overrideCellSize || CELL_SIZE;
     const fontScale = CS / CELL_SIZE; // 1.0 at default, >1 when enlarged
-    const nameFontSize = Math.max(12, Math.round(12 * fontScale));
-    const m2FontSize = Math.max(12, Math.round(12 * fontScale));
-    const dimFontSize = Math.max(10, Math.round(10 * fontScale));
-    const coordFontSize = Math.max(9, Math.round(9 * fontScale));
-    const axisLabelSize = Math.max(13, Math.round(13 * fontScale));
+    const nameFontSize = Math.max(16, Math.round(16 * fontScale));
+    const m2FontSize = Math.max(14, Math.round(14 * fontScale));
+    const dimFontSize = Math.max(12, Math.round(12 * fontScale));
+    const coordFontSize = Math.max(10, Math.round(10 * fontScale));
+    const axisLabelSize = Math.max(15, Math.round(15 * fontScale));
     // Render rooms as absolutely positioned overlays on the grid
     const roomOverlays = placedRooms.map(room => {
       const startCol = Math.round(room.posX / cellSizeM) + 1;

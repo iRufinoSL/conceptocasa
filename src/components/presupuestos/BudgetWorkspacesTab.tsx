@@ -2517,6 +2517,37 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
     queryClient.invalidateQueries({ queryKey: ['workspace-walls'] });
   };
 
+  /**
+   * Smart wall rebuild: only deletes+recreates walls when vertex count changes.
+   * When count is the same, walls (and their objects/layers/openings) are preserved intact.
+   */
+  const rebuildWallsSmart = async (roomId: string, newVertexCount: number) => {
+    const { data: existingWalls } = await supabase.from('budget_floor_plan_walls')
+      .select('id, wall_index, wall_type').eq('room_id', roomId).order('wall_index');
+    // Only count structural walls (wall_index > 0); wall_index=0 is "Espacio"
+    const structuralWalls = (existingWalls || []).filter(w => w.wall_index > 0);
+    if (structuralWalls.length === newVertexCount) {
+      // Same count — walls stay in place, no rebuild needed
+      return;
+    }
+    // Different count — rebuild preserving types by index
+    const oldTypeMap = new Map(structuralWalls.map(w => [w.wall_index, normalizeWallType(w.wall_type)]));
+    // Delete only structural walls (preserve wall_index=0 "Espacio")
+    const idsToDelete = structuralWalls.map(w => w.id);
+    if (idsToDelete.length > 0) {
+      await supabase.from('budget_floor_plan_walls').delete().in('id', idsToDelete);
+    }
+    const walls = Array.from({ length: newVertexCount }, (_, i) => ({
+      room_id: roomId,
+      wall_index: i + 1,
+      wall_type: oldTypeMap.get(i + 1) || 'exterior',
+    }));
+    if (walls.length > 0) {
+      const { error } = await supabase.from('budget_floor_plan_walls').insert(walls);
+      if (error) toast.error(`Error al reconstruir paredes: ${error.message}`);
+    }
+  };
+
   /** Update the custom height for a specific wall */
   const updateWallHeight = async (roomId: string, wallIndex: number, heightMm: number | null, existingWallId?: string) => {
     const dbWallIndex = wallIndex + 1;

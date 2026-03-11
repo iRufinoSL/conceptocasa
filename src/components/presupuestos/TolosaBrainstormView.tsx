@@ -1850,6 +1850,8 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
       );
       case 'cuanto': {
         const cuanto = getCuanto(item.id);
+        const cuantoNormal = getCuantoNormal(item.id);
+        const cuantoEst = getCuantoEst(item.id);
         return (
           <div className="p-3 rounded-lg border border-rose-200 bg-rose-50/50 dark:border-rose-800 dark:bg-rose-950/30 space-y-3">
             <div className="flex items-center justify-between">
@@ -1862,12 +1864,20 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="p-3 rounded border bg-background text-center">
-                <p className="text-xl font-bold text-foreground">{formatCurrency(itemSubtotals[item.id] || 0)}</p>
-                <p className="text-[10px] text-muted-foreground uppercase">Recursos propios</p>
+                <p className="text-lg font-bold text-foreground">{formatCurrency(cuantoNormal)}</p>
+                <p className="text-[10px] text-muted-foreground uppercase">Normal (con hijos)</p>
               </div>
-              <div className="p-3 rounded border bg-background text-center">
+              <div className="p-3 rounded border border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/30 text-center">
+                <p className="text-lg font-bold text-amber-700 dark:text-amber-400">{formatCurrency(cuantoEst)}</p>
+                <p className="text-[10px] text-amber-600 dark:text-amber-500 uppercase">Est. (con hijos)</p>
+              </div>
+            </div>
+            {cuanto > 0 && (
+              <div className="p-2 rounded border bg-background text-center">
                 <p className="text-xl font-bold text-foreground">{formatCurrency(cuanto)}</p>
-                <p className="text-[10px] text-muted-foreground uppercase">Total (con hijos)</p>
+                <p className="text-[10px] text-muted-foreground uppercase">Total combinado</p>
+              </div>
+            )}
               </div>
             </div>
             <TolosaResourcesPanel

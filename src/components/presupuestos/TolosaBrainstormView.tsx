@@ -195,6 +195,21 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
     setPhases((data as PhaseInfo[]) || []);
   }, [budgetId]);
 
+  const fetchBudgetInfo = useCallback(async () => {
+    const { data } = await supabase
+      .from('presupuestos')
+      .select('nombre, budget_contacts(contact_role, contact_id, crm_contacts(name, surname))')
+      .eq('id', budgetId)
+      .single();
+    if (data) {
+      const clientContact = (data as any).budget_contacts?.find((bc: any) => bc.contact_role === 'cliente');
+      const clientName = clientContact?.crm_contacts
+        ? `${clientContact.crm_contacts.name}${clientContact.crm_contacts.surname ? ' ' + clientContact.crm_contacts.surname : ''}`
+        : null;
+      setBudgetInfo({ name: (data as any).nombre || '', clientName });
+    }
+  }, [budgetId]);
+
   const bumpMeasurementVersion = useCallback((itemId: string) => {
     setMeasurementVersions(prev => ({ ...prev, [itemId]: (prev[itemId] || 0) + 1 }));
   }, []);

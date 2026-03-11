@@ -1332,6 +1332,11 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
     return `${phaseCode} ${activity.code}.- ${activity.name}`.trim();
   };
 
+  // Check if activity has children
+  const activityHasChildren = (activityId: string) => {
+    return activities.some(a => a.parent_activity_id === activityId);
+  };
+
   // Sort activities by ActividadID
   const sortActivitiesByActivityId = (activitiesToSort: BudgetActivity[]) => {
     return [...activitiesToSort].sort((a, b) => {

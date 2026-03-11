@@ -49,6 +49,7 @@ interface TolosaCardViewProps {
   onAddSibling?: (parentId: string | null, name: string) => void;
   onAddChild?: (parentId: string, name: string) => void;
   onDeleteItem?: (itemId: string) => void;
+  onDuplicate?: (item: TolosItem, asSub: boolean) => void;
   initialFocusId?: string | null;
 }
 

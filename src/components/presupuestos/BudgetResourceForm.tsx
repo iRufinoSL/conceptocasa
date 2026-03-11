@@ -146,6 +146,7 @@ export function BudgetResourceForm({
           purchase_units: resource.purchase_units ?? null,
           purchase_unit_measure: resource.purchase_unit_measure || '',
           purchase_unit_cost: resource.purchase_unit_cost ?? null,
+          is_estimation: resource.is_estimation ?? false,
         });
         
         // If resource has an activity, recalculate related_units to ensure it's up-to-date

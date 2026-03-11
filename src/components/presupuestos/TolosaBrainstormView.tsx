@@ -2368,7 +2368,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
             return (
               <div className="space-y-2" id="cuando-listing-content">
                 {/* Header: Budget name, Client, title + grand totals */}
-                <div className="px-3 py-2 rounded-md bg-purple-100/80 dark:bg-purple-900/40 border border-purple-200 dark:border-purple-800 space-y-0.5">
+                <div className="px-3 py-2 rounded-md bg-orange-100/80 dark:bg-orange-900/40 border border-orange-200 dark:border-orange-800 space-y-0.5">
                   {budgetInfo.name && (
                     <div className="text-xs font-semibold text-foreground">{budgetInfo.name}</div>
                   )}

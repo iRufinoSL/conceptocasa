@@ -2362,6 +2362,9 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                         )}
                         {activity.parent_activity_id && <span className="text-muted-foreground">↳</span>}
                         {generateActivityId(activity)}
+                        {activityHasChildren(activity.id) && (
+                          <ChevronDown className="h-3.5 w-3.5 text-amber-500 flex-shrink-0" />
+                        )}
                       </div>
                     </TableCell>
                     <TableCell className="text-center">

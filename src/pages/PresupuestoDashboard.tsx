@@ -27,6 +27,7 @@ import { BudgetContactsManager } from '@/components/presupuestos/BudgetContactsM
 import { BudgetSpacesTab } from '@/components/presupuestos/BudgetSpacesTab';
 import { BudgetCostSummary } from '@/components/presupuestos/BudgetCostSummary';
 import { CloneBudgetDialog } from '@/components/presupuestos/CloneBudgetDialog';
+import { ProjectSelector } from '@/components/presupuestos/ProjectSelector';
 import { BudgetTimelineView } from '@/components/presupuestos/BudgetTimelineView';
 import { HierarchicalGanttView } from '@/components/presupuestos/HierarchicalGanttView';
 import { recalculateAllBudgetResources } from '@/lib/budget-utils';
@@ -413,12 +414,17 @@ export default function PresupuestoDashboard() {
               <CardTitle className="text-2xl">{presupuesto.poblacion}</CardTitle>
             </CardHeader>
           </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Proyecto</CardDescription>
-              <CardTitle className="text-2xl">{project?.name || 'Sin proyecto'}</CardTitle>
-            </CardHeader>
-          </Card>
+          <ProjectSelector
+            currentProject={project}
+            presupuestoId={presupuesto.id}
+            isAdmin={isAdmin}
+            onProjectChanged={(newProject) => {
+              setProject(newProject);
+              if (presupuesto) {
+                setPresupuesto({ ...presupuesto, project_id: newProject?.id || null });
+              }
+            }}
+          />
           <Card>
             <CardHeader className="pb-2">
               <CardDescription>Fecha Inicio</CardDescription>

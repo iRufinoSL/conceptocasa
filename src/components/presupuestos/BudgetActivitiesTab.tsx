@@ -4696,6 +4696,124 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
           }}
         />
       )}
+
+      {/* Duplicate Activity Dialog */}
+      <Dialog open={duplicateActivityDialogOpen} onOpenChange={setDuplicateActivityDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Duplicar Actividad</DialogTitle>
+            <DialogDescription>
+              Elige el tipo de actividad para la copia de "{duplicatingActivity?.name}"
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            {/* Type selector */}
+            <div className="space-y-2">
+              <Label>Tipo de actividad</Label>
+              <Select value={dupActType} onValueChange={(v) => setDupActType(v as 'normal' | 'estimacion')}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="normal">Normal</SelectItem>
+                  <SelectItem value="estimacion">Estimación</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Name */}
+            <div className="space-y-2">
+              <Label>Nombre *</Label>
+              <Input
+                value={dupActName}
+                onChange={(e) => setDupActName(e.target.value)}
+                placeholder="Nombre de la actividad"
+                autoFocus
+              />
+            </div>
+
+            {/* Estimation fields */}
+            {dupActType === 'estimacion' && (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label>Unidades</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={dupActUnits}
+                      onChange={(e) => setDupActUnits(e.target.value)}
+                      placeholder="1"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Importe por Ud (€)</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={dupActUnitPrice}
+                      onChange={(e) => setDupActUnitPrice(e.target.value)}
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+
+                {/* Subtotal */}
+                <div className="flex items-center justify-between bg-muted/50 p-3 rounded-lg">
+                  <span className="text-sm font-medium">Total (sin IVA)</span>
+                  <span className="font-semibold">
+                    {formatCurrency((parseFloat(dupActUnits) || 0) * (parseFloat(dupActUnitPrice) || 0))}
+                  </span>
+                </div>
+
+                {/* VAT */}
+                <div className="space-y-2">
+                  <Label>% IVA</Label>
+                  <Select value={dupActVatPercent} onValueChange={setDupActVatPercent}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">0%</SelectItem>
+                      <SelectItem value="4">4%</SelectItem>
+                      <SelectItem value="10">10%</SelectItem>
+                      <SelectItem value="21">21%</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Total with VAT */}
+                <div className="flex items-center justify-between bg-primary/10 p-3 rounded-lg border border-primary/20">
+                  <span className="text-sm font-semibold">Total (IVA incluido)</span>
+                  <span className="font-bold text-primary">
+                    {(() => {
+                      const subtotal = (parseFloat(dupActUnits) || 0) * (parseFloat(dupActUnitPrice) || 0);
+                      const vat = parseFloat(dupActVatPercent) || 0;
+                      return formatCurrency(subtotal * (1 + vat / 100));
+                    })()}
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDuplicateActivityDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={executeDuplicateActivity}
+              disabled={!dupActName.trim() || isDuplicatingActivity}
+            >
+              <Copy className="h-4 w-4 mr-2" />
+              {isDuplicatingActivity ? 'Duplicando...' : 'Duplicar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

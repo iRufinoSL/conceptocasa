@@ -3620,8 +3620,10 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
                    }}
                    onWallSelect={(wallDbIdx) => openWallPanel(r.id, wallDbIdx, 'z')}
                    initialRulerLines={getSavedRulerLines(`z_${r.id}`)}
-                   onSaveRulerLines={(lines) => saveRulerLines(`z_${r.id}`, lines)}
-                 />
+                    onSaveRulerLines={(lines) => saveRulerLines(`z_${r.id}`, lines)}
+                    ridgeLine={ridgeLine}
+                    sectionType="vertical"
+                  />
                  {/* Sibling workspace inline property editor */}
                  {selectedOtherWorkspaceId && (() => {
                    const sibRoom = rooms.find(rm => rm.id === selectedOtherWorkspaceId);

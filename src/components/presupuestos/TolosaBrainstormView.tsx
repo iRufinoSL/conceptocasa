@@ -2047,11 +2047,11 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                 <Plus className="h-3.5 w-3.5" />
               </Button>
               <Button size="icon" variant="ghost" className="h-7 w-7" title="Duplicar como QUÉ?"
-                onClick={() => duplicateItem(item, false)}>
+                onClick={() => openDuplicateDialog(item, false)}>
                 <Copy className="h-3.5 w-3.5" />
               </Button>
               <Button size="icon" variant="ghost" className="h-7 w-7" title="Duplicar como sub-QUÉ?"
-                onClick={() => duplicateItem(item, true)}>
+                onClick={() => openDuplicateDialog(item, true)}>
                 <Plus className="h-3 w-3" /><Copy className="h-3 w-3" />
               </Button>
               <Button size="icon" variant="ghost" className="h-7 w-7"

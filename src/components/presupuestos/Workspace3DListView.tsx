@@ -402,7 +402,7 @@ export function Workspace3DListView({ workspaces, scaleXY, scaleZ, onClose, onFa
             <directionalLight position={[-3, 4, -3]} intensity={0.3} />
             {currentItems.map(ws => (
               <MultiPrism key={ws.id} ws={ws} scaleXY={scaleXY} scaleZ={scaleZ} offsetX={0} offsetZ={0}
-                onFaceDoubleClick={onFaceDoubleClick} />
+                onFaceDoubleClick={onFaceDoubleClick} allSections={allSections} />
             ))}
             <OrbitControls
               enableDamping

@@ -2438,7 +2438,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                         body: rows,
                         margin: { left: 14, right: 14 },
                         styles: { fontSize: 7, cellPadding: 1.5, overflow: 'linebreak' },
-                        headStyles: { fillColor: [120, 80, 180], textColor: 255, fontStyle: 'bold', fontSize: 7 },
+                        headStyles: { fillColor: [217, 119, 52], textColor: 255, fontStyle: 'bold', fontSize: 7 },
                         columnStyles: {
                           0: { cellWidth: 22 },
                           1: { cellWidth: 'auto' },

@@ -164,19 +164,28 @@ function InteractiveFace({ vertices, color, label, labelPos, labelRot, onDoubleC
 }
 
 /** Single workspace prism for multi-workspace scene with interactive faces */
-function MultiPrism({ ws, scaleXY, scaleZ, offsetX, offsetZ, onFaceDoubleClick }: {
+function MultiPrism({ ws, scaleXY, scaleZ, offsetX, offsetZ, onFaceDoubleClick, allSections }: {
   ws: WorkspaceEntry; scaleXY: number; scaleZ: number; offsetX: number; offsetZ: number;
   onFaceDoubleClick?: (info: FaceInfo) => void;
+  allSections?: CustomSection[];
 }) {
   const sMxy = scaleXY / 1000;
   const zScaleM = scaleZ / 1000;
 
   const { baseVerts, topVerts, faces, cornerLabels, edgeLabels } = useMemo(() => {
     const base = ws.polygon.map(v => new THREE.Vector3(v.x * sMxy + offsetX, ws.zBase * zScaleM, v.y * sMxy + offsetZ));
+
+    // Use section polygon data to compute per-vertex top Z when available
+    const topYMeters = (allSections && allSections.length > 0)
+      ? computeVertexTopPositions(ws.polygon, ws.walls, ws.zBase, ws.height, scaleXY, scaleZ, allSections, ws.id)
+      : null;
+
     const top = base.map((v, i) => {
+      if (topYMeters) {
+        return new THREE.Vector3(v.x, topYMeters[i], v.z);
+      }
       const wall = ws.walls.find(w => w.wall_index === i + 1);
       const h = wall?.height != null ? wall.height : ws.height;
-      // Quantize to Z-grid so shared coordinates across workspaces coincide exactly
       const zTopUnits = ws.zBase + Math.round(h / zScaleM);
       return new THREE.Vector3(v.x, zTopUnits * zScaleM, v.z);
     });

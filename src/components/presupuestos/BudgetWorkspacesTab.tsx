@@ -3165,13 +3165,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
       length: Math.round(bbox.w * cellSizeM * 100) / 100,
       width: Math.round(bbox.h * cellSizeM * 100) / 100,
     }).eq('id', otherId);
-    // Rebuild walls preserving types
-    const { data: existingWalls } = await supabase.from('budget_floor_plan_walls')
-      .select('wall_index, wall_type').eq('room_id', otherId).order('wall_index');
-    const oldTypeMap = new Map((existingWalls || []).map(w => [w.wall_index, normalizeWallType(w.wall_type)]));
-    await supabase.from('budget_floor_plan_walls').delete().eq('room_id', otherId);
-    const walls = newVertices.map((_, i) => ({ room_id: otherId, wall_index: i + 1, wall_type: oldTypeMap.get(i + 1) || 'exterior' }));
-    await supabase.from('budget_floor_plan_walls').insert(walls);
+    // Smart rebuild: only recreate walls if vertex count changed
+    await rebuildWallsSmart(otherId, newVertices.length);
     await refetch();
     queryClient.invalidateQueries({ queryKey: ['workspace-walls'] });
   };

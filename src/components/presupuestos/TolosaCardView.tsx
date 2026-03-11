@@ -335,6 +335,16 @@ export function TolosaCardView({
                   <Edit2 className="h-3 w-3" />
                 </button>
               )}
+              {/* Duplicate */}
+              {onDuplicate && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onDuplicate(item, false); }}
+                  className="flex items-center px-1 py-0.5 rounded text-[10px] font-medium hover:bg-black/10 dark:hover:bg-white/10 transition-colors opacity-0 group-hover/card:opacity-60 hover:!opacity-100"
+                  title="Duplicar"
+                >
+                  <Copy className="h-3 w-3" />
+                </button>
+              )}
               {/* Delete */}
               {onDeleteItem && (
                 <button

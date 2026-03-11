@@ -4124,8 +4124,10 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
                   onOtherPolygonChange={handleOtherPolygonChangeZ}
                   onOtherPolygonRename={handleOtherPolygonRename}
                   pdfTitle="Espacio de trabajo"
-                  pdfSubtitle={formName || 'Nuevo espacio'}
-                />
+                   pdfSubtitle={formName || 'Nuevo espacio'}
+                   ridgeLine={ridgeLine}
+                   sectionType="vertical"
+                 />
               </div>
             )}
           </div>

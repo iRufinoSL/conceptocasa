@@ -2375,7 +2375,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                   {budgetInfo.clientName && (
                     <div className="text-xs text-muted-foreground">Cliente: {budgetInfo.clientName}</div>
                   )}
-                  <div className="text-xs font-medium text-purple-700 dark:text-purple-400 mt-1">
+                  <div className="text-xs font-medium text-orange-700 dark:text-orange-400 mt-1">
                     Presupuesto de Actividades por Fases constructivas
                   </div>
                   <div className="flex gap-3 text-[10px] font-mono text-muted-foreground mt-0.5">

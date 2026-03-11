@@ -2269,7 +2269,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                 <button
                   key={dim.key}
                   onClick={() => setCuandoListOpen(prev => !prev)}
-                  className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors cursor-pointer ${dim.color} ${cuandoListOpen ? 'ring-2 ring-purple-400' : ''}`}
+                  className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors cursor-pointer ${dim.color} ${cuandoListOpen ? 'ring-2 ring-orange-400' : ''}`}
                 >
                   <Icon className="h-3 w-3" /> {dim.label}
                 </button>

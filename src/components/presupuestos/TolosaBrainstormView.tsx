@@ -2028,7 +2028,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
 
           {/* Actions */}
           {!isEditing && (
-            <div className="flex items-center gap-0.5 opacity-0 group-hover/item:opacity-100 transition-opacity shrink-0">
+            <div className="flex items-center gap-0.5 shrink-0">
               {/* Move arrows */}
               <div className="flex items-center gap-0 border rounded-md mr-1">
                 <Button size="icon" variant="ghost" className="h-6 w-6 rounded-r-none" title="Subir nivel (← Outdent)"

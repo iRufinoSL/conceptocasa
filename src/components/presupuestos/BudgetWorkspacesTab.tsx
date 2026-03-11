@@ -633,11 +633,80 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
     setDraggingIdx(idx);
   };
 
+  // Helper: find closest point on a line segment to a point
+  const closestPointOnSegment = (px: number, py: number, ax: number, ay: number, bx: number, by: number) => {
+    const dx = bx - ax, dy = by - ay;
+    const lenSq = dx * dx + dy * dy;
+    if (lenSq === 0) return { x: ax, y: ay, dist: Math.sqrt((px - ax) ** 2 + (py - ay) ** 2) };
+    let t = ((px - ax) * dx + (py - ay) * dy) / lenSq;
+    t = Math.max(0, Math.min(1, t));
+    const cx = ax + t * dx, cy = ay + t * dy;
+    return { x: cx, y: cy, dist: Math.sqrt((px - cx) ** 2 + (py - cy) ** 2) };
+  };
+
+  // Magnet: snap to nearest edge or vertex of all visible polygons
+  const applyMagnetSnap = (gx: number, gy: number, excludeVertexIdx: number | null, isOther: boolean): { x: number; y: number; label: string } | null => {
+    const MAGNET_THRESHOLD = 1.5; // grid units
+    let bestDist = MAGNET_THRESHOLD;
+    let bestPoint: { x: number; y: number; label: string } | null = null;
+
+    // Collect all polygon vertex lists to check against
+    const targets: { verts: PolygonVertex[]; name: string; isSelf: boolean }[] = [];
+    if (!isOther && vertices.length >= 2) {
+      targets.push({ verts: vertices, name: activeName || 'Actual', isSelf: true });
+    }
+    for (const op of otherPolygons) {
+      if (isOther && op.id === selectedOtherId) continue;
+      targets.push({ verts: op.vertices, name: op.name || 'Otro', isSelf: false });
+    }
+    if (isOther && vertices.length >= 2) {
+      targets.push({ verts: vertices, name: activeName || 'Actual', isSelf: false });
+    }
+    // Also check perimeter polygon
+    if (perimeterPolygon && perimeterPolygon.length >= 2) {
+      targets.push({ verts: perimeterPolygon, name: 'Perímetro', isSelf: false });
+    }
+
+    for (const { verts, name, isSelf } of targets) {
+      // Snap to vertices
+      for (let i = 0; i < verts.length; i++) {
+        if (isSelf && i === excludeVertexIdx) continue;
+        const d = Math.sqrt((gx - verts[i].x) ** 2 + (gy - verts[i].y) ** 2);
+        if (d < bestDist) {
+          bestDist = d;
+          bestPoint = { x: verts[i].x, y: verts[i].y, label: `V${i + 1} ${name}` };
+        }
+      }
+      // Snap to edges (closest point on segment)
+      const n = verts.length;
+      if (n >= 2) {
+        const closed = n >= 3;
+        const edgeCount = closed ? n : n - 1;
+        for (let i = 0; i < edgeCount; i++) {
+          const j = (i + 1) % n;
+          if (isSelf && (i === excludeVertexIdx || j === excludeVertexIdx)) continue;
+          const cp = closestPointOnSegment(gx, gy, verts[i].x, verts[i].y, verts[j].x, verts[j].y);
+          if (cp.dist < bestDist) {
+            bestDist = cp.dist;
+            // Round to 0.01 for precision
+            const rx = Math.round(cp.x * 100) / 100;
+            const ry = Math.round(cp.y * 100) / 100;
+            bestPoint = { x: rx, y: ry, label: `P${i + 1}-${j + 1} ${name}` };
+          }
+        }
+      }
+    }
+    return bestPoint;
+  };
+
   const handleMouseMove = (e: React.MouseEvent) => {
     const activeIdx = draggingIdx !== null ? draggingIdx : null;
     const otherIdx = draggingOtherIdx !== null ? draggingOtherIdx : null;
     const rulerDrag = draggingRulerIdx !== null;
-    if (activeIdx === null && otherIdx === null && !rulerDrag) return;
+    if (activeIdx === null && otherIdx === null && !rulerDrag) {
+      if (magnetMode) setMagnetSnap(null);
+      return;
+    }
     if (!svgRef.current) return;
     const rect = svgRef.current.getBoundingClientRect();
     const sx = e.clientX - rect.left;
@@ -646,8 +715,21 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
     // Clamp to grid bounds; in free mode allow fractional
     const clampX = (v: number) => Math.max(gridOffsetX, Math.min(gridOffsetX + gridWidth, v));
     const clampY = (v: number) => Math.max(gridOffsetY, Math.min(gridOffsetY + gridHeight, v));
-    const snappedX = (freeMode || rulerDrag) ? clampX(Math.round(gx * 10) / 10) : clampX(gx);
-    const snappedY = (freeMode || rulerDrag) ? clampY(Math.round(gy * 10) / 10) : clampY(gy);
+    let snappedX = (freeMode || magnetMode || rulerDrag) ? clampX(Math.round(gx * 10) / 10) : clampX(gx);
+    let snappedY = (freeMode || magnetMode || rulerDrag) ? clampY(Math.round(gy * 10) / 10) : clampY(gy);
+
+    // Apply magnet snap if enabled
+    if (magnetMode && !rulerDrag) {
+      const snap = applyMagnetSnap(snappedX, snappedY, activeIdx, otherIdx !== null);
+      if (snap) {
+        snappedX = snap.x;
+        snappedY = snap.y;
+        setMagnetSnap(snap);
+      } else {
+        setMagnetSnap(null);
+      }
+    }
+
     if (rulerDrag && draggingRulerEnd) {
       setRulerLines(prev => prev.map((rl, i) => {
         if (i !== draggingRulerIdx) return rl;

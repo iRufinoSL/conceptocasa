@@ -322,16 +322,31 @@ export function BudgetResourceForm({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Resource Name */}
+          {/* Resource Name + Est toggle */}
           <div className="space-y-2">
             <Label htmlFor="name">Nombre del Recurso *</Label>
-            <Input
-              id="name"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              placeholder="Nombre del recurso"
-              required
-            />
+            <div className="flex gap-2">
+              <Input
+                id="name"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                placeholder="Nombre del recurso"
+                required
+                className="flex-1"
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant={formData.is_estimation ? 'default' : 'outline'}
+                className={`shrink-0 text-xs px-3 ${formData.is_estimation ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'border-amber-300 text-amber-700 hover:bg-amber-50'}`}
+                onClick={() => setFormData({ ...formData, is_estimation: !formData.is_estimation })}
+              >
+                {formData.is_estimation ? '✓ Est.' : 'Est.'}
+              </Button>
+            </div>
+            {formData.is_estimation && (
+              <p className="text-xs text-amber-600">Este recurso es de tipo Estimación — sus costes contribuyen a las Actividades (Est)</p>
+            )}
           </div>
 
           {/* Row 1: Cost, Unit, Type */}

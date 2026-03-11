@@ -1947,6 +1947,15 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                     const cuanto = getCuanto(item.id);
                     return (
                       <div className="ml-auto flex items-center gap-1.5 shrink-0">
+                        {(() => {
+                          const phase = item.phase_id ? phases.find(p => p.id === item.phase_id) : null;
+                          return phase ? (
+                            <Badge variant="outline" className="text-[10px] gap-1 border-purple-300 text-purple-700 dark:border-purple-700 dark:text-purple-300">
+                              <Clock className="h-2.5 w-2.5" />
+                              {phase.code ? phase.code : phase.name}
+                            </Badge>
+                          ) : null;
+                        })()}
                         {summary && summary.measurementUnits > 0 && (
                           <Badge variant="outline" className="text-[10px] font-mono gap-1">
                             <Ruler className="h-2.5 w-2.5" />

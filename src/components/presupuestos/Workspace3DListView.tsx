@@ -254,7 +254,7 @@ function MultiPrism({ ws, scaleXY, scaleZ, offsetX, offsetZ, onFaceDoubleClick, 
     facesList.push({ vertices: [...top], color: FACE_COLORS.techo, label: `T1\n${ws.name}\n${ceilArea.toFixed(2)} m²`, labelPos: topCenter, labelRot: [-Math.PI / 2, 0, 0], faceType: 'techo', faceIndex: 1 });
 
     return { baseVerts: base, topVerts: top, faces: facesList, cornerLabels: labels, edgeLabels: edges };
-  }, [ws, sMxy, zScaleM, offsetX, offsetZ, scaleXY]);
+  }, [ws, sMxy, zScaleM, offsetX, offsetZ, scaleXY, allSections]);
 
   const handleFaceDblClick = useCallback((faceType: string, faceIndex: number, faceLabel: string) => {
     onFaceDoubleClick?.({

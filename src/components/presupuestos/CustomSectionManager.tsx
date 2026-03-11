@@ -1729,15 +1729,16 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
         {/* H-axis labels (top) */}
         {Array.from({ length: gridCount + 1 }, (_, i) => {
           const val = gridMin + i;
+          const hAxisColor = hLabel === 'X' ? 'rgba(192,57,43,0.9)' : hLabel === 'Y' ? 'rgba(39,174,96,0.9)' : 'rgba(41,128,185,0.9)';
           return (
             <text
               key={`h-${i}`}
               x={margin.left + i * cellSize}
               y={margin.top - 6}
               textAnchor="middle"
-              className="fill-muted-foreground"
-              fontSize={val === 0 ? 10 : 7}
-              fontWeight={val === 0 ? 700 : 400}
+              fill={hAxisColor}
+              fontSize={val === 0 ? 13 : 10}
+              fontWeight={700}
               data-pdf-axis-label=""
             >
               {hLabel}{val}
@@ -1749,9 +1750,9 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
         <text
           x={margin.left + gridCount * cellSize + 6}
           y={margin.top - 6}
-          className="fill-muted-foreground"
-          fontSize={9}
-          fontWeight={600}
+          fill={hLabel === 'X' ? 'rgba(192,57,43,0.9)' : hLabel === 'Y' ? 'rgba(39,174,96,0.9)' : 'rgba(41,128,185,0.9)'}
+          fontSize={12}
+          fontWeight={700}
           data-pdf-axis-label=""
         >
           {hLabel}
@@ -1760,15 +1761,16 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
         {/* V-axis labels (left) */}
         {Array.from({ length: gridCount + 1 }, (_, i) => {
           const val = isElevation ? (gridMax - i) : (gridMin + i);
+          const vAxisColor = vLabel === 'Y' ? 'rgba(39,174,96,0.9)' : 'rgba(41,128,185,0.9)';
           return (
             <text
               key={`v-${i}`}
               x={margin.left - 4}
               y={margin.top + i * cellSize + 3}
               textAnchor="end"
-              className="fill-muted-foreground"
-              fontSize={val === 0 ? 10 : 7}
-              fontWeight={val === 0 ? 700 : 400}
+              fill={vAxisColor}
+              fontSize={val === 0 ? 13 : 10}
+              fontWeight={700}
               data-pdf-axis-label=""
             >
               {vLabel}{val}
@@ -1781,9 +1783,9 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
           x={margin.left - 4}
           y={margin.top - 14}
           textAnchor="end"
-          className="fill-muted-foreground"
-          fontSize={9}
-          fontWeight={600}
+          fill={vLabel === 'Y' ? 'rgba(39,174,96,0.9)' : 'rgba(41,128,185,0.9)'}
+          fontSize={12}
+          fontWeight={700}
           data-pdf-axis-label=""
         >
           {vLabel}

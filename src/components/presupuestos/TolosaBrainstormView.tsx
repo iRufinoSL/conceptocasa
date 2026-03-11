@@ -43,6 +43,8 @@ import { Json } from '@/integrations/supabase/types';
 import { toast } from 'sonner';
 import { formatCurrency, formatNumber } from '@/lib/format-utils';
 import { calcResourceSubtotal } from '@/lib/budget-pricing';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 interface TolosItem {
   id: string;

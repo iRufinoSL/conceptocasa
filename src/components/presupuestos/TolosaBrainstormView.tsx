@@ -2546,8 +2546,8 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                 })}
 
                 {/* Grand total */}
-                <div className="flex items-center justify-between px-3 py-2 rounded-md bg-purple-100/60 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800">
-                  <span className="text-xs font-semibold text-purple-700 dark:text-purple-400">
+                <div className="flex items-center justify-between px-3 py-2 rounded-md bg-orange-100/60 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800">
+                  <span className="text-xs font-semibold text-orange-700 dark:text-orange-400">
                     Total ({filtered.length} actividades)
                   </span>
                   <div className="flex gap-4 text-xs font-mono">

@@ -41,7 +41,7 @@ interface BudgetResource {
 const RESOURCE_TYPES = ['Producto', 'Mano de obra', 'Alquiler', 'Servicio', 'Impuestos', 'Tarea', 'Equipo', 'Material', 'Utiles y herramientas'];
 const UNIT_MEASURES = ['m2', 'm3', 'ml', 'mes', 'ud', 'kg', 'hora', 'día'];
 
-const RESOURCE_SELECT_FIELDS = 'id, budget_id, name, external_unit_cost, unit, resource_type, safety_margin_percent, sales_margin_percent, manual_units, related_units, activity_id, description, supplier_id, signed_subtotal, purchase_vat_percent, purchase_units, purchase_unit_measure, purchase_unit_cost';
+const RESOURCE_SELECT_FIELDS = 'id, budget_id, name, external_unit_cost, unit, resource_type, safety_margin_percent, sales_margin_percent, manual_units, related_units, activity_id, description, supplier_id, signed_subtotal, purchase_vat_percent, purchase_units, purchase_unit_measure, purchase_unit_cost, is_estimation';
 
 interface TolosaResourcesPanelProps {
   budgetId: string;

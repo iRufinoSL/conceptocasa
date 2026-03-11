@@ -1371,6 +1371,33 @@ export function FloorPlanGridView({
             vDimsMulti(leftAll, leftBaseX, 'dl', -1);
             vDimsMulti(rightAll, COL_HEADER_W + (maxCol - 1) * CS + CS + DIM_OFF_RIGHT, 'dr', 1);
 
+            // ─── Total perimeter dimensions (red) at 2 grid scales outside each face ───
+            const TOTAL_DIM_OFFSET = 2 * CS; // 2 grid scales distance
+            // Top total
+            const topTotalY = ROW_HEADER_H + (minRow - 1) * CS - TOTAL_DIM_OFFSET;
+            const topX1 = cornerTargetX(mColA, 'top');
+            const topX2 = cornerTargetX(mColB, 'top');
+            const topBlocks = Math.round(Math.abs(topX2 - topX1) / CS);
+            if (topBlocks > 0) hDimLine(Math.min(topX1, topX2), Math.max(topX1, topX2), topTotalY, fmtDist(topBlocks), 'total-top', true);
+            // Bottom total
+            const bottomTotalY = ROW_HEADER_H + (maxRow - 1) * CS + CS + TOTAL_DIM_OFFSET;
+            const botX1 = cornerTargetX(mColD, 'bottom');
+            const botX2 = cornerTargetX(mColC, 'bottom');
+            const botBlocks = Math.round(Math.abs(botX2 - botX1) / CS);
+            if (botBlocks > 0) hDimLine(Math.min(botX1, botX2), Math.max(botX1, botX2), bottomTotalY, fmtDist(botBlocks), 'total-bottom', true);
+            // Left total
+            const leftTotalX = COL_HEADER_W + (minCol - 1) * CS - TOTAL_DIM_OFFSET;
+            const leftY1 = cornerTargetY(mRowA, 'left');
+            const leftY2 = cornerTargetY(mRowD, 'left');
+            const leftBlocks = Math.round(Math.abs(leftY2 - leftY1) / CS);
+            if (leftBlocks > 0) vDimLine(Math.min(leftY1, leftY2), Math.max(leftY1, leftY2), leftTotalX, fmtDist(leftBlocks), 'total-left', true);
+            // Right total
+            const rightTotalX = COL_HEADER_W + (maxCol - 1) * CS + CS + TOTAL_DIM_OFFSET;
+            const rightY1 = cornerTargetY(mRowB, 'right');
+            const rightY2 = cornerTargetY(mRowC, 'right');
+            const rightBlocks = Math.round(Math.abs(rightY2 - rightY1) / CS);
+            if (rightBlocks > 0) vDimLine(Math.min(rightY1, rightY2), Math.max(rightY1, rightY2), rightTotalX, fmtDist(rightBlocks), 'total-right', true);
+
             // ─── Internal coordinate dimensions: rendered OUTSIDE the grid as additional levels ───
             // Group internal coords by shared row (horizontal) or shared col (vertical)
             const allCustom = nonMainCorners.filter(c => !c.isEave);

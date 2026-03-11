@@ -454,9 +454,8 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
       vertices: [...topVerts3D], labelPos: topCenter, labelRot: [-Math.PI / 2, 0, 0],
       color: FACE_COLORS.techo,
       realVertices: polygon.map((v, i) => {
-        const wall = walls.find(w => w.wall_index === i + 1);
-        const hM = wall?.height != null ? wall.height : height;
-        return { x: v.x, y: v.y, z: zBase + Math.round(hM / zScaleBlocks) };
+        const zTopVal = Math.round(topVerts3D[i].y / zScaleBlocks);
+        return { x: v.x, y: v.y, z: zTopVal };
       }),
     });
 

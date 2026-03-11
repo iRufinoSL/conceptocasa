@@ -102,7 +102,7 @@ export function HierarchicalGanttView({
             .order('code', { ascending: true }),
           supabase
             .from('budget_activities')
-            .select('id, name, code, phase_id, start_date, end_date, duration_days, actual_start_date, actual_end_date, depends_on_activity_id')
+            .select('id, name, code, phase_id, start_date, end_date, duration_days, actual_start_date, actual_end_date, depends_on_activity_id, activity_type')
             .eq('budget_id', budgetId)
             .order('code', { ascending: true })
         ]);

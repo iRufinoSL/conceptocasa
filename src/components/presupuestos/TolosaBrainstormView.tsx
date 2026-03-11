@@ -662,7 +662,25 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
     }
   };
 
-  const duplicateItem = async (item: TolosItem, asSub: boolean) => {
+  const openDuplicateDialog = (item: TolosItem, asSub: boolean) => {
+    setDupItem(item);
+    setDupAsSub(asSub);
+    setDupType('normal');
+    setDupName(item.name + ' (copia)');
+    setDupUnits('1');
+    setDupUnitPrice('');
+    setDupVatPercent('21');
+    setDupDialogOpen(true);
+  };
+
+  const executeDuplicate = async () => {
+    if (!dupItem) return;
+    const item = dupItem;
+    const asSub = dupAsSub;
+    const isEstimacion = dupType === 'estimacion';
+    const trimmedName = dupName.trim();
+    if (!trimmedName) { toast.error('El nombre es obligatorio'); return; }
+
     const targetParentId = asSub ? item.id : item.parent_id;
     const code = getNextCode(targetParentId);
     const siblings = targetParentId ? getChildren(targetParentId) : rootItems;
@@ -672,8 +690,8 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
       .insert({
         budget_id: budgetId,
         parent_id: targetParentId,
-        code,
-        name: item.name + ' (copia)',
+        code: isEstimacion ? code + '.E' : code,
+        name: trimmedName,
         description: item.description,
         order_index: siblings.length,
         address_street: item.address_street,
@@ -687,6 +705,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
         client_contact_id: item.client_contact_id,
         supplier_contact_id: item.supplier_contact_id,
         housing_profile_id: item.housing_profile_id,
+        phase_id: item.phase_id,
       })
       .select()
       .single();
@@ -696,13 +715,51 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
       return;
     }
 
-    const children = getChildren(item.id);
-    if (children.length > 0) {
-      await duplicateChildren(children, newItem.id, newItem.code);
+    if (isEstimacion) {
+      // Create a linked budget_activity with estimation type + resource
+      const units = parseFloat(dupUnits) || 1;
+      const unitPrice = parseFloat(dupUnitPrice) || 0;
+      const vatPercent = parseFloat(dupVatPercent) || 21;
+
+      const { data: newActivity } = await supabase
+        .from('budget_activities')
+        .insert({
+          budget_id: budgetId,
+          code: `Est.${code}`,
+          name: trimmedName,
+          activity_type: 'estimacion',
+          is_executed: true,
+        })
+        .select()
+        .single();
+
+      if (newActivity) {
+        await supabase.from('budget_activity_resources').insert({
+          budget_id: budgetId,
+          activity_id: newActivity.id,
+          name: trimmedName,
+          manual_units: units,
+          external_unit_cost: unitPrice,
+          purchase_vat_percent: vatPercent,
+          resource_type: 'material',
+        });
+        // Link resource to tolosa item
+        await supabase.from('tolosa_item_resources').insert({
+          tolosa_item_id: (newItem as any).id,
+          resource_id: newActivity.id,
+        });
+      }
+    } else {
+      const children = getChildren(item.id);
+      if (children.length > 0) {
+        await duplicateChildren(children, (newItem as any).id, (newItem as any).code);
+      }
     }
 
-    toast.success(asSub ? 'Duplicado como sub-QUÉ?' : 'QUÉ? duplicado');
+    toast.success(isEstimacion ? 'Estimación creada' : (asSub ? 'Duplicado como sub-QUÉ?' : 'QUÉ? duplicado'));
     if (targetParentId) setExpandedIds(prev => new Set(prev).add(targetParentId));
+    setDupDialogOpen(false);
+    setDupItem(null);
     fetchItems();
   };
 

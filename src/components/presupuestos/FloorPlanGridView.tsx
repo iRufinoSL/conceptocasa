@@ -159,13 +159,13 @@ export function computeGridRuler(positioned: PositionedRoom[]) {
 
 const getSpaceColor = (name: string): string => {
   const n = name.toLowerCase();
-  if (n.includes('salón') || n.includes('salon')) return 'bg-amber-100/70 border-amber-400 dark:bg-amber-900/30 dark:border-amber-700';
-  if (n.includes('hab')) return 'bg-blue-100/70 border-blue-400 dark:bg-blue-900/30 dark:border-blue-700';
-  if (n.includes('baño') || n.includes('bano')) return 'bg-cyan-100/70 border-cyan-400 dark:bg-cyan-900/30 dark:border-cyan-700';
-  if (n.includes('porche')) return 'bg-green-100/70 border-green-400 dark:bg-green-900/30 dark:border-green-700';
-  if (n.includes('pasillo') || n.includes('corredor')) return 'bg-gray-100/70 border-gray-400 dark:bg-gray-800/50 dark:border-gray-600';
-  if (n.includes('cocina')) return 'bg-orange-100/70 border-orange-400 dark:bg-orange-900/30 dark:border-orange-700';
-  return 'bg-purple-100/70 border-purple-400 dark:bg-purple-900/30 dark:border-purple-700';
+  if (n.includes('salón') || n.includes('salon')) return 'border-amber-500 dark:border-amber-600';
+  if (n.includes('hab')) return 'border-blue-500 dark:border-blue-600';
+  if (n.includes('baño') || n.includes('bano')) return 'border-cyan-500 dark:border-cyan-600';
+  if (n.includes('porche')) return 'border-green-500 dark:border-green-600';
+  if (n.includes('pasillo') || n.includes('corredor')) return 'border-gray-500 dark:border-gray-500';
+  if (n.includes('cocina')) return 'border-orange-500 dark:border-orange-600';
+  return 'border-purple-500 dark:border-purple-600';
 };
 
 const getGroupColor = (groupId: string): string => {
@@ -594,10 +594,11 @@ export function FloorPlanGridView({
   const renderGrid = (overrideCellSize?: number) => {
     const CS = overrideCellSize || CELL_SIZE;
     const fontScale = CS / CELL_SIZE; // 1.0 at default, >1 when enlarged
-    const nameFontSize = Math.max(9, Math.round(9 * fontScale));
-    const m2FontSize = Math.max(10, Math.round(10 * fontScale));
-    const dimFontSize = Math.max(8, Math.round(8 * fontScale));
-    const coordFontSize = Math.max(7, Math.round(7 * fontScale));
+    const nameFontSize = Math.max(12, Math.round(12 * fontScale));
+    const m2FontSize = Math.max(12, Math.round(12 * fontScale));
+    const dimFontSize = Math.max(10, Math.round(10 * fontScale));
+    const coordFontSize = Math.max(9, Math.round(9 * fontScale));
+    const axisLabelSize = Math.max(13, Math.round(13 * fontScale));
     // Render rooms as absolutely positioned overlays on the grid
     const roomOverlays = placedRooms.map(room => {
       const startCol = Math.round(room.posX / cellSizeM) + 1;
@@ -661,14 +662,14 @@ export function FloorPlanGridView({
           {renderOpeningMarks(room, 3, 'bottom', width, height)}
           {renderOpeningMarks(room, 4, 'left', width, height)}
 
-          <div className="font-bold text-center max-w-full px-0.5 leading-tight break-words" style={{ fontSize: `${nameFontSize}px`, lineHeight: '1.2' }}>{room.name}</div>
-          <div className="font-mono leading-tight text-center" style={{ fontSize: `${Math.max(7, m2FontSize - 1)}px` }}>
-            <span className="font-semibold">C={builtM2.toFixed(2)}</span>
-            <span className="text-muted-foreground mx-0.5">·</span>
-            <span className="font-semibold">U={usableM2.toFixed(2)}</span>
+          <div className="font-extrabold text-center max-w-full px-0.5 leading-tight break-words" style={{ fontSize: `${nameFontSize}px`, lineHeight: '1.2', textShadow: '0 0 3px white, 0 0 3px white' }}>{room.name}</div>
+          <div className="font-mono leading-tight text-center font-bold" style={{ fontSize: `${Math.max(9, m2FontSize - 1)}px`, textShadow: '0 0 3px white, 0 0 3px white' }}>
+            <span>C={builtM2.toFixed(2)}</span>
+            <span className="mx-0.5">·</span>
+            <span>U={usableM2.toFixed(2)}</span>
           </div>
-          <div className="text-muted-foreground" style={{ fontSize: `${dimFontSize}px` }}>{room.width.toFixed(1)}×{room.length.toFixed(1)}</div>
-          <Badge variant="outline" className="px-0.5 py-0 mt-0.5" style={{ fontSize: `${coordFontSize}px`, height: `${Math.max(12, Math.round(12 * fontScale))}px` }}>{coord}</Badge>
+          <div style={{ fontSize: `${dimFontSize}px`, fontWeight: 700, textShadow: '0 0 3px white, 0 0 3px white' }}>{room.width.toFixed(1)}×{room.length.toFixed(1)}</div>
+          <Badge variant="outline" className="px-0.5 py-0 mt-0.5 font-bold" style={{ fontSize: `${coordFontSize}px`, height: `${Math.max(14, Math.round(14 * fontScale))}px` }}>{coord}</Badge>
 
           {multiSelectMode && (
             <div className={`absolute top-0.5 right-0.5 w-3 h-3 rounded-full border ${isMultiSelected ? 'bg-blue-500 border-blue-500' : 'border-muted-foreground/50 bg-background'}`} />
@@ -693,7 +694,7 @@ export function FloorPlanGridView({
           {Array.from({ length: totalCols }, (_, ci) => (
             <div
               key={`ch-${ci}`}
-              className="absolute text-[8px] font-bold leading-none"
+              className="absolute leading-none"
               style={{
                 left: COL_HEADER_W + ci * CS,
                 top: 2,
@@ -703,7 +704,10 @@ export function FloorPlanGridView({
                 alignItems: 'flex-end',
                 justifyContent: 'flex-start',
                 paddingLeft: 1,
-                color: '#c0392b',
+                color: '#a51c1c',
+                fontSize: `${axisLabelSize}px`,
+                fontWeight: 900,
+                textShadow: '0 0 2px rgba(165,28,28,0.3)',
               }}
             >
               {colToLabel(ci + 1, levelPrefix)}
@@ -714,7 +718,7 @@ export function FloorPlanGridView({
           {Array.from({ length: totalRows }, (_, ri) => (
             <div
               key={`rh-${ri}`}
-              className="absolute text-[8px] font-bold text-right leading-none"
+              className="absolute text-right leading-none"
               style={{
                 left: 2,
                 top: ROW_HEADER_H + ri * CS,
@@ -724,7 +728,10 @@ export function FloorPlanGridView({
                 alignItems: 'flex-start',
                 justifyContent: 'flex-end',
                 paddingTop: 1,
-                color: '#27ae60',
+                color: '#1a8a4a',
+                fontSize: `${axisLabelSize}px`,
+                fontWeight: 900,
+                textShadow: '0 0 2px rgba(26,138,74,0.3)',
               }}
             >
               {rowToLabel(ri + 1, levelPrefix)}
@@ -1274,36 +1281,43 @@ export function FloorPlanGridView({
               return `${(mm / 1000).toFixed(3)}m`;
             };
 
-            const hDimLine = (x1: number, x2: number, y: number, lbl: string, key: string) => {
+            const dimLabelFontSize = Math.max(13, Math.round(13 * fontScale));
+            const hDimLine = (x1: number, x2: number, y: number, lbl: string, key: string, isTotal = false) => {
               const minX = Math.min(x1, x2);
               const maxX = Math.max(x1, x2);
               const mx = (minX + maxX) / 2;
-              const tw = Math.max(50, lbl.length * 6 + 10);
+              const tw = Math.max(60, lbl.length * 7 + 14);
+              const lineColor = isTotal ? '#dc2626' : '#2563eb';
+              const bgColor = isTotal ? 'rgba(220, 38, 38, 0.9)' : 'rgba(37, 99, 235, 0.9)';
+              const fs = isTotal ? dimLabelFontSize + 2 : dimLabelFontSize;
               dimElements.push(
-                <div key={`${key}-l`} className="absolute pointer-events-none" style={{ left: minX, top: y, width: maxX - minX, height: 1, backgroundColor: '#2563eb', zIndex: 28 }} />,
-                <div key={`${key}-t1`} className="absolute pointer-events-none" style={{ left: x1 - 1, top: y - 5, width: 1.5, height: 11, backgroundColor: '#2563eb', zIndex: 28 }} />,
-                <div key={`${key}-t2`} className="absolute pointer-events-none" style={{ left: x2 - 1, top: y - 5, width: 1.5, height: 11, backgroundColor: '#2563eb', zIndex: 28 }} />,
+                <div key={`${key}-l`} className="absolute pointer-events-none" style={{ left: minX, top: y, width: maxX - minX, height: isTotal ? 2 : 1, backgroundColor: lineColor, zIndex: 28 }} />,
+                <div key={`${key}-t1`} className="absolute pointer-events-none" style={{ left: x1 - 1, top: y - 6, width: isTotal ? 2 : 1.5, height: 13, backgroundColor: lineColor, zIndex: 28 }} />,
+                <div key={`${key}-t2`} className="absolute pointer-events-none" style={{ left: x2 - 1, top: y - 6, width: isTotal ? 2 : 1.5, height: 13, backgroundColor: lineColor, zIndex: 28 }} />,
                 <div key={`${key}-lb`} className="absolute pointer-events-none flex items-center justify-center" style={{
-                  left: mx - tw / 2, top: y - 12, width: tw, height: 22,
-                  backgroundColor: 'rgba(37, 99, 235, 0.9)', borderRadius: 3,
-                  color: 'white', fontSize: 10, fontWeight: 'bold', zIndex: 29, lineHeight: '1',
+                  left: mx - tw / 2, top: y - 14, width: tw, height: 26,
+                  backgroundColor: bgColor, borderRadius: 4,
+                  color: 'white', fontSize: fs, fontWeight: 'bold', zIndex: 29, lineHeight: '1',
                 }}>{lbl}</div>,
               );
             };
 
-            const vDimLine = (y1: number, y2: number, x: number, lbl: string, key: string) => {
+            const vDimLine = (y1: number, y2: number, x: number, lbl: string, key: string, isTotal = false) => {
               const minY = Math.min(y1, y2);
               const maxY = Math.max(y1, y2);
               const my = (minY + maxY) / 2;
-              const tw = Math.max(50, lbl.length * 6 + 10);
+              const tw = Math.max(60, lbl.length * 7 + 14);
+              const lineColor = isTotal ? '#dc2626' : '#2563eb';
+              const bgColor = isTotal ? 'rgba(220, 38, 38, 0.9)' : 'rgba(37, 99, 235, 0.9)';
+              const fs = isTotal ? dimLabelFontSize + 2 : dimLabelFontSize;
               dimElements.push(
-                <div key={`${key}-l`} className="absolute pointer-events-none" style={{ left: x, top: minY, width: 1, height: maxY - minY, backgroundColor: '#2563eb', zIndex: 28 }} />,
-                <div key={`${key}-t1`} className="absolute pointer-events-none" style={{ left: x - 5, top: y1 - 1, width: 11, height: 1.5, backgroundColor: '#2563eb', zIndex: 28 }} />,
-                <div key={`${key}-t2`} className="absolute pointer-events-none" style={{ left: x - 5, top: y2 - 1, width: 11, height: 1.5, backgroundColor: '#2563eb', zIndex: 28 }} />,
+                <div key={`${key}-l`} className="absolute pointer-events-none" style={{ left: x, top: minY, width: isTotal ? 2 : 1, height: maxY - minY, backgroundColor: lineColor, zIndex: 28 }} />,
+                <div key={`${key}-t1`} className="absolute pointer-events-none" style={{ left: x - 6, top: y1 - 1, width: 13, height: isTotal ? 2 : 1.5, backgroundColor: lineColor, zIndex: 28 }} />,
+                <div key={`${key}-t2`} className="absolute pointer-events-none" style={{ left: x - 6, top: y2 - 1, width: 13, height: isTotal ? 2 : 1.5, backgroundColor: lineColor, zIndex: 28 }} />,
                 <div key={`${key}-lb`} className="absolute pointer-events-none flex items-center justify-center" style={{
-                  left: x - tw / 2, top: my - 11, width: tw, height: 22,
-                  backgroundColor: 'rgba(37, 99, 235, 0.9)', borderRadius: 3,
-                  color: 'white', fontSize: 10, fontWeight: 'bold', zIndex: 29, lineHeight: '1',
+                  left: x - tw / 2, top: my - 13, width: tw, height: 26,
+                  backgroundColor: bgColor, borderRadius: 4,
+                  color: 'white', fontSize: fs, fontWeight: 'bold', zIndex: 29, lineHeight: '1',
                 }}>{lbl}</div>,
               );
             };
@@ -1356,6 +1370,33 @@ export function FloorPlanGridView({
             hDimsMulti(bottomAll, ROW_HEADER_H + (maxRow - 1) * CS + CS + DIM_OFF_BOTTOM, 'db', 1);
             vDimsMulti(leftAll, leftBaseX, 'dl', -1);
             vDimsMulti(rightAll, COL_HEADER_W + (maxCol - 1) * CS + CS + DIM_OFF_RIGHT, 'dr', 1);
+
+            // ─── Total perimeter dimensions (red) at 2 grid scales outside each face ───
+            const TOTAL_DIM_OFFSET = 2 * CS; // 2 grid scales distance
+            // Top total
+            const topTotalY = ROW_HEADER_H + (minRow - 1) * CS - TOTAL_DIM_OFFSET;
+            const topX1 = cornerTargetX(mColA, 'top');
+            const topX2 = cornerTargetX(mColB, 'top');
+            const topBlocks = Math.round(Math.abs(topX2 - topX1) / CS);
+            if (topBlocks > 0) hDimLine(Math.min(topX1, topX2), Math.max(topX1, topX2), topTotalY, fmtDist(topBlocks), 'total-top', true);
+            // Bottom total
+            const bottomTotalY = ROW_HEADER_H + (maxRow - 1) * CS + CS + TOTAL_DIM_OFFSET;
+            const botX1 = cornerTargetX(mColD, 'bottom');
+            const botX2 = cornerTargetX(mColC, 'bottom');
+            const botBlocks = Math.round(Math.abs(botX2 - botX1) / CS);
+            if (botBlocks > 0) hDimLine(Math.min(botX1, botX2), Math.max(botX1, botX2), bottomTotalY, fmtDist(botBlocks), 'total-bottom', true);
+            // Left total
+            const leftTotalX = COL_HEADER_W + (minCol - 1) * CS - TOTAL_DIM_OFFSET;
+            const leftY1 = cornerTargetY(mRowA, 'left');
+            const leftY2 = cornerTargetY(mRowD, 'left');
+            const leftBlocks = Math.round(Math.abs(leftY2 - leftY1) / CS);
+            if (leftBlocks > 0) vDimLine(Math.min(leftY1, leftY2), Math.max(leftY1, leftY2), leftTotalX, fmtDist(leftBlocks), 'total-left', true);
+            // Right total
+            const rightTotalX = COL_HEADER_W + (maxCol - 1) * CS + CS + TOTAL_DIM_OFFSET;
+            const rightY1 = cornerTargetY(mRowB, 'right');
+            const rightY2 = cornerTargetY(mRowC, 'right');
+            const rightBlocks = Math.round(Math.abs(rightY2 - rightY1) / CS);
+            if (rightBlocks > 0) vDimLine(Math.min(rightY1, rightY2), Math.max(rightY1, rightY2), rightTotalX, fmtDist(rightBlocks), 'total-right', true);
 
             // ─── Internal coordinate dimensions: rendered OUTSIDE the grid as additional levels ───
             // Group internal coords by shared row (horizontal) or shared col (vertical)

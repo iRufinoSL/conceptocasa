@@ -947,8 +947,8 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
           >
             {hLabel}{verts[0].x},{vLabel}{verts[0].y}
           </text>
-          <rect x={sx - 25} y={sy + 10} width={50} height={14} rx={3}
-            fill="hsl(45 100% 50% / 0.85)"
+           <rect x={sx - 25} y={sy + 10} width={50} height={14} rx={3}
+            fill="rgba(255,255,255,0.85)" stroke="hsl(0 0% 70%)" strokeWidth={0.5}
             className={isEditingThis ? '' : 'cursor-pointer'}
              onClick={() => !isEditingThis && openWorkspaceProps(proj)}
           />
@@ -1003,8 +1003,8 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
             fontSize={fontSize} fontWeight={700} fill={color}
             className="pointer-events-none select-none"
           >{lineLenMm} mm</text>
-          <rect x={mx - 25} y={my + 3} width={50} height={14} rx={3}
-            fill="hsl(45 100% 50% / 0.85)"
+           <rect x={mx - 25} y={my + 3} width={50} height={14} rx={3}
+            fill="rgba(255,255,255,0.85)" stroke="hsl(0 0% 70%)" strokeWidth={0.5}
             className={isEditingThis ? '' : 'cursor-pointer'}
             onClick={() => !isEditingThis && openWorkspaceProps(proj)}
           />
@@ -1208,8 +1208,8 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
         )}
 
         {/* Name + area label */}
-        <rect x={cxSvg - 30} y={cySvg - 10} width={60} height={20} rx={3}
-          fill="hsl(45 100% 50% / 0.85)"
+         <rect x={cxSvg - 30} y={cySvg - 10} width={60} height={20} rx={3}
+          fill="rgba(255,255,255,0.85)" stroke="hsl(0 0% 70%)" strokeWidth={0.5}
           className={isEditingThis ? '' : 'cursor-pointer'}
           data-pdf-workspace-name=""
            onClick={() => !isEditingThis && openWorkspaceProps(proj)}
@@ -2113,8 +2113,8 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                       y={cySvg - 12}
                       width={60}
                       height={22}
-                      rx={3}
-                      fill="hsl(45 100% 50% / 0.85)"
+                       rx={3}
+                      fill="rgba(255,255,255,0.85)" stroke="hsl(0 0% 70%)" strokeWidth={0.5}
                       data-pdf-workspace-name=""
                     />
                     <text
@@ -2344,8 +2344,8 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                 <text x={sx} y={sy - 12} textAnchor="middle" fontSize={6} fontWeight={600} fill={color} className="pointer-events-none select-none">
                   {hLabel}{verts[0].x},{vLabel}{verts[0].y}
                 </text>
-                <rect x={sx - 25} y={sy + 10} width={50} height={14} rx={3}
-                  fill="hsl(45 100% 50% / 0.85)" className="cursor-pointer"
+                 <rect x={sx - 25} y={sy + 10} width={50} height={14} rx={3}
+                  fill="rgba(255,255,255,0.85)" stroke="hsl(0 0% 70%)" strokeWidth={0.5} className="cursor-pointer"
                    onClick={() => !isEditingThisPoly && openWorkspacePropsFromPoly(poly)}
                 />
                 <text x={sx} y={sy + 19} textAnchor="middle" fontSize={fontSize} fontWeight={700}
@@ -2373,8 +2373,8 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                    className="cursor-pointer" onClick={() => !isEditingThisPoly && openWorkspacePropsFromPoly(poly)} />
                 <text x={mx} y={my - 8} textAnchor="middle" fontSize={fontSize} fontWeight={700} fill={color}
                   className="pointer-events-none select-none">{lineLenMm} mm</text>
-                <rect x={mx - 25} y={my + 3} width={50} height={14} rx={3}
-                  fill="hsl(45 100% 50% / 0.85)" className="cursor-pointer"
+                 <rect x={mx - 25} y={my + 3} width={50} height={14} rx={3}
+                  fill="rgba(255,255,255,0.85)" stroke="hsl(0 0% 70%)" strokeWidth={0.5} className="cursor-pointer"
                   onClick={() => !isEditingThisPoly && openWorkspacePropsFromPoly(poly)} />
                 <text x={mx} y={my + 12} textAnchor="middle" fontSize={fontSize} fontWeight={700}
                   fill="hsl(0 0% 10%)" className="pointer-events-none select-none">{poly.name}</text>
@@ -2495,8 +2495,8 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                 );
               })}
               {/* Name + area label */}
-              <rect x={cxSvg - 30} y={cySvg - 10} width={60} height={20} rx={3}
-                fill="hsl(45 100% 50% / 0.85)" className="cursor-pointer"
+               <rect x={cxSvg - 30} y={cySvg - 10} width={60} height={20} rx={3}
+                fill="rgba(255,255,255,0.85)" stroke="hsl(0 0% 70%)" strokeWidth={0.5} className="cursor-pointer"
                 data-pdf-workspace-name=""
                  onClick={() => !isEditingThisPoly && openWorkspacePropsFromPoly(poly)} />
               <text x={cxSvg} y={cySvg - 1} textAnchor="middle" fontSize={fontSize} fontWeight={700}

@@ -158,7 +158,9 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
   }>>({});
   const [dondeLocationOpen, setDondeLocationOpen] = useState<Record<string, boolean>>({});
   const [itemSubtotals, setItemSubtotals] = useState<Record<string, number>>({});
-  const [itemSummaries, setItemSummaries] = useState<Record<string, { measurementUnits: number; measurementUnit: string; resourceSubtotal: number }>>({});
+  const [itemSubtotalsNormal, setItemSubtotalsNormal] = useState<Record<string, number>>({});
+  const [itemSubtotalsEst, setItemSubtotalsEst] = useState<Record<string, number>>({});
+  const [itemSummaries, setItemSummaries] = useState<Record<string, { measurementUnits: number; measurementUnit: string; resourceSubtotal: number; normalSubtotal: number; estSubtotal: number }>>({});
   const [viewMode, setViewMode] = useState<'list' | 'cards'>('list');
   const [showOnlyExecuted, setShowOnlyExecuted] = useState(true);
   const [graphEntryItemId, setGraphEntryItemId] = useState<string | null>(null); // tracks item opened from graph card ✏️
@@ -201,6 +203,16 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
       return { ...prev, [itemId]: subtotal };
     });
   }, []);
+  const updateItemSubtotalSplit = useCallback((itemId: string, normal: number, est: number) => {
+    setItemSubtotalsNormal(prev => {
+      if (prev[itemId] === normal) return prev;
+      return { ...prev, [itemId]: normal };
+    });
+    setItemSubtotalsEst(prev => {
+      if (prev[itemId] === est) return prev;
+      return { ...prev, [itemId]: est };
+    });
+  }, []);
 
   // Calculate CUÁNTO? for an item: own subtotal + all descendants' subtotals
   const getCuanto = useCallback((itemId: string): number => {
@@ -209,6 +221,20 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
     const childrenTotal = children.reduce((sum, child) => sum + getCuanto(child.id), 0);
     return own + childrenTotal;
   }, [items, itemSubtotals]);
+
+  const getCuantoNormal = useCallback((itemId: string): number => {
+    const own = itemSubtotalsNormal[itemId] || 0;
+    const children = items.filter(i => i.parent_id === itemId);
+    const childrenTotal = children.reduce((sum, child) => sum + getCuantoNormal(child.id), 0);
+    return own + childrenTotal;
+  }, [items, itemSubtotalsNormal]);
+
+  const getCuantoEst = useCallback((itemId: string): number => {
+    const own = itemSubtotalsEst[itemId] || 0;
+    const children = items.filter(i => i.parent_id === itemId);
+    const childrenTotal = children.reduce((sum, child) => sum + getCuantoEst(child.id), 0);
+    return own + childrenTotal;
+  }, [items, itemSubtotalsEst]);
 
   // Bulk fetch measurement + resource summaries for all items
   const itemsRef = useRef(items);
@@ -294,31 +320,35 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
       if (allResIds.size > 0) {
         const { data: resources, error: resErr } = await supabase
           .from('budget_activity_resources')
-          .select('id, external_unit_cost, safety_margin_percent, sales_margin_percent, manual_units, related_units')
+          .select('id, external_unit_cost, safety_margin_percent, sales_margin_percent, manual_units, related_units, is_estimation')
           .in('id', Array.from(allResIds));
         if (resErr) { console.error('fetchItemSummaries resources error:', resErr); return; }
         (resources || []).forEach((r: any) => { resData[r.id] = r; });
       }
 
-      // 7. Calculate subtotals per item
-      const summaries: Record<string, { measurementUnits: number; measurementUnit: string; resourceSubtotal: number }> = {};
+      // 7. Calculate subtotals per item (split normal vs est)
+      const summaries: Record<string, { measurementUnits: number; measurementUnit: string; resourceSubtotal: number; normalSubtotal: number; estSubtotal: number }> = {};
       itemIds.forEach(itemId => {
         const meas = getInheritedMeas(itemId);
         const rids = resLinksByItem[itemId] || [];
         let subtotal = 0;
+        let normalSub = 0;
+        let estSub = 0;
         rids.forEach(rid => {
           const r = resData[rid];
           if (r) {
-            subtotal += calcResourceSubtotal({
+            const s = calcResourceSubtotal({
               externalUnitCost: r.external_unit_cost,
               safetyPercent: r.safety_margin_percent,
               salesPercent: r.sales_margin_percent,
               manualUnits: r.manual_units,
               relatedUnits: r.manual_units != null ? r.related_units : meas.total,
             });
+            subtotal += s;
+            if (r.is_estimation) { estSub += s; } else { normalSub += s; }
           }
         });
-        summaries[itemId] = { measurementUnits: meas.total, measurementUnit: meas.unit, resourceSubtotal: subtotal };
+        summaries[itemId] = { measurementUnits: meas.total, measurementUnit: meas.unit, resourceSubtotal: subtotal, normalSubtotal: normalSub, estSubtotal: estSub };
       });
 
       // Only update state if values actually changed (prevent re-render cascade)
@@ -328,16 +358,30 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
           const n = summaries[id];
           if (!p && !n) return false;
           if (!p || !n) return true;
-          return p.measurementUnits !== n.measurementUnits || p.measurementUnit !== n.measurementUnit || p.resourceSubtotal !== n.resourceSubtotal;
+          return p.measurementUnits !== n.measurementUnits || p.measurementUnit !== n.measurementUnit || p.resourceSubtotal !== n.resourceSubtotal || p.normalSubtotal !== n.normalSubtotal || p.estSubtotal !== n.estSubtotal;
         });
         return changed ? summaries : prev;
       });
 
       const newSubtotals: Record<string, number> = {};
-      itemIds.forEach(id => { newSubtotals[id] = summaries[id]?.resourceSubtotal || 0; });
+      const newNormal: Record<string, number> = {};
+      const newEst: Record<string, number> = {};
+      itemIds.forEach(id => {
+        newSubtotals[id] = summaries[id]?.resourceSubtotal || 0;
+        newNormal[id] = summaries[id]?.normalSubtotal || 0;
+        newEst[id] = summaries[id]?.estSubtotal || 0;
+      });
       setItemSubtotals(prev => {
         const changed = itemIds.some(id => (prev[id] || 0) !== (newSubtotals[id] || 0));
         return changed ? newSubtotals : prev;
+      });
+      setItemSubtotalsNormal(prev => {
+        const changed = itemIds.some(id => (prev[id] || 0) !== (newNormal[id] || 0));
+        return changed ? newNormal : prev;
+      });
+      setItemSubtotalsEst(prev => {
+        const changed = itemIds.some(id => (prev[id] || 0) !== (newEst[id] || 0));
+        return changed ? newEst : prev;
       });
     } catch (err) {
       console.error('fetchItemSummaries unexpected error:', err);
@@ -1806,6 +1850,8 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
       );
       case 'cuanto': {
         const cuanto = getCuanto(item.id);
+        const cuantoNormal = getCuantoNormal(item.id);
+        const cuantoEst = getCuantoEst(item.id);
         return (
           <div className="p-3 rounded-lg border border-rose-200 bg-rose-50/50 dark:border-rose-800 dark:bg-rose-950/30 space-y-3">
             <div className="flex items-center justify-between">
@@ -1818,20 +1864,27 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="p-3 rounded border bg-background text-center">
-                <p className="text-xl font-bold text-foreground">{formatCurrency(itemSubtotals[item.id] || 0)}</p>
-                <p className="text-[10px] text-muted-foreground uppercase">Recursos propios</p>
+                <p className="text-lg font-bold text-foreground">{formatCurrency(cuantoNormal)}</p>
+                <p className="text-[10px] text-muted-foreground uppercase">Normal (con hijos)</p>
               </div>
-              <div className="p-3 rounded border bg-background text-center">
-                <p className="text-xl font-bold text-foreground">{formatCurrency(cuanto)}</p>
-                <p className="text-[10px] text-muted-foreground uppercase">Total (con hijos)</p>
+              <div className="p-3 rounded border border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/30 text-center">
+                <p className="text-lg font-bold text-amber-700 dark:text-amber-400">{formatCurrency(cuantoEst)}</p>
+                <p className="text-[10px] text-amber-600 dark:text-amber-500 uppercase">Est. (con hijos)</p>
               </div>
             </div>
+            {cuanto > 0 && (
+              <div className="p-2 rounded border bg-background text-center">
+                <p className="text-xl font-bold text-foreground">{formatCurrency(cuanto)}</p>
+                <p className="text-[10px] text-muted-foreground uppercase">Total combinado</p>
+              </div>
+            )}
             <TolosaResourcesPanel
               budgetId={budgetId}
               tolosItemId={item.id}
               isAdmin={isAdmin}
               parentItemId={item.parent_id}
               onSubtotalChange={(s) => updateItemSubtotal(item.id, s)}
+              onSubtotalSplitChange={(n, e) => updateItemSubtotalSplit(item.id, n, e)}
               measurementVersion={measurementVersions[item.id] || 0}
             />
           </div>
@@ -1944,7 +1997,8 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                   {/* Summary info: Mediciones relacionadas | Ud medida | SubTotal */}
                   {(() => {
                     const summary = itemSummaries[item.id];
-                    const cuanto = getCuanto(item.id);
+                    const cuantoNormal = getCuantoNormal(item.id);
+                    const cuantoEst = getCuantoEst(item.id);
                     return (
                       <div className="ml-auto flex items-center gap-1.5 shrink-0">
                         {(() => {
@@ -1962,14 +2016,14 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                             {formatNumber(summary.measurementUnits)} {summary.measurementUnit}
                           </Badge>
                         )}
-                        {summary && summary.resourceSubtotal > 0 && (
+                        {cuantoNormal > 0 && (
                           <Badge variant="secondary" className="text-[10px] font-mono gap-1">
-                            {formatCurrency(summary.resourceSubtotal)}
+                            {formatCurrency(cuantoNormal)}
                           </Badge>
                         )}
-                        {cuanto > 0 && cuanto !== (summary?.resourceSubtotal || 0) && (
-                          <Badge variant="secondary" className="text-[10px] font-mono gap-1 bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300">
-                            {formatCurrency(cuanto)}
+                        {cuantoEst > 0 && (
+                          <Badge variant="secondary" className="text-[10px] font-mono gap-1 bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                            Est. {formatCurrency(cuantoEst)}
                           </Badge>
                         )}
                       </div>

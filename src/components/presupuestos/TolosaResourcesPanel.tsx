@@ -49,6 +49,7 @@ interface TolosaResourcesPanelProps {
   isAdmin: boolean;
   parentItemId?: string | null;
   onSubtotalChange?: (subtotal: number) => void;
+  onSubtotalSplitChange?: (normal: number, est: number) => void;
   measurementVersion?: number;
 }
 
@@ -70,7 +71,7 @@ const defaultForm = {
   is_estimation: false,
 };
 
-export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentItemId, onSubtotalChange, measurementVersion }: TolosaResourcesPanelProps) {
+export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentItemId, onSubtotalChange, onSubtotalSplitChange, measurementVersion }: TolosaResourcesPanelProps) {
   const [linkedResources, setLinkedResources] = useState<BudgetResource[]>([]);
   const [allResources, setAllResources] = useState<BudgetResource[]>([]);
   const [linkedIds, setLinkedIds] = useState<Set<string>>(new Set());
@@ -275,13 +276,20 @@ export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentIte
   useEffect(() => { if (activeTab === 'external') fetchExternalCatalogueResources(externalSearchQuery); }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const prevSubtotalRef = useRef<number | null>(null);
+  const prevSplitRef = useRef<{ normal: number; est: number } | null>(null);
   useEffect(() => {
     const total = linkedResources.reduce((sum, r) => sum + getSubtotal(r), 0);
+    const normalTotal = linkedResources.filter(r => !r.is_estimation).reduce((sum, r) => sum + getSubtotal(r), 0);
+    const estTotal = linkedResources.filter(r => r.is_estimation).reduce((sum, r) => sum + getSubtotal(r), 0);
     if (prevSubtotalRef.current !== total) {
       prevSubtotalRef.current = total;
       onSubtotalChange?.(total);
     }
-  }, [linkedResources, onSubtotalChange, measurementUnits, getSubtotal]);
+    if (!prevSplitRef.current || prevSplitRef.current.normal !== normalTotal || prevSplitRef.current.est !== estTotal) {
+      prevSplitRef.current = { normal: normalTotal, est: estTotal };
+      onSubtotalSplitChange?.(normalTotal, estTotal);
+    }
+  }, [linkedResources, onSubtotalChange, onSubtotalSplitChange, measurementUnits, getSubtotal]);
 
   const linkResource = async (resourceId: string) => {
     const { error } = await supabase

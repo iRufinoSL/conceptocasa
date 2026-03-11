@@ -6,6 +6,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 import {
   Plus, ChevronRight, ChevronDown, Brain, Trash2, Edit2, Check, X,
   HelpCircle, Copy, Wrench, Users, MapPin, Clock, DollarSign,

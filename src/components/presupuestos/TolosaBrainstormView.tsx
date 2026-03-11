@@ -2519,9 +2519,9 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                                 const total = sub + vatAmount;
                                 return (
                                   <tr key={item.id} className={`border-t hover:bg-accent/20 transition-colors ${isEst ? 'bg-amber-50/50 dark:bg-amber-950/20' : ''}`}>
-                                    <td className="px-2 py-1.5 font-mono text-[10px] align-top whitespace-nowrap">
-                                      <Badge variant="outline" className={`text-[9px] ${isEst ? 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/60 dark:text-amber-300' : ''}`}>
-                                        {item.code}
+                                    <td className="px-1.5 py-1.5 font-mono text-[10px] align-top whitespace-nowrap" title={item.code}>
+                                      <Badge variant="outline" className={`text-[9px] max-w-[56px] truncate ${isEst ? 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/60 dark:text-amber-300' : ''}`}>
+                                        {item.code && item.code.length > 8 ? `${item.code.slice(0, 3)}…${item.code.slice(-3)}` : item.code}
                                       </Badge>
                                     </td>
                                     <td className="px-2 py-1.5 text-xs break-words whitespace-normal align-top">{item.name}</td>

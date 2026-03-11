@@ -169,6 +169,8 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
   const [deleteConfirm, setDeleteConfirm] = useState<{ item: TolosItem; descendants: TolosItem[] } | null>(null);
   const [graphAddName, setGraphAddName] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [cuandoListOpen, setCuandoListOpen] = useState(false);
+  const [cuandoFilter, setCuandoFilter] = useState<'all' | 'normal' | 'estimacion'>('all');
 
   const [phases, setPhases] = useState<PhaseInfo[]>([]);
   // Duplicate dialog state

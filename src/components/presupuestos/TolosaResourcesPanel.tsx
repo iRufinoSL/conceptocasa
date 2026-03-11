@@ -721,10 +721,24 @@ export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentIte
           </DialogHeader>
 
           <div className="space-y-5">
-            {/* Name */}
+            {/* Name + Est toggle */}
             <div className="space-y-2">
               <Label>Nombre del Recurso *</Label>
-              <Input value={formData.name} onChange={e => setFormData(d => ({ ...d, name: e.target.value }))} placeholder="Ej: Ladrillo, Oficial 1ª..." autoFocus />
+              <div className="flex gap-2">
+                <Input value={formData.name} onChange={e => setFormData(d => ({ ...d, name: e.target.value }))} placeholder="Ej: Ladrillo, Oficial 1ª..." autoFocus className="flex-1" />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={formData.is_estimation ? 'default' : 'outline'}
+                  className={`shrink-0 text-xs px-3 ${formData.is_estimation ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'border-amber-300 text-amber-700 hover:bg-amber-50'}`}
+                  onClick={() => setFormData(d => ({ ...d, is_estimation: !d.is_estimation }))}
+                >
+                  {formData.is_estimation ? '✓ Est.' : 'Est.'}
+                </Button>
+              </div>
+              {formData.is_estimation && (
+                <p className="text-xs text-amber-600">Este recurso es de tipo Estimación — sus costes contribuyen a las Actividades (Est)</p>
+              )}
             </div>
 
             {/* Row 1: Cost (IVA incl.) + %IVA + Unit + Type */}

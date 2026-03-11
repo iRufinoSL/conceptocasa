@@ -46,6 +46,8 @@ interface Workspace3DViewerProps {
   onVertexEdit?: (faceType: string, faceIndex: number, vertices: { x: number; y: number; z: number }[]) => void;
   onNavigateTo2D?: (faceType: string, faceIndex: number) => void;
   selectedFace?: string | null;
+  allSections?: CustomSection[];
+  roomId?: string;
 }
 
 const FACE_COLORS: Record<string, string> = {

@@ -267,6 +267,7 @@ export function TolosaCardView({
       : SIBLING_PALETTES[parentColorMap[item.id] ?? 0];
     const clientName = item.client_contact_id ? contactCache[item.client_contact_id] : null;
     const hasLocation = !!(item.address_city || item.address_street);
+    const phaseName = item.phase_id && phases ? phases.find(p => p.id === item.phase_id) : null;
     const isFocused = focusedId === item.id;
     const isEditing = editingCardId === item.id;
 

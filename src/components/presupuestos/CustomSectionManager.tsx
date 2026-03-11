@@ -2113,8 +2113,8 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                       y={cySvg - 12}
                       width={60}
                       height={22}
-                      rx={3}
-                      fill="hsl(45 100% 50% / 0.85)"
+                       rx={3}
+                      fill="rgba(255,255,255,0.85)" stroke="hsl(0 0% 70%)" strokeWidth={0.5}
                       data-pdf-workspace-name=""
                     />
                     <text

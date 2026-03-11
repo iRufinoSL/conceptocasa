@@ -203,6 +203,16 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
       return { ...prev, [itemId]: subtotal };
     });
   }, []);
+  const updateItemSubtotalSplit = useCallback((itemId: string, normal: number, est: number) => {
+    setItemSubtotalsNormal(prev => {
+      if (prev[itemId] === normal) return prev;
+      return { ...prev, [itemId]: normal };
+    });
+    setItemSubtotalsEst(prev => {
+      if (prev[itemId] === est) return prev;
+      return { ...prev, [itemId]: est };
+    });
+  }, []);
 
   // Calculate CUÁNTO? for an item: own subtotal + all descendants' subtotals
   const getCuanto = useCallback((itemId: string): number => {
@@ -211,6 +221,20 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
     const childrenTotal = children.reduce((sum, child) => sum + getCuanto(child.id), 0);
     return own + childrenTotal;
   }, [items, itemSubtotals]);
+
+  const getCuantoNormal = useCallback((itemId: string): number => {
+    const own = itemSubtotalsNormal[itemId] || 0;
+    const children = items.filter(i => i.parent_id === itemId);
+    const childrenTotal = children.reduce((sum, child) => sum + getCuantoNormal(child.id), 0);
+    return own + childrenTotal;
+  }, [items, itemSubtotalsNormal]);
+
+  const getCuantoEst = useCallback((itemId: string): number => {
+    const own = itemSubtotalsEst[itemId] || 0;
+    const children = items.filter(i => i.parent_id === itemId);
+    const childrenTotal = children.reduce((sum, child) => sum + getCuantoEst(child.id), 0);
+    return own + childrenTotal;
+  }, [items, itemSubtotalsEst]);
 
   // Bulk fetch measurement + resource summaries for all items
   const itemsRef = useRef(items);

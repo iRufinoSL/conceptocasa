@@ -3993,6 +3993,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                 </div>
               </div>
               </div>
+              </div>
             </div>
 
             {/* Fechas Reales de Ejecución */}

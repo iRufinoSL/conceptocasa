@@ -83,6 +83,8 @@ interface BudgetActivity {
   end_date: string | null;
   actual_start_date: string | null;
   actual_end_date: string | null;
+  activity_type: string;
+  parent_activity_id: string | null;
 }
 
 interface Measurement {

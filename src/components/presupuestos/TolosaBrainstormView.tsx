@@ -2299,9 +2299,9 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
 
       {/* CUÁNDO? Activity Listing Panel */}
       {cuandoListOpen && (
-        <div className="border rounded-lg p-4 space-y-3 border-purple-200 bg-purple-50/50 dark:border-purple-800 dark:bg-purple-950/30">
+        <div className="border rounded-lg p-4 space-y-3 border-orange-200 bg-orange-50/50 dark:border-orange-800 dark:bg-orange-950/30">
           <div className="flex items-center justify-between">
-            <h4 className="text-sm font-semibold flex items-center gap-2 text-purple-700 dark:text-purple-400">
+            <h4 className="text-sm font-semibold flex items-center gap-2 text-orange-700 dark:text-orange-400">
               <Clock className="h-4 w-4" /> CUÁNDO? — Listado de Actividades
             </h4>
             <Button size="sm" variant="ghost" className="text-xs h-7 gap-1 text-muted-foreground" onClick={() => setCuandoListOpen(false)}>

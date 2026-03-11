@@ -169,6 +169,8 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
   const [deleteConfirm, setDeleteConfirm] = useState<{ item: TolosItem; descendants: TolosItem[] } | null>(null);
   const [graphAddName, setGraphAddName] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [cuandoListOpen, setCuandoListOpen] = useState(false);
+  const [cuandoFilter, setCuandoFilter] = useState<'all' | 'normal' | 'estimacion'>('all');
 
   const [phases, setPhases] = useState<PhaseInfo[]>([]);
   // Duplicate dialog state
@@ -1945,6 +1947,15 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                     const cuanto = getCuanto(item.id);
                     return (
                       <div className="ml-auto flex items-center gap-1.5 shrink-0">
+                        {(() => {
+                          const phase = item.phase_id ? phases.find(p => p.id === item.phase_id) : null;
+                          return phase ? (
+                            <Badge variant="outline" className="text-[10px] gap-1 border-purple-300 text-purple-700 dark:border-purple-700 dark:text-purple-300">
+                              <Clock className="h-2.5 w-2.5" />
+                              {phase.code ? phase.code : phase.name}
+                            </Badge>
+                          ) : null;
+                        })()}
                         {summary && summary.measurementUnits > 0 && (
                           <Badge variant="outline" className="text-[10px] font-mono gap-1">
                             <Ruler className="h-2.5 w-2.5" />
@@ -2181,6 +2192,17 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
         <div className="flex flex-wrap gap-2 items-center">
           {DIMENSION_LINKS.map(dim => {
             const Icon = dim.icon;
+            if (dim.key === 'cuando') {
+              return (
+                <button
+                  key={dim.key}
+                  onClick={() => setCuandoListOpen(prev => !prev)}
+                  className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors cursor-pointer ${dim.color} ${cuandoListOpen ? 'ring-2 ring-purple-400' : ''}`}
+                >
+                  <Icon className="h-3 w-3" /> {dim.label}
+                </button>
+              );
+            }
             return (
               <Badge key={dim.key} variant="outline" className={`gap-1 ${dim.color}`}>
                 <Icon className="h-3 w-3" /> {dim.label}
@@ -2203,7 +2225,99 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
         </div>
       </div>
 
-      {/* Filter: Show only executed items */}
+      {/* CUÁNDO? Activity Listing Panel */}
+      {cuandoListOpen && (
+        <div className="border rounded-lg p-4 space-y-3 border-purple-200 bg-purple-50/50 dark:border-purple-800 dark:bg-purple-950/30">
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-semibold flex items-center gap-2 text-purple-700 dark:text-purple-400">
+              <Clock className="h-4 w-4" /> CUÁNDO? — Listado de Actividades
+            </h4>
+            <Button size="sm" variant="ghost" className="text-xs h-7 gap-1 text-muted-foreground" onClick={() => setCuandoListOpen(false)}>
+              <X className="h-3 w-3" /> Cerrar
+            </Button>
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" variant={cuandoFilter === 'all' ? 'default' : 'outline'} onClick={() => setCuandoFilter('all')} className="text-xs">
+              Todas
+            </Button>
+            <Button size="sm" variant={cuandoFilter === 'normal' ? 'default' : 'outline'} onClick={() => setCuandoFilter('normal')} className="text-xs">
+              Solo Normales
+            </Button>
+            <Button size="sm" variant={cuandoFilter === 'estimacion' ? 'default' : 'outline'} onClick={() => setCuandoFilter('estimacion')}
+              className={`text-xs ${cuandoFilter === 'estimacion' ? 'bg-amber-600 hover:bg-amber-700 text-white' : ''}`}>
+              Solo Estimaciones
+            </Button>
+          </div>
+          <div className="border rounded overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-muted/50 text-xs text-muted-foreground">
+                  <th className="text-left px-3 py-1.5 font-medium">Código</th>
+                  <th className="text-left px-3 py-1.5 font-medium">Actividad</th>
+                  <th className="text-left px-3 py-1.5 font-medium">Fase</th>
+                  <th className="text-right px-3 py-1.5 font-medium">Subtotal</th>
+                  <th className="text-right px-3 py-1.5 font-medium">IVA</th>
+                  <th className="text-right px-3 py-1.5 font-medium">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(() => {
+                  const filtered = items.filter(item => {
+                    const isEst = item.code?.includes('.E') || item.name?.includes('(Est.)');
+                    if (cuandoFilter === 'normal') return !isEst;
+                    if (cuandoFilter === 'estimacion') return isEst;
+                    return true;
+                  });
+                  let grandSubtotal = 0;
+                  let grandVat = 0;
+                  let grandTotal = 0;
+                  const rows = filtered.map(item => {
+                    const isEst = item.code?.includes('.E') || item.name?.includes('(Est.)');
+                    const cuanto = getCuanto(item.id);
+                    const sub = itemSubtotals[item.id] || 0;
+                    // Estimate VAT at 21% if no specific data
+                    const vatAmount = sub * 0.21;
+                    const total = sub + vatAmount;
+                    grandSubtotal += sub;
+                    grandVat += vatAmount;
+                    grandTotal += total;
+                    const phase = item.phase_id ? phases.find(p => p.id === item.phase_id) : null;
+                    return (
+                      <tr key={item.id} className={`border-t hover:bg-accent/20 transition-colors ${isEst ? 'bg-amber-50/50 dark:bg-amber-950/20' : ''}`}>
+                        <td className="px-3 py-1.5 font-mono text-xs">
+                          <Badge variant="outline" className={`text-[10px] ${isEst ? 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/60 dark:text-amber-300' : ''}`}>
+                            {item.code}
+                          </Badge>
+                        </td>
+                        <td className="px-3 py-1.5 truncate max-w-[200px]">{item.name}</td>
+                        <td className="px-3 py-1.5 text-xs text-muted-foreground">
+                          {phase ? (phase.code ? `${phase.code} — ${phase.name}` : phase.name) : '—'}
+                        </td>
+                        <td className="px-3 py-1.5 text-right font-mono text-xs">{sub > 0 ? formatCurrency(sub) : '—'}</td>
+                        <td className="px-3 py-1.5 text-right font-mono text-xs text-muted-foreground">{sub > 0 ? formatCurrency(vatAmount) : '—'}</td>
+                        <td className="px-3 py-1.5 text-right font-mono text-xs font-semibold">{sub > 0 ? formatCurrency(total) : '—'}</td>
+                      </tr>
+                    );
+                  });
+                  return (
+                    <>
+                      {rows}
+                      <tr className="border-t bg-muted/30 font-semibold text-xs">
+                        <td colSpan={3} className="px-3 py-2">Total ({filtered.length} actividades)</td>
+                        <td className="px-3 py-2 text-right font-mono">{formatCurrency(grandSubtotal)}</td>
+                        <td className="px-3 py-2 text-right font-mono text-muted-foreground">{formatCurrency(grandVat)}</td>
+                        <td className="px-3 py-2 text-right font-mono font-bold">{formatCurrency(grandTotal)}</td>
+                      </tr>
+                    </>
+                  );
+                })()}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+
       <div className="flex items-center gap-3">
         <Button
           variant={showOnlyExecuted ? 'default' : 'outline'}
@@ -2254,6 +2368,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
           itemSummaries={itemSummaries}
           itemSubtotals={itemSubtotals}
           contactCache={contactCache}
+          phases={phases}
           getCuanto={getCuanto}
           initialFocusId={lastWorkedItemId}
           onItemClick={(itemId) => {

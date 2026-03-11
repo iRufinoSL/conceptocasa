@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ChevronDown, ChevronRight, Ruler, Users, MapPin, Minus, Plus, Edit2, Maximize2, Home, Check, X, ArrowRight, ArrowDown, Trash2, Copy } from 'lucide-react';
+import { ChevronDown, ChevronRight, Ruler, Users, MapPin, Clock, Minus, Plus, Edit2, Maximize2, Home, Check, X, ArrowRight, ArrowDown, Trash2, Copy } from 'lucide-react';
 import { formatCurrency, formatNumber } from '@/lib/format-utils';
 
 interface TolosItem {
@@ -27,6 +27,13 @@ interface TolosItem {
   supplier_contact_id: string | null;
   housing_profile_id: string | null;
   is_executed?: boolean;
+  phase_id?: string | null;
+}
+
+interface PhaseInfo {
+  id: string;
+  code: string | null;
+  name: string;
 }
 
 interface ItemSummary {
@@ -40,6 +47,7 @@ interface TolosaCardViewProps {
   itemSummaries: Record<string, ItemSummary>;
   itemSubtotals: Record<string, number>;
   contactCache: Record<string, string>;
+  phases?: PhaseInfo[];
   getCuanto: (itemId: string) => number;
   onItemClick?: (itemId: string) => void;
   onItemDoubleClick?: (itemId: string) => void;
@@ -69,6 +77,7 @@ export function TolosaCardView({
   itemSummaries,
   itemSubtotals,
   contactCache,
+  phases,
   getCuanto,
   onItemClick,
   onItemDoubleClick,
@@ -258,6 +267,7 @@ export function TolosaCardView({
       : SIBLING_PALETTES[parentColorMap[item.id] ?? 0];
     const clientName = item.client_contact_id ? contactCache[item.client_contact_id] : null;
     const hasLocation = !!(item.address_city || item.address_street);
+    const phaseName = item.phase_id && phases ? phases.find(p => p.id === item.phase_id) : null;
     const isFocused = focusedId === item.id;
     const isEditing = editingCardId === item.id;
 
@@ -426,6 +436,12 @@ export function TolosaCardView({
                   <Badge variant="outline" className="text-[8px] gap-0.5 px-1 py-0">
                     <MapPin className="h-2 w-2" />
                     {item.address_city || 'Loc'}
+                  </Badge>
+                )}
+                {phaseName && (
+                  <Badge variant="outline" className="text-[8px] gap-0.5 px-1 py-0 border-purple-300 text-purple-700 dark:border-purple-700 dark:text-purple-300">
+                    <Clock className="h-2 w-2" />
+                    {phaseName.code ? `${phaseName.code}` : phaseName.name}
                   </Badge>
                 )}
               </div>

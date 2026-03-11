@@ -27,6 +27,7 @@ import { BudgetContactsManager } from '@/components/presupuestos/BudgetContactsM
 import { BudgetSpacesTab } from '@/components/presupuestos/BudgetSpacesTab';
 import { BudgetCostSummary } from '@/components/presupuestos/BudgetCostSummary';
 import { CloneBudgetDialog } from '@/components/presupuestos/CloneBudgetDialog';
+import { ProjectSelector } from '@/components/presupuestos/ProjectSelector';
 import { BudgetTimelineView } from '@/components/presupuestos/BudgetTimelineView';
 import { HierarchicalGanttView } from '@/components/presupuestos/HierarchicalGanttView';
 import { recalculateAllBudgetResources } from '@/lib/budget-utils';

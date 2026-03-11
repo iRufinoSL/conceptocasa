@@ -294,7 +294,7 @@ function MultiPrism({ ws, scaleXY, scaleZ, offsetX, offsetZ, onFaceDoubleClick, 
 
 type ViewMode = 'complete' | 'by-section' | 'by-workspace';
 
-export function Workspace3DListView({ workspaces, scaleXY, scaleZ, onClose, onFaceDoubleClick }: Workspace3DListViewProps) {
+export function Workspace3DListView({ workspaces, scaleXY, scaleZ, onClose, onFaceDoubleClick, allSections }: Workspace3DListViewProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('complete');
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
   const [selectedWs, setSelectedWs] = useState<string | null>(null);

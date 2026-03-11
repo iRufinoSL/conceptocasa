@@ -5,7 +5,6 @@ import * as THREE from 'three';
 import { InfiniteAxes3D } from './InfiniteAxes3D';
 import { computeVertexTopPositions } from './workspace3dUtils';
 import type { CustomSection } from './CustomSectionManager';
-import { InfiniteAxes3D } from './InfiniteAxes3D';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Minimize2, Maximize2, Home, Layers, SortAsc, X } from 'lucide-react';

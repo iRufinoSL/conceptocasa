@@ -3354,9 +3354,14 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
         <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <div className="flex items-center justify-between">
-              <DialogTitle>
-                {editingActivity ? 'Editar Actividad' : 'Nueva Actividad'}
-              </DialogTitle>
+              <div className="flex items-center gap-3">
+                <DialogTitle>
+                  {editingActivity ? 'Editar Actividad' : form.activity_type === 'estimacion' ? 'Nueva Estimación' : 'Nueva Actividad'}
+                </DialogTitle>
+                {form.activity_type === 'estimacion' && (
+                  <Badge className="bg-amber-500 hover:bg-amber-600 text-white">Estimación</Badge>
+                )}
+              </div>
               {editingActivity && (
                 <div className="flex items-center gap-1 mr-6">
                   <Button
@@ -3379,13 +3384,111 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
               )}
             </div>
             <DialogDescription>
-              {editingActivity 
-                ? 'Modifica los datos de la actividad'
-                : 'Introduce los datos de la nueva actividad'}
+              {form.activity_type === 'estimacion'
+                ? `Estimación vinculada a: ${activities.find(a => a.id === form.parent_activity_id)?.name || 'Actividad padre'}`
+                : editingActivity 
+                  ? 'Modifica los datos de la actividad'
+                  : 'Introduce los datos de la nueva actividad'}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
+            {/* Activity Type Selector (only when creating new non-estimation or editing) */}
+            {!form.parent_activity_id && (
+              <div className="flex items-center gap-4 py-2 px-3 border rounded-lg bg-muted/30">
+                <Label className="text-sm font-medium">Tipo:</Label>
+                <div className="flex gap-2">
+                  <Badge 
+                    variant={form.activity_type === 'normal' ? 'default' : 'outline'}
+                    className="cursor-pointer"
+                    onClick={() => setForm({ ...form, activity_type: 'normal' })}
+                  >
+                    Normal
+                  </Badge>
+                  <Badge 
+                    variant={form.activity_type === 'estimacion' ? 'default' : 'outline'}
+                    className={`cursor-pointer ${form.activity_type === 'estimacion' ? 'bg-amber-500 hover:bg-amber-600' : ''}`}
+                    onClick={() => setForm({ ...form, activity_type: 'estimacion' })}
+                  >
+                    Estimación
+                  </Badge>
+                </div>
+                {form.activity_type === 'estimacion' && !form.parent_activity_id && (
+                  <div className="flex-1">
+                    <Select 
+                      value={form.parent_activity_id || 'none'}
+                      onValueChange={(v) => setForm({ ...form, parent_activity_id: v === 'none' ? '' : v })}
+                    >
+                      <SelectTrigger className="h-8">
+                        <SelectValue placeholder="Seleccionar actividad padre..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Sin padre</SelectItem>
+                        {activities.filter(a => a.activity_type !== 'estimacion').map(a => (
+                          <SelectItem key={a.id} value={a.id}>
+                            {generateActivityId(a)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Estimation-specific fields */}
+            {form.activity_type === 'estimacion' && (
+              <div className="border-2 border-amber-300 dark:border-amber-700 rounded-lg p-4 bg-amber-50/50 dark:bg-amber-950/20 space-y-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Target className="h-5 w-5 text-amber-600" />
+                  <Label className="text-base font-semibold text-amber-700 dark:text-amber-400">Datos de Estimación</Label>
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="estimation_amount">Importe sin IVA (€)</Label>
+                    <Input
+                      id="estimation_amount"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={form.estimation_amount}
+                      onChange={(e) => setForm({ ...form, estimation_amount: e.target.value })}
+                      placeholder="0.00"
+                      className="font-mono"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="estimation_vat">IVA %</Label>
+                    <Select 
+                      value={form.estimation_vat_percent}
+                      onValueChange={(v) => setForm({ ...form, estimation_vat_percent: v })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="0">0%</SelectItem>
+                        <SelectItem value="4">4%</SelectItem>
+                        <SelectItem value="10">10%</SelectItem>
+                        <SelectItem value="21">21%</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Total con IVA</Label>
+                    <div className="h-10 px-3 py-2 border rounded-md bg-muted text-sm flex items-center font-mono font-bold text-primary">
+                      {(() => {
+                        const amount = parseFloat(form.estimation_amount) || 0;
+                        const vatPercent = parseFloat(form.estimation_vat_percent) || 0;
+                        const total = amount * (1 + vatPercent / 100);
+                        return formatCurrency(total);
+                      })()}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-4 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="code">Código *</Label>

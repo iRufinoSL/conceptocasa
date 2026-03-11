@@ -77,6 +77,7 @@ export function TolosaCardView({
   itemSummaries,
   itemSubtotals,
   contactCache,
+  phases,
   getCuanto,
   onItemClick,
   onItemDoubleClick,

@@ -718,7 +718,7 @@ export function FloorPlanGridView({
           {Array.from({ length: totalRows }, (_, ri) => (
             <div
               key={`rh-${ri}`}
-              className="absolute text-[8px] font-bold text-right leading-none"
+              className="absolute text-right leading-none"
               style={{
                 left: 2,
                 top: ROW_HEADER_H + ri * CS,
@@ -728,7 +728,10 @@ export function FloorPlanGridView({
                 alignItems: 'flex-start',
                 justifyContent: 'flex-end',
                 paddingTop: 1,
-                color: '#27ae60',
+                color: '#1a8a4a',
+                fontSize: `${axisLabelSize}px`,
+                fontWeight: 900,
+                textShadow: '0 0 2px rgba(26,138,74,0.3)',
               }}
             >
               {rowToLabel(ri + 1, levelPrefix)}

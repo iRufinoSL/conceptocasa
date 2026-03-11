@@ -333,7 +333,7 @@ interface PrismModelProps extends Omit<Workspace3DViewerProps, 'name' | 'onFaceE
   orbitRef?: React.RefObject<any>;
 }
 
-function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase = 0, onFaceClick, onFaceDoubleClick, selectedFace, workspaceName, showDraggableNodes, onNodeDrag, orbitRef }: PrismModelProps) {
+function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase = 0, onFaceClick, onFaceDoubleClick, selectedFace, workspaceName, showDraggableNodes, onNodeDrag, orbitRef, allSections, roomId }: PrismModelProps) {
   const groupRef = useRef<THREE.Group>(null);
 
   const { baseVerts3D, topVerts3D, heightM, cornerLabels, centroid } = useMemo(() => {
@@ -345,7 +345,15 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
     // Place vertices at their REAL XYZ positions (no centering)
     const base = polygon.map(v => new THREE.Vector3(v.x * sMxy, zBaseM, v.y * sMxy));
 
+    // Compute per-vertex top Z using section polygon data when available
+    const topYMeters = (allSections && roomId && allSections.length > 0)
+      ? computeVertexTopPositions(polygon, walls, zBase, heightM, scaleXY, scaleZ, allSections, roomId)
+      : null;
+
     const top = base.map((v, i) => {
+      if (topYMeters) {
+        return new THREE.Vector3(v.x, topYMeters[i], v.z);
+      }
       const wall = walls.find(w => w.wall_index === i + 1);
       const h = wall?.height != null ? wall.height : heightM;
       const zTopUnits = zBase + Math.round(h / zScaleBlocks);
@@ -355,7 +363,7 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
 
     // Centroid for camera targeting
     const cx = base.reduce((s, v) => s + v.x, 0) / base.length;
-    const cy = (base[0].y + top[0].y) / 2;
+    const cy = (base[0].y + top.reduce((s, v) => s + v.y, 0) / top.length) / 2;
     const cz = base.reduce((s, v) => s + v.z, 0) / base.length;
 
     const labels: { pos: THREE.Vector3; text: string }[] = [];
@@ -367,9 +375,7 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
         pos: new THREE.Vector3(base[i].x, base[i].y - 0.05, base[i].z),
         text: `(X${vx},Y${vy},Z${zBase})`,
       });
-      const wall = walls.find(w => w.wall_index === i + 1);
-      const hM = wall?.height != null ? wall.height : heightM;
-      const zTopVal = zBase + Math.round(hM / zScaleBlocks);
+      const zTopVal = Math.round(top[i].y / zScaleBlocks);
       labels.push({
         pos: new THREE.Vector3(top[i].x, top[i].y + 0.08, top[i].z),
         text: `(X${vx},Y${vy},Z${zTopVal})`,
@@ -377,7 +383,7 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
     }
 
     return { baseVerts3D: base, topVerts3D: top, heightM, cornerLabels: labels, centroid: new THREE.Vector3(cx, cy, cz) };
-  }, [polygon, height, walls, scaleXY, scaleZ, zBase]);
+  }, [polygon, height, walls, scaleXY, scaleZ, zBase, allSections, roomId]);
 
   const faces = useMemo(() => {
     const result: Array<{

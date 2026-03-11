@@ -2312,7 +2312,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                     <Collapsible key={groupKey} defaultOpen>
                       <CollapsibleTrigger className="flex items-center justify-between w-full px-3 py-2 rounded-md bg-muted/40 hover:bg-muted/60 transition-colors text-left">
                         <div className="flex items-center gap-2">
-                          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground transition-transform [[data-state=open]>&]:rotate-90" />
+                          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
                           <span className="text-xs font-semibold text-purple-700 dark:text-purple-400">{phaseLabel}</span>
                           <Badge variant="outline" className="text-[9px] h-4">{group.items.length}</Badge>
                         </div>

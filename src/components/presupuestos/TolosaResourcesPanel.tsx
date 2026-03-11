@@ -71,7 +71,7 @@ const defaultForm = {
   is_estimation: false,
 };
 
-export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentItemId, onSubtotalChange, measurementVersion }: TolosaResourcesPanelProps) {
+export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentItemId, onSubtotalChange, onSubtotalSplitChange, measurementVersion }: TolosaResourcesPanelProps) {
   const [linkedResources, setLinkedResources] = useState<BudgetResource[]>([]);
   const [allResources, setAllResources] = useState<BudgetResource[]>([]);
   const [linkedIds, setLinkedIds] = useState<Set<string>>(new Set());

@@ -657,6 +657,25 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
     setFormDialogOpen(true);
   };
 
+  // Open form for new estimation activity (child of a parent activity)
+  const handleNewEstimation = (parentActivity: BudgetActivity) => {
+    setEditingActivity(null);
+    const nextCode = `${parentActivity.code}.E${Date.now().toString().slice(-3)}`;
+    setForm({
+      ...emptyForm,
+      activity_type: 'estimacion',
+      parent_activity_id: parentActivity.id,
+      phase_id: parentActivity.phase_id || '',
+      code: nextCode,
+      opciones: parentActivity.opciones || ['A', 'B', 'C'],
+      start_date: parentActivity.start_date || '',
+    });
+    setActivityResources([]);
+    setWorkAreaSearchQuery('');
+    setShowAllWorkAreas(false);
+    setFormDialogOpen(true);
+  };
+
   // Fetch resources for an activity
   const fetchActivityResources = async (activityId: string) => {
     const { data, error } = await supabase

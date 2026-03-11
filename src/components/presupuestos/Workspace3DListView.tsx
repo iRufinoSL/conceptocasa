@@ -197,9 +197,7 @@ function MultiPrism({ ws, scaleXY, scaleZ, offsetX, offsetZ, onFaceDoubleClick, 
       const vx = ws.polygon[i].x;
       const vy = ws.polygon[i].y;
       labels.push({ pos: new THREE.Vector3(base[i].x, base[i].y - 0.04, base[i].z), text: `(X${vx},Y${vy},Z${ws.zBase})` });
-      const wall = ws.walls.find(w => w.wall_index === i + 1);
-      const hM = wall?.height != null ? wall.height : ws.height;
-      const zTopVal = ws.zBase + Math.round(hM / zScaleM);
+      const zTopVal = Math.round(top[i].y / zScaleM);
       labels.push({ pos: new THREE.Vector3(top[i].x, top[i].y + 0.06, top[i].z), text: `(X${vx},Y${vy},Z${zTopVal})` });
     }
 
@@ -215,10 +213,9 @@ function MultiPrism({ ws, scaleXY, scaleZ, offsetX, offsetZ, onFaceDoubleClick, 
         axisStart: `X${ws.polygon[i].x},Y${ws.polygon[i].y}`, axisEnd: `X${ws.polygon[next].x},Y${ws.polygon[next].y}` });
     }
     for (let i = 0; i < n; i++) {
-      const wall = ws.walls.find(w => w.wall_index === i + 1);
-      const hM = wall?.height != null ? wall.height : ws.height;
-      const zTopVal = ws.zBase + Math.round(hM / zScaleM);
-      edges.push({ from: base[i], to: top[i], lengthMm: Math.abs(hM) * 1000,
+      const hDiff = top[i].y - base[i].y;
+      const zTopVal = Math.round(top[i].y / zScaleM);
+      edges.push({ from: base[i], to: top[i], lengthMm: Math.abs(hDiff) * 1000,
         axisStart: `Z${ws.zBase}`, axisEnd: `Z${zTopVal}` });
     }
 

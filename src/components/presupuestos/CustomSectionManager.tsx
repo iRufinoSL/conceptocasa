@@ -1783,7 +1783,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
           x={margin.left - 4}
           y={margin.top - 14}
           textAnchor="end"
-          fill={vLabel === 'X' ? 'rgba(192,57,43,0.9)' : vLabel === 'Y' ? 'rgba(39,174,96,0.9)' : 'rgba(41,128,185,0.9)'}
+          fill={vLabel === 'Y' ? 'rgba(39,174,96,0.9)' : 'rgba(41,128,185,0.9)'}
           fontSize={12}
           fontWeight={700}
           data-pdf-axis-label=""

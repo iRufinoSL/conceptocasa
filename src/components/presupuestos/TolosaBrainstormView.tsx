@@ -125,7 +125,7 @@ const DIMENSION_LINKS = [
   { key: 'como', label: 'CÓMO?', icon: Wrench, color: 'text-blue-600 bg-blue-50 border-blue-200 dark:text-blue-400 dark:bg-blue-950 dark:border-blue-800', hint: 'Actividades / Perfil' },
   { key: 'quien', label: 'QUIÉN?', icon: Users, color: 'text-emerald-600 bg-emerald-50 border-emerald-200 dark:text-emerald-400 dark:bg-emerald-950 dark:border-emerald-800', hint: 'Cliente / Proveedor' },
   { key: 'donde', label: 'DÓNDE?', icon: MapPin, color: 'text-amber-600 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-950 dark:border-amber-800', hint: 'Dirección / Catastro' },
-  { key: 'cuando', label: 'CUÁNDO?', icon: Clock, color: 'text-purple-600 bg-purple-50 border-purple-200 dark:text-purple-400 dark:bg-purple-950 dark:border-purple-800', hint: 'Fases / Plazos' },
+  { key: 'cuando', label: 'CUÁNDO?', icon: Clock, color: 'text-orange-600 bg-orange-50 border-orange-200 dark:text-orange-400 dark:bg-orange-950 dark:border-orange-800', hint: 'Fases / Plazos' },
   { key: 'cuanto', label: 'CUÁNTO?', icon: DollarSign, color: 'text-rose-600 bg-rose-50 border-rose-200 dark:text-rose-400 dark:bg-rose-950 dark:border-rose-800', hint: 'Costes / SubTotal' },
 ];
 
@@ -1026,7 +1026,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
       'border-l-blue-500',
       'border-l-emerald-500',
       'border-l-amber-500',
-      'border-l-purple-500',
+      'border-l-orange-500',
       'border-l-rose-500',
     ];
     return colors[depth % colors.length];
@@ -1823,9 +1823,9 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
       case 'quien': return renderQuienPanel(item);
       case 'como': return renderComoPanel(item);
       case 'cuando': return (
-        <div className="p-3 rounded-lg border border-purple-200 bg-purple-50/50 dark:border-purple-800 dark:bg-purple-950/30 space-y-3">
+        <div className="p-3 rounded-lg border border-orange-200 bg-orange-50/50 dark:border-orange-800 dark:bg-orange-950/30 space-y-3">
           <div className="flex items-center justify-between">
-            <h4 className="text-sm font-semibold flex items-center gap-2 text-purple-700 dark:text-purple-400">
+            <h4 className="text-sm font-semibold flex items-center gap-2 text-orange-700 dark:text-orange-400">
               <Clock className="h-4 w-4" /> CUÁNDO? — Plazos y fases
             </h4>
             <Button size="sm" variant="ghost" className="text-xs h-7 gap-1 text-muted-foreground" onClick={() => setDimension(item.id, '')}>
@@ -2022,7 +2022,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                         {(() => {
                           const phase = item.phase_id ? phases.find(p => p.id === item.phase_id) : null;
                           return phase ? (
-                            <Badge variant="outline" className="text-[10px] gap-1 border-purple-300 text-purple-700 dark:border-purple-700 dark:text-purple-300">
+                            <Badge variant="outline" className="text-[10px] gap-1 border-orange-300 text-orange-700 dark:border-orange-700 dark:text-orange-300">
                               <Clock className="h-2.5 w-2.5" />
                               {phase.code ? phase.code : phase.name}
                             </Badge>
@@ -2269,7 +2269,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                 <button
                   key={dim.key}
                   onClick={() => setCuandoListOpen(prev => !prev)}
-                  className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors cursor-pointer ${dim.color} ${cuandoListOpen ? 'ring-2 ring-purple-400' : ''}`}
+                  className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors cursor-pointer ${dim.color} ${cuandoListOpen ? 'ring-2 ring-orange-400' : ''}`}
                 >
                   <Icon className="h-3 w-3" /> {dim.label}
                 </button>
@@ -2299,9 +2299,9 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
 
       {/* CUÁNDO? Activity Listing Panel */}
       {cuandoListOpen && (
-        <div className="border rounded-lg p-4 space-y-3 border-purple-200 bg-purple-50/50 dark:border-purple-800 dark:bg-purple-950/30">
+        <div className="border rounded-lg p-4 space-y-3 border-orange-200 bg-orange-50/50 dark:border-orange-800 dark:bg-orange-950/30">
           <div className="flex items-center justify-between">
-            <h4 className="text-sm font-semibold flex items-center gap-2 text-purple-700 dark:text-purple-400">
+            <h4 className="text-sm font-semibold flex items-center gap-2 text-orange-700 dark:text-orange-400">
               <Clock className="h-4 w-4" /> CUÁNDO? — Listado de Actividades
             </h4>
             <Button size="sm" variant="ghost" className="text-xs h-7 gap-1 text-muted-foreground" onClick={() => setCuandoListOpen(false)}>
@@ -2368,14 +2368,14 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
             return (
               <div className="space-y-2" id="cuando-listing-content">
                 {/* Header: Budget name, Client, title + grand totals */}
-                <div className="px-3 py-2 rounded-md bg-purple-100/80 dark:bg-purple-900/40 border border-purple-200 dark:border-purple-800 space-y-0.5">
+                <div className="px-3 py-2 rounded-md bg-orange-100/80 dark:bg-orange-900/40 border border-orange-200 dark:border-orange-800 space-y-0.5">
                   {budgetInfo.name && (
                     <div className="text-xs font-semibold text-foreground">{budgetInfo.name}</div>
                   )}
                   {budgetInfo.clientName && (
                     <div className="text-xs text-muted-foreground">Cliente: {budgetInfo.clientName}</div>
                   )}
-                  <div className="text-xs font-medium text-purple-700 dark:text-purple-400 mt-1">
+                  <div className="text-xs font-medium text-orange-700 dark:text-orange-400 mt-1">
                     Presupuesto de Actividades por Fases constructivas
                   </div>
                   <div className="flex gap-3 text-[10px] font-mono text-muted-foreground mt-0.5">
@@ -2487,7 +2487,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                       <CollapsibleTrigger className="flex items-center justify-between w-full px-3 py-2 rounded-md bg-muted/40 hover:bg-muted/60 transition-colors text-left">
                         <div className="flex items-center gap-2 min-w-0">
                           <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
-                          <span className="text-xs font-semibold text-purple-700 dark:text-purple-400 break-words">{phaseLabel}</span>
+                          <span className="text-xs font-semibold text-orange-700 dark:text-orange-400 break-words">{phaseLabel}</span>
                           <Badge variant="outline" className="text-[9px] h-4 shrink-0">{group.items.length}</Badge>
                         </div>
                         <span className="text-[10px] font-mono font-semibold text-foreground shrink-0 ml-2">{groupSub > 0 ? formatCurrency(groupTotal) : '—'}</span>
@@ -2546,8 +2546,8 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                 })}
 
                 {/* Grand total */}
-                <div className="flex items-center justify-between px-3 py-2 rounded-md bg-purple-100/60 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800">
-                  <span className="text-xs font-semibold text-purple-700 dark:text-purple-400">
+                <div className="flex items-center justify-between px-3 py-2 rounded-md bg-orange-100/60 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800">
+                  <span className="text-xs font-semibold text-orange-700 dark:text-orange-400">
                     Total ({filtered.length} actividades)
                   </span>
                   <div className="flex gap-4 text-xs font-mono">

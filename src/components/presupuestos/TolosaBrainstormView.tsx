@@ -1972,6 +1972,13 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                 {/* Inline Measurements + Resources (always visible when detail open) */}
                 {isDetailOpen && (
                   <div className="mt-3 space-y-3">
+                    {isEst && (
+                      <EstimationResourceForm
+                        tolosItemId={item.id}
+                        budgetId={budgetId}
+                        isAdmin={isAdmin}
+                      />
+                    )}
                     <TolosaMeasurementsPanel
                       budgetId={budgetId}
                       tolosItemId={item.id}

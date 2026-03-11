@@ -49,6 +49,7 @@ interface TolosaResourcesPanelProps {
   isAdmin: boolean;
   parentItemId?: string | null;
   onSubtotalChange?: (subtotal: number) => void;
+  onSubtotalSplitChange?: (normal: number, est: number) => void;
   measurementVersion?: number;
 }
 

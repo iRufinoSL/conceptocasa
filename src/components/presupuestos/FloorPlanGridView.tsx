@@ -159,13 +159,13 @@ export function computeGridRuler(positioned: PositionedRoom[]) {
 
 const getSpaceColor = (name: string): string => {
   const n = name.toLowerCase();
-  if (n.includes('salón') || n.includes('salon')) return 'bg-amber-100/70 border-amber-400 dark:bg-amber-900/30 dark:border-amber-700';
-  if (n.includes('hab')) return 'bg-blue-100/70 border-blue-400 dark:bg-blue-900/30 dark:border-blue-700';
-  if (n.includes('baño') || n.includes('bano')) return 'bg-cyan-100/70 border-cyan-400 dark:bg-cyan-900/30 dark:border-cyan-700';
-  if (n.includes('porche')) return 'bg-green-100/70 border-green-400 dark:bg-green-900/30 dark:border-green-700';
-  if (n.includes('pasillo') || n.includes('corredor')) return 'bg-gray-100/70 border-gray-400 dark:bg-gray-800/50 dark:border-gray-600';
-  if (n.includes('cocina')) return 'bg-orange-100/70 border-orange-400 dark:bg-orange-900/30 dark:border-orange-700';
-  return 'bg-purple-100/70 border-purple-400 dark:bg-purple-900/30 dark:border-purple-700';
+  if (n.includes('salón') || n.includes('salon')) return 'border-amber-500 dark:border-amber-600';
+  if (n.includes('hab')) return 'border-blue-500 dark:border-blue-600';
+  if (n.includes('baño') || n.includes('bano')) return 'border-cyan-500 dark:border-cyan-600';
+  if (n.includes('porche')) return 'border-green-500 dark:border-green-600';
+  if (n.includes('pasillo') || n.includes('corredor')) return 'border-gray-500 dark:border-gray-500';
+  if (n.includes('cocina')) return 'border-orange-500 dark:border-orange-600';
+  return 'border-purple-500 dark:border-purple-600';
 };
 
 const getGroupColor = (groupId: string): string => {

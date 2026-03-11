@@ -367,6 +367,7 @@ export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentIte
       purchase_units: formData.purchase_units,
       purchase_unit_measure: formData.purchase_unit_measure || null,
       purchase_unit_cost: formData.purchase_unit_cost,
+      is_estimation: formData.is_estimation,
     };
 
     try {

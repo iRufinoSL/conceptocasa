@@ -3315,7 +3315,18 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                   const phase = getPhaseById(activity.phase_id);
                   return (
                     <TableRow key={activity.id}>
-                      <TableCell className="font-mono text-sm">{generateActivityId(activity)}</TableCell>
+                      <TableCell className="font-mono text-sm">
+                        <div className="flex items-center gap-1.5">
+                          {activity.activity_type === 'estimacion' && (
+                            <Badge className="bg-amber-500 text-white text-[10px] px-1 py-0">Est</Badge>
+                          )}
+                          {activity.parent_activity_id && <span className="text-muted-foreground">↳</span>}
+                          {generateActivityId(activity)}
+                          {activityHasChildren(activity.id) && (
+                            <ChevronDown className="h-3.5 w-3.5 text-amber-500 flex-shrink-0" />
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell className="text-muted-foreground">
                         {phase ? `${phase.code} ${phase.name}` : '-'}
                       </TableCell>

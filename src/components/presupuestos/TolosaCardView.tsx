@@ -283,7 +283,9 @@ export function TolosaCardView({
                 onClick={e => e.stopPropagation()}
               />
             ) : (
-              <Badge variant="outline" className="font-mono text-[10px] shrink-0 px-1.5 bg-background/50">{item.code}</Badge>
+              <Badge variant="outline" className={`font-mono text-[10px] shrink-0 px-1.5 ${isEst ? 'bg-amber-200 text-amber-800 border-amber-400 dark:bg-amber-900/60 dark:text-amber-300 dark:border-amber-700' : 'bg-background/50'}`}>
+                {isEst && <span className="mr-0.5">Est.</span>}{item.code}
+              </Badge>
             )}
             <div className="flex items-center gap-0.5 ml-auto">
               {/* Quick-add sibling → */}

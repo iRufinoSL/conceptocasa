@@ -3283,6 +3283,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
                     scaleXY={floorPlan?.block_length_mm || 625}
                     scaleZ={250}
                     zBase={zBase3D}
+                    allSections={allSections}
+                    roomId={r.id}
                     onFaceClick={(faceType, faceIndex) => {
                       const key = `${faceType}_${faceIndex}`;
                       setSelected3DFace(prev => prev === key ? null : key);

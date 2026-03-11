@@ -23,54 +23,86 @@ export function EstimationResourceForm({ tolosItemId, budgetId, isAdmin }: Estim
 
   const fetchResource = useCallback(async () => {
     setLoading(true);
-    // Get linked resources
-    const { data: links } = await supabase
-      .from('tolosa_item_resources')
-      .select('resource_id')
-      .eq('tolosa_item_id', tolosItemId);
+    try {
+      // Get linked resources from tolosa_item_resources
+      const { data: links } = await supabase
+        .from('tolosa_item_resources')
+        .select('resource_id')
+        .eq('tolosa_item_id', tolosItemId);
 
-    if (!links?.length) { setLoading(false); return; }
-
-    // Find the estimation activity resource
-    const resourceIds = links.map(l => l.resource_id);
-    
-    // First check if any linked ID is a budget_activity (estimation type)
-    const { data: activities } = await supabase
-      .from('budget_activities')
-      .select('id')
-      .in('id', resourceIds)
-      .eq('activity_type', 'estimacion');
-
-    if (activities?.length) {
-      // Get the resource linked to this estimation activity
-      const { data: resources } = await supabase
-        .from('budget_activity_resources')
-        .select('id, manual_units, external_unit_cost, purchase_vat_percent')
-        .eq('activity_id', activities[0].id)
-        .limit(1);
-      
-      if (resources?.length) {
-        const r = resources[0];
-        setResourceId(r.id);
-        setUnits(String(r.manual_units ?? ''));
-        setUnitPrice(String(r.external_unit_cost ?? ''));
-        setVatPercent(String(r.purchase_vat_percent ?? '21'));
+      if (!links?.length) {
+        // No links found - try to find via budget_activities estimation linked to this item's code
+        setLoading(false);
+        return;
       }
-    } else {
-      // Maybe the resource_id IS the budget_activity_resources directly
-      const { data: resources } = await supabase
+
+      const resourceIds = links.map(l => l.resource_id);
+
+      // Strategy 1: Check if any linked ID is a budget_activity (estimation type)
+      const { data: activities } = await supabase
+        .from('budget_activities')
+        .select('id')
+        .in('id', resourceIds)
+        .eq('activity_type', 'estimacion');
+
+      if (activities?.length) {
+        const { data: resources } = await supabase
+          .from('budget_activity_resources')
+          .select('id, manual_units, external_unit_cost, purchase_vat_percent')
+          .eq('activity_id', activities[0].id)
+          .limit(1);
+
+        if (resources?.length) {
+          const r = resources[0];
+          setResourceId(r.id);
+          setUnits(String(r.manual_units ?? ''));
+          setUnitPrice(String(r.external_unit_cost ?? ''));
+          setVatPercent(String(r.purchase_vat_percent ?? '21'));
+          setLoading(false);
+          return;
+        }
+      }
+
+      // Strategy 2: Check if resource_id is directly a budget_activity_resources ID
+      const { data: directResources } = await supabase
         .from('budget_activity_resources')
         .select('id, manual_units, external_unit_cost, purchase_vat_percent')
         .in('id', resourceIds)
         .limit(1);
 
-      if (resources?.length) {
-        const r = resources[0];
+      if (directResources?.length) {
+        const r = directResources[0];
         setResourceId(r.id);
         setUnits(String(r.manual_units ?? ''));
         setUnitPrice(String(r.external_unit_cost ?? ''));
         setVatPercent(String(r.purchase_vat_percent ?? '21'));
+        setLoading(false);
+        return;
       }
+
+      // Strategy 3: Check if resource_id links to an activity that has resources
+      const { data: anyActivities } = await supabase
+        .from('budget_activities')
+        .select('id')
+        .in('id', resourceIds);
+
+      if (anyActivities?.length) {
+        const { data: actResources } = await supabase
+          .from('budget_activity_resources')
+          .select('id, manual_units, external_unit_cost, purchase_vat_percent')
+          .in('activity_id', anyActivities.map(a => a.id))
+          .limit(1);
+
+        if (actResources?.length) {
+          const r = actResources[0];
+          setResourceId(r.id);
+          setUnits(String(r.manual_units ?? ''));
+          setUnitPrice(String(r.external_unit_cost ?? ''));
+          setVatPercent(String(r.purchase_vat_percent ?? '21'));
+        }
+      }
+    } catch (err) {
+      console.error('EstimationResourceForm fetchResource error:', err);
     }
     setLoading(false);
   }, [tolosItemId]);
@@ -89,7 +121,7 @@ export function EstimationResourceForm({ tolosItemId, budgetId, isAdmin }: Estim
   };
 
   if (loading) return <div className="text-xs text-muted-foreground py-2">Cargando estimación...</div>;
-  if (!resourceId) return null;
+  if (!resourceId) return <div className="text-xs text-amber-600 py-2 italic">Sin recurso de estimación vinculado</div>;
 
   const unitsNum = parseFloat(units) || 0;
   const priceNum = parseFloat(unitPrice) || 0;
@@ -104,6 +136,7 @@ export function EstimationResourceForm({ tolosItemId, budgetId, isAdmin }: Estim
         <Badge className="bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/60 dark:text-amber-300 dark:border-amber-700 text-xs">
           Estimación
         </Badge>
+        {saving && <span className="text-[10px] text-muted-foreground animate-pulse">Guardando...</span>}
       </div>
       <div className="grid grid-cols-3 gap-3">
         <div className="space-y-1">

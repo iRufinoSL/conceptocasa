@@ -27,6 +27,13 @@ interface TolosItem {
   supplier_contact_id: string | null;
   housing_profile_id: string | null;
   is_executed?: boolean;
+  phase_id?: string | null;
+}
+
+interface PhaseInfo {
+  id: string;
+  code: string | null;
+  name: string;
 }
 
 interface ItemSummary {

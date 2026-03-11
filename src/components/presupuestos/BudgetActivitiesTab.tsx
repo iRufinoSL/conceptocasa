@@ -138,6 +138,10 @@ interface ActivityForm {
   work_area_ids: string[];
   actual_start_date: string;
   actual_end_date: string;
+  activity_type: string;
+  parent_activity_id: string;
+  estimation_amount: string;
+  estimation_vat_percent: string;
 }
 
 interface BudgetActivitiesTabProps {

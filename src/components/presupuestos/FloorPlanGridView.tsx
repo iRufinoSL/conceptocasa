@@ -680,14 +680,21 @@ export function FloorPlanGridView({
     return (
       <div className="overflow-auto border rounded-lg bg-background" ref={gridRef}>
         <div
-          className="relative"
           style={{
-            width: COL_HEADER_W + totalCols * CS + 400 + 4 * CS,
-            height: ROW_HEADER_H + totalRows * CS + 300 + 4 * CS,
-            paddingLeft: COL_HEADER_W + 120 + 3 * CS,
-            paddingTop: ROW_HEADER_H + 100 + 3 * CS,
+            width: COL_HEADER_W + totalCols * CS + 400 + 6 * CS + COL_HEADER_W + 120,
+            height: ROW_HEADER_H + totalRows * CS + 300 + 6 * CS + ROW_HEADER_H + 100,
           }}
         >
+          <div
+            className="relative"
+            style={{
+              position: 'relative',
+              left: COL_HEADER_W + 120 + 3 * CS,
+              top: ROW_HEADER_H + 100 + 3 * CS,
+              width: COL_HEADER_W + totalCols * CS + 400,
+              height: ROW_HEADER_H + totalRows * CS + 300,
+            }}
+          >
           {/* Column headers — separated ~10px from grid edge for readability */}
           {/* Column headers — X axis (red, like SketchUp) */}
           {Array.from({ length: totalCols }, (_, ci) => (

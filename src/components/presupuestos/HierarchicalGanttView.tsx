@@ -38,6 +38,7 @@ interface BudgetActivity {
   actual_start_date: string | null;
   actual_end_date: string | null;
   depends_on_activity_id: string | null;
+  activity_type: string;
 }
 
 interface HierarchicalGanttViewProps {
@@ -101,7 +102,7 @@ export function HierarchicalGanttView({
             .order('code', { ascending: true }),
           supabase
             .from('budget_activities')
-            .select('id, name, code, phase_id, start_date, end_date, duration_days, actual_start_date, actual_end_date, depends_on_activity_id')
+            .select('id, name, code, phase_id, start_date, end_date, duration_days, actual_start_date, actual_end_date, depends_on_activity_id, activity_type')
             .eq('budget_id', budgetId)
             .order('code', { ascending: true })
         ]);
@@ -509,9 +510,14 @@ export function HierarchicalGanttView({
 
   // Render activity row
   const renderActivityRow = useCallback((activity: BudgetActivity, colorIdx: number) => {
+    const isEstimation = activity.activity_type === 'estimacion';
     const plannedBarStyle = getBarStyle(activity.start_date, activity.end_date, activity.duration_days);
     const actualBarStyle = getBarStyle(activity.actual_start_date, activity.actual_end_date, null);
     const hasActualDates = activity.actual_start_date || activity.actual_end_date;
+
+    const barColor = isEstimation ? 'bg-amber-500' : PHASE_COLORS[colorIdx % PHASE_COLORS.length];
+    const barColorLight = isEstimation ? 'bg-amber-300' : PHASE_COLORS_LIGHT[colorIdx % PHASE_COLORS_LIGHT.length];
+    const dotColor = isEstimation ? 'bg-amber-500' : PHASE_COLORS[colorIdx % PHASE_COLORS.length];
 
     return (
       <div 
@@ -520,8 +526,9 @@ export function HierarchicalGanttView({
         onClick={() => onActivityClick?.(activity)}
       >
         <div className="w-[300px] shrink-0 px-3 py-2 flex items-center gap-2">
-          <div className={cn("w-3 h-3 rounded-full shrink-0", PHASE_COLORS[colorIdx % PHASE_COLORS.length])} />
+          <div className={cn("w-3 h-3 rounded-full shrink-0", dotColor)} />
           <span className="text-sm font-medium truncate flex-1">
+            {isEstimation && <span className="text-amber-600 mr-1">Est.</span>}
             {activity.code}.-{activity.name}
           </span>
           {activity.depends_on_activity_id && (
@@ -540,7 +547,7 @@ export function HierarchicalGanttView({
                   <div
                     className={cn(
                       "absolute top-1 h-4 rounded opacity-40",
-                      PHASE_COLORS_LIGHT[colorIdx % PHASE_COLORS_LIGHT.length]
+                      barColorLight
                     )}
                     style={plannedBarStyle}
                   />
@@ -562,7 +569,7 @@ export function HierarchicalGanttView({
                   <div
                     className={cn(
                       "absolute top-6 h-5 rounded shadow-sm opacity-90 flex items-center px-2 overflow-hidden",
-                      PHASE_COLORS[colorIdx % PHASE_COLORS.length]
+                      barColor
                     )}
                     style={actualBarStyle}
                   >
@@ -583,7 +590,7 @@ export function HierarchicalGanttView({
             <div
               className={cn(
                 "absolute top-6 h-5 rounded shadow-sm opacity-70 flex items-center px-2 overflow-hidden border-2 border-dashed",
-                PHASE_COLORS[colorIdx % PHASE_COLORS.length]
+                barColor
               )}
               style={plannedBarStyle}
             >

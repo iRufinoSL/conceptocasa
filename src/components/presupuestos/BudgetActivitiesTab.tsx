@@ -83,6 +83,8 @@ interface BudgetActivity {
   end_date: string | null;
   actual_start_date: string | null;
   actual_end_date: string | null;
+  activity_type: string;
+  parent_activity_id: string | null;
 }
 
 interface Measurement {
@@ -136,6 +138,10 @@ interface ActivityForm {
   work_area_ids: string[];
   actual_start_date: string;
   actual_end_date: string;
+  activity_type: string;
+  parent_activity_id: string;
+  estimation_amount: string;
+  estimation_vat_percent: string;
 }
 
 interface BudgetActivitiesTabProps {
@@ -176,6 +182,10 @@ const emptyForm: ActivityForm = {
   work_area_ids: [],
   actual_start_date: '',
   actual_end_date: '',
+  activity_type: 'normal',
+  parent_activity_id: '',
+  estimation_amount: '',
+  estimation_vat_percent: '21',
 };
 
 export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStartDate, budgetEndDate, initialActivityId, onClearInitialActivityId }: BudgetActivitiesTabProps) {
@@ -599,6 +609,10 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
               work_area_ids: (workAreaLinksRes.data || []).map(r => r.work_area_id),
               actual_start_date: data.actual_start_date || '',
               actual_end_date: data.actual_end_date || '',
+              activity_type: data.activity_type || 'normal',
+              parent_activity_id: data.parent_activity_id || '',
+              estimation_amount: '',
+              estimation_vat_percent: '21',
             });
             setWorkAreaSearchQuery('');
             setShowAllWorkAreas(false);
@@ -637,6 +651,25 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
   const handleNew = () => {
     setEditingActivity(null);
     setForm(emptyForm);
+    setActivityResources([]);
+    setWorkAreaSearchQuery('');
+    setShowAllWorkAreas(false);
+    setFormDialogOpen(true);
+  };
+
+  // Open form for new estimation activity (child of a parent activity)
+  const handleNewEstimation = (parentActivity: BudgetActivity) => {
+    setEditingActivity(null);
+    const nextCode = `${parentActivity.code}.E${Date.now().toString().slice(-3)}`;
+    setForm({
+      ...emptyForm,
+      activity_type: 'estimacion',
+      parent_activity_id: parentActivity.id,
+      phase_id: parentActivity.phase_id || '',
+      code: nextCode,
+      opciones: parentActivity.opciones || ['A', 'B', 'C'],
+      start_date: parentActivity.start_date || '',
+    });
     setActivityResources([]);
     setWorkAreaSearchQuery('');
     setShowAllWorkAreas(false);
@@ -686,6 +719,10 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
       work_area_ids: fetchedWorkAreaIds,
       actual_start_date: activity.actual_start_date || '',
       actual_end_date: activity.actual_end_date || '',
+      activity_type: activity.activity_type || 'normal',
+      parent_activity_id: activity.parent_activity_id || '',
+      estimation_amount: '',
+      estimation_vat_percent: '21',
     });
     
     // Reset search state
@@ -876,7 +913,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
     setIsSaving(true);
 
     try {
-      const data = {
+      const data: any = {
         budget_id: budgetId,
         name: form.name.trim(),
         code: form.code.trim(),
@@ -891,6 +928,8 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
         tolerance_days: form.tolerance_days ? parseInt(form.tolerance_days) : null,
         actual_start_date: form.actual_start_date || null,
         actual_end_date: form.actual_end_date || null,
+        activity_type: form.activity_type || 'normal',
+        parent_activity_id: form.parent_activity_id || null,
       };
 
       let savedActivityId: string | null = null;
@@ -914,6 +953,45 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
         if (error) throw error;
         savedActivityId = newActivity?.id || null;
         toast.success('Actividad creada');
+      }
+
+      // For estimation activities, auto-create/update the single resource with amount + VAT
+      if (form.activity_type === 'estimacion' && savedActivityId && form.estimation_amount) {
+        const amount = parseFloat(form.estimation_amount) || 0;
+        const vatPercent = parseFloat(form.estimation_vat_percent) || 21;
+        
+        // Check if resource already exists for this estimation activity
+        const { data: existingRes } = await supabase
+          .from('budget_activity_resources')
+          .select('id')
+          .eq('activity_id', savedActivityId)
+          .limit(1);
+        
+        const resourceData = {
+          budget_id: budgetId,
+          activity_id: savedActivityId,
+          name: form.name.trim(),
+          external_unit_cost: amount,
+          manual_units: 1,
+          unit: 'pa',
+          resource_type: 'Servicio',
+          safety_margin_percent: 0,
+          sales_margin_percent: 0,
+          purchase_vat_percent: vatPercent,
+          purchase_unit_cost: amount,
+          purchase_units: 1,
+        };
+        
+        if (existingRes && existingRes.length > 0) {
+          await supabase
+            .from('budget_activity_resources')
+            .update(resourceData)
+            .eq('id', existingRes[0].id);
+        } else {
+          await supabase
+            .from('budget_activity_resources')
+            .insert(resourceData);
+        }
       }
 
        // Sync related_units for the activity's resources
@@ -2213,7 +2291,15 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                         }}
                       />
                     </TableCell>
-                    <TableCell className="font-mono text-sm">{generateActivityId(activity)}</TableCell>
+                    <TableCell className="font-mono text-sm">
+                      <div className="flex items-center gap-1.5">
+                        {activity.activity_type === 'estimacion' && (
+                          <Badge className="bg-amber-500 text-white text-[10px] px-1 py-0">Est</Badge>
+                        )}
+                        {activity.parent_activity_id && <span className="text-muted-foreground">↳</span>}
+                        {generateActivityId(activity)}
+                      </div>
+                    </TableCell>
                     <TableCell className="text-center">
                       {canEditActivity(activity.id) ? (
                         <button
@@ -2399,6 +2485,12 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                             </DropdownMenuItem>
                             {isAdmin && (
                               <>
+                                {activity.activity_type !== 'estimacion' && (
+                                  <DropdownMenuItem onClick={() => handleNewEstimation(activity)}>
+                                    <Target className="h-4 w-4 mr-2" />
+                                    Nueva Estimación
+                                  </DropdownMenuItem>
+                                )}
                                 <DropdownMenuItem onClick={() => handleDuplicate(activity)}>
                                   <Copy className="h-4 w-4 mr-2" />
                                   Duplicar
@@ -3270,9 +3362,14 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
         <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <div className="flex items-center justify-between">
-              <DialogTitle>
-                {editingActivity ? 'Editar Actividad' : 'Nueva Actividad'}
-              </DialogTitle>
+              <div className="flex items-center gap-3">
+                <DialogTitle>
+                  {editingActivity ? 'Editar Actividad' : form.activity_type === 'estimacion' ? 'Nueva Estimación' : 'Nueva Actividad'}
+                </DialogTitle>
+                {form.activity_type === 'estimacion' && (
+                  <Badge className="bg-amber-500 hover:bg-amber-600 text-white">Estimación</Badge>
+                )}
+              </div>
               {editingActivity && (
                 <div className="flex items-center gap-1 mr-6">
                   <Button
@@ -3295,13 +3392,111 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
               )}
             </div>
             <DialogDescription>
-              {editingActivity 
-                ? 'Modifica los datos de la actividad'
-                : 'Introduce los datos de la nueva actividad'}
+              {form.activity_type === 'estimacion'
+                ? `Estimación vinculada a: ${activities.find(a => a.id === form.parent_activity_id)?.name || 'Actividad padre'}`
+                : editingActivity 
+                  ? 'Modifica los datos de la actividad'
+                  : 'Introduce los datos de la nueva actividad'}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
+            {/* Activity Type Selector (only when creating new non-estimation or editing) */}
+            {!form.parent_activity_id && (
+              <div className="flex items-center gap-4 py-2 px-3 border rounded-lg bg-muted/30">
+                <Label className="text-sm font-medium">Tipo:</Label>
+                <div className="flex gap-2">
+                  <Badge 
+                    variant={form.activity_type === 'normal' ? 'default' : 'outline'}
+                    className="cursor-pointer"
+                    onClick={() => setForm({ ...form, activity_type: 'normal' })}
+                  >
+                    Normal
+                  </Badge>
+                  <Badge 
+                    variant={form.activity_type === 'estimacion' ? 'default' : 'outline'}
+                    className={`cursor-pointer ${form.activity_type === 'estimacion' ? 'bg-amber-500 hover:bg-amber-600' : ''}`}
+                    onClick={() => setForm({ ...form, activity_type: 'estimacion' })}
+                  >
+                    Estimación
+                  </Badge>
+                </div>
+                {form.activity_type === 'estimacion' && !form.parent_activity_id && (
+                  <div className="flex-1">
+                    <Select 
+                      value={form.parent_activity_id || 'none'}
+                      onValueChange={(v) => setForm({ ...form, parent_activity_id: v === 'none' ? '' : v })}
+                    >
+                      <SelectTrigger className="h-8">
+                        <SelectValue placeholder="Seleccionar actividad padre..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Sin padre</SelectItem>
+                        {activities.filter(a => a.activity_type !== 'estimacion').map(a => (
+                          <SelectItem key={a.id} value={a.id}>
+                            {generateActivityId(a)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Estimation-specific fields */}
+            {form.activity_type === 'estimacion' && (
+              <div className="border-2 border-amber-300 dark:border-amber-700 rounded-lg p-4 bg-amber-50/50 dark:bg-amber-950/20 space-y-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Target className="h-5 w-5 text-amber-600" />
+                  <Label className="text-base font-semibold text-amber-700 dark:text-amber-400">Datos de Estimación</Label>
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="estimation_amount">Importe sin IVA (€)</Label>
+                    <Input
+                      id="estimation_amount"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={form.estimation_amount}
+                      onChange={(e) => setForm({ ...form, estimation_amount: e.target.value })}
+                      placeholder="0.00"
+                      className="font-mono"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="estimation_vat">IVA %</Label>
+                    <Select 
+                      value={form.estimation_vat_percent}
+                      onValueChange={(v) => setForm({ ...form, estimation_vat_percent: v })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="0">0%</SelectItem>
+                        <SelectItem value="4">4%</SelectItem>
+                        <SelectItem value="10">10%</SelectItem>
+                        <SelectItem value="21">21%</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Total con IVA</Label>
+                    <div className="h-10 px-3 py-2 border rounded-md bg-muted text-sm flex items-center font-mono font-bold text-primary">
+                      {(() => {
+                        const amount = parseFloat(form.estimation_amount) || 0;
+                        const vatPercent = parseFloat(form.estimation_vat_percent) || 0;
+                        const total = amount * (1 + vatPercent / 100);
+                        return formatCurrency(total);
+                      })()}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-4 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="code">Código *</Label>

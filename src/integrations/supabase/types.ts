@@ -420,6 +420,7 @@ export type Database = {
       }
       budget_activities: {
         Row: {
+          activity_type: string
           actual_end_date: string | null
           actual_start_date: string | null
           budget_id: string
@@ -435,6 +436,7 @@ export type Database = {
           measurement_unit: string | null
           name: string
           opciones: string[]
+          parent_activity_id: string | null
           phase_id: string | null
           start_date: string | null
           tolerance_days: number | null
@@ -442,6 +444,7 @@ export type Database = {
           uses_measurement: boolean
         }
         Insert: {
+          activity_type?: string
           actual_end_date?: string | null
           actual_start_date?: string | null
           budget_id: string
@@ -457,6 +460,7 @@ export type Database = {
           measurement_unit?: string | null
           name: string
           opciones?: string[]
+          parent_activity_id?: string | null
           phase_id?: string | null
           start_date?: string | null
           tolerance_days?: number | null
@@ -464,6 +468,7 @@ export type Database = {
           uses_measurement?: boolean
         }
         Update: {
+          activity_type?: string
           actual_end_date?: string | null
           actual_start_date?: string | null
           budget_id?: string
@@ -479,6 +484,7 @@ export type Database = {
           measurement_unit?: string | null
           name?: string
           opciones?: string[]
+          parent_activity_id?: string | null
           phase_id?: string | null
           start_date?: string | null
           tolerance_days?: number | null
@@ -505,6 +511,13 @@ export type Database = {
             columns: ["measurement_id"]
             isOneToOne: false
             referencedRelation: "budget_measurements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_activities_parent_activity_id_fkey"
+            columns: ["parent_activity_id"]
+            isOneToOne: false
+            referencedRelation: "budget_activities"
             referencedColumns: ["id"]
           },
           {

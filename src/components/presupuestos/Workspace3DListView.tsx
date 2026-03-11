@@ -37,6 +37,7 @@ interface Workspace3DListViewProps {
   scaleZ: number;
   onClose: () => void;
   onFaceDoubleClick?: (info: FaceInfo) => void;
+  allSections?: CustomSection[];
 }
 
 const FACE_COLORS: Record<string, string> = {

@@ -169,6 +169,26 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
   const [graphAddName, setGraphAddName] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
 
+  const [phases, setPhases] = useState<PhaseInfo[]>([]);
+  // Duplicate dialog state
+  const [dupDialogOpen, setDupDialogOpen] = useState(false);
+  const [dupItem, setDupItem] = useState<TolosItem | null>(null);
+  const [dupAsSub, setDupAsSub] = useState(false);
+  const [dupType, setDupType] = useState<'normal' | 'estimacion'>('normal');
+  const [dupName, setDupName] = useState('');
+  const [dupUnits, setDupUnits] = useState('1');
+  const [dupUnitPrice, setDupUnitPrice] = useState('');
+  const [dupVatPercent, setDupVatPercent] = useState('21');
+
+  const fetchPhases = useCallback(async () => {
+    const { data } = await supabase
+      .from('budget_phases')
+      .select('id, code, name, start_date')
+      .eq('budget_id', budgetId)
+      .order('order_index');
+    setPhases((data as PhaseInfo[]) || []);
+  }, [budgetId]);
+
   const bumpMeasurementVersion = useCallback((itemId: string) => {
     setMeasurementVersions(prev => ({ ...prev, [itemId]: (prev[itemId] || 0) + 1 }));
   }, []);

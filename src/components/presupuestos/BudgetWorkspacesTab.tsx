@@ -3771,6 +3771,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
             scaleZ={250}
             onClose={() => setShow3DList(false)}
             onFaceDoubleClick={handleFaceNavigateTo2D}
+            allSections={allSections}
           />
         );
       })()}

@@ -662,6 +662,10 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
     }
   };
 
+  const isEstimacionItem = (item: TolosItem) => {
+    return item.code?.includes('.E') || item.name?.includes('(Est.)');
+  };
+
   const openDuplicateDialog = (item: TolosItem, asSub: boolean) => {
     setDupItem(item);
     setDupAsSub(asSub);

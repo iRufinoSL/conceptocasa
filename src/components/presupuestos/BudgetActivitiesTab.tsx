@@ -1083,116 +1083,165 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
     }
   };
 
-  // Duplicate activity with all related files and resources
-  const handleDuplicate = async (activity: BudgetActivity) => {
+  // Open duplicate activity dialog (ask type before duplicating)
+  const handleDuplicate = (activity: BudgetActivity) => {
+    setDuplicatingActivity(activity);
+    setDupActType('normal');
+    setDupActName(`${activity.name} (copia)`);
+    setDupActUnits('1');
+    setDupActUnitPrice('');
+    setDupActVatPercent('21');
+    setDuplicateActivityDialogOpen(true);
+  };
+
+  // Execute activity duplication
+  const executeDuplicateActivity = async () => {
+    if (!duplicatingActivity) return;
+    setIsDuplicatingActivity(true);
+
     try {
-      // Create duplicated activity - including measurement_id and uses_measurement
+      const isEstimacion = dupActType === 'estimacion';
+      const trimmedName = dupActName.trim();
+      if (!trimmedName) {
+        toast.error('El nombre es obligatorio');
+        setIsDuplicatingActivity(false);
+        return;
+      }
+
+      // Create duplicated activity
       const { data: newActivity, error: activityError } = await supabase
         .from('budget_activities')
         .insert({
           budget_id: budgetId,
-          name: `${activity.name} (copia)`,
-          code: `${activity.code}-C`,
-          description: activity.description,
-          measurement_unit: activity.measurement_unit,
-          measurement_id: activity.measurement_id, // Keep measurement relation
-          uses_measurement: activity.uses_measurement, // Keep uses_measurement flag
-          is_executed: activity.is_executed ?? true, // Keep is_executed flag
-          phase_id: activity.phase_id,
-          start_date: activity.start_date,
-          duration_days: activity.duration_days,
-          tolerance_days: activity.tolerance_days
+          name: trimmedName,
+          code: isEstimacion
+            ? `${duplicatingActivity.code}.E${Date.now().toString().slice(-3)}`
+            : `${duplicatingActivity.code}-C`,
+          description: duplicatingActivity.description,
+          measurement_unit: duplicatingActivity.measurement_unit,
+          measurement_id: isEstimacion ? null : duplicatingActivity.measurement_id,
+          uses_measurement: isEstimacion ? false : duplicatingActivity.uses_measurement,
+          is_executed: duplicatingActivity.is_executed ?? true,
+          phase_id: duplicatingActivity.phase_id,
+          start_date: duplicatingActivity.start_date,
+          duration_days: duplicatingActivity.duration_days,
+          tolerance_days: duplicatingActivity.tolerance_days,
+          activity_type: isEstimacion ? 'estimacion' : 'normal',
+          parent_activity_id: isEstimacion ? duplicatingActivity.id : null,
         })
         .select()
         .single();
 
       if (activityError) throw activityError;
 
-      // Get resources from original activity
-      const { data: originalResources, error: resourcesError } = await supabase
-        .from('budget_activity_resources')
-        .select('*')
-        .eq('activity_id', activity.id);
+      if (isEstimacion) {
+        // Create single resource with the estimation values
+        const units = parseFloat(dupActUnits) || 1;
+        const unitPrice = parseFloat(dupActUnitPrice) || 0;
+        const vatPercent = parseFloat(dupActVatPercent) || 21;
 
-      if (resourcesError) throw resourcesError;
-
-      // Duplicate resources if any
-      if (originalResources && originalResources.length > 0) {
-        const resourcesToInsert = originalResources.map(resource => ({
-          budget_id: budgetId,
-          activity_id: newActivity.id,
-          name: `${resource.name} (copia)`,
-          description: resource.description,
-          resource_type: resource.resource_type,
-          unit: resource.unit,
-          manual_units: resource.manual_units,
-          related_units: resource.related_units,
-          external_unit_cost: resource.external_unit_cost,
-          safety_margin_percent: resource.safety_margin_percent,
-          sales_margin_percent: resource.sales_margin_percent
-        }));
-
-        const { error: insertResourcesError } = await supabase
+        await supabase
           .from('budget_activity_resources')
-          .insert(resourcesToInsert);
+          .insert({
+            budget_id: budgetId,
+            activity_id: newActivity.id,
+            name: trimmedName,
+            external_unit_cost: unitPrice,
+            manual_units: units,
+            unit: 'pa',
+            resource_type: 'Servicio',
+            safety_margin_percent: 0,
+            sales_margin_percent: 0,
+            purchase_vat_percent: vatPercent,
+            purchase_unit_cost: unitPrice,
+            purchase_units: units,
+          });
+      } else {
+        // Normal duplicate: copy resources
+        const { data: originalResources, error: resourcesError } = await supabase
+          .from('budget_activity_resources')
+          .select('*')
+          .eq('activity_id', duplicatingActivity.id);
 
-        if (insertResourcesError) {
-          console.error('Error duplicating resources:', insertResourcesError);
+        if (resourcesError) throw resourcesError;
+
+        if (originalResources && originalResources.length > 0) {
+          const resourcesToInsert = originalResources.map(resource => ({
+            budget_id: budgetId,
+            activity_id: newActivity.id,
+            name: `${resource.name} (copia)`,
+            description: resource.description,
+            resource_type: resource.resource_type,
+            unit: resource.unit,
+            manual_units: resource.manual_units,
+            related_units: resource.related_units,
+            external_unit_cost: resource.external_unit_cost,
+            safety_margin_percent: resource.safety_margin_percent,
+            sales_margin_percent: resource.sales_margin_percent
+          }));
+
+          const { error: insertResourcesError } = await supabase
+            .from('budget_activity_resources')
+            .insert(resourcesToInsert);
+
+          if (insertResourcesError) {
+            console.error('Error duplicating resources:', insertResourcesError);
+          }
+        }
+
+        // Duplicate files for normal type
+        const { data: files, error: filesError } = await supabase
+          .from('budget_activity_files')
+          .select('*')
+          .eq('activity_id', duplicatingActivity.id);
+
+        if (filesError) throw filesError;
+
+        if (files && files.length > 0) {
+          for (const file of files) {
+            const { data: fileData, error: downloadError } = await supabase.storage
+              .from('activity-files')
+              .download(file.file_path);
+
+            if (downloadError) {
+              console.error('Error downloading file:', downloadError);
+              continue;
+            }
+
+            const fileExt = file.file_name.split('.').pop();
+            const newPath = `${newActivity.id}/${Date.now()}.${fileExt}`;
+            
+            const { error: uploadError } = await supabase.storage
+              .from('activity-files')
+              .upload(newPath, fileData);
+
+            if (uploadError) {
+              console.error('Error uploading file:', uploadError);
+              continue;
+            }
+
+            await supabase
+              .from('budget_activity_files')
+              .insert({
+                activity_id: newActivity.id,
+                file_name: file.file_name,
+                file_path: newPath,
+                file_type: file.file_type,
+                file_size: file.file_size
+              });
+          }
         }
       }
 
-      // Get files from original activity
-      const { data: files, error: filesError } = await supabase
-        .from('budget_activity_files')
-        .select('*')
-        .eq('activity_id', activity.id);
-
-      if (filesError) throw filesError;
-
-      // Duplicate files if any
-      if (files && files.length > 0) {
-        for (const file of files) {
-          // Download original file
-          const { data: fileData, error: downloadError } = await supabase.storage
-            .from('activity-files')
-            .download(file.file_path);
-
-          if (downloadError) {
-            console.error('Error downloading file:', downloadError);
-            continue;
-          }
-
-          // Upload with new path
-          const fileExt = file.file_name.split('.').pop();
-          const newPath = `${newActivity.id}/${Date.now()}.${fileExt}`;
-          
-          const { error: uploadError } = await supabase.storage
-            .from('activity-files')
-            .upload(newPath, fileData);
-
-          if (uploadError) {
-            console.error('Error uploading file:', uploadError);
-            continue;
-          }
-
-          // Create file record
-          await supabase
-            .from('budget_activity_files')
-            .insert({
-              activity_id: newActivity.id,
-              file_name: file.file_name,
-              file_path: newPath,
-              file_type: file.file_type,
-              file_size: file.file_size
-            });
-        }
-      }
-
-      toast.success('Actividad duplicada con recursos');
+      setDuplicateActivityDialogOpen(false);
+      setDuplicatingActivity(null);
+      toast.success(isEstimacion ? 'Estimación creada' : 'Actividad duplicada con recursos');
       fetchData();
     } catch (err: any) {
       console.error('Error duplicating:', err);
       toast.error(err.message || 'Error al duplicar');
+    } finally {
+      setIsDuplicatingActivity(false);
     }
   };
 

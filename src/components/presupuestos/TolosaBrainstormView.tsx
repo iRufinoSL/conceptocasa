@@ -2432,6 +2432,94 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Duplicate Dialog */}
+      <Dialog open={dupDialogOpen} onOpenChange={(open) => { if (!open) { setDupDialogOpen(false); setDupItem(null); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Duplicar "{dupItem?.name}"</DialogTitle>
+            <DialogDescription>
+              Elige el tipo de copia a crear.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Tipo de copia</Label>
+              <div className="flex gap-2">
+                <Button
+                  variant={dupType === 'normal' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setDupType('normal')}
+                >
+                  Normal
+                </Button>
+                <Button
+                  variant={dupType === 'estimacion' ? 'default' : 'outline'}
+                  size="sm"
+                  className={dupType === 'estimacion' ? 'bg-amber-600 hover:bg-amber-700 text-white' : ''}
+                  onClick={() => setDupType('estimacion')}
+                >
+                  Estimación
+                </Button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Nombre</Label>
+              <Input value={dupName} onChange={(e) => setDupName(e.target.value)} />
+            </div>
+            {dupType === 'estimacion' && (
+              <div className="space-y-3 border-t pt-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Unidades</Label>
+                    <Input type="number" value={dupUnits} onChange={(e) => setDupUnits(e.target.value)} min="0" step="0.01" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Importe / Ud</Label>
+                    <Input type="number" value={dupUnitPrice} onChange={(e) => setDupUnitPrice(e.target.value)} min="0" step="0.01" placeholder="0.00" />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">% IVA</Label>
+                  <Select value={dupVatPercent} onValueChange={setDupVatPercent}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">0%</SelectItem>
+                      <SelectItem value="4">4%</SelectItem>
+                      <SelectItem value="10">10%</SelectItem>
+                      <SelectItem value="21">21%</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {(() => {
+                  const subtotal = (parseFloat(dupUnits) || 0) * (parseFloat(dupUnitPrice) || 0);
+                  const vat = parseFloat(dupVatPercent) || 0;
+                  const totalWithVat = subtotal * (1 + vat / 100);
+                  return (
+                    <div className="grid grid-cols-2 gap-3 pt-2 border-t">
+                      <div className="text-center">
+                        <p className="text-xs text-muted-foreground">Total (sin IVA)</p>
+                        <p className="text-sm font-semibold">{formatCurrency(subtotal)}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-xs text-muted-foreground">Total (IVA incl.)</p>
+                        <p className="text-sm font-bold text-primary">{formatCurrency(totalWithVat)}</p>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setDupDialogOpen(false); setDupItem(null); }}>Cancelar</Button>
+            <Button onClick={executeDuplicate}>
+              <Copy className="h-4 w-4 mr-1" />
+              {dupType === 'estimacion' ? 'Crear Estimación' : 'Duplicar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

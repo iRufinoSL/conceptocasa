@@ -487,9 +487,7 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
     }
     for (let i = 0; i < n; i++) {
       const hDiff = topVerts3D[i].y - baseVerts3D[i].y;
-      const wall = walls.find(w => w.wall_index === i + 1);
-      const hM = wall?.height != null ? wall.height : height;
-      const zTopVal = zBase + Math.round(hM / zScaleBlocks);
+      const zTopVal = Math.round(topVerts3D[i].y / zScaleBlocks);
       items.push({ from: baseVerts3D[i], to: topVerts3D[i], lengthMm: Math.abs(hDiff) * 1000,
         axisLabel: `Z${zBase}→Z${zTopVal}` });
     }

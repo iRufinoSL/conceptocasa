@@ -1332,6 +1332,11 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
     return `${phaseCode} ${activity.code}.- ${activity.name}`.trim();
   };
 
+  // Check if activity has children
+  const activityHasChildren = (activityId: string) => {
+    return activities.some(a => a.parent_activity_id === activityId);
+  };
+
   // Sort activities by ActividadID
   const sortActivitiesByActivityId = (activitiesToSort: BudgetActivity[]) => {
     return [...activitiesToSort].sort((a, b) => {
@@ -2357,6 +2362,9 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                         )}
                         {activity.parent_activity_id && <span className="text-muted-foreground">↳</span>}
                         {generateActivityId(activity)}
+                        {activityHasChildren(activity.id) && (
+                          <ChevronDown className="h-3.5 w-3.5 text-amber-500 flex-shrink-0" />
+                        )}
                       </div>
                     </TableCell>
                     <TableCell className="text-center">
@@ -2785,7 +2793,18 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                             const opciones = activity.opciones || ['A', 'B', 'C'];
                             return (
                               <TableRow key={activity.id}>
-                                <TableCell className="font-mono text-sm">{generateActivityId(activity)}</TableCell>
+                                <TableCell className="font-mono text-sm">
+                                  <div className="flex items-center gap-1.5">
+                                    {activity.activity_type === 'estimacion' && (
+                                      <Badge className="bg-amber-500 text-white text-[10px] px-1 py-0">Est</Badge>
+                                    )}
+                                    {activity.parent_activity_id && <span className="text-muted-foreground">↳</span>}
+                                    {generateActivityId(activity)}
+                                    {activityHasChildren(activity.id) && (
+                                      <ChevronDown className="h-3.5 w-3.5 text-amber-500 flex-shrink-0" />
+                                    )}
+                                  </div>
+                                </TableCell>
                                 <TableCell>
                                   {canEditActivity(activity.id) ? (
                                     <div className="flex gap-0.5">
@@ -3061,7 +3080,18 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                             const opciones = activity.opciones || ['A', 'B', 'C'];
                             return (
                               <TableRow key={activity.id}>
-                                <TableCell className="font-mono text-sm">{generateActivityId(activity)}</TableCell>
+                                <TableCell className="font-mono text-sm">
+                                  <div className="flex items-center gap-1.5">
+                                    {activity.activity_type === 'estimacion' && (
+                                      <Badge className="bg-amber-500 text-white text-[10px] px-1 py-0">Est</Badge>
+                                    )}
+                                    {activity.parent_activity_id && <span className="text-muted-foreground">↳</span>}
+                                    {generateActivityId(activity)}
+                                    {activityHasChildren(activity.id) && (
+                                      <ChevronDown className="h-3.5 w-3.5 text-amber-500 flex-shrink-0" />
+                                    )}
+                                  </div>
+                                </TableCell>
                                 <TableCell>
                                   {canEditActivity(activity.id) ? (
                                     <div className="flex gap-0.5">
@@ -3285,7 +3315,18 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                   const phase = getPhaseById(activity.phase_id);
                   return (
                     <TableRow key={activity.id}>
-                      <TableCell className="font-mono text-sm">{generateActivityId(activity)}</TableCell>
+                      <TableCell className="font-mono text-sm">
+                        <div className="flex items-center gap-1.5">
+                          {activity.activity_type === 'estimacion' && (
+                            <Badge className="bg-amber-500 text-white text-[10px] px-1 py-0">Est</Badge>
+                          )}
+                          {activity.parent_activity_id && <span className="text-muted-foreground">↳</span>}
+                          {generateActivityId(activity)}
+                          {activityHasChildren(activity.id) && (
+                            <ChevronDown className="h-3.5 w-3.5 text-amber-500 flex-shrink-0" />
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell className="text-muted-foreground">
                         {phase ? `${phase.code} ${phase.name}` : '-'}
                       </TableCell>
@@ -3847,8 +3888,44 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
               </div>
             </div>
 
-            {/* Time Management Fields */}
-            <div className="grid grid-cols-4 gap-4 p-3 border rounded-lg bg-muted/30">
+            {/* Time Management Fields - CUÁNDO? */}
+            <div className="border-t pt-4 mt-4">
+              <Label className="text-base font-semibold mb-3 flex items-center gap-2">
+                <Clock className="h-4 w-4" />
+                CUÁNDO?
+              </Label>
+              <div className="space-y-3">
+                {/* Phase selector in CUÁNDO section */}
+                <div className="space-y-2">
+                  <Label htmlFor="phase_cuando">Fase de la Actividad</Label>
+                  <Select 
+                    value={form.phase_id || 'none'} 
+                    onValueChange={(value) => {
+                      const newPhaseId = value === 'none' ? '' : value;
+                      if (newPhaseId && !form.start_date) {
+                        const phase = phases.find(p => p.id === newPhaseId);
+                        if (phase?.start_date) {
+                          setForm({ ...form, phase_id: newPhaseId, start_date: phase.start_date });
+                          return;
+                        }
+                      }
+                      setForm({ ...form, phase_id: newPhaseId });
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar fase..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Sin fase</SelectItem>
+                      {phases.map(phase => (
+                        <SelectItem key={phase.id} value={phase.id}>
+                          {phase.code} {phase.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              <div className="grid grid-cols-4 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="start_date">Fecha Inicio</Label>
                 <Input
@@ -3914,6 +3991,8 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                     <span className="text-muted-foreground">-</span>
                   )}
                 </div>
+              </div>
+              </div>
               </div>
             </div>
 

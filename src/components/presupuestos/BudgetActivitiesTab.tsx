@@ -609,6 +609,10 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
               work_area_ids: (workAreaLinksRes.data || []).map(r => r.work_area_id),
               actual_start_date: data.actual_start_date || '',
               actual_end_date: data.actual_end_date || '',
+              activity_type: data.activity_type || 'normal',
+              parent_activity_id: data.parent_activity_id || '',
+              estimation_amount: '',
+              estimation_vat_percent: '21',
             });
             setWorkAreaSearchQuery('');
             setShowAllWorkAreas(false);

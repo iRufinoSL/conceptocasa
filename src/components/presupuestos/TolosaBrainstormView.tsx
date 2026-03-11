@@ -2449,7 +2449,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                         didParseCell: (data: any) => {
                           if (data.section === 'body' && data.row.index === rows.length - 1) {
                             data.cell.styles.fontStyle = 'bold';
-                            data.cell.styles.fillColor = [240, 235, 250];
+                            data.cell.styles.fillColor = [255, 237, 213];
                           }
                         },
                       });

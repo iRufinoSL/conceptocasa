@@ -2455,7 +2455,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                 <Button
                   variant={dupType === 'normal' ? 'default' : 'outline'}
                   size="sm"
-                  onClick={() => setDupType('normal')}
+                  onClick={() => { setDupType('normal'); setDupName(prev => prev.replace(' (Est.)', ' (copia)')); }}
                 >
                   Normal
                 </Button>

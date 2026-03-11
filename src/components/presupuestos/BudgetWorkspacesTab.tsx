@@ -859,6 +859,8 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
           onClick={() => { setMagnetMode(!magnetMode); if (!magnetMode) setSelectMode(false); }}
         >
           🧲 Imán
+        </Button>
+        {rulerLines.length > 0 && (
           <>
             {onSaveRulerLines && (
               <Button

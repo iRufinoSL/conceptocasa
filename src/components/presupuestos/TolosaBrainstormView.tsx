@@ -2496,7 +2496,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                         <div className="border rounded overflow-x-auto mt-1 ml-4">
                           <table className="w-full text-sm table-fixed">
                             <colgroup>
-                              <col className="w-[80px]" />
+                              <col className="w-[62px]" />
                               <col style={{ width: 'auto' }} />
                               <col className="w-[90px]" />
                               <col className="w-[80px]" />

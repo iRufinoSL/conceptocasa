@@ -1761,7 +1761,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
         {/* V-axis labels (left) */}
         {Array.from({ length: gridCount + 1 }, (_, i) => {
           const val = isElevation ? (gridMax - i) : (gridMin + i);
-          const vAxisColor = vLabel === 'X' ? 'rgba(192,57,43,0.9)' : vLabel === 'Y' ? 'rgba(39,174,96,0.9)' : 'rgba(41,128,185,0.9)';
+          const vAxisColor = vLabel === 'Y' ? 'rgba(39,174,96,0.9)' : 'rgba(41,128,185,0.9)';
           return (
             <text
               key={`v-${i}`}

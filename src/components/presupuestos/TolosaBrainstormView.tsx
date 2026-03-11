@@ -2022,7 +2022,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                         {(() => {
                           const phase = item.phase_id ? phases.find(p => p.id === item.phase_id) : null;
                           return phase ? (
-                            <Badge variant="outline" className="text-[10px] gap-1 border-purple-300 text-purple-700 dark:border-purple-700 dark:text-purple-300">
+                            <Badge variant="outline" className="text-[10px] gap-1 border-orange-300 text-orange-700 dark:border-orange-700 dark:text-orange-300">
                               <Clock className="h-2.5 w-2.5" />
                               {phase.code ? phase.code : phase.name}
                             </Badge>

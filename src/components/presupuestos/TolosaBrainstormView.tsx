@@ -2342,6 +2342,14 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                 {detailItem.description && (
                   <p className="text-sm text-muted-foreground">{detailItem.description}</p>
                 )}
+                {/* Estimation form */}
+                {(detailItem.code?.includes('.E') || detailItem.name?.includes('(Est.)')) && (
+                  <EstimationResourceForm
+                    tolosItemId={detailItem.id}
+                    budgetId={budgetId}
+                    isAdmin={isAdmin}
+                  />
+                )}
                 {/* Mediciones */}
                 <TolosaMeasurementsPanel
                   budgetId={budgetId}

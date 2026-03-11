@@ -2365,6 +2365,17 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
 
             return (
               <div className="space-y-2">
+                {/* Header: Budget name, Client, title */}
+                <div className="px-3 py-2 rounded-md bg-purple-100/80 dark:bg-purple-900/40 border border-purple-200 dark:border-purple-800 space-y-0.5">
+                  {budgetInfo.name && (
+                    <div className="text-xs font-semibold text-foreground">{budgetInfo.name}</div>
+                  )}
+                  {budgetInfo.clientName && (
+                    <div className="text-xs text-muted-foreground">Cliente: {budgetInfo.clientName}</div>
+                  )}
+                  <div className="text-xs font-medium text-purple-700 dark:text-purple-400">Actividades por Fases constructivas</div>
+                </div>
+
                 {sortedGroups.map(([groupKey, group]) => {
                   let groupSub = 0;
                   let groupVat = 0;
@@ -2381,23 +2392,30 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                   return (
                     <Collapsible key={groupKey} defaultOpen className="group">
                       <CollapsibleTrigger className="flex items-center justify-between w-full px-3 py-2 rounded-md bg-muted/40 hover:bg-muted/60 transition-colors text-left">
-                        <div className="flex items-center gap-2">
-                          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
-                          <span className="text-xs font-semibold text-purple-700 dark:text-purple-400">{phaseLabel}</span>
-                          <Badge variant="outline" className="text-[9px] h-4">{group.items.length}</Badge>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
+                          <span className="text-xs font-semibold text-purple-700 dark:text-purple-400 break-words">{phaseLabel}</span>
+                          <Badge variant="outline" className="text-[9px] h-4 shrink-0">{group.items.length}</Badge>
                         </div>
-                        <span className="text-[10px] font-mono font-semibold text-foreground">{groupSub > 0 ? formatCurrency(groupTotal) : '—'}</span>
+                        <span className="text-[10px] font-mono font-semibold text-foreground shrink-0 ml-2">{groupSub > 0 ? formatCurrency(groupTotal) : '—'}</span>
                       </CollapsibleTrigger>
                       <CollapsibleContent>
                         <div className="border rounded overflow-hidden mt-1 ml-4">
-                          <table className="w-full text-sm">
+                          <table className="w-full text-sm table-fixed">
+                            <colgroup>
+                              <col className="w-[70px]" />
+                              <col />
+                              <col className="w-[90px]" />
+                              <col className="w-[80px]" />
+                              <col className="w-[90px]" />
+                            </colgroup>
                             <thead>
                               <tr className="bg-muted/50 text-xs text-muted-foreground">
-                                <th className="text-left px-3 py-1 font-medium">Código</th>
-                                <th className="text-left px-3 py-1 font-medium">Actividad</th>
-                                <th className="text-right px-3 py-1 font-medium">Subtotal</th>
-                                <th className="text-right px-3 py-1 font-medium">IVA</th>
-                                <th className="text-right px-3 py-1 font-medium">Total</th>
+                                <th className="text-left px-2 py-1 font-medium">Código</th>
+                                <th className="text-left px-2 py-1 font-medium">Actividad</th>
+                                <th className="text-right px-2 py-1 font-medium">Subtotal</th>
+                                <th className="text-right px-2 py-1 font-medium">IVA</th>
+                                <th className="text-right px-2 py-1 font-medium">Total</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -2408,23 +2426,23 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                                 const total = sub + vatAmount;
                                 return (
                                   <tr key={item.id} className={`border-t hover:bg-accent/20 transition-colors ${isEst ? 'bg-amber-50/50 dark:bg-amber-950/20' : ''}`}>
-                                    <td className="px-3 py-1.5 font-mono text-xs">
+                                    <td className="px-2 py-1.5 font-mono text-xs align-top">
                                       <Badge variant="outline" className={`text-[10px] ${isEst ? 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/60 dark:text-amber-300' : ''}`}>
                                         {item.code}
                                       </Badge>
                                     </td>
-                                    <td className="px-3 py-1.5 truncate max-w-[200px]">{item.name}</td>
-                                    <td className="px-3 py-1.5 text-right font-mono text-xs">{sub > 0 ? formatCurrency(sub) : '—'}</td>
-                                    <td className="px-3 py-1.5 text-right font-mono text-xs text-muted-foreground">{sub > 0 ? formatCurrency(vatAmount) : '—'}</td>
-                                    <td className="px-3 py-1.5 text-right font-mono text-xs font-semibold">{sub > 0 ? formatCurrency(total) : '—'}</td>
+                                    <td className="px-2 py-1.5 text-xs break-words whitespace-normal align-top">{item.name}</td>
+                                    <td className="px-2 py-1.5 text-right font-mono text-xs align-top">{sub > 0 ? formatCurrency(sub) : '—'}</td>
+                                    <td className="px-2 py-1.5 text-right font-mono text-xs text-muted-foreground align-top">{sub > 0 ? formatCurrency(vatAmount) : '—'}</td>
+                                    <td className="px-2 py-1.5 text-right font-mono text-xs font-semibold align-top">{sub > 0 ? formatCurrency(total) : '—'}</td>
                                   </tr>
                                 );
                               })}
                               <tr className="border-t bg-muted/20 text-xs font-medium">
-                                <td colSpan={2} className="px-3 py-1.5 text-muted-foreground">Subtotal fase</td>
-                                <td className="px-3 py-1.5 text-right font-mono">{groupSub > 0 ? formatCurrency(groupSub) : '—'}</td>
-                                <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">{groupVat > 0 ? formatCurrency(groupVat) : '—'}</td>
-                                <td className="px-3 py-1.5 text-right font-mono font-semibold">{groupTotal > 0 ? formatCurrency(groupTotal) : '—'}</td>
+                                <td colSpan={2} className="px-2 py-1.5 text-muted-foreground">Subtotal fase</td>
+                                <td className="px-2 py-1.5 text-right font-mono">{groupSub > 0 ? formatCurrency(groupSub) : '—'}</td>
+                                <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">{groupVat > 0 ? formatCurrency(groupVat) : '—'}</td>
+                                <td className="px-2 py-1.5 text-right font-mono font-semibold">{groupTotal > 0 ? formatCurrency(groupTotal) : '—'}</td>
                               </tr>
                             </tbody>
                           </table>

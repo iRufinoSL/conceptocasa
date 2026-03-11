@@ -1646,7 +1646,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
         </div>
       )}
 
-      <div ref={gridContainerRef} className="overflow-auto border border-border rounded-md bg-muted/20" style={{ maxHeight: zoomLevel > 1 ? '600px' : undefined }}>
+      <div ref={gridContainerRef} className="overflow-auto border border-border rounded-md bg-muted/20" style={{ maxHeight: '600px' }}>
       <svg
         ref={svgRef}
         width={totalW}

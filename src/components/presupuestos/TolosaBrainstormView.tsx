@@ -1848,10 +1848,12 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
     const queId = `${item.code} ${item.name}`;
     const openDim = activeDimension[item.id];
 
+    const isEst = isEstimacionItem(item);
+
     return (
       <div key={item.id} className="group/item">
         <div
-          className={`flex items-start gap-2 p-3 rounded-lg border-l-4 ${getDepthColor(depth)} bg-card hover:bg-accent/30 transition-colors`}
+          className={`flex items-start gap-2 p-3 rounded-lg border-l-4 ${isEst ? 'border-l-amber-500 bg-amber-50/50 dark:bg-amber-950/20' : getDepthColor(depth) + ' bg-card'} hover:bg-accent/30 transition-colors`}
           style={{ marginLeft: depth * 24 }}
         >
           {/* Expand/collapse chevron - toggles children tree only, NOT the detail form */}

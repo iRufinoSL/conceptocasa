@@ -47,6 +47,7 @@ interface TolosaCardViewProps {
   itemSummaries: Record<string, ItemSummary>;
   itemSubtotals: Record<string, number>;
   contactCache: Record<string, string>;
+  phases?: PhaseInfo[];
   getCuanto: (itemId: string) => number;
   onItemClick?: (itemId: string) => void;
   onItemDoubleClick?: (itemId: string) => void;

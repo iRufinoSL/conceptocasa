@@ -1746,6 +1746,20 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
               );
             });
           })}
+          {/* ── Magnet snap indicator ── */}
+          {magnetMode && magnetSnap && (() => {
+            const { sx, sy } = toSvg(magnetSnap.x, magnetSnap.y);
+            return (
+              <g className="pointer-events-none">
+                <line x1={sx - 12} y1={sy} x2={sx + 12} y2={sy} stroke="hsl(280 70% 50%)" strokeWidth={1.5} strokeDasharray="3 2" />
+                <line x1={sx} y1={sy - 12} x2={sx} y2={sy + 12} stroke="hsl(280 70% 50%)" strokeWidth={1.5} strokeDasharray="3 2" />
+                <circle cx={sx} cy={sy} r={5} fill="none" stroke="hsl(280 70% 50%)" strokeWidth={2} />
+                <text x={sx} y={sy - 16} textAnchor="middle" fill="hsl(280 70% 50%)" fontSize={7} fontWeight="bold" className="select-none">
+                  🧲 {magnetSnap.label}
+                </text>
+              </g>
+            );
+          })()}
 
           {/* ── External perimeter dimension lines (total width & height of all polygons) ── */}
           {(() => {

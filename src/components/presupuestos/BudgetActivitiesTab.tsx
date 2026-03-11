@@ -3890,7 +3890,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
 
             {/* Time Management Fields - CUÁNDO? */}
             <div className="border-t pt-4 mt-4">
-              <Label className="text-base font-semibold mb-3 block flex items-center gap-2">
+              <Label className="text-base font-semibold mb-3 flex items-center gap-2">
                 <Clock className="h-4 w-4" />
                 CUÁNDO?
               </Label>

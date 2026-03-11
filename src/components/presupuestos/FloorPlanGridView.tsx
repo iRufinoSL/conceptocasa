@@ -594,11 +594,11 @@ export function FloorPlanGridView({
   const renderGrid = (overrideCellSize?: number) => {
     const CS = overrideCellSize || CELL_SIZE;
     const fontScale = CS / CELL_SIZE; // 1.0 at default, >1 when enlarged
-    const nameFontSize = Math.max(12, Math.round(12 * fontScale));
-    const m2FontSize = Math.max(12, Math.round(12 * fontScale));
-    const dimFontSize = Math.max(10, Math.round(10 * fontScale));
-    const coordFontSize = Math.max(9, Math.round(9 * fontScale));
-    const axisLabelSize = Math.max(13, Math.round(13 * fontScale));
+    const nameFontSize = Math.max(16, Math.round(16 * fontScale));
+    const m2FontSize = Math.max(14, Math.round(14 * fontScale));
+    const dimFontSize = Math.max(12, Math.round(12 * fontScale));
+    const coordFontSize = Math.max(10, Math.round(10 * fontScale));
+    const axisLabelSize = Math.max(15, Math.round(15 * fontScale));
     // Render rooms as absolutely positioned overlays on the grid
     const roomOverlays = placedRooms.map(room => {
       const startCol = Math.round(room.posX / cellSizeM) + 1;
@@ -662,14 +662,13 @@ export function FloorPlanGridView({
           {renderOpeningMarks(room, 3, 'bottom', width, height)}
           {renderOpeningMarks(room, 4, 'left', width, height)}
 
-          <div className="font-extrabold text-center max-w-full px-0.5 leading-tight break-words" style={{ fontSize: `${nameFontSize}px`, lineHeight: '1.2', textShadow: '0 0 3px white, 0 0 3px white' }}>{room.name}</div>
-          <div className="font-mono leading-tight text-center font-bold" style={{ fontSize: `${Math.max(9, m2FontSize - 1)}px`, textShadow: '0 0 3px white, 0 0 3px white' }}>
+          <div className="font-extrabold text-center max-w-full px-0.5 leading-tight break-words" style={{ fontSize: `${nameFontSize}px`, lineHeight: '1.2', textShadow: '0 0 4px white, 0 0 4px white, 0 0 6px white' }}>{room.name}</div>
+          <div className="font-mono leading-tight text-center font-bold" style={{ fontSize: `${m2FontSize}px`, textShadow: '0 0 4px white, 0 0 4px white, 0 0 6px white' }}>
             <span>C={builtM2.toFixed(2)}</span>
             <span className="mx-0.5">·</span>
             <span>U={usableM2.toFixed(2)}</span>
           </div>
-          <div style={{ fontSize: `${dimFontSize}px`, fontWeight: 700, textShadow: '0 0 3px white, 0 0 3px white' }}>{room.width.toFixed(1)}×{room.length.toFixed(1)}</div>
-          <Badge variant="outline" className="px-0.5 py-0 mt-0.5 font-bold" style={{ fontSize: `${coordFontSize}px`, height: `${Math.max(14, Math.round(14 * fontScale))}px` }}>{coord}</Badge>
+          <div style={{ fontSize: `${dimFontSize}px`, fontWeight: 700, textShadow: '0 0 4px white, 0 0 4px white' }}>{room.width.toFixed(1)}×{room.length.toFixed(1)}</div>
 
           {multiSelectMode && (
             <div className={`absolute top-0.5 right-0.5 w-3 h-3 rounded-full border ${isMultiSelected ? 'bg-blue-500 border-blue-500' : 'border-muted-foreground/50 bg-background'}`} />
@@ -681,14 +680,21 @@ export function FloorPlanGridView({
     return (
       <div className="overflow-auto border rounded-lg bg-background" ref={gridRef}>
         <div
-          className="relative"
           style={{
-            width: COL_HEADER_W + totalCols * CS + 400,
-            height: ROW_HEADER_H + totalRows * CS + 300,
-            marginLeft: COL_HEADER_W + 120,
-            marginTop: ROW_HEADER_H + 100,
+            width: COL_HEADER_W + totalCols * CS + 400 + 6 * CS + COL_HEADER_W + 120,
+            height: ROW_HEADER_H + totalRows * CS + 300 + 6 * CS + ROW_HEADER_H + 100,
           }}
         >
+          <div
+            className="relative"
+            style={{
+              position: 'relative',
+              left: COL_HEADER_W + 120 + 3 * CS,
+              top: ROW_HEADER_H + 100 + 3 * CS,
+              width: COL_HEADER_W + totalCols * CS + 400,
+              height: ROW_HEADER_H + totalRows * CS + 300,
+            }}
+          >
           {/* Column headers — separated ~10px from grid edge for readability */}
           {/* Column headers — X axis (red, like SketchUp) */}
           {Array.from({ length: totalCols }, (_, ci) => (
@@ -1459,6 +1465,7 @@ export function FloorPlanGridView({
 
             return dimElements;
           })()}
+        </div>
         </div>
       </div>
     );

@@ -1997,7 +1997,8 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                   {/* Summary info: Mediciones relacionadas | Ud medida | SubTotal */}
                   {(() => {
                     const summary = itemSummaries[item.id];
-                    const cuanto = getCuanto(item.id);
+                    const cuantoNormal = getCuantoNormal(item.id);
+                    const cuantoEst = getCuantoEst(item.id);
                     return (
                       <div className="ml-auto flex items-center gap-1.5 shrink-0">
                         {(() => {
@@ -2015,14 +2016,14 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                             {formatNumber(summary.measurementUnits)} {summary.measurementUnit}
                           </Badge>
                         )}
-                        {summary && summary.resourceSubtotal > 0 && (
+                        {cuantoNormal > 0 && (
                           <Badge variant="secondary" className="text-[10px] font-mono gap-1">
-                            {formatCurrency(summary.resourceSubtotal)}
+                            {formatCurrency(cuantoNormal)}
                           </Badge>
                         )}
-                        {cuanto > 0 && cuanto !== (summary?.resourceSubtotal || 0) && (
-                          <Badge variant="secondary" className="text-[10px] font-mono gap-1 bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300">
-                            {formatCurrency(cuanto)}
+                        {cuantoEst > 0 && (
+                          <Badge variant="secondary" className="text-[10px] font-mono gap-1 bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                            Est. {formatCurrency(cuantoEst)}
                           </Badge>
                         )}
                       </div>

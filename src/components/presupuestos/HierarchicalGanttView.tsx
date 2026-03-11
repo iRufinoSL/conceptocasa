@@ -547,7 +547,7 @@ export function HierarchicalGanttView({
                   <div
                     className={cn(
                       "absolute top-1 h-4 rounded opacity-40",
-                      PHASE_COLORS_LIGHT[colorIdx % PHASE_COLORS_LIGHT.length]
+                      barColorLight
                     )}
                     style={plannedBarStyle}
                   />

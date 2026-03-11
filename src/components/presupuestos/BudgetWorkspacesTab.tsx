@@ -2443,18 +2443,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
     if (editingId) {
       const { error } = await supabase.from('budget_floor_plan_rooms').update(payload).eq('id', editingId);
       if (error) { toast.error('Error al actualizar'); return; }
-      // Preserve existing wall types when rebuilding walls
-      const { data: existingWalls } = await supabase.from('budget_floor_plan_walls')
-        .select('wall_index, wall_type').eq('room_id', editingId).order('wall_index');
-      const oldTypeMap = new Map((existingWalls || []).map(w => [w.wall_index, normalizeWallType(w.wall_type)]));
-      await supabase.from('budget_floor_plan_walls').delete().eq('room_id', editingId);
-      const walls = formVertices.map((_, i) => ({
-        room_id: editingId,
-        wall_index: i + 1,
-        wall_type: oldTypeMap.get(i + 1) || 'exterior',
-      }));
-      const { error: wallsInsertError } = await supabase.from('budget_floor_plan_walls').insert(walls);
-      if (wallsInsertError) { toast.error(`Error al reconstruir paredes: ${wallsInsertError.message}`); return; }
+      // Smart rebuild: only recreate walls if vertex count changed
+      await rebuildWallsSmart(editingId, formVertices.length);
       toast.success('Espacio actualizado');
     } else {
       const { data: newRoom, error } = await supabase

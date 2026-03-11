@@ -1466,6 +1466,7 @@ export function FloorPlanGridView({
             return dimElements;
           })()}
         </div>
+        </div>
       </div>
     );
   };

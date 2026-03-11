@@ -158,7 +158,9 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
   }>>({});
   const [dondeLocationOpen, setDondeLocationOpen] = useState<Record<string, boolean>>({});
   const [itemSubtotals, setItemSubtotals] = useState<Record<string, number>>({});
-  const [itemSummaries, setItemSummaries] = useState<Record<string, { measurementUnits: number; measurementUnit: string; resourceSubtotal: number }>>({});
+  const [itemSubtotalsNormal, setItemSubtotalsNormal] = useState<Record<string, number>>({});
+  const [itemSubtotalsEst, setItemSubtotalsEst] = useState<Record<string, number>>({});
+  const [itemSummaries, setItemSummaries] = useState<Record<string, { measurementUnits: number; measurementUnit: string; resourceSubtotal: number; normalSubtotal: number; estSubtotal: number }>>({});
   const [viewMode, setViewMode] = useState<'list' | 'cards'>('list');
   const [showOnlyExecuted, setShowOnlyExecuted] = useState(true);
   const [graphEntryItemId, setGraphEntryItemId] = useState<string | null>(null); // tracks item opened from graph card ✏️

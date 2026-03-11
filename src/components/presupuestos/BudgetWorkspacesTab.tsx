@@ -851,7 +851,14 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
         >
           🎯 Libre
         </Button>
-        {rulerLines.length > 0 && (
+        <Button
+          variant={magnetMode ? 'default' : 'outline'}
+          size="sm"
+          className="h-5 text-[10px] px-2 gap-0.5"
+          style={magnetMode ? { backgroundColor: 'hsl(280 70% 50%)', borderColor: 'hsl(280 70% 50%)' } : {}}
+          onClick={() => { setMagnetMode(!magnetMode); if (!magnetMode) setSelectMode(false); }}
+        >
+          🧲 Imán
           <>
             {onSaveRulerLines && (
               <Button

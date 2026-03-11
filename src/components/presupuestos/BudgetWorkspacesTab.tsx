@@ -478,6 +478,9 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
   const [draggingRulerEnd, setDraggingRulerEnd] = useState<'start' | 'end' | null>(null);
   // Free vertex mode — allows non-node placement
   const [freeMode, setFreeMode] = useState(false);
+  // Magnet mode — snaps to nearest edge/vertex of other polygons
+  const [magnetMode, setMagnetMode] = useState(false);
+  const [magnetSnap, setMagnetSnap] = useState<{ x: number; y: number; label: string } | null>(null);
   // Select/pointer mode — disables drawing, allows precise element selection
   const [selectMode, setSelectMode] = useState(false);
   // Annotation display toggles: always show mm, optionally degrees and/or %

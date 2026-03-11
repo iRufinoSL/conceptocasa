@@ -1754,7 +1754,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
       case 'quien': return renderQuienPanel(item);
       case 'como': return renderComoPanel(item);
       case 'cuando': return (
-        <div className="p-3 rounded-lg border border-purple-200 bg-purple-50/50 dark:border-purple-800 dark:bg-purple-950/30">
+        <div className="p-3 rounded-lg border border-purple-200 bg-purple-50/50 dark:border-purple-800 dark:bg-purple-950/30 space-y-3">
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-semibold flex items-center gap-2 text-purple-700 dark:text-purple-400">
               <Clock className="h-4 w-4" /> CUÁNDO? — Plazos y fases
@@ -1763,7 +1763,38 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
               <X className="h-3 w-3" /> Cerrar
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground mt-1">Vinculación a fases y cronograma — próximamente</p>
+          <div className="space-y-2">
+            <Label className="text-xs font-medium">Fase asociada</Label>
+            <Select
+              value={item.phase_id || 'none'}
+              onValueChange={async (value) => {
+                const newPhaseId = value === 'none' ? null : value;
+                const { error } = await supabase.from('tolosa_items').update({ phase_id: newPhaseId }).eq('id', item.id);
+                if (error) { toast.error('Error al guardar fase'); }
+                else { toast.success('Fase actualizada'); fetchItems(); }
+              }}
+            >
+              <SelectTrigger className="bg-background">
+                <SelectValue placeholder="Seleccionar fase..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Sin fase</SelectItem>
+                {phases.map(phase => (
+                  <SelectItem key={phase.id} value={phase.id}>
+                    {phase.code ? `${phase.code} — ` : ''}{phase.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {item.phase_id && (() => {
+              const phase = phases.find(p => p.id === item.phase_id);
+              return phase?.start_date ? (
+                <p className="text-xs text-muted-foreground">
+                  Inicio fase: {new Date(phase.start_date).toLocaleDateString('es-ES')}
+                </p>
+              ) : null;
+            })()}
+          </div>
         </div>
       );
       case 'cuanto': {

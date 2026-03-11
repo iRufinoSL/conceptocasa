@@ -438,6 +438,12 @@ export function TolosaCardView({
                     {item.address_city || 'Loc'}
                   </Badge>
                 )}
+                {phaseName && (
+                  <Badge variant="outline" className="text-[8px] gap-0.5 px-1 py-0 border-purple-300 text-purple-700 dark:border-purple-700 dark:text-purple-300">
+                    <Clock className="h-2 w-2" />
+                    {phaseName.code ? `${phaseName.code}` : phaseName.name}
+                  </Badge>
+                )}
               </div>
             )}
           </div>

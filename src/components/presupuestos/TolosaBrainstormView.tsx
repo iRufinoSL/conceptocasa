@@ -2183,6 +2183,17 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
         <div className="flex flex-wrap gap-2 items-center">
           {DIMENSION_LINKS.map(dim => {
             const Icon = dim.icon;
+            if (dim.key === 'cuando') {
+              return (
+                <button
+                  key={dim.key}
+                  onClick={() => setCuandoListOpen(prev => !prev)}
+                  className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors cursor-pointer ${dim.color} ${cuandoListOpen ? 'ring-2 ring-purple-400' : ''}`}
+                >
+                  <Icon className="h-3 w-3" /> {dim.label}
+                </button>
+              );
+            }
             return (
               <Badge key={dim.key} variant="outline" className={`gap-1 ${dim.color}`}>
                 <Icon className="h-3 w-3" /> {dim.label}

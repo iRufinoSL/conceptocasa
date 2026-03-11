@@ -182,6 +182,10 @@ const emptyForm: ActivityForm = {
   work_area_ids: [],
   actual_start_date: '',
   actual_end_date: '',
+  activity_type: 'normal',
+  parent_activity_id: '',
+  estimation_amount: '',
+  estimation_vat_percent: '21',
 };
 
 export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStartDate, budgetEndDate, initialActivityId, onClearInitialActivityId }: BudgetActivitiesTabProps) {

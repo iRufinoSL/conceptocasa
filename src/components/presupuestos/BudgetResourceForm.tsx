@@ -94,6 +94,7 @@ export function BudgetResourceForm({
     purchase_units: null as number | null,
     purchase_unit_measure: '',
     purchase_unit_cost: null as number | null,
+    is_estimation: false,
   });
 
   // Calculate end date for tasks

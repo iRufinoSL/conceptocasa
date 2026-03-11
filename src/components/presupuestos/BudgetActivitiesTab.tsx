@@ -2477,6 +2477,12 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                             </DropdownMenuItem>
                             {isAdmin && (
                               <>
+                                {activity.activity_type !== 'estimacion' && (
+                                  <DropdownMenuItem onClick={() => handleNewEstimation(activity)}>
+                                    <Target className="h-4 w-4 mr-2" />
+                                    Nueva Estimación
+                                  </DropdownMenuItem>
+                                )}
                                 <DropdownMenuItem onClick={() => handleDuplicate(activity)}>
                                   <Copy className="h-4 w-4 mr-2" />
                                   Duplicar

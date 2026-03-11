@@ -894,7 +894,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
     setIsSaving(true);
 
     try {
-      const data = {
+      const data: any = {
         budget_id: budgetId,
         name: form.name.trim(),
         code: form.code.trim(),
@@ -909,6 +909,8 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
         tolerance_days: form.tolerance_days ? parseInt(form.tolerance_days) : null,
         actual_start_date: form.actual_start_date || null,
         actual_end_date: form.actual_end_date || null,
+        activity_type: form.activity_type || 'normal',
+        parent_activity_id: form.parent_activity_id || null,
       };
 
       let savedActivityId: string | null = null;

@@ -227,6 +227,16 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
   const [resourceFormOpen, setResourceFormOpen] = useState(false);
   const [editingResourceForForm, setEditingResourceForForm] = useState<any>(null);
 
+  // Duplicate activity dialog state
+  const [duplicateActivityDialogOpen, setDuplicateActivityDialogOpen] = useState(false);
+  const [duplicatingActivity, setDuplicatingActivity] = useState<BudgetActivity | null>(null);
+  const [dupActType, setDupActType] = useState<'normal' | 'estimacion'>('normal');
+  const [dupActName, setDupActName] = useState('');
+  const [dupActUnits, setDupActUnits] = useState('1');
+  const [dupActUnitPrice, setDupActUnitPrice] = useState('');
+  const [dupActVatPercent, setDupActVatPercent] = useState('21');
+  const [isDuplicatingActivity, setIsDuplicatingActivity] = useState(false);
+
   const [existingResourcePickerOpen, setExistingResourcePickerOpen] = useState(false);
   const [existingResources, setExistingResources] = useState<ExistingBudgetResource[]>([]);
   const [existingResourcesLoading, setExistingResourcesLoading] = useState(false);

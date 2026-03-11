@@ -38,6 +38,7 @@ interface BudgetActivity {
   actual_start_date: string | null;
   actual_end_date: string | null;
   depends_on_activity_id: string | null;
+  activity_type: string;
 }
 
 interface HierarchicalGanttViewProps {

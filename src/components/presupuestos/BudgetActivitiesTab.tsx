@@ -2291,7 +2291,15 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                         }}
                       />
                     </TableCell>
-                    <TableCell className="font-mono text-sm">{generateActivityId(activity)}</TableCell>
+                    <TableCell className="font-mono text-sm">
+                      <div className="flex items-center gap-1.5">
+                        {activity.activity_type === 'estimacion' && (
+                          <Badge className="bg-amber-500 text-white text-[10px] px-1 py-0">Est</Badge>
+                        )}
+                        {activity.parent_activity_id && <span className="text-muted-foreground">↳</span>}
+                        {generateActivityId(activity)}
+                      </div>
+                    </TableCell>
                     <TableCell className="text-center">
                       {canEditActivity(activity.id) ? (
                         <button

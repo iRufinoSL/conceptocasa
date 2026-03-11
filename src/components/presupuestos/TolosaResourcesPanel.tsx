@@ -496,6 +496,9 @@ export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentIte
                   <tr key={r.id} className="border-t hover:bg-accent/20 transition-colors">
                     <td className="px-3 py-1.5">
                       <span className="font-medium">{r.name}</span>
+                      {r.is_estimation && (
+                        <Badge className="ml-1 text-[8px] bg-amber-100 text-amber-800 border-amber-300" variant="outline">Est.</Badge>
+                      )}
                       {r.description && (
                         <span className="text-xs text-muted-foreground ml-1 truncate">— {r.description}</span>
                       )}

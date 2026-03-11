@@ -700,6 +700,10 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
       work_area_ids: fetchedWorkAreaIds,
       actual_start_date: activity.actual_start_date || '',
       actual_end_date: activity.actual_end_date || '',
+      activity_type: activity.activity_type || 'normal',
+      parent_activity_id: activity.parent_activity_id || '',
+      estimation_amount: '',
+      estimation_vat_percent: '21',
     });
     
     // Reset search state

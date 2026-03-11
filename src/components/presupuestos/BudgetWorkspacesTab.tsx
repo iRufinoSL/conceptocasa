@@ -3769,6 +3769,9 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
                      initialRulerLines={getSavedRulerLines(`sec_${r.id}_${view.sectionId}`)}
                      onSaveRulerLines={(lines) => saveRulerLines(`sec_${r.id}_${view.sectionId}`, lines)}
                      onWallSelect={(wallDbIdx) => openWallPanel(r.id, wallDbIdx, 'xy')}
+                     ridgeLine={ridgeLine}
+                     sectionType={isLongitudinal ? 'longitudinal' : 'transversal'}
+                     sectionAxisValue={parseFloat(String(section.axisValue)) || 0}
                    />
                    {/* Sibling workspace inline property editor (Y/X) */}
                    {selectedOtherWorkspaceId && (() => {

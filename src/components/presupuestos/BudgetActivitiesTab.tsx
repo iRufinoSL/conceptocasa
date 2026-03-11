@@ -3888,8 +3888,44 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
               </div>
             </div>
 
-            {/* Time Management Fields */}
-            <div className="grid grid-cols-4 gap-4 p-3 border rounded-lg bg-muted/30">
+            {/* Time Management Fields - CUÁNDO? */}
+            <div className="border-t pt-4 mt-4">
+              <Label className="text-base font-semibold mb-3 block flex items-center gap-2">
+                <Clock className="h-4 w-4" />
+                CUÁNDO?
+              </Label>
+              <div className="space-y-3">
+                {/* Phase selector in CUÁNDO section */}
+                <div className="space-y-2">
+                  <Label htmlFor="phase_cuando">Fase de la Actividad</Label>
+                  <Select 
+                    value={form.phase_id || 'none'} 
+                    onValueChange={(value) => {
+                      const newPhaseId = value === 'none' ? '' : value;
+                      if (newPhaseId && !form.start_date) {
+                        const phase = phases.find(p => p.id === newPhaseId);
+                        if (phase?.start_date) {
+                          setForm({ ...form, phase_id: newPhaseId, start_date: phase.start_date });
+                          return;
+                        }
+                      }
+                      setForm({ ...form, phase_id: newPhaseId });
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar fase..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Sin fase</SelectItem>
+                      {phases.map(phase => (
+                        <SelectItem key={phase.id} value={phase.id}>
+                          {phase.code} {phase.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              <div className="grid grid-cols-4 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="start_date">Fecha Inicio</Label>
                 <Input

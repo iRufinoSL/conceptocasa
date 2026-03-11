@@ -1823,9 +1823,9 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
       case 'quien': return renderQuienPanel(item);
       case 'como': return renderComoPanel(item);
       case 'cuando': return (
-        <div className="p-3 rounded-lg border border-purple-200 bg-purple-50/50 dark:border-purple-800 dark:bg-purple-950/30 space-y-3">
+        <div className="p-3 rounded-lg border border-orange-200 bg-orange-50/50 dark:border-orange-800 dark:bg-orange-950/30 space-y-3">
           <div className="flex items-center justify-between">
-            <h4 className="text-sm font-semibold flex items-center gap-2 text-purple-700 dark:text-purple-400">
+            <h4 className="text-sm font-semibold flex items-center gap-2 text-orange-700 dark:text-orange-400">
               <Clock className="h-4 w-4" /> CUÁNDO? — Plazos y fases
             </h4>
             <Button size="sm" variant="ghost" className="text-xs h-7 gap-1 text-muted-foreground" onClick={() => setDimension(item.id, '')}>

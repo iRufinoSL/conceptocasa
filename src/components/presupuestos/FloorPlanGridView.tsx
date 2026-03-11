@@ -662,14 +662,13 @@ export function FloorPlanGridView({
           {renderOpeningMarks(room, 3, 'bottom', width, height)}
           {renderOpeningMarks(room, 4, 'left', width, height)}
 
-          <div className="font-extrabold text-center max-w-full px-0.5 leading-tight break-words" style={{ fontSize: `${nameFontSize}px`, lineHeight: '1.2', textShadow: '0 0 3px white, 0 0 3px white' }}>{room.name}</div>
-          <div className="font-mono leading-tight text-center font-bold" style={{ fontSize: `${Math.max(9, m2FontSize - 1)}px`, textShadow: '0 0 3px white, 0 0 3px white' }}>
+          <div className="font-extrabold text-center max-w-full px-0.5 leading-tight break-words" style={{ fontSize: `${nameFontSize}px`, lineHeight: '1.2', textShadow: '0 0 4px white, 0 0 4px white, 0 0 6px white' }}>{room.name}</div>
+          <div className="font-mono leading-tight text-center font-bold" style={{ fontSize: `${m2FontSize}px`, textShadow: '0 0 4px white, 0 0 4px white, 0 0 6px white' }}>
             <span>C={builtM2.toFixed(2)}</span>
             <span className="mx-0.5">·</span>
             <span>U={usableM2.toFixed(2)}</span>
           </div>
-          <div style={{ fontSize: `${dimFontSize}px`, fontWeight: 700, textShadow: '0 0 3px white, 0 0 3px white' }}>{room.width.toFixed(1)}×{room.length.toFixed(1)}</div>
-          <Badge variant="outline" className="px-0.5 py-0 mt-0.5 font-bold" style={{ fontSize: `${coordFontSize}px`, height: `${Math.max(14, Math.round(14 * fontScale))}px` }}>{coord}</Badge>
+          <div style={{ fontSize: `${dimFontSize}px`, fontWeight: 700, textShadow: '0 0 4px white, 0 0 4px white' }}>{room.width.toFixed(1)}×{room.length.toFixed(1)}</div>
 
           {multiSelectMode && (
             <div className={`absolute top-0.5 right-0.5 w-3 h-3 rounded-full border ${isMultiSelected ? 'bg-blue-500 border-blue-500' : 'border-muted-foreground/50 bg-background'}`} />

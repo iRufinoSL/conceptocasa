@@ -2248,72 +2248,136 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
               Solo Estimaciones
             </Button>
           </div>
-          <div className="border rounded overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-muted/50 text-xs text-muted-foreground">
-                  <th className="text-left px-3 py-1.5 font-medium">Código</th>
-                  <th className="text-left px-3 py-1.5 font-medium">Actividad</th>
-                  <th className="text-left px-3 py-1.5 font-medium">Fase</th>
-                  <th className="text-right px-3 py-1.5 font-medium">Subtotal</th>
-                  <th className="text-right px-3 py-1.5 font-medium">IVA</th>
-                  <th className="text-right px-3 py-1.5 font-medium">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(() => {
-                  const filtered = items.filter(item => {
-                    const isEst = item.code?.includes('.E') || item.name?.includes('(Est.)');
-                    if (cuandoFilter === 'normal') return !isEst;
-                    if (cuandoFilter === 'estimacion') return isEst;
-                    return true;
-                  });
-                  let grandSubtotal = 0;
-                  let grandVat = 0;
-                  let grandTotal = 0;
-                  const rows = filtered.map(item => {
-                    const isEst = item.code?.includes('.E') || item.name?.includes('(Est.)');
-                    const cuanto = getCuanto(item.id);
+          {(() => {
+            const filtered = items.filter(item => {
+              const isEst = item.code?.includes('.E') || item.name?.includes('(Est.)');
+              if (cuandoFilter === 'normal') return !isEst;
+              if (cuandoFilter === 'estimacion') return isEst;
+              return true;
+            });
+
+            // Group by phase
+            const grouped = new Map<string, { phase: PhaseInfo | null; items: typeof filtered }>();
+            const NO_PHASE_KEY = '__no_phase__';
+            for (const item of filtered) {
+              const phase = item.phase_id ? phases.find(p => p.id === item.phase_id) || null : null;
+              const key = phase ? phase.id : NO_PHASE_KEY;
+              if (!grouped.has(key)) grouped.set(key, { phase, items: [] });
+              grouped.get(key)!.items.push(item);
+            }
+
+            // Sort groups: phases with code first (by code), then unnamed phases, then "Sin fase" last
+            const sortedGroups = [...grouped.entries()].sort(([kA, gA], [kB, gB]) => {
+              if (kA === NO_PHASE_KEY) return 1;
+              if (kB === NO_PHASE_KEY) return -1;
+              const cA = gA.phase?.code || '';
+              const cB = gB.phase?.code || '';
+              if (cA && cB) return cA.localeCompare(cB, undefined, { numeric: true });
+              if (cA) return -1;
+              if (cB) return 1;
+              return (gA.phase?.name || '').localeCompare(gB.phase?.name || '');
+            });
+
+            // Sort items within each group by code
+            for (const [, g] of sortedGroups) {
+              g.items.sort((a, b) => (a.code || '').localeCompare(b.code || '', undefined, { numeric: true }));
+            }
+
+            let grandSubtotal = 0;
+            let grandVat = 0;
+            let grandTotal = 0;
+            filtered.forEach(item => {
+              const sub = itemSubtotals[item.id] || 0;
+              grandSubtotal += sub;
+              grandVat += sub * 0.21;
+              grandTotal += sub + sub * 0.21;
+            });
+
+            return (
+              <div className="space-y-2">
+                {sortedGroups.map(([groupKey, group]) => {
+                  let groupSub = 0;
+                  let groupVat = 0;
+                  group.items.forEach(item => {
                     const sub = itemSubtotals[item.id] || 0;
-                    // Estimate VAT at 21% if no specific data
-                    const vatAmount = sub * 0.21;
-                    const total = sub + vatAmount;
-                    grandSubtotal += sub;
-                    grandVat += vatAmount;
-                    grandTotal += total;
-                    const phase = item.phase_id ? phases.find(p => p.id === item.phase_id) : null;
-                    return (
-                      <tr key={item.id} className={`border-t hover:bg-accent/20 transition-colors ${isEst ? 'bg-amber-50/50 dark:bg-amber-950/20' : ''}`}>
-                        <td className="px-3 py-1.5 font-mono text-xs">
-                          <Badge variant="outline" className={`text-[10px] ${isEst ? 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/60 dark:text-amber-300' : ''}`}>
-                            {item.code}
-                          </Badge>
-                        </td>
-                        <td className="px-3 py-1.5 truncate max-w-[200px]">{item.name}</td>
-                        <td className="px-3 py-1.5 text-xs text-muted-foreground">
-                          {phase ? (phase.code ? `${phase.code} — ${phase.name}` : phase.name) : '—'}
-                        </td>
-                        <td className="px-3 py-1.5 text-right font-mono text-xs">{sub > 0 ? formatCurrency(sub) : '—'}</td>
-                        <td className="px-3 py-1.5 text-right font-mono text-xs text-muted-foreground">{sub > 0 ? formatCurrency(vatAmount) : '—'}</td>
-                        <td className="px-3 py-1.5 text-right font-mono text-xs font-semibold">{sub > 0 ? formatCurrency(total) : '—'}</td>
-                      </tr>
-                    );
+                    groupSub += sub;
+                    groupVat += sub * 0.21;
                   });
+                  const groupTotal = groupSub + groupVat;
+                  const phaseLabel = group.phase
+                    ? (group.phase.code ? `${group.phase.code} — ${group.phase.name}` : group.phase.name)
+                    : 'Sin fase asignada';
+
                   return (
-                    <>
-                      {rows}
-                      <tr className="border-t bg-muted/30 font-semibold text-xs">
-                        <td colSpan={3} className="px-3 py-2">Total ({filtered.length} actividades)</td>
-                        <td className="px-3 py-2 text-right font-mono">{formatCurrency(grandSubtotal)}</td>
-                        <td className="px-3 py-2 text-right font-mono text-muted-foreground">{formatCurrency(grandVat)}</td>
-                        <td className="px-3 py-2 text-right font-mono font-bold">{formatCurrency(grandTotal)}</td>
-                      </tr>
-                    </>
+                    <Collapsible key={groupKey} defaultOpen>
+                      <CollapsibleTrigger className="flex items-center justify-between w-full px-3 py-2 rounded-md bg-muted/40 hover:bg-muted/60 transition-colors text-left">
+                        <div className="flex items-center gap-2">
+                          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground transition-transform [[data-state=open]>&]:rotate-90" />
+                          <span className="text-xs font-semibold text-purple-700 dark:text-purple-400">{phaseLabel}</span>
+                          <Badge variant="outline" className="text-[9px] h-4">{group.items.length}</Badge>
+                        </div>
+                        <span className="text-[10px] font-mono font-semibold text-foreground">{groupSub > 0 ? formatCurrency(groupTotal) : '—'}</span>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <div className="border rounded overflow-hidden mt-1 ml-4">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="bg-muted/50 text-xs text-muted-foreground">
+                                <th className="text-left px-3 py-1 font-medium">Código</th>
+                                <th className="text-left px-3 py-1 font-medium">Actividad</th>
+                                <th className="text-right px-3 py-1 font-medium">Subtotal</th>
+                                <th className="text-right px-3 py-1 font-medium">IVA</th>
+                                <th className="text-right px-3 py-1 font-medium">Total</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {group.items.map(item => {
+                                const isEst = item.code?.includes('.E') || item.name?.includes('(Est.)');
+                                const sub = itemSubtotals[item.id] || 0;
+                                const vatAmount = sub * 0.21;
+                                const total = sub + vatAmount;
+                                return (
+                                  <tr key={item.id} className={`border-t hover:bg-accent/20 transition-colors ${isEst ? 'bg-amber-50/50 dark:bg-amber-950/20' : ''}`}>
+                                    <td className="px-3 py-1.5 font-mono text-xs">
+                                      <Badge variant="outline" className={`text-[10px] ${isEst ? 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/60 dark:text-amber-300' : ''}`}>
+                                        {item.code}
+                                      </Badge>
+                                    </td>
+                                    <td className="px-3 py-1.5 truncate max-w-[200px]">{item.name}</td>
+                                    <td className="px-3 py-1.5 text-right font-mono text-xs">{sub > 0 ? formatCurrency(sub) : '—'}</td>
+                                    <td className="px-3 py-1.5 text-right font-mono text-xs text-muted-foreground">{sub > 0 ? formatCurrency(vatAmount) : '—'}</td>
+                                    <td className="px-3 py-1.5 text-right font-mono text-xs font-semibold">{sub > 0 ? formatCurrency(total) : '—'}</td>
+                                  </tr>
+                                );
+                              })}
+                              <tr className="border-t bg-muted/20 text-xs font-medium">
+                                <td colSpan={2} className="px-3 py-1.5 text-muted-foreground">Subtotal fase</td>
+                                <td className="px-3 py-1.5 text-right font-mono">{groupSub > 0 ? formatCurrency(groupSub) : '—'}</td>
+                                <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">{groupVat > 0 ? formatCurrency(groupVat) : '—'}</td>
+                                <td className="px-3 py-1.5 text-right font-mono font-semibold">{groupTotal > 0 ? formatCurrency(groupTotal) : '—'}</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
                   );
-                })()}
-              </tbody>
-            </table>
-          </div>
+                })}
+
+                {/* Grand total */}
+                <div className="flex items-center justify-between px-3 py-2 rounded-md bg-purple-100/60 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800">
+                  <span className="text-xs font-semibold text-purple-700 dark:text-purple-400">
+                    Total ({filtered.length} actividades)
+                  </span>
+                  <div className="flex gap-4 text-xs font-mono">
+                    <span>{formatCurrency(grandSubtotal)}</span>
+                    <span className="text-muted-foreground">{formatCurrency(grandVat)}</span>
+                    <span className="font-bold">{formatCurrency(grandTotal)}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
 

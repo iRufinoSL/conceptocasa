@@ -252,7 +252,10 @@ export function TolosaCardView({
     const isExpanded = expandedIds.has(item.id);
     const summary = itemSummaries[item.id];
     const cuanto = getCuanto(item.id);
-    const palette = SIBLING_PALETTES[parentColorMap[item.id] ?? 0];
+    const isEst = item.code?.includes('.E') || item.name?.includes('(Est.)');
+    const palette = isEst
+      ? { bg: 'bg-amber-50 dark:bg-amber-950/40', border: 'border-amber-400 dark:border-amber-600', header: 'bg-amber-100 dark:bg-amber-900/60', line: '#fbbf24' }
+      : SIBLING_PALETTES[parentColorMap[item.id] ?? 0];
     const clientName = item.client_contact_id ? contactCache[item.client_contact_id] : null;
     const hasLocation = !!(item.address_city || item.address_street);
     const isFocused = focusedId === item.id;

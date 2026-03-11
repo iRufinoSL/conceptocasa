@@ -2305,6 +2305,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
             handleAddFromGraph(parentId, name);
           }}
           onDeleteItem={handleDeleteById}
+          onDuplicate={(item, asSub) => openDuplicateDialog(item as any, asSub)}
         />
       ) : (
         <div className="space-y-1">

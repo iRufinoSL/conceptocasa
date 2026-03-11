@@ -125,7 +125,7 @@ const DIMENSION_LINKS = [
   { key: 'como', label: 'CÓMO?', icon: Wrench, color: 'text-blue-600 bg-blue-50 border-blue-200 dark:text-blue-400 dark:bg-blue-950 dark:border-blue-800', hint: 'Actividades / Perfil' },
   { key: 'quien', label: 'QUIÉN?', icon: Users, color: 'text-emerald-600 bg-emerald-50 border-emerald-200 dark:text-emerald-400 dark:bg-emerald-950 dark:border-emerald-800', hint: 'Cliente / Proveedor' },
   { key: 'donde', label: 'DÓNDE?', icon: MapPin, color: 'text-amber-600 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-950 dark:border-amber-800', hint: 'Dirección / Catastro' },
-  { key: 'cuando', label: 'CUÁNDO?', icon: Clock, color: 'text-purple-600 bg-purple-50 border-purple-200 dark:text-purple-400 dark:bg-purple-950 dark:border-purple-800', hint: 'Fases / Plazos' },
+  { key: 'cuando', label: 'CUÁNDO?', icon: Clock, color: 'text-orange-600 bg-orange-50 border-orange-200 dark:text-orange-400 dark:bg-orange-950 dark:border-orange-800', hint: 'Fases / Plazos' },
   { key: 'cuanto', label: 'CUÁNTO?', icon: DollarSign, color: 'text-rose-600 bg-rose-50 border-rose-200 dark:text-rose-400 dark:bg-rose-950 dark:border-rose-800', hint: 'Costes / SubTotal' },
 ];
 

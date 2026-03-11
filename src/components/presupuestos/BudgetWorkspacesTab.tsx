@@ -437,6 +437,9 @@ interface GridPolygonDrawerProps {
   activeWalls?: WallData[];
   initialRulerLines?: RulerLine[];
   onSaveRulerLines?: (lines: RulerLine[]) => void;
+  ridgeLine?: { x1: number; y1: number; x2: number; y2: number; z: number } | null;
+  sectionType?: 'vertical' | 'longitudinal' | 'transversal';
+  sectionAxisValue?: number;
 }
 
 const RULER_COLOR = 'hsl(30 90% 50%)';

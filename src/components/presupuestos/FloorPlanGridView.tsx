@@ -682,10 +682,10 @@ export function FloorPlanGridView({
         <div
           className="relative"
           style={{
-            width: COL_HEADER_W + totalCols * CS + 400,
-            height: ROW_HEADER_H + totalRows * CS + 300,
-            marginLeft: COL_HEADER_W + 120,
-            marginTop: ROW_HEADER_H + 100,
+            width: COL_HEADER_W + totalCols * CS + 400 + 4 * CS,
+            height: ROW_HEADER_H + totalRows * CS + 300 + 4 * CS,
+            marginLeft: COL_HEADER_W + 120 + 3 * CS,
+            marginTop: ROW_HEADER_H + 100 + 3 * CS,
           }}
         >
           {/* Column headers — separated ~10px from grid edge for readability */}

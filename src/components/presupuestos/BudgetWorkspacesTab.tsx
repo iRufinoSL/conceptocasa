@@ -3116,6 +3116,38 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
     restoreReturnTo3D();
   };
 
+  /** Sync floor_polygon changes to customSections polygons so Plano view stays in sync */
+  const syncFloorPolygonToSections = async (roomId: string, vertices: PolygonVertex[]) => {
+    if (!floorPlan?.id) return;
+    let parsed: any = {};
+    try {
+      parsed = typeof floorPlan.custom_corners === 'string'
+        ? JSON.parse(floorPlan.custom_corners) : (floorPlan.custom_corners || {});
+    } catch { parsed = {}; }
+    const sections: CustomSection[] = parsed.customSections || [];
+    const room = rooms.find(r => r.id === roomId);
+    const roomName = room?.name || 'Espacio';
+    let changed = false;
+    // Find the vertical section for this room and update its polygon entry
+    const vSectionId = room?.vertical_section_id;
+    for (const s of sections) {
+      if (!s.polygons) continue;
+      const pIdx = s.polygons.findIndex(p => p.id === roomId);
+      if (pIdx >= 0) {
+        s.polygons[pIdx] = { ...s.polygons[pIdx], vertices: vertices.map(v => ({ x: v.x, y: v.y, z: 0 })) };
+        changed = true;
+      } else if (vSectionId && s.id === vSectionId) {
+        // If room has a vertical_section_id but no polygon entry yet, add it
+        s.polygons.push({ id: roomId, name: roomName, vertices: vertices.map(v => ({ x: v.x, y: v.y, z: 0 })) });
+        changed = true;
+      }
+    }
+    if (changed) {
+      parsed.customSections = sections;
+      await supabase.from('budget_floor_plans').update({ custom_corners: parsed }).eq('id', floorPlan.id);
+    }
+  };
+
   const saveGridEditorPolygon = async (roomId: string) => {
     if (gridEditVertices.length < 3) { toast.error('Mínimo 3 vértices'); return; }
     const bbox = polygonBBox(gridEditVertices);
@@ -3126,6 +3158,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
     }).eq('id', roomId);
     // Smart rebuild: only recreate walls if vertex count changed
     await rebuildWallsSmart(roomId, gridEditVertices.length);
+    // Sync polygon to customSections so Plano view updates
+    await syncFloorPolygonToSections(roomId, gridEditVertices);
     toast.success('Polígono actualizado');
     setGridEditId(null);
     await refetch();

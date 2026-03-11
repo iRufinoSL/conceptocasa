@@ -1,0 +1,1 @@
+ALTER TABLE public.tolosa_items ADD COLUMN phase_id UUID REFERENCES public.budget_phases(id) ON DELETE SET NULL;

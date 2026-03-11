@@ -6,6 +6,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 import {
   Plus, ChevronRight, ChevronDown, Brain, Trash2, Edit2, Check, X,
   HelpCircle, Copy, Wrench, Users, MapPin, Clock, DollarSign,
@@ -63,6 +65,14 @@ interface TolosItem {
   supplier_contact_id: string | null;
   housing_profile_id: string | null;
   is_executed: boolean;
+  phase_id: string | null;
+}
+
+interface PhaseInfo {
+  id: string;
+  code: string | null;
+  name: string;
+  start_date: string | null;
 }
 
 interface ContactInfo {
@@ -158,6 +168,26 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
   const [deleteConfirm, setDeleteConfirm] = useState<{ item: TolosItem; descendants: TolosItem[] } | null>(null);
   const [graphAddName, setGraphAddName] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+
+  const [phases, setPhases] = useState<PhaseInfo[]>([]);
+  // Duplicate dialog state
+  const [dupDialogOpen, setDupDialogOpen] = useState(false);
+  const [dupItem, setDupItem] = useState<TolosItem | null>(null);
+  const [dupAsSub, setDupAsSub] = useState(false);
+  const [dupType, setDupType] = useState<'normal' | 'estimacion'>('normal');
+  const [dupName, setDupName] = useState('');
+  const [dupUnits, setDupUnits] = useState('1');
+  const [dupUnitPrice, setDupUnitPrice] = useState('');
+  const [dupVatPercent, setDupVatPercent] = useState('21');
+
+  const fetchPhases = useCallback(async () => {
+    const { data } = await supabase
+      .from('budget_phases')
+      .select('id, code, name, start_date')
+      .eq('budget_id', budgetId)
+      .order('order_index');
+    setPhases((data as PhaseInfo[]) || []);
+  }, [budgetId]);
 
   const bumpMeasurementVersion = useCallback((itemId: string) => {
     setMeasurementVersions(prev => ({ ...prev, [itemId]: (prev[itemId] || 0) + 1 }));
@@ -434,7 +464,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
     setHousingProfiles((data as ProfileInfo[]) || []);
   }, []);
 
-  useEffect(() => { fetchItems(); fetchContacts(); fetchHousingProfiles(); }, [fetchItems, fetchContacts, fetchHousingProfiles]);
+  useEffect(() => { fetchItems(); fetchContacts(); fetchHousingProfiles(); fetchPhases(); }, [fetchItems, fetchContacts, fetchHousingProfiles, fetchPhases]);
 
   // Build set of non-executed codes for cascading filter
   const inactiveCodes = useMemo(() => {
@@ -632,7 +662,25 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
     }
   };
 
-  const duplicateItem = async (item: TolosItem, asSub: boolean) => {
+  const openDuplicateDialog = (item: TolosItem, asSub: boolean) => {
+    setDupItem(item);
+    setDupAsSub(asSub);
+    setDupType('normal');
+    setDupName(item.name + ' (copia)');
+    setDupUnits('1');
+    setDupUnitPrice('');
+    setDupVatPercent('21');
+    setDupDialogOpen(true);
+  };
+
+  const executeDuplicate = async () => {
+    if (!dupItem) return;
+    const item = dupItem;
+    const asSub = dupAsSub;
+    const isEstimacion = dupType === 'estimacion';
+    const trimmedName = dupName.trim();
+    if (!trimmedName) { toast.error('El nombre es obligatorio'); return; }
+
     const targetParentId = asSub ? item.id : item.parent_id;
     const code = getNextCode(targetParentId);
     const siblings = targetParentId ? getChildren(targetParentId) : rootItems;
@@ -642,8 +690,8 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
       .insert({
         budget_id: budgetId,
         parent_id: targetParentId,
-        code,
-        name: item.name + ' (copia)',
+        code: isEstimacion ? code + '.E' : code,
+        name: trimmedName,
         description: item.description,
         order_index: siblings.length,
         address_street: item.address_street,
@@ -657,6 +705,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
         client_contact_id: item.client_contact_id,
         supplier_contact_id: item.supplier_contact_id,
         housing_profile_id: item.housing_profile_id,
+        phase_id: item.phase_id,
       })
       .select()
       .single();
@@ -666,13 +715,51 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
       return;
     }
 
-    const children = getChildren(item.id);
-    if (children.length > 0) {
-      await duplicateChildren(children, newItem.id, newItem.code);
+    if (isEstimacion) {
+      // Create a linked budget_activity with estimation type + resource
+      const units = parseFloat(dupUnits) || 1;
+      const unitPrice = parseFloat(dupUnitPrice) || 0;
+      const vatPercent = parseFloat(dupVatPercent) || 21;
+
+      const { data: newActivity } = await supabase
+        .from('budget_activities')
+        .insert({
+          budget_id: budgetId,
+          code: `Est.${code}`,
+          name: trimmedName,
+          activity_type: 'estimacion',
+          is_executed: true,
+        })
+        .select()
+        .single();
+
+      if (newActivity) {
+        await supabase.from('budget_activity_resources').insert({
+          budget_id: budgetId,
+          activity_id: newActivity.id,
+          name: trimmedName,
+          manual_units: units,
+          external_unit_cost: unitPrice,
+          purchase_vat_percent: vatPercent,
+          resource_type: 'material',
+        });
+        // Link resource to tolosa item
+        await supabase.from('tolosa_item_resources').insert({
+          tolosa_item_id: (newItem as any).id,
+          resource_id: newActivity.id,
+        });
+      }
+    } else {
+      const children = getChildren(item.id);
+      if (children.length > 0) {
+        await duplicateChildren(children, (newItem as any).id, (newItem as any).code);
+      }
     }
 
-    toast.success(asSub ? 'Duplicado como sub-QUÉ?' : 'QUÉ? duplicado');
+    toast.success(isEstimacion ? 'Estimación creada' : (asSub ? 'Duplicado como sub-QUÉ?' : 'QUÉ? duplicado'));
     if (targetParentId) setExpandedIds(prev => new Set(prev).add(targetParentId));
+    setDupDialogOpen(false);
+    setDupItem(null);
     fetchItems();
   };
 
@@ -1667,7 +1754,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
       case 'quien': return renderQuienPanel(item);
       case 'como': return renderComoPanel(item);
       case 'cuando': return (
-        <div className="p-3 rounded-lg border border-purple-200 bg-purple-50/50 dark:border-purple-800 dark:bg-purple-950/30">
+        <div className="p-3 rounded-lg border border-purple-200 bg-purple-50/50 dark:border-purple-800 dark:bg-purple-950/30 space-y-3">
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-semibold flex items-center gap-2 text-purple-700 dark:text-purple-400">
               <Clock className="h-4 w-4" /> CUÁNDO? — Plazos y fases
@@ -1676,7 +1763,38 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
               <X className="h-3 w-3" /> Cerrar
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground mt-1">Vinculación a fases y cronograma — próximamente</p>
+          <div className="space-y-2">
+            <Label className="text-xs font-medium">Fase asociada</Label>
+            <Select
+              value={item.phase_id || 'none'}
+              onValueChange={async (value) => {
+                const newPhaseId = value === 'none' ? null : value;
+                const { error } = await supabase.from('tolosa_items').update({ phase_id: newPhaseId }).eq('id', item.id);
+                if (error) { toast.error('Error al guardar fase'); }
+                else { toast.success('Fase actualizada'); fetchItems(); }
+              }}
+            >
+              <SelectTrigger className="bg-background">
+                <SelectValue placeholder="Seleccionar fase..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Sin fase</SelectItem>
+                {phases.map(phase => (
+                  <SelectItem key={phase.id} value={phase.id}>
+                    {phase.code ? `${phase.code} — ` : ''}{phase.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {item.phase_id && (() => {
+              const phase = phases.find(p => p.id === item.phase_id);
+              return phase?.start_date ? (
+                <p className="text-xs text-muted-foreground">
+                  Inicio fase: {new Date(phase.start_date).toLocaleDateString('es-ES')}
+                </p>
+              ) : null;
+            })()}
+          </div>
         </div>
       );
       case 'cuanto': {
@@ -1929,11 +2047,11 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                 <Plus className="h-3.5 w-3.5" />
               </Button>
               <Button size="icon" variant="ghost" className="h-7 w-7" title="Duplicar como QUÉ?"
-                onClick={() => duplicateItem(item, false)}>
+                onClick={() => openDuplicateDialog(item, false)}>
                 <Copy className="h-3.5 w-3.5" />
               </Button>
               <Button size="icon" variant="ghost" className="h-7 w-7" title="Duplicar como sub-QUÉ?"
-                onClick={() => duplicateItem(item, true)}>
+                onClick={() => openDuplicateDialog(item, true)}>
                 <Plus className="h-3 w-3" /><Copy className="h-3 w-3" />
               </Button>
               <Button size="icon" variant="ghost" className="h-7 w-7"
@@ -2314,6 +2432,94 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Duplicate Dialog */}
+      <Dialog open={dupDialogOpen} onOpenChange={(open) => { if (!open) { setDupDialogOpen(false); setDupItem(null); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Duplicar "{dupItem?.name}"</DialogTitle>
+            <DialogDescription>
+              Elige el tipo de copia a crear.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Tipo de copia</Label>
+              <div className="flex gap-2">
+                <Button
+                  variant={dupType === 'normal' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setDupType('normal')}
+                >
+                  Normal
+                </Button>
+                <Button
+                  variant={dupType === 'estimacion' ? 'default' : 'outline'}
+                  size="sm"
+                  className={dupType === 'estimacion' ? 'bg-amber-600 hover:bg-amber-700 text-white' : ''}
+                  onClick={() => setDupType('estimacion')}
+                >
+                  Estimación
+                </Button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Nombre</Label>
+              <Input value={dupName} onChange={(e) => setDupName(e.target.value)} />
+            </div>
+            {dupType === 'estimacion' && (
+              <div className="space-y-3 border-t pt-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Unidades</Label>
+                    <Input type="number" value={dupUnits} onChange={(e) => setDupUnits(e.target.value)} min="0" step="0.01" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Importe / Ud</Label>
+                    <Input type="number" value={dupUnitPrice} onChange={(e) => setDupUnitPrice(e.target.value)} min="0" step="0.01" placeholder="0.00" />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">% IVA</Label>
+                  <Select value={dupVatPercent} onValueChange={setDupVatPercent}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">0%</SelectItem>
+                      <SelectItem value="4">4%</SelectItem>
+                      <SelectItem value="10">10%</SelectItem>
+                      <SelectItem value="21">21%</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {(() => {
+                  const subtotal = (parseFloat(dupUnits) || 0) * (parseFloat(dupUnitPrice) || 0);
+                  const vat = parseFloat(dupVatPercent) || 0;
+                  const totalWithVat = subtotal * (1 + vat / 100);
+                  return (
+                    <div className="grid grid-cols-2 gap-3 pt-2 border-t">
+                      <div className="text-center">
+                        <p className="text-xs text-muted-foreground">Total (sin IVA)</p>
+                        <p className="text-sm font-semibold">{formatCurrency(subtotal)}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-xs text-muted-foreground">Total (IVA incl.)</p>
+                        <p className="text-sm font-bold text-primary">{formatCurrency(totalWithVat)}</p>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setDupDialogOpen(false); setDupItem(null); }}>Cancelar</Button>
+            <Button onClick={executeDuplicate}>
+              <Copy className="h-4 w-4 mr-1" />
+              {dupType === 'estimacion' ? 'Crear Estimación' : 'Duplicar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

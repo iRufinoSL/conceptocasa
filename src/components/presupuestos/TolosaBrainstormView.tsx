@@ -2366,8 +2366,8 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
             });
 
             return (
-              <div className="space-y-2">
-                {/* Header: Budget name, Client, title */}
+              <div className="space-y-2" id="cuando-listing-content">
+                {/* Header: Budget name, Client, title + grand totals */}
                 <div className="px-3 py-2 rounded-md bg-purple-100/80 dark:bg-purple-900/40 border border-purple-200 dark:border-purple-800 space-y-0.5">
                   {budgetInfo.name && (
                     <div className="text-xs font-semibold text-foreground">{budgetInfo.name}</div>
@@ -2375,7 +2375,98 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                   {budgetInfo.clientName && (
                     <div className="text-xs text-muted-foreground">Cliente: {budgetInfo.clientName}</div>
                   )}
-                  <div className="text-xs font-medium text-purple-700 dark:text-purple-400">Actividades por Fases constructivas</div>
+                  <div className="text-xs font-medium text-purple-700 dark:text-purple-400 mt-1">
+                    Presupuesto de Actividades por Fases constructivas
+                  </div>
+                  <div className="flex gap-3 text-[10px] font-mono text-muted-foreground mt-0.5">
+                    <span>Subtotal: {formatCurrency(grandSubtotal)}</span>
+                    <span>IVA: {formatCurrency(grandVat)}</span>
+                    <span className="font-bold text-foreground">Total: {formatCurrency(grandTotal)}</span>
+                  </div>
+                </div>
+
+                {/* PDF Export button */}
+                <div className="flex justify-end">
+                  <Button size="sm" variant="outline" className="text-xs h-7 gap-1" onClick={() => {
+                    const doc = new jsPDF('p', 'mm', 'a4');
+                    const pageW = doc.internal.pageSize.getWidth();
+                    let y = 15;
+
+                    doc.setFontSize(12);
+                    doc.setFont('helvetica', 'bold');
+                    doc.text(budgetInfo.name || 'Presupuesto', 14, y);
+                    y += 6;
+                    if (budgetInfo.clientName) {
+                      doc.setFontSize(9);
+                      doc.setFont('helvetica', 'normal');
+                      doc.text(`Cliente: ${budgetInfo.clientName}`, 14, y);
+                      y += 5;
+                    }
+                    doc.setFontSize(10);
+                    doc.setFont('helvetica', 'bold');
+                    doc.text('Presupuesto de Actividades por Fases constructivas', 14, y);
+                    y += 5;
+                    doc.setFontSize(8);
+                    doc.setFont('helvetica', 'normal');
+                    doc.text(`Subtotal: ${formatCurrency(grandSubtotal)}   IVA: ${formatCurrency(grandVat)}   Total: ${formatCurrency(grandTotal)}`, 14, y);
+                    y += 8;
+
+                    for (const [, group] of sortedGroups) {
+                      let gSub = 0, gVat = 0;
+                      group.items.forEach(i => { const s = itemSubtotals[i.id] || 0; gSub += s; gVat += s * 0.21; });
+                      const gTotal = gSub + gVat;
+                      const phaseL = group.phase
+                        ? (group.phase.code ? `${group.phase.code} — ${group.phase.name}` : group.phase.name)
+                        : 'Sin fase asignada';
+
+                      doc.setFontSize(9);
+                      doc.setFont('helvetica', 'bold');
+                      const phaseText = `${phaseL}  —  ${formatCurrency(gTotal)}`;
+                      doc.text(phaseText, 14, y);
+                      y += 2;
+
+                      const rows = group.items.map(item => {
+                        const s = itemSubtotals[item.id] || 0;
+                        const v = s * 0.21;
+                        return [item.code || '', item.name || '', s > 0 ? formatCurrency(s) : '—', s > 0 ? formatCurrency(v) : '—', s > 0 ? formatCurrency(s + v) : '—'];
+                      });
+                      rows.push(['', 'Subtotal fase', formatCurrency(gSub), formatCurrency(gVat), formatCurrency(gTotal)]);
+
+                      autoTable(doc, {
+                        startY: y,
+                        head: [['Código', 'Actividad', 'Subtotal', 'IVA', 'Total']],
+                        body: rows,
+                        margin: { left: 14, right: 14 },
+                        styles: { fontSize: 7, cellPadding: 1.5, overflow: 'linebreak' },
+                        headStyles: { fillColor: [120, 80, 180], textColor: 255, fontStyle: 'bold', fontSize: 7 },
+                        columnStyles: {
+                          0: { cellWidth: 22 },
+                          1: { cellWidth: 'auto' },
+                          2: { cellWidth: 28, halign: 'right' },
+                          3: { cellWidth: 24, halign: 'right' },
+                          4: { cellWidth: 28, halign: 'right', fontStyle: 'bold' },
+                        },
+                        didParseCell: (data: any) => {
+                          if (data.section === 'body' && data.row.index === rows.length - 1) {
+                            data.cell.styles.fontStyle = 'bold';
+                            data.cell.styles.fillColor = [240, 235, 250];
+                          }
+                        },
+                      });
+                      y = (doc as any).lastAutoTable.finalY + 6;
+                      if (y > 270) { doc.addPage(); y = 15; }
+                    }
+
+                    // Grand total
+                    doc.setFontSize(10);
+                    doc.setFont('helvetica', 'bold');
+                    doc.text(`Total (${filtered.length} actividades):  Subtotal: ${formatCurrency(grandSubtotal)}  IVA: ${formatCurrency(grandVat)}  Total: ${formatCurrency(grandTotal)}`, 14, y);
+
+                    doc.save(`${budgetInfo.name || 'Presupuesto'}_Fases.pdf`);
+                    toast.success('PDF generado correctamente');
+                  }}>
+                    <FileText className="h-3 w-3" /> Imprimir PDF
+                  </Button>
                 </div>
 
                 {sortedGroups.map(([groupKey, group]) => {
@@ -2402,11 +2493,11 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                         <span className="text-[10px] font-mono font-semibold text-foreground shrink-0 ml-2">{groupSub > 0 ? formatCurrency(groupTotal) : '—'}</span>
                       </CollapsibleTrigger>
                       <CollapsibleContent>
-                        <div className="border rounded overflow-hidden mt-1 ml-4">
+                        <div className="border rounded overflow-x-auto mt-1 ml-4">
                           <table className="w-full text-sm table-fixed">
                             <colgroup>
-                              <col className="w-[70px]" />
-                              <col />
+                              <col className="w-[80px]" />
+                              <col style={{ width: 'auto' }} />
                               <col className="w-[90px]" />
                               <col className="w-[80px]" />
                               <col className="w-[90px]" />
@@ -2428,15 +2519,15 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                                 const total = sub + vatAmount;
                                 return (
                                   <tr key={item.id} className={`border-t hover:bg-accent/20 transition-colors ${isEst ? 'bg-amber-50/50 dark:bg-amber-950/20' : ''}`}>
-                                    <td className="px-2 py-1.5 font-mono text-xs align-top">
-                                      <Badge variant="outline" className={`text-[10px] ${isEst ? 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/60 dark:text-amber-300' : ''}`}>
+                                    <td className="px-2 py-1.5 font-mono text-[10px] align-top whitespace-nowrap">
+                                      <Badge variant="outline" className={`text-[9px] ${isEst ? 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/60 dark:text-amber-300' : ''}`}>
                                         {item.code}
                                       </Badge>
                                     </td>
                                     <td className="px-2 py-1.5 text-xs break-words whitespace-normal align-top">{item.name}</td>
-                                    <td className="px-2 py-1.5 text-right font-mono text-xs align-top">{sub > 0 ? formatCurrency(sub) : '—'}</td>
-                                    <td className="px-2 py-1.5 text-right font-mono text-xs text-muted-foreground align-top">{sub > 0 ? formatCurrency(vatAmount) : '—'}</td>
-                                    <td className="px-2 py-1.5 text-right font-mono text-xs font-semibold align-top">{sub > 0 ? formatCurrency(total) : '—'}</td>
+                                    <td className="px-2 py-1.5 text-right font-mono text-xs align-top whitespace-nowrap">{sub > 0 ? formatCurrency(sub) : '—'}</td>
+                                    <td className="px-2 py-1.5 text-right font-mono text-xs text-muted-foreground align-top whitespace-nowrap">{sub > 0 ? formatCurrency(vatAmount) : '—'}</td>
+                                    <td className="px-2 py-1.5 text-right font-mono text-xs font-semibold align-top whitespace-nowrap">{sub > 0 ? formatCurrency(total) : '—'}</td>
                                   </tr>
                                 );
                               })}

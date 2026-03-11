@@ -1026,7 +1026,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
       'border-l-blue-500',
       'border-l-emerald-500',
       'border-l-amber-500',
-      'border-l-purple-500',
+      'border-l-orange-500',
       'border-l-rose-500',
     ];
     return colors[depth % colors.length];

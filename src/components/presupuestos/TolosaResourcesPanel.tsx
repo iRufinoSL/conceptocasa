@@ -332,6 +332,7 @@ export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentIte
       purchase_units: r.purchase_units ?? null,
       purchase_unit_measure: r.purchase_unit_measure || '',
       purchase_unit_cost: r.purchase_unit_cost ?? null,
+      is_estimation: r.is_estimation ?? false,
     });
     setShowFormDialog(true);
   };

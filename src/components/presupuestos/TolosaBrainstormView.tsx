@@ -662,6 +662,10 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
     }
   };
 
+  const isEstimacionItem = (item: TolosItem) => {
+    return item.code?.includes('.E') || item.name?.includes('(Est.)');
+  };
+
   const openDuplicateDialog = (item: TolosItem, asSub: boolean) => {
     setDupItem(item);
     setDupAsSub(asSub);
@@ -1844,10 +1848,12 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
     const queId = `${item.code} ${item.name}`;
     const openDim = activeDimension[item.id];
 
+    const isEst = isEstimacionItem(item);
+
     return (
       <div key={item.id} className="group/item">
         <div
-          className={`flex items-start gap-2 p-3 rounded-lg border-l-4 ${getDepthColor(depth)} bg-card hover:bg-accent/30 transition-colors`}
+          className={`flex items-start gap-2 p-3 rounded-lg border-l-4 ${isEst ? 'border-l-amber-500 bg-amber-50/50 dark:bg-amber-950/20' : getDepthColor(depth) + ' bg-card'} hover:bg-accent/30 transition-colors`}
           style={{ marginLeft: depth * 24 }}
         >
           {/* Expand/collapse chevron - toggles children tree only, NOT the detail form */}
@@ -1888,7 +1894,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
             ) : (
               <>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <Badge variant="outline" className="font-mono text-xs shrink-0">{item.code}</Badge>
+                  <Badge variant="outline" className={`font-mono text-xs shrink-0 ${isEst ? 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-700' : ''}`}>{isEst ? 'Est.' : ''}{item.code}</Badge>
                   <button
                     onClick={() => {
                       toggleDetail(item.id);
@@ -2022,7 +2028,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
 
           {/* Actions */}
           {!isEditing && (
-            <div className="flex items-center gap-0.5 opacity-0 group-hover/item:opacity-100 transition-opacity shrink-0">
+            <div className="flex items-center gap-0.5 shrink-0">
               {/* Move arrows */}
               <div className="flex items-center gap-0 border rounded-md mr-1">
                 <Button size="icon" variant="ghost" className="h-6 w-6 rounded-r-none" title="Subir nivel (← Outdent)"
@@ -2449,7 +2455,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                 <Button
                   variant={dupType === 'normal' ? 'default' : 'outline'}
                   size="sm"
-                  onClick={() => setDupType('normal')}
+                  onClick={() => { setDupType('normal'); setDupName(prev => prev.replace(' (Est.)', ' (copia)')); }}
                 >
                   Normal
                 </Button>
@@ -2457,7 +2463,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                   variant={dupType === 'estimacion' ? 'default' : 'outline'}
                   size="sm"
                   className={dupType === 'estimacion' ? 'bg-amber-600 hover:bg-amber-700 text-white' : ''}
-                  onClick={() => setDupType('estimacion')}
+                  onClick={() => { setDupType('estimacion'); setDupName(prev => prev.replace(' (copia)', ' (Est.)')); }}
                 >
                   Estimación
                 </Button>

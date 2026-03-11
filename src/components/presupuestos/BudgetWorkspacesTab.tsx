@@ -437,6 +437,9 @@ interface GridPolygonDrawerProps {
   activeWalls?: WallData[];
   initialRulerLines?: RulerLine[];
   onSaveRulerLines?: (lines: RulerLine[]) => void;
+  ridgeLine?: { x1: number; y1: number; x2: number; y2: number; z: number } | null;
+  sectionType?: 'vertical' | 'longitudinal' | 'transversal';
+  sectionAxisValue?: number;
 }
 
 const RULER_COLOR = 'hsl(30 90% 50%)';
@@ -452,7 +455,7 @@ const POLY_COLORS = [
   'hsl(280 60% 55%)',
 ];
 
-function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16, gridOffsetX = 0, gridOffsetY = 0, placedRooms = [], cellSizeM = 1, otherPolygons = [], activeRoomId, onSwitchRoom, onOtherPolygonChange, onOtherPolygonRename, onSelectOtherWorkspace, perimeterPolygon, activeName, originTopLeft = false, pdfTitle, pdfSubtitle, onWallClick, onWallSelect, hAxisLabel = 'X', vAxisLabel = 'Y', hScaleMm, vScaleMm, activeWalls = [], initialRulerLines = [], onSaveRulerLines }: GridPolygonDrawerProps) {
+function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16, gridOffsetX = 0, gridOffsetY = 0, placedRooms = [], cellSizeM = 1, otherPolygons = [], activeRoomId, onSwitchRoom, onOtherPolygonChange, onOtherPolygonRename, onSelectOtherWorkspace, perimeterPolygon, activeName, originTopLeft = false, pdfTitle, pdfSubtitle, onWallClick, onWallSelect, hAxisLabel = 'X', vAxisLabel = 'Y', hScaleMm, vScaleMm, activeWalls = [], initialRulerLines = [], onSaveRulerLines, ridgeLine, sectionType, sectionAxisValue }: GridPolygonDrawerProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null);
@@ -1746,6 +1749,82 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
               );
             });
           })}
+          {/* ── Ridge line axis (cumbrera) ── */}
+          {ridgeLine && (() => {
+            const RIDGE_COLOR = 'hsl(0 70% 50%)';
+            if (sectionType === 'vertical' || !sectionType) {
+              // On Z sections: draw the ridge as a projected line on the XY plane
+              const { sx: sx1, sy: sy1 } = toSvg(ridgeLine.x1, ridgeLine.y1);
+              const { sx: sx2, sy: sy2 } = toSvg(ridgeLine.x2, ridgeLine.y2);
+              // Extend 3 grid units beyond endpoints
+              const dx = ridgeLine.x2 - ridgeLine.x1;
+              const dy = ridgeLine.y2 - ridgeLine.y1;
+              const len = Math.sqrt(dx * dx + dy * dy);
+              const ext = len > 0 ? 3 : 0;
+              const ux = len > 0 ? dx / len : 0;
+              const uy = len > 0 ? dy / len : 0;
+              const { sx: exs1, sy: eys1 } = toSvg(ridgeLine.x1 - ux * ext, ridgeLine.y1 - uy * ext);
+              const { sx: exs2, sy: eys2 } = toSvg(ridgeLine.x2 + ux * ext, ridgeLine.y2 + uy * ext);
+              const mx = (sx1 + sx2) / 2;
+              const my = (sy1 + sy2) / 2;
+              return (
+                <g className="pointer-events-none">
+                  <line x1={exs1} y1={eys1} x2={exs2} y2={eys2} stroke={RIDGE_COLOR} strokeWidth={1.5} strokeDasharray="6 3" opacity={0.7} />
+                  <circle cx={sx1} cy={sy1} r={3} fill={RIDGE_COLOR} opacity={0.8} />
+                  <circle cx={sx2} cy={sy2} r={3} fill={RIDGE_COLOR} opacity={0.8} />
+                  <text x={mx} y={my - 8} textAnchor="middle" fill={RIDGE_COLOR} fontSize={8} fontWeight={700} className="select-none" opacity={0.85}>
+                    CUMBRERA (Z={ridgeLine.z})
+                  </text>
+                </g>
+              );
+            }
+            if (sectionType === 'longitudinal' && sectionAxisValue !== undefined) {
+              // Y section: ridge intersects as a vertical mark at the ridge X coordinate
+              // Check if ridge line crosses this Y value
+              const y = sectionAxisValue;
+              const dy = ridgeLine.y2 - ridgeLine.y1;
+              if (Math.abs(dy) < 0.001) {
+                // Horizontal ridge — only show if y matches
+                if (Math.abs(ridgeLine.y1 - y) > 0.5) return null;
+              }
+              const t = Math.abs(dy) > 0.001 ? (y - ridgeLine.y1) / dy : 0.5;
+              if (t < -0.1 || t > 1.1) return null;
+              const ridgeX = ridgeLine.x1 + t * (ridgeLine.x2 - ridgeLine.x1);
+              const { sx: rx, sy: ry1 } = toSvg(ridgeX, gridOffsetY);
+              const { sx: _rx2, sy: ry2 } = toSvg(ridgeX, gridOffsetY + gridHeight);
+              return (
+                <g className="pointer-events-none">
+                  <line x1={rx} y1={ry1} x2={rx} y2={ry2} stroke={RIDGE_COLOR} strokeWidth={1.5} strokeDasharray="4 3" opacity={0.6} />
+                  <text x={rx} y={Math.min(ry1, ry2) - 6} textAnchor="middle" fill={RIDGE_COLOR} fontSize={7} fontWeight={700} className="select-none" opacity={0.85}>
+                    ▽ CUMBRERA
+                  </text>
+                </g>
+              );
+            }
+            if (sectionType === 'transversal' && sectionAxisValue !== undefined) {
+              // X section: ridge intersects as a vertical mark at the ridge Y coordinate
+              const x = sectionAxisValue;
+              const dx = ridgeLine.x2 - ridgeLine.x1;
+              if (Math.abs(dx) < 0.001) {
+                if (Math.abs(ridgeLine.x1 - x) > 0.5) return null;
+              }
+              const t = Math.abs(dx) > 0.001 ? (x - ridgeLine.x1) / dx : 0.5;
+              if (t < -0.1 || t > 1.1) return null;
+              const ridgeY = ridgeLine.y1 + t * (ridgeLine.y2 - ridgeLine.y1);
+              const { sx: ry, sy: ry1 } = toSvg(ridgeY, gridOffsetY);
+              const { sx: _ry2, sy: ry2 } = toSvg(ridgeY, gridOffsetY + gridHeight);
+              return (
+                <g className="pointer-events-none">
+                  <line x1={ry} y1={ry1} x2={ry} y2={ry2} stroke={RIDGE_COLOR} strokeWidth={1.5} strokeDasharray="4 3" opacity={0.6} />
+                  <text x={ry} y={Math.min(ry1, ry2) - 6} textAnchor="middle" fill={RIDGE_COLOR} fontSize={7} fontWeight={700} className="select-none" opacity={0.85}>
+                    ▽ CUMBRERA
+                  </text>
+                </g>
+              );
+            }
+            return null;
+          })()}
+
           {/* ── Magnet snap indicator ── */}
           {magnetMode && magnetSnap && (() => {
             const { sx, sy } = toSvg(magnetSnap.x, magnetSnap.y);
@@ -2159,6 +2238,17 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
         : floorPlan.custom_corners;
       return parsed?.customSections || [];
     } catch { return []; }
+  }, [floorPlan?.custom_corners]);
+
+  // Extract ridge line from custom_corners
+  const ridgeLine = useMemo<{ x1: number; y1: number; x2: number; y2: number; z: number } | null>(() => {
+    if (!floorPlan?.custom_corners) return null;
+    try {
+      const parsed = typeof floorPlan.custom_corners === 'string'
+        ? JSON.parse(floorPlan.custom_corners)
+        : floorPlan.custom_corners;
+      return parsed?.ridgeLine ?? null;
+    } catch { return null; }
   }, [floorPlan?.custom_corners]);
 
   const verticalSections = useMemo(() => allSections.filter(s => s.sectionType === 'vertical'), [allSections]);
@@ -3530,8 +3620,10 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
                    }}
                    onWallSelect={(wallDbIdx) => openWallPanel(r.id, wallDbIdx, 'z')}
                    initialRulerLines={getSavedRulerLines(`z_${r.id}`)}
-                   onSaveRulerLines={(lines) => saveRulerLines(`z_${r.id}`, lines)}
-                 />
+                    onSaveRulerLines={(lines) => saveRulerLines(`z_${r.id}`, lines)}
+                    ridgeLine={ridgeLine}
+                    sectionType="vertical"
+                  />
                  {/* Sibling workspace inline property editor */}
                  {selectedOtherWorkspaceId && (() => {
                    const sibRoom = rooms.find(rm => rm.id === selectedOtherWorkspaceId);
@@ -3677,6 +3769,9 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
                      initialRulerLines={getSavedRulerLines(`sec_${r.id}_${view.sectionId}`)}
                      onSaveRulerLines={(lines) => saveRulerLines(`sec_${r.id}_${view.sectionId}`, lines)}
                      onWallSelect={(wallDbIdx) => openWallPanel(r.id, wallDbIdx, 'xy')}
+                     ridgeLine={ridgeLine}
+                     sectionType={isLongitudinal ? 'longitudinal' : 'transversal'}
+                     sectionAxisValue={parseFloat(String(section.axisValue)) || 0}
                    />
                    {/* Sibling workspace inline property editor (Y/X) */}
                    {selectedOtherWorkspaceId && (() => {
@@ -4029,8 +4124,10 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
                   onOtherPolygonChange={handleOtherPolygonChangeZ}
                   onOtherPolygonRename={handleOtherPolygonRename}
                   pdfTitle="Espacio de trabajo"
-                  pdfSubtitle={formName || 'Nuevo espacio'}
-                />
+                   pdfSubtitle={formName || 'Nuevo espacio'}
+                   ridgeLine={ridgeLine}
+                   sectionType="vertical"
+                 />
               </div>
             )}
           </div>

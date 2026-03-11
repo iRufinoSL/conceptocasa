@@ -2309,7 +2309,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                     : 'Sin fase asignada';
 
                   return (
-                    <Collapsible key={groupKey} defaultOpen>
+                    <Collapsible key={groupKey} defaultOpen className="group">
                       <CollapsibleTrigger className="flex items-center justify-between w-full px-3 py-2 rounded-md bg-muted/40 hover:bg-muted/60 transition-colors text-left">
                         <div className="flex items-center gap-2">
                           <ChevronRight className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />

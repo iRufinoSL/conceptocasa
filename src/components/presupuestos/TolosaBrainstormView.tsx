@@ -2463,7 +2463,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                   variant={dupType === 'estimacion' ? 'default' : 'outline'}
                   size="sm"
                   className={dupType === 'estimacion' ? 'bg-amber-600 hover:bg-amber-700 text-white' : ''}
-                  onClick={() => setDupType('estimacion')}
+                  onClick={() => { setDupType('estimacion'); setDupName(prev => prev.replace(' (copia)', ' (Est.)')); }}
                 >
                   Estimación
                 </Button>

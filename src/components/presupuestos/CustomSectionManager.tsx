@@ -1651,6 +1651,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
         width={totalW}
         height={totalH}
         className="block"
+        overflow="visible"
         style={{ cursor: drawingMode ? 'crosshair' : draggingIdx !== null ? 'grabbing' : undefined }}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}

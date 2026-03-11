@@ -67,6 +67,7 @@ const defaultForm = {
   purchase_units: null as number | null,
   purchase_unit_measure: '',
   purchase_unit_cost: null as number | null,
+  is_estimation: false,
 };
 
 export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentItemId, onSubtotalChange, measurementVersion }: TolosaResourcesPanelProps) {

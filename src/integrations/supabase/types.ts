@@ -618,6 +618,7 @@ export type Database = {
           external_unit_cost: number | null
           has_travel_time: boolean | null
           id: string
+          is_estimation: boolean
           manual_units: number | null
           name: string
           purchase_unit: string | null
@@ -651,6 +652,7 @@ export type Database = {
           external_unit_cost?: number | null
           has_travel_time?: boolean | null
           id?: string
+          is_estimation?: boolean
           manual_units?: number | null
           name: string
           purchase_unit?: string | null
@@ -684,6 +686,7 @@ export type Database = {
           external_unit_cost?: number | null
           has_travel_time?: boolean | null
           id?: string
+          is_estimation?: boolean
           manual_units?: number | null
           name?: string
           purchase_unit?: string | null

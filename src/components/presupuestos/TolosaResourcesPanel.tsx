@@ -35,12 +35,13 @@ interface BudgetResource {
   purchase_units: number | null;
   purchase_unit_measure: string | null;
   purchase_unit_cost: number | null;
+  is_estimation: boolean;
 }
 
 const RESOURCE_TYPES = ['Producto', 'Mano de obra', 'Alquiler', 'Servicio', 'Impuestos', 'Tarea', 'Equipo', 'Material', 'Utiles y herramientas'];
 const UNIT_MEASURES = ['m2', 'm3', 'ml', 'mes', 'ud', 'kg', 'hora', 'día'];
 
-const RESOURCE_SELECT_FIELDS = 'id, budget_id, name, external_unit_cost, unit, resource_type, safety_margin_percent, sales_margin_percent, manual_units, related_units, activity_id, description, supplier_id, signed_subtotal, purchase_vat_percent, purchase_units, purchase_unit_measure, purchase_unit_cost';
+const RESOURCE_SELECT_FIELDS = 'id, budget_id, name, external_unit_cost, unit, resource_type, safety_margin_percent, sales_margin_percent, manual_units, related_units, activity_id, description, supplier_id, signed_subtotal, purchase_vat_percent, purchase_units, purchase_unit_measure, purchase_unit_cost, is_estimation';
 
 interface TolosaResourcesPanelProps {
   budgetId: string;
@@ -66,6 +67,7 @@ const defaultForm = {
   purchase_units: null as number | null,
   purchase_unit_measure: '',
   purchase_unit_cost: null as number | null,
+  is_estimation: false,
 };
 
 export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentItemId, onSubtotalChange, measurementVersion }: TolosaResourcesPanelProps) {
@@ -330,6 +332,7 @@ export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentIte
       purchase_units: r.purchase_units ?? null,
       purchase_unit_measure: r.purchase_unit_measure || '',
       purchase_unit_cost: r.purchase_unit_cost ?? null,
+      is_estimation: r.is_estimation ?? false,
     });
     setShowFormDialog(true);
   };
@@ -364,6 +367,7 @@ export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentIte
       purchase_units: formData.purchase_units,
       purchase_unit_measure: formData.purchase_unit_measure || null,
       purchase_unit_cost: formData.purchase_unit_cost,
+      is_estimation: formData.is_estimation,
     };
 
     try {
@@ -492,6 +496,9 @@ export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentIte
                   <tr key={r.id} className="border-t hover:bg-accent/20 transition-colors">
                     <td className="px-3 py-1.5">
                       <span className="font-medium">{r.name}</span>
+                      {r.is_estimation && (
+                        <Badge className="ml-1 text-[8px] bg-amber-100 text-amber-800 border-amber-300" variant="outline">Est.</Badge>
+                      )}
                       {r.description && (
                         <span className="text-xs text-muted-foreground ml-1 truncate">— {r.description}</span>
                       )}
@@ -717,10 +724,24 @@ export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentIte
           </DialogHeader>
 
           <div className="space-y-5">
-            {/* Name */}
+            {/* Name + Est toggle */}
             <div className="space-y-2">
               <Label>Nombre del Recurso *</Label>
-              <Input value={formData.name} onChange={e => setFormData(d => ({ ...d, name: e.target.value }))} placeholder="Ej: Ladrillo, Oficial 1ª..." autoFocus />
+              <div className="flex gap-2">
+                <Input value={formData.name} onChange={e => setFormData(d => ({ ...d, name: e.target.value }))} placeholder="Ej: Ladrillo, Oficial 1ª..." autoFocus className="flex-1" />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={formData.is_estimation ? 'default' : 'outline'}
+                  className={`shrink-0 text-xs px-3 ${formData.is_estimation ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'border-amber-300 text-amber-700 hover:bg-amber-50'}`}
+                  onClick={() => setFormData(d => ({ ...d, is_estimation: !d.is_estimation }))}
+                >
+                  {formData.is_estimation ? '✓ Est.' : 'Est.'}
+                </Button>
+              </div>
+              {formData.is_estimation && (
+                <p className="text-xs text-amber-600">Este recurso es de tipo Estimación — sus costes contribuyen a las Actividades (Est)</p>
+              )}
             </div>
 
             {/* Row 1: Cost (IVA incl.) + %IVA + Unit + Type */}

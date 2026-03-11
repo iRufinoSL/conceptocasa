@@ -1,0 +1,1 @@
+ALTER TABLE public.budget_activity_resources ADD COLUMN is_estimation boolean NOT NULL DEFAULT false;

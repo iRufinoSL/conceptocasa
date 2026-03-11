@@ -35,6 +35,7 @@ interface BudgetResource {
   purchase_units?: number | null;
   purchase_unit_measure?: string | null;
   purchase_unit_cost?: number | null;
+  is_estimation?: boolean;
 }
 
 interface Activity {
@@ -93,6 +94,7 @@ export function BudgetResourceForm({
     purchase_units: null as number | null,
     purchase_unit_measure: '',
     purchase_unit_cost: null as number | null,
+    is_estimation: false,
   });
 
   // Calculate end date for tasks
@@ -144,6 +146,7 @@ export function BudgetResourceForm({
           purchase_units: resource.purchase_units ?? null,
           purchase_unit_measure: resource.purchase_unit_measure || '',
           purchase_unit_cost: resource.purchase_unit_cost ?? null,
+          is_estimation: resource.is_estimation ?? false,
         });
         
         // If resource has an activity, recalculate related_units to ensure it's up-to-date
@@ -176,6 +179,7 @@ export function BudgetResourceForm({
           purchase_units: null,
           purchase_unit_measure: '',
           purchase_unit_cost: null,
+          is_estimation: false,
         });
         
         // If preselected activity, fetch related_units
@@ -272,6 +276,7 @@ export function BudgetResourceForm({
         purchase_units: formData.purchase_units,
         purchase_unit_measure: formData.purchase_unit_measure || null,
         purchase_unit_cost: formData.purchase_unit_cost,
+        is_estimation: formData.is_estimation,
       };
 
       if (resource) {
@@ -317,16 +322,31 @@ export function BudgetResourceForm({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Resource Name */}
+          {/* Resource Name + Est toggle */}
           <div className="space-y-2">
             <Label htmlFor="name">Nombre del Recurso *</Label>
-            <Input
-              id="name"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              placeholder="Nombre del recurso"
-              required
-            />
+            <div className="flex gap-2">
+              <Input
+                id="name"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                placeholder="Nombre del recurso"
+                required
+                className="flex-1"
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant={formData.is_estimation ? 'default' : 'outline'}
+                className={`shrink-0 text-xs px-3 ${formData.is_estimation ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'border-amber-300 text-amber-700 hover:bg-amber-50'}`}
+                onClick={() => setFormData({ ...formData, is_estimation: !formData.is_estimation })}
+              >
+                {formData.is_estimation ? '✓ Est.' : 'Est.'}
+              </Button>
+            </div>
+            {formData.is_estimation && (
+              <p className="text-xs text-amber-600">Este recurso es de tipo Estimación — sus costes contribuyen a las Actividades (Est)</p>
+            )}
           </div>
 
           {/* Row 1: Cost, Unit, Type */}

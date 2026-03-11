@@ -936,6 +936,45 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
         toast.success('Actividad creada');
       }
 
+      // For estimation activities, auto-create/update the single resource with amount + VAT
+      if (form.activity_type === 'estimacion' && savedActivityId && form.estimation_amount) {
+        const amount = parseFloat(form.estimation_amount) || 0;
+        const vatPercent = parseFloat(form.estimation_vat_percent) || 21;
+        
+        // Check if resource already exists for this estimation activity
+        const { data: existingRes } = await supabase
+          .from('budget_activity_resources')
+          .select('id')
+          .eq('activity_id', savedActivityId)
+          .limit(1);
+        
+        const resourceData = {
+          budget_id: budgetId,
+          activity_id: savedActivityId,
+          name: form.name.trim(),
+          external_unit_cost: amount,
+          manual_units: 1,
+          unit: 'pa',
+          resource_type: 'Servicio',
+          safety_margin_percent: 0,
+          sales_margin_percent: 0,
+          purchase_vat_percent: vatPercent,
+          purchase_unit_cost: amount,
+          purchase_units: 1,
+        };
+        
+        if (existingRes && existingRes.length > 0) {
+          await supabase
+            .from('budget_activity_resources')
+            .update(resourceData)
+            .eq('id', existingRes[0].id);
+        } else {
+          await supabase
+            .from('budget_activity_resources')
+            .insert(resourceData);
+        }
+      }
+
        // Sync related_units for the activity's resources
       if (savedActivityId) {
         await syncActivityResourcesRelatedUnits(savedActivityId);

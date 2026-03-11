@@ -1878,14 +1878,13 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                 <p className="text-[10px] text-muted-foreground uppercase">Total combinado</p>
               </div>
             )}
-              </div>
-            </div>
             <TolosaResourcesPanel
               budgetId={budgetId}
               tolosItemId={item.id}
               isAdmin={isAdmin}
               parentItemId={item.parent_id}
               onSubtotalChange={(s) => updateItemSubtotal(item.id, s)}
+              onSubtotalSplitChange={(n, e) => updateItemSubtotalSplit(item.id, n, e)}
               measurementVersion={measurementVersions[item.id] || 0}
             />
           </div>

@@ -2277,51 +2277,44 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
 
                 const { sx: gleft, sy: gtop } = toSvg(bMinX, isElevation ? bMaxY : bMinY);
                 const { sx: gright, sy: gbottom } = toSvg(bMaxX, isElevation ? bMinY : bMaxY);
-                // Position outside the axis label area
-                const topY = margin.top - 22;
-                const bottomY = margin.top + gridCount * cellSize + 18;
-                const leftX = margin.left - 28;
-                const rightX = margin.left + gridCount * cellSize + 18;
-                const perimFontSize = Math.round(8 * Math.max(1, zoomLevel * 0.8));
+                // Position exactly 2 grid cells away from the bounding box
+                const dimOff = 2 * cellSize;
+                const topY = gtop - dimOff;
+                const bottomY = gbottom + dimOff;
+                const leftX = gleft - dimOff;
+                const rightX = gright + dimOff;
+                const perimFontSize = Math.round(11 * Math.max(1, zoomLevel * 0.8));
                 const midX = (gleft + gright) / 2;
                 const midY = (gtop + gbottom) / 2;
+                const lineW = 2;
+                const extLineW = 0.8;
+                const dimColor = 'hsl(0 70% 45%)';
+                const dimColorFaint = 'hsl(0 70% 50% / 0.5)';
 
                 return (
                   <g className="pointer-events-none" data-pdf-dimension="">
                     {totalWidthMm > 0 && (
                       <>
-                        {/* Top horizontal — above axis labels */}
-                        <line x1={gleft} y1={topY} x2={gright} y2={topY} stroke="hsl(0 70% 50%)" strokeWidth={1.2} />
-                        <line x1={gleft} y1={gtop} x2={gleft} y2={topY} stroke="hsl(0 70% 50% / 0.4)" strokeWidth={0.6} strokeDasharray="2 2" />
-                        <line x1={gright} y1={gtop} x2={gright} y2={topY} stroke="hsl(0 70% 50% / 0.4)" strokeWidth={0.6} strokeDasharray="2 2" />
-                        <text x={midX} y={topY - 4} textAnchor="middle" fontSize={perimFontSize} fontWeight={700} fill="hsl(0 70% 45%)">{totalWidthMm} mm</text>
-                        {/* Bottom horizontal — below grid */}
-                        <line x1={gleft} y1={bottomY} x2={gright} y2={bottomY} stroke="hsl(0 70% 50%)" strokeWidth={1.2} />
-                        <line x1={gleft} y1={gbottom} x2={gleft} y2={bottomY} stroke="hsl(0 70% 50% / 0.4)" strokeWidth={0.6} strokeDasharray="2 2" />
-                        <line x1={gright} y1={gbottom} x2={gright} y2={bottomY} stroke="hsl(0 70% 50% / 0.4)" strokeWidth={0.6} strokeDasharray="2 2" />
-                        <text x={midX} y={bottomY + 10} textAnchor="middle" fontSize={perimFontSize} fontWeight={700} fill="hsl(0 70% 45%)">{totalWidthMm} mm</text>
+                        <line x1={gleft} y1={topY} x2={gright} y2={topY} stroke={dimColor} strokeWidth={lineW} />
+                        <line x1={gleft} y1={gtop} x2={gleft} y2={topY} stroke={dimColorFaint} strokeWidth={extLineW} strokeDasharray="3 2" />
+                        <line x1={gright} y1={gtop} x2={gright} y2={topY} stroke={dimColorFaint} strokeWidth={extLineW} strokeDasharray="3 2" />
+                        <text x={midX} y={topY - 5} textAnchor="middle" fontSize={perimFontSize} fontWeight={900} fill={dimColor} style={{ textShadow: '0 0 4px white, 0 0 4px white' }}>{totalWidthMm} mm</text>
+                        <line x1={gleft} y1={bottomY} x2={gright} y2={bottomY} stroke={dimColor} strokeWidth={lineW} />
+                        <line x1={gleft} y1={gbottom} x2={gleft} y2={bottomY} stroke={dimColorFaint} strokeWidth={extLineW} strokeDasharray="3 2" />
+                        <line x1={gright} y1={gbottom} x2={gright} y2={bottomY} stroke={dimColorFaint} strokeWidth={extLineW} strokeDasharray="3 2" />
+                        <text x={midX} y={bottomY + perimFontSize + 3} textAnchor="middle" fontSize={perimFontSize} fontWeight={900} fill={dimColor} style={{ textShadow: '0 0 4px white, 0 0 4px white' }}>{totalWidthMm} mm</text>
                       </>
                     )}
                     {totalHeightMm > 0 && (
                       <>
-                        {/* Right vertical — right of grid */}
-                        <line x1={rightX} y1={gtop} x2={rightX} y2={gbottom} stroke="hsl(0 70% 50%)" strokeWidth={1.2} />
-                        <line x1={gright} y1={gtop} x2={rightX} y2={gtop} stroke="hsl(0 70% 50% / 0.4)" strokeWidth={0.6} strokeDasharray="2 2" />
-                        <line x1={gright} y1={gbottom} x2={rightX} y2={gbottom} stroke="hsl(0 70% 50% / 0.4)" strokeWidth={0.6} strokeDasharray="2 2" />
-                        <text
-                          x={rightX + 5} y={midY}
-                          textAnchor="middle" fontSize={perimFontSize} fontWeight={700} fill="hsl(0 70% 45%)"
-                          transform={`rotate(-90, ${rightX + 5}, ${midY})`}
-                        >{totalHeightMm} mm</text>
-                        {/* Left vertical — left of axis labels */}
-                        <line x1={leftX} y1={gtop} x2={leftX} y2={gbottom} stroke="hsl(0 70% 50%)" strokeWidth={1.2} />
-                        <line x1={gleft} y1={gtop} x2={leftX} y2={gtop} stroke="hsl(0 70% 50% / 0.4)" strokeWidth={0.6} strokeDasharray="2 2" />
-                        <line x1={gleft} y1={gbottom} x2={leftX} y2={gbottom} stroke="hsl(0 70% 50% / 0.4)" strokeWidth={0.6} strokeDasharray="2 2" />
-                        <text
-                          x={leftX - 5} y={midY}
-                          textAnchor="middle" fontSize={perimFontSize} fontWeight={700} fill="hsl(0 70% 45%)"
-                          transform={`rotate(-90, ${leftX - 5}, ${midY})`}
-                        >{totalHeightMm} mm</text>
+                        <line x1={rightX} y1={gtop} x2={rightX} y2={gbottom} stroke={dimColor} strokeWidth={lineW} />
+                        <line x1={gright} y1={gtop} x2={rightX} y2={gtop} stroke={dimColorFaint} strokeWidth={extLineW} strokeDasharray="3 2" />
+                        <line x1={gright} y1={gbottom} x2={rightX} y2={gbottom} stroke={dimColorFaint} strokeWidth={extLineW} strokeDasharray="3 2" />
+                        <text x={rightX + 6} y={midY} textAnchor="middle" fontSize={perimFontSize} fontWeight={900} fill={dimColor} transform={`rotate(-90, ${rightX + 6}, ${midY})`} style={{ textShadow: '0 0 4px white, 0 0 4px white' }}>{totalHeightMm} mm</text>
+                        <line x1={leftX} y1={gtop} x2={leftX} y2={gbottom} stroke={dimColor} strokeWidth={lineW} />
+                        <line x1={gleft} y1={gtop} x2={leftX} y2={gtop} stroke={dimColorFaint} strokeWidth={extLineW} strokeDasharray="3 2" />
+                        <line x1={gleft} y1={gbottom} x2={leftX} y2={gbottom} stroke={dimColorFaint} strokeWidth={extLineW} strokeDasharray="3 2" />
+                        <text x={leftX - 6} y={midY} textAnchor="middle" fontSize={perimFontSize} fontWeight={900} fill={dimColor} transform={`rotate(-90, ${leftX - 6}, ${midY})`} style={{ textShadow: '0 0 4px white, 0 0 4px white' }}>{totalHeightMm} mm</text>
                       </>
                     )}
                   </g>

@@ -2267,6 +2267,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
           itemSummaries={itemSummaries}
           itemSubtotals={itemSubtotals}
           contactCache={contactCache}
+          phases={phases}
           getCuanto={getCuanto}
           initialFocusId={lastWorkedItemId}
           onItemClick={(itemId) => {

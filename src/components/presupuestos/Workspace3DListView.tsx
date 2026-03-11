@@ -3,6 +3,8 @@ import { Canvas, ThreeEvent, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls, Text, Line } from '@react-three/drei';
 import * as THREE from 'three';
 import { InfiniteAxes3D } from './InfiniteAxes3D';
+import { computeVertexTopPositions } from './workspace3dUtils';
+import type { CustomSection } from './CustomSectionManager';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Minimize2, Maximize2, Home, Layers, SortAsc, X } from 'lucide-react';
@@ -34,6 +36,7 @@ interface Workspace3DListViewProps {
   scaleZ: number;
   onClose: () => void;
   onFaceDoubleClick?: (info: FaceInfo) => void;
+  allSections?: CustomSection[];
 }
 
 const FACE_COLORS: Record<string, string> = {
@@ -161,19 +164,28 @@ function InteractiveFace({ vertices, color, label, labelPos, labelRot, onDoubleC
 }
 
 /** Single workspace prism for multi-workspace scene with interactive faces */
-function MultiPrism({ ws, scaleXY, scaleZ, offsetX, offsetZ, onFaceDoubleClick }: {
+function MultiPrism({ ws, scaleXY, scaleZ, offsetX, offsetZ, onFaceDoubleClick, allSections }: {
   ws: WorkspaceEntry; scaleXY: number; scaleZ: number; offsetX: number; offsetZ: number;
   onFaceDoubleClick?: (info: FaceInfo) => void;
+  allSections?: CustomSection[];
 }) {
   const sMxy = scaleXY / 1000;
   const zScaleM = scaleZ / 1000;
 
   const { baseVerts, topVerts, faces, cornerLabels, edgeLabels } = useMemo(() => {
     const base = ws.polygon.map(v => new THREE.Vector3(v.x * sMxy + offsetX, ws.zBase * zScaleM, v.y * sMxy + offsetZ));
+
+    // Use section polygon data to compute per-vertex top Z when available
+    const topYMeters = (allSections && allSections.length > 0)
+      ? computeVertexTopPositions(ws.polygon, ws.walls, ws.zBase, ws.height, scaleXY, scaleZ, allSections, ws.id)
+      : null;
+
     const top = base.map((v, i) => {
+      if (topYMeters) {
+        return new THREE.Vector3(v.x, topYMeters[i], v.z);
+      }
       const wall = ws.walls.find(w => w.wall_index === i + 1);
       const h = wall?.height != null ? wall.height : ws.height;
-      // Quantize to Z-grid so shared coordinates across workspaces coincide exactly
       const zTopUnits = ws.zBase + Math.round(h / zScaleM);
       return new THREE.Vector3(v.x, zTopUnits * zScaleM, v.z);
     });
@@ -185,9 +197,7 @@ function MultiPrism({ ws, scaleXY, scaleZ, offsetX, offsetZ, onFaceDoubleClick }
       const vx = ws.polygon[i].x;
       const vy = ws.polygon[i].y;
       labels.push({ pos: new THREE.Vector3(base[i].x, base[i].y - 0.04, base[i].z), text: `(X${vx},Y${vy},Z${ws.zBase})` });
-      const wall = ws.walls.find(w => w.wall_index === i + 1);
-      const hM = wall?.height != null ? wall.height : ws.height;
-      const zTopVal = ws.zBase + Math.round(hM / zScaleM);
+      const zTopVal = Math.round(top[i].y / zScaleM);
       labels.push({ pos: new THREE.Vector3(top[i].x, top[i].y + 0.06, top[i].z), text: `(X${vx},Y${vy},Z${zTopVal})` });
     }
 
@@ -203,10 +213,9 @@ function MultiPrism({ ws, scaleXY, scaleZ, offsetX, offsetZ, onFaceDoubleClick }
         axisStart: `X${ws.polygon[i].x},Y${ws.polygon[i].y}`, axisEnd: `X${ws.polygon[next].x},Y${ws.polygon[next].y}` });
     }
     for (let i = 0; i < n; i++) {
-      const wall = ws.walls.find(w => w.wall_index === i + 1);
-      const hM = wall?.height != null ? wall.height : ws.height;
-      const zTopVal = ws.zBase + Math.round(hM / zScaleM);
-      edges.push({ from: base[i], to: top[i], lengthMm: Math.abs(hM) * 1000,
+      const hDiff = top[i].y - base[i].y;
+      const zTopVal = Math.round(top[i].y / zScaleM);
+      edges.push({ from: base[i], to: top[i], lengthMm: Math.abs(hDiff) * 1000,
         axisStart: `Z${ws.zBase}`, axisEnd: `Z${zTopVal}` });
     }
 
@@ -245,7 +254,7 @@ function MultiPrism({ ws, scaleXY, scaleZ, offsetX, offsetZ, onFaceDoubleClick }
     facesList.push({ vertices: [...top], color: FACE_COLORS.techo, label: `T1\n${ws.name}\n${ceilArea.toFixed(2)} m²`, labelPos: topCenter, labelRot: [-Math.PI / 2, 0, 0], faceType: 'techo', faceIndex: 1 });
 
     return { baseVerts: base, topVerts: top, faces: facesList, cornerLabels: labels, edgeLabels: edges };
-  }, [ws, sMxy, zScaleM, offsetX, offsetZ, scaleXY]);
+  }, [ws, sMxy, zScaleM, offsetX, offsetZ, scaleXY, allSections]);
 
   const handleFaceDblClick = useCallback((faceType: string, faceIndex: number, faceLabel: string) => {
     onFaceDoubleClick?.({
@@ -285,7 +294,7 @@ function MultiPrism({ ws, scaleXY, scaleZ, offsetX, offsetZ, onFaceDoubleClick }
 
 type ViewMode = 'complete' | 'by-section' | 'by-workspace';
 
-export function Workspace3DListView({ workspaces, scaleXY, scaleZ, onClose, onFaceDoubleClick }: Workspace3DListViewProps) {
+export function Workspace3DListView({ workspaces, scaleXY, scaleZ, onClose, onFaceDoubleClick, allSections }: Workspace3DListViewProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('complete');
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
   const [selectedWs, setSelectedWs] = useState<string | null>(null);
@@ -393,7 +402,7 @@ export function Workspace3DListView({ workspaces, scaleXY, scaleZ, onClose, onFa
             <directionalLight position={[-3, 4, -3]} intensity={0.3} />
             {currentItems.map(ws => (
               <MultiPrism key={ws.id} ws={ws} scaleXY={scaleXY} scaleZ={scaleZ} offsetX={0} offsetZ={0}
-                onFaceDoubleClick={onFaceDoubleClick} />
+                onFaceDoubleClick={onFaceDoubleClick} allSections={allSections} />
             ))}
             <OrbitControls
               enableDamping

@@ -3,6 +3,8 @@ import { Canvas, useThree, useFrame, ThreeEvent } from '@react-three/fiber';
 import { OrbitControls, Text, Line } from '@react-three/drei';
 import * as THREE from 'three';
 import { InfiniteAxes3D } from './InfiniteAxes3D';
+import { computeVertexTopPositions } from './workspace3dUtils';
+import type { CustomSection } from './CustomSectionManager';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -44,6 +46,8 @@ interface Workspace3DViewerProps {
   onVertexEdit?: (faceType: string, faceIndex: number, vertices: { x: number; y: number; z: number }[]) => void;
   onNavigateTo2D?: (faceType: string, faceIndex: number) => void;
   selectedFace?: string | null;
+  allSections?: CustomSection[];
+  roomId?: string;
 }
 
 const FACE_COLORS: Record<string, string> = {
@@ -329,7 +333,7 @@ interface PrismModelProps extends Omit<Workspace3DViewerProps, 'name' | 'onFaceE
   orbitRef?: React.RefObject<any>;
 }
 
-function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase = 0, onFaceClick, onFaceDoubleClick, selectedFace, workspaceName, showDraggableNodes, onNodeDrag, orbitRef }: PrismModelProps) {
+function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase = 0, onFaceClick, onFaceDoubleClick, selectedFace, workspaceName, showDraggableNodes, onNodeDrag, orbitRef, allSections, roomId }: PrismModelProps) {
   const groupRef = useRef<THREE.Group>(null);
 
   const { baseVerts3D, topVerts3D, heightM, cornerLabels, centroid } = useMemo(() => {
@@ -341,7 +345,15 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
     // Place vertices at their REAL XYZ positions (no centering)
     const base = polygon.map(v => new THREE.Vector3(v.x * sMxy, zBaseM, v.y * sMxy));
 
+    // Compute per-vertex top Z using section polygon data when available
+    const topYMeters = (allSections && roomId && allSections.length > 0)
+      ? computeVertexTopPositions(polygon, walls, zBase, heightM, scaleXY, scaleZ, allSections, roomId)
+      : null;
+
     const top = base.map((v, i) => {
+      if (topYMeters) {
+        return new THREE.Vector3(v.x, topYMeters[i], v.z);
+      }
       const wall = walls.find(w => w.wall_index === i + 1);
       const h = wall?.height != null ? wall.height : heightM;
       const zTopUnits = zBase + Math.round(h / zScaleBlocks);
@@ -351,7 +363,7 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
 
     // Centroid for camera targeting
     const cx = base.reduce((s, v) => s + v.x, 0) / base.length;
-    const cy = (base[0].y + top[0].y) / 2;
+    const cy = (base[0].y + top.reduce((s, v) => s + v.y, 0) / top.length) / 2;
     const cz = base.reduce((s, v) => s + v.z, 0) / base.length;
 
     const labels: { pos: THREE.Vector3; text: string }[] = [];
@@ -363,9 +375,7 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
         pos: new THREE.Vector3(base[i].x, base[i].y - 0.05, base[i].z),
         text: `(X${vx},Y${vy},Z${zBase})`,
       });
-      const wall = walls.find(w => w.wall_index === i + 1);
-      const hM = wall?.height != null ? wall.height : heightM;
-      const zTopVal = zBase + Math.round(hM / zScaleBlocks);
+      const zTopVal = Math.round(top[i].y / zScaleBlocks);
       labels.push({
         pos: new THREE.Vector3(top[i].x, top[i].y + 0.08, top[i].z),
         text: `(X${vx},Y${vy},Z${zTopVal})`,
@@ -373,7 +383,7 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
     }
 
     return { baseVerts3D: base, topVerts3D: top, heightM, cornerLabels: labels, centroid: new THREE.Vector3(cx, cy, cz) };
-  }, [polygon, height, walls, scaleXY, scaleZ, zBase]);
+  }, [polygon, height, walls, scaleXY, scaleZ, zBase, allSections, roomId]);
 
   const faces = useMemo(() => {
     const result: Array<{
@@ -417,9 +427,8 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
       wallCenter.add(outward);
 
       const wall = walls.find(w => w.wall_index === i + 1);
-      const hM1 = wall?.height != null ? wall.height : height;
-      const wallNext = walls.find(w => w.wall_index === next + 1);
-      const hM2 = wallNext?.height != null ? wallNext.height : height;
+      const zTopI = Math.round(topVerts3D[i].y / zScaleBlocks);
+      const zTopNext = Math.round(topVerts3D[next].y / zScaleBlocks);
 
       result.push({
         type: 'pared', index: i + 1, label: `P${i + 1}`,
@@ -428,8 +437,8 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
         realVertices: [
           { x: polygon[i].x, y: polygon[i].y, z: zBase },
           { x: polygon[next].x, y: polygon[next].y, z: zBase },
-          { x: polygon[next].x, y: polygon[next].y, z: zBase + Math.round(hM2 / zScaleBlocks) },
-          { x: polygon[i].x, y: polygon[i].y, z: zBase + Math.round(hM1 / zScaleBlocks) },
+          { x: polygon[next].x, y: polygon[next].y, z: zTopNext },
+          { x: polygon[i].x, y: polygon[i].y, z: zTopI },
         ],
       });
     }
@@ -445,9 +454,8 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
       vertices: [...topVerts3D], labelPos: topCenter, labelRot: [-Math.PI / 2, 0, 0],
       color: FACE_COLORS.techo,
       realVertices: polygon.map((v, i) => {
-        const wall = walls.find(w => w.wall_index === i + 1);
-        const hM = wall?.height != null ? wall.height : height;
-        return { x: v.x, y: v.y, z: zBase + Math.round(hM / zScaleBlocks) };
+        const zTopVal = Math.round(topVerts3D[i].y / zScaleBlocks);
+        return { x: v.x, y: v.y, z: zTopVal };
       }),
     });
 
@@ -479,9 +487,7 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
     }
     for (let i = 0; i < n; i++) {
       const hDiff = topVerts3D[i].y - baseVerts3D[i].y;
-      const wall = walls.find(w => w.wall_index === i + 1);
-      const hM = wall?.height != null ? wall.height : height;
-      const zTopVal = zBase + Math.round(hM / zScaleBlocks);
+      const zTopVal = Math.round(topVerts3D[i].y / zScaleBlocks);
       items.push({ from: baseVerts3D[i], to: topVerts3D[i], lengthMm: Math.abs(hDiff) * 1000,
         axisLabel: `Z${zBase}→Z${zTopVal}` });
     }
@@ -729,7 +735,7 @@ function CenteredOrbitControls({ orbitRef, target }: { orbitRef: React.RefObject
   );
 }
 
-export function Workspace3DViewer({ name, polygon, height, walls, scaleXY, scaleZ = 250, zBase = 0, onFaceClick, onFaceEdit, onVertexEdit, onNavigateTo2D, selectedFace }: Workspace3DViewerProps) {
+export function Workspace3DViewer({ name, polygon, height, walls, scaleXY, scaleZ = 250, zBase = 0, onFaceClick, onFaceEdit, onVertexEdit, onNavigateTo2D, selectedFace, allSections, roomId }: Workspace3DViewerProps) {
   const [editingFace, setEditingFace] = useState<FaceEditData | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showNodes, setShowNodes] = useState(false);
@@ -831,6 +837,8 @@ export function Workspace3DViewer({ name, polygon, height, walls, scaleXY, scale
             showDraggableNodes={showNodes}
             onNodeDrag={handleNodeDrag}
             orbitRef={orbitRef}
+            allSections={allSections}
+            roomId={roomId}
           />
           <CenteredOrbitControls orbitRef={orbitRef} target={centroid} />
           <gridHelper args={[20, 40, '#888888', '#cccccc']} />

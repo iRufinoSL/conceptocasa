@@ -99,6 +99,7 @@ interface Invoice {
   document_type?: DocumentType;
   issuer_account_id?: string | null;
   receiver_account_id?: string | null;
+  footer_contact_source?: string;
   presupuesto?: Presupuesto | null;
   issuer_account?: {
     id?: string;

@@ -1924,12 +1924,12 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
               <line
                 x1={svgX} y1={gridTop}
                 x2={svgX} y2={gridBottom}
-                stroke="hsl(0 70% 50%)"
+                stroke="hsl(0, 0%, 45%)"
                 strokeWidth={1.5}
                 strokeDasharray="6 3"
                 opacity={0.5}
               />
-              <text x={svgX} y={gridTop - 4} textAnchor="middle" fontSize={6} fontWeight={700} fill="hsl(0 70% 45%)">
+              <text x={svgX} y={gridTop - 4} textAnchor="middle" fontSize={6} fontWeight={700} fill="hsl(0, 0%, 40%)">
                 ▽ CUMBRERA
               </text>
             </g>

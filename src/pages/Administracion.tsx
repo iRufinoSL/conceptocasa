@@ -178,6 +178,10 @@ export default function Administracion() {
                 </Badge>
               </TabsTrigger>
             )}
+            <TabsTrigger value="purchase_orders" className="gap-2">
+              <ShoppingCart className="h-4 w-4" />
+              Órdenes Pedido
+            </TabsTrigger>
             <TabsTrigger value="invoices" className="gap-2">
               <Receipt className="h-4 w-4" />
               Facturas

@@ -337,6 +337,8 @@ export function SectionAxisViewer({
         name: editName.trim() || p.name,
         zTop: parseInt(editHeight) || p.zTop,
         vertices: editVertices,
+        hasFloor: editHasFloor,
+        hasCeiling: editHasCeiling,
       };
     });
     setPolygons(updated);

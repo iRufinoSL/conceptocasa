@@ -72,6 +72,8 @@ interface CustomSectionManagerProps {
   onRidgeLineChange?: (ridge: import('@/hooks/useFloorPlan').RidgeLine | null) => void;
   /** Open workspace properties panel */
   onOpenWorkspaceProperties?: (info: { workspaceId: string; workspaceName: string; sectionType: string; sectionName: string }) => void;
+  /** Refresh data from DB */
+  onRefresh?: () => Promise<void>;
 }
 
 const AXIS_MAP: Record<string, { axis: 'X' | 'Y' | 'Z'; label: string; placeholder: string }> = {
@@ -929,7 +931,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
 
     const color = PROJ_COLORS[pi % PROJ_COLORS.length];
     const svgPts = verts.map(v => toSvg(v.x, v.y));
-    const fontSize = Math.round(7 * Math.max(1, zoomLevel * 0.8));
+    const fontSize = Math.round(10 * Math.max(1, zoomLevel * 0.8));
 
     // ─── POINT (1 vertex) ───
     if (verts.length === 1) {
@@ -1096,34 +1098,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                   handleWallEdgeClick(pseudoRoom, ei, v, next, emx, emy);
                 }}
               />
-              {/* Wall number badge */}
-              {(() => {
-                const len = Math.sqrt(edx * edx + edy * edy) || 1;
-                let wnx = -edy / len;
-                let wny = edx / len;
-                const toCenter = (cxSvg - emx) * wnx + (cySvg - emy) * wny;
-                if (toCenter > 0) { wnx = -wnx; wny = -wny; }
-                const offX = emx + wnx * 12;
-                const offY = emy + wny * 12;
-                return (
-                  <>
-                    <circle cx={offX} cy={offY} r={6}
-                      fill={isThisWallSelected ? (isHoriz ? 'hsl(150 70% 40%)' : 'hsl(30 80% 50%)') : 'hsl(210 60% 50%)'}
-                      className="cursor-pointer"
-                      data-pdf-wall-number=""
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleWallNumberClick(pseudoRoom, ei, v, next, emx, emy);
-                      }}
-                    />
-                    <text x={offX} y={offY} textAnchor="middle" dominantBaseline="central" fill="#ffffff" fontSize="7" fontWeight="bold" className="pointer-events-none select-none"
-                      data-pdf-wall-number=""
-                    >
-                      {ei + 1}
-                    </text>
-                  </>
-                );
-              })()}
+              {/* Wall number badge removed for cleaner visuals */}
               {/* Section type hint on selected wall */}
               {isThisWallSelected && (
                 <text
@@ -1167,16 +1142,22 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
           let nx = -edy / len;
           let ny = edx / len;
           if ((cxSvg - emx) * nx + (cySvg - emy) * ny > 0) { nx = -nx; ny = -ny; }
-          const offPx = isEditingThis ? 14 : 10;
+          const offPx = isEditingThis ? 18 : 14;
+          const labelX = emx + nx * offPx;
+          const labelY = emy + ny * offPx;
+          const labelText = `${eLenMm} mm`;
+          const labelW = labelText.length * 5.5 + 8;
+          const labelH = fontSize + 6;
           return (
-            <text key={`emm-${ei}`}
-              x={emx + nx * offPx} y={emy + ny * offPx}
-              textAnchor="middle" dominantBaseline="central"
-              transform={`rotate(${eRotAngle}, ${emx + nx * offPx}, ${emy + ny * offPx})`}
-              fontSize={fontSize} fontWeight={700} fill={color}
-              className="pointer-events-none select-none"
-              data-pdf-dimension=""
-            >{eLenMm} mm</text>
+            <g key={`emm-${ei}`} className="pointer-events-none select-none" data-pdf-dimension=""
+              transform={`rotate(${eRotAngle}, ${labelX}, ${labelY})`}>
+              <rect x={labelX - labelW / 2} y={labelY - labelH / 2} width={labelW} height={labelH} rx={3}
+                fill="rgba(255,255,255,0.9)" stroke={color} strokeWidth={0.5} />
+              <text x={labelX} y={labelY}
+                textAnchor="middle" dominantBaseline="central"
+                fontSize={fontSize} fontWeight={700} fill={color}
+              >{labelText}</text>
+            </g>
           );
         })}
         {/* Vertex labels */}
@@ -2855,7 +2836,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
   );
 }
 
-export function CustomSectionManager({ sectionType, sections, onSectionsChange, scaleConfig, wallProjectionsBySection, rooms, budgetName, onNavigateToWallSection, forcedVisibleGridId, planData, ridgeLine, onRidgeLineChange, onOpenWorkspaceProperties }: CustomSectionManagerProps) {
+export function CustomSectionManager({ sectionType, sections, onSectionsChange, scaleConfig, wallProjectionsBySection, rooms, budgetName, onNavigateToWallSection, forcedVisibleGridId, planData, ridgeLine, onRidgeLineChange, onOpenWorkspaceProperties, onRefresh }: CustomSectionManagerProps) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState('');
   const [newAxisValue, setNewAxisValue] = useState('0');
@@ -3069,6 +3050,15 @@ export function CustomSectionManager({ sectionType, sections, onSectionsChange, 
               </div>
               {!isEditing && (
                 <div className="flex items-center gap-1 shrink-0">
+                  {onRefresh && (
+                    <Button
+                      variant="ghost" size="sm" className="h-7 w-7 p-0"
+                      onClick={async () => { await onRefresh(); toast.success('Actualizado'); }}
+                      title="Actualizar datos"
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
                   <Button
                     variant={gridVisible ? 'default' : 'ghost'}
                     size="sm"

@@ -403,6 +403,7 @@ export function SectionsView(props: SectionsViewProps) {
                    ridgeLine={props.ridgeLine}
                    onRidgeLineChange={props.onRidgeLineChange}
                    onOpenWorkspaceProperties={(info) => setWorkspaceProps(info)}
+                   onRefresh={props.onRefresh}
                  />
                </div>
             )}

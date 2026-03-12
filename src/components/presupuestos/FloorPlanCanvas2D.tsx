@@ -859,11 +859,7 @@ export function FloorPlanCanvas2D({
                     );
                   })()}
 
-                  {/* Interior dimension (top) */}
-                  <line x1={0} y1={-8} x2={w} y2={-8} stroke="#9ca3af" strokeWidth={0.5} pointerEvents="none" />
-                  <text x={w / 2} y={-12} textAnchor="middle" fontSize={7} fill="#64748b" pointerEvents="none">
-                    {room.width.toFixed(1)}m
-                  </text>
+                  {/* (Wall dimensions are now shown globally outside each room) */}
 
                   {/* Resize handles — improved with hover glow */}
                   {isSelected && onResizeWall && roomWallSegments.map(({ wall, isHoriz: ih }) => {
@@ -999,96 +995,55 @@ export function FloorPlanCanvas2D({
               );
             })}
 
-            {/* Building outline corners and edge measurements */}
-            {buildingOutline.length >= 3 && (() => {
-              const extT2 = plan.externalWallThickness;
-              const CORNER_R = 6;
-              const CORNER_FONT = 9;
-              const EDGE_FONT = 7;
-              const CORNER_BG = '#1e40af';
-              const CORNER_FG = '#ffffff';
-              const EDGE_COLOR = '#1e40af';
+            {/* Wall dimension labels on each room edge — prominent */}
+            {rooms.map(room => {
+              const rx = room.posX * SCALE;
+              const ry = room.posY * SCALE;
+              const rw = room.width * SCALE;
+              const rh = room.length * SCALE;
+              const WALL_DIM_FONT = 10;
+              const WALL_DIM_COLOR = '#1e293b';
+              const WALL_DIM_BG = 'rgba(255,255,255,0.85)';
+              const wallDims: JSX.Element[] = [];
 
-              const elements: JSX.Element[] = [];
-
-              // Draw edges with measurements
-              for (let i = 0; i < buildingOutline.length; i++) {
-                const v1 = buildingOutline[i];
-                const v2 = buildingOutline[(i + 1) % buildingOutline.length];
-                const dx = v2.x - v1.x;
-                const dy = v2.y - v1.y;
-                const edgeLen = Math.sqrt(dx * dx + dy * dy);
-                if (edgeLen < 0.05) continue;
-
-                // Convert to SVG coordinates (offset by extT for exterior perimeter)
-                const sx1 = (v1.x - extT2) * SCALE * -1 + (rooms.reduce((mn, r) => Math.min(mn, r.posX), Infinity)) * SCALE + v1.x * SCALE;
-                // Simpler: just use v.x * SCALE, v.y * SCALE directly since outline coords are in room coordinate space
-                const px1 = v1.x * SCALE;
-                const py1 = v1.y * SCALE;
-                const px2 = v2.x * SCALE;
-                const py2 = v2.y * SCALE;
-
-                const mx = (px1 + px2) / 2;
-                const my = (py1 + py2) / 2;
-
-                // Edge line (subtle)
-                elements.push(
-                  <line key={`ol-edge-${i}`}
-                    x1={px1} y1={py1} x2={px2} y2={py2}
-                    stroke={EDGE_COLOR} strokeWidth={1.2} strokeDasharray="6 3" opacity={0.4} pointerEvents="none" />
-                );
-
-                // Measurement label offset outward
-                const isHoriz = Math.abs(dy) < 0.05;
-                const isVert = Math.abs(dx) < 0.05;
-                let labelX = mx;
-                let labelY = my;
-                const offset = 14;
-
-                if (isHoriz) {
-                  // Determine if this is on top or bottom
-                  const centerY = rooms.reduce((s, r) => s + r.posY + r.length / 2, 0) / rooms.length;
-                  labelY = v1.y < centerY ? my - offset : my + offset + 4;
-                } else if (isVert) {
-                  const centerX = rooms.reduce((s, r) => s + r.posX + r.width / 2, 0) / rooms.length;
-                  labelX = v1.x < centerX ? mx - offset - 8 : mx + offset + 8;
-                }
-
-                const edgeLenWithWalls = edgeLen + 2 * extT2;
-                elements.push(
-                  <text key={`ol-dim-${i}`}
-                    x={labelX} y={labelY}
-                    textAnchor="middle" dominantBaseline="middle"
-                    fontSize={EDGE_FONT} fontWeight="bold" fill={EDGE_COLOR} opacity={0.8} pointerEvents="none">
-                    {v1.label}{v2.label}: {edgeLenWithWalls.toFixed(2)}m
+              // Top wall (wall 1) — width
+              wallDims.push(
+                <g key={`wd-${room.id}-1`} transform={`translate(${rx + rw / 2}, ${ry - 6})`}>
+                  <rect x={-20} y={-7} width={40} height={14} rx={3} fill={WALL_DIM_BG} />
+                  <text textAnchor="middle" dominantBaseline="middle" fontSize={WALL_DIM_FONT} fontWeight="700" fill={WALL_DIM_COLOR}>
+                    {room.width.toFixed(2)}m
                   </text>
-                );
-              }
-
-              // Draw corner markers
-              buildingOutline.forEach((v, i) => {
-                const cx = v.x * SCALE;
-                const cy = v.y * SCALE;
-
-                // Background circle
-                elements.push(
-                  <circle key={`ol-corner-bg-${i}`}
-                    cx={cx} cy={cy} r={CORNER_R}
-                    fill={CORNER_BG} stroke="#ffffff" strokeWidth={1.5} opacity={0.9} pointerEvents="none" />
-                );
-                // Label
-                elements.push(
-                  <text key={`ol-corner-lbl-${i}`}
-                    x={cx} y={cy + 1}
-                    textAnchor="middle" dominantBaseline="middle"
-                    fontSize={CORNER_FONT} fontWeight="bold" fill={CORNER_FG} pointerEvents="none">
-                    {v.label}
+                </g>
+              );
+              // Right wall (wall 2) — length
+              wallDims.push(
+                <g key={`wd-${room.id}-2`} transform={`translate(${rx + rw + 6}, ${ry + rh / 2})`}>
+                  <rect x={-2} y={-7} width={42} height={14} rx={3} fill={WALL_DIM_BG} />
+                  <text x={19} textAnchor="middle" dominantBaseline="middle" fontSize={WALL_DIM_FONT} fontWeight="700" fill={WALL_DIM_COLOR}>
+                    {room.length.toFixed(2)}m
                   </text>
-                );
-              });
-
-              return elements;
-            })()}
+                </g>
+              );
+              // Bottom wall (wall 3) — width
+              wallDims.push(
+                <g key={`wd-${room.id}-3`} transform={`translate(${rx + rw / 2}, ${ry + rh + 8})`}>
+                  <rect x={-20} y={-7} width={40} height={14} rx={3} fill={WALL_DIM_BG} />
+                  <text textAnchor="middle" dominantBaseline="middle" fontSize={WALL_DIM_FONT} fontWeight="700" fill={WALL_DIM_COLOR}>
+                    {room.width.toFixed(2)}m
+                  </text>
+                </g>
+              );
+              // Left wall (wall 4) — length
+              wallDims.push(
+                <g key={`wd-${room.id}-4`} transform={`translate(${rx - 6}, ${ry + rh / 2})`}>
+                  <rect x={-40} y={-7} width={42} height={14} rx={3} fill={WALL_DIM_BG} />
+                  <text x={-19} textAnchor="middle" dominantBaseline="middle" fontSize={WALL_DIM_FONT} fontWeight="700" fill={WALL_DIM_COLOR}>
+                    {room.length.toFixed(2)}m
+                  </text>
+                </g>
+              );
+              return wallDims;
+            })}
 
             {/* Magnetic alignment guides when dragging */}
             {liveDragOffset && (() => {
@@ -1232,18 +1187,23 @@ export function FloorPlanCanvas2D({
                   );
                 })}
 
-                {/* Building outline corners */}
-                {showCorners && buildingOutline.length >= 3 && buildingOutline.map((v, i) => (
-                  <g key={`fs-corner-${i}`}>
-                    <circle cx={v.x * SCALE} cy={v.y * SCALE} r={8}
-                      fill="#1e40af" stroke="#ffffff" strokeWidth={1.5} opacity={0.9} pointerEvents="none" />
-                    <text x={v.x * SCALE} y={v.y * SCALE + 1}
-                      textAnchor="middle" dominantBaseline="middle"
-                      fontSize={9} fontWeight="bold" fill="#ffffff" pointerEvents="none">
-                      {v.label}
-                    </text>
-                  </g>
-                ))}
+                {/* Wall dimensions in fullscreen */}
+                {rooms.map(room => {
+                  const rx = room.posX * SCALE;
+                  const ry = room.posY * SCALE;
+                  const rw = room.width * SCALE;
+                  const rh = room.length * SCALE;
+                  return (
+                    <g key={`fs-wd-${room.id}`} pointerEvents="none">
+                      <text x={rx + rw / 2} y={ry - 6} textAnchor="middle" fontSize={10} fontWeight="700" fill="#1e293b">
+                        {room.width.toFixed(2)}m
+                      </text>
+                      <text x={rx + rw + 8} y={ry + rh / 2} textAnchor="start" dominantBaseline="middle" fontSize={10} fontWeight="700" fill="#1e293b">
+                        {room.length.toFixed(2)}m
+                      </text>
+                    </g>
+                  );
+                })}
               </g>
             </svg>
           </div>

@@ -2447,6 +2447,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
       name: formName.trim(),
       length: Math.round(bbox.w * scale * 100) / 100,
       width: Math.round(bbox.h * scale * 100) / 100,
+      pos_x: Math.round(bbox.minX * scale * 100) / 100,
+      pos_y: Math.round(bbox.minY * scale * 100) / 100,
       height: parseFloat(formHeight) || 0,
       floor_plan_id: floorPlan.id,
       vertical_section_id: sectionId,
@@ -2459,6 +2461,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
       if (error) { toast.error('Error al actualizar'); return; }
       // Smart rebuild: only recreate walls if vertex count changed
       await rebuildWallsSmart(editingId, formVertices.length);
+      // Sync polygon to customSections so Plano view updates
+      await syncFloorPolygonToSections(editingId, formVertices);
       toast.success('Espacio actualizado');
     } else {
       const { data: newRoom, error } = await supabase
@@ -2467,6 +2471,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
       const walls = formVertices.map((_, i) => ({ room_id: newRoom.id, wall_index: i + 1, wall_type: 'exterior' }));
       const { error: wallsInsertError } = await supabase.from('budget_floor_plan_walls').insert(walls);
       if (wallsInsertError) { toast.error(`Espacio creado, pero falló la creación de paredes: ${wallsInsertError.message}`); return; }
+      // Sync polygon to customSections so Plano view updates immediately
+      await syncFloorPolygonToSections(newRoom.id, formVertices);
       toast.success(`Espacio creado con ${formVertices.length} paredes`);
     }
     resetForm();
@@ -3169,6 +3175,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
       floor_polygon: gridEditVertices as any,
       length: Math.round(bbox.w * cellSizeM * 100) / 100,
       width: Math.round(bbox.h * cellSizeM * 100) / 100,
+      pos_x: Math.round(bbox.minX * cellSizeM * 100) / 100,
+      pos_y: Math.round(bbox.minY * cellSizeM * 100) / 100,
     }).eq('id', roomId);
     // Smart rebuild: only recreate walls if vertex count changed
     await rebuildWallsSmart(roomId, gridEditVertices.length);
@@ -3212,6 +3220,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
       floor_polygon: newVertices as any,
       length: Math.round(bbox.w * cellSizeM * 100) / 100,
       width: Math.round(bbox.h * cellSizeM * 100) / 100,
+      pos_x: Math.round(bbox.minX * cellSizeM * 100) / 100,
+      pos_y: Math.round(bbox.minY * cellSizeM * 100) / 100,
     }).eq('id', otherId);
     // Smart rebuild: only recreate walls if vertex count changed
     await rebuildWallsSmart(otherId, newVertices.length);

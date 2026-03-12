@@ -251,7 +251,7 @@ export function SectionAxisViewer({
   // Handle SVG click for drawing
   const handleSvgClick = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
     if (!drawMode || !gridLayout) return;
-    const node = snapToNode(e.clientX, e.clientY);
+    const node = snapToNode(e);
     if (!node) return;
 
     // Check if closing the polygon (clicking first vertex)

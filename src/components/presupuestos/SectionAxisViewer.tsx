@@ -537,7 +537,7 @@ export function SectionAxisViewer({
   // Drawing overlay (current drawing in progress)
   const drawingOverlay = useMemo(() => {
     if (!drawMode || !gridLayout || drawingVertices.length === 0) return null;
-    const { ox, oy } = gridLayout;
+    const { ox, oy, cellPx } = gridLayout;
     const elements: JSX.Element[] = [];
 
     const pxVerts = drawingVertices.map(v => ({

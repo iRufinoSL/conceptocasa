@@ -52,6 +52,8 @@ export function SectionAxisViewer({
   sectionName,
   savedScale,
   onSaveScale,
+  savedNegLimits,
+  onSaveNegLimits,
   ridgeLine,
 }: SectionAxisViewerProps) {
   const { fixedAxis, hAxis, vAxis } = getConfig(sectionType);
@@ -63,6 +65,13 @@ export function SectionAxisViewer({
   const [hScaleInput, setHScaleInput] = useState(String(savedScale?.hScale || ''));
   const [vScaleInput, setVScaleInput] = useState(String(savedScale?.vScale || ''));
   const [scale, setScale] = useState<SectionScale | null>(savedScale || null);
+
+  // Negative grid limits
+  const [negHInput, setNegHInput] = useState(String(savedNegLimits?.negH ?? 3));
+  const [negVInput, setNegVInput] = useState(String(savedNegLimits?.negV ?? 3));
+  const [negLimits, setNegLimits] = useState<{ negH: number; negV: number }>(
+    savedNegLimits || { negH: 3, negV: 3 }
+  );
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ w: 800, h: 500 });

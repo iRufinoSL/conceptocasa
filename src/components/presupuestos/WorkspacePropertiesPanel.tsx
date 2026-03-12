@@ -210,7 +210,7 @@ export function WorkspacePropertiesPanel({ workspaceId, workspaceName, sectionTy
   };
 
   const poly = room?.floor_polygon as Array<{ x: number; y: number }> | null;
-  const edgeCount = poly ? poly.length : (room ? 4 : 0);
+  const edgeCount = edgeCountProp ?? (poly ? poly.length : (room ? 4 : 0));
 
   let area = 0;
   if (poly && poly.length >= 3) {

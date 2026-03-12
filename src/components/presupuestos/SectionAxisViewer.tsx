@@ -5,7 +5,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Save, PenTool, X, Check, Printer, Ruler } from 'lucide-react';
 import type { SectionPolygon } from './CustomSectionManager';
-import html2canvas from 'html2canvas';
+import { WorkspacePropertiesPanel } from './WorkspacePropertiesPanel';
+import { VISUAL_PATTERNS, getPatternById } from '@/lib/visual-patterns';
 import jsPDF from 'jspdf';
 import { toast } from 'sonner';
 
@@ -27,6 +28,11 @@ export interface RulerLine {
   label?: string;
 }
 
+/** Face pattern map: polyId -> { faceKey -> patternId } */
+export interface PolygonFacePatterns {
+  [polyId: string]: { [faceKey: string]: string | null };
+}
+
 interface SectionAxisViewerProps {
   sectionType: 'vertical' | 'longitudinal' | 'transversal';
   axisValue: number;
@@ -42,6 +48,9 @@ interface SectionAxisViewerProps {
   /** Persisted ruler lines */
   savedRulerLines?: RulerLine[];
   onSaveRulerLines?: (lines: RulerLine[]) => void;
+  /** Face patterns per polygon */
+  facePatterns?: PolygonFacePatterns;
+  onFacePatternChange?: (polyId: string, faceKey: string, patternId: string | null) => void;
 }
 
 const AXIS_COLORS = {
@@ -70,7 +79,6 @@ function getConfig(sectionType: string) {
   }
 }
 
-/** Compute polygon area using the Shoelace formula (in grid units²) */
 function polygonAreaGrid(vertices: Array<{ x: number; y: number }>): number {
   let area = 0;
   const n = vertices.length;
@@ -82,14 +90,12 @@ function polygonAreaGrid(vertices: Array<{ x: number; y: number }>): number {
   return Math.abs(area) / 2;
 }
 
-/** Compute centroid of polygon */
 function polygonCentroid(vertices: Array<{ x: number; y: number }>): { x: number; y: number } {
   let cx = 0, cy = 0;
   vertices.forEach(v => { cx += v.x; cy += v.y; });
   return { x: cx / vertices.length, y: cy / vertices.length };
 }
 
-/** Distance between two points in grid coords */
 function edgeLengthGrid(a: { x: number; y: number }, b: { x: number; y: number }): number {
   return Math.sqrt((b.x - a.x) ** 2 + (b.y - a.y) ** 2);
 }
@@ -107,6 +113,8 @@ export function SectionAxisViewer({
   onSavePolygons,
   savedRulerLines,
   onSaveRulerLines,
+  facePatterns: savedFacePatterns,
+  onFacePatternChange,
 }: SectionAxisViewerProps) {
   const { fixedAxis, hAxis, vAxis } = getConfig(sectionType);
   const hColor = AXIS_COLORS[hAxis];
@@ -118,7 +126,7 @@ export function SectionAxisViewer({
   const [vScaleInput, setVScaleInput] = useState(String(savedScale?.vScale || ''));
   const [scale, setScale] = useState<SectionScale | null>(savedScale || null);
 
-  // Grid limits: negative and positive for each axis (in grid nodes)
+  // Grid limits
   const [negHInput, setNegHInput] = useState(String(savedNegLimits?.negH ?? 3));
   const [negVInput, setNegVInput] = useState(String(savedNegLimits?.negV ?? 3));
   const [posHInput, setPosHInput] = useState(String(savedNegLimits?.posH ?? 8));
@@ -156,8 +164,17 @@ export function SectionAxisViewer({
   const [editRulerLabel, setEditRulerLabel] = useState('');
   const [rulerHoverNode, setRulerHoverNode] = useState<{ col: number; row: number } | null>(null);
 
-  // Wall label display mode for PDF and screen
+  // Wall label display mode
   const [wallLabelMode, setWallLabelMode] = useState<WallLabelMode>('both');
+
+  // Face properties panel state
+  const [facePanel, setFacePanel] = useState<{ polyId: string; polyName: string; faceKey: string } | null>(null);
+
+  // Local face patterns (for immediate SVG re-render)
+  const [facePatterns, setFacePatterns] = useState<PolygonFacePatterns>(savedFacePatterns || {});
+
+  // Double-click timer for edge detection
+  const lastClickRef = useRef<{ time: number; polyId: string; edgeIdx: number } | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -173,10 +190,7 @@ export function SectionAxisViewer({
     return () => ro.disconnect();
   }, []);
 
-  useEffect(() => {
-    if (savedRulerLines) setRulerLines(savedRulerLines);
-  }, [savedRulerLines]);
-
+  useEffect(() => { if (savedRulerLines) setRulerLines(savedRulerLines); }, [savedRulerLines]);
   useEffect(() => {
     if (savedScale) {
       setScale(savedScale);
@@ -198,9 +212,8 @@ export function SectionAxisViewer({
     }
   }, [savedNegLimits]);
 
-  useEffect(() => {
-    if (savedPolygons) setPolygons(savedPolygons);
-  }, [savedPolygons]);
+  useEffect(() => { if (savedPolygons) setPolygons(savedPolygons); }, [savedPolygons]);
+  useEffect(() => { if (savedFacePatterns) setFacePatterns(savedFacePatterns); }, [savedFacePatterns]);
 
   const handleSaveScale = () => {
     const h = parseFloat(hScaleInput);
@@ -226,13 +239,11 @@ export function SectionAxisViewer({
     try {
       const svgEl = svgRef.current;
       const svgClone = svgEl.cloneNode(true) as SVGSVGElement;
-      // Ensure the clone has explicit dimensions and white background
       const svgW = svgEl.width.baseVal.value || svgEl.clientWidth || 800;
       const svgH = svgEl.height.baseVal.value || svgEl.clientHeight || 500;
       svgClone.setAttribute('width', String(svgW));
       svgClone.setAttribute('height', String(svgH));
       svgClone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-      // Add white background rect
       const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
       bgRect.setAttribute('width', '100%');
       bgRect.setAttribute('height', '100%');
@@ -276,7 +287,6 @@ export function SectionAxisViewer({
   const w = containerSize.w;
   const h = containerSize.h;
 
-  // Compute grid layout: fixed number of cols/rows from limits, cellPx auto-calculated to fill viewport
   const gridLayout = useMemo(() => {
     if (!scale) return null;
     const totalCols = gridLimits.negH + gridLimits.posH;
@@ -299,7 +309,6 @@ export function SectionAxisViewer({
     return { totalCols, totalRows, gridW, gridH, ox, oy, originCol, originRow, originX, originY, cellPx };
   }, [scale, w, h, gridLimits]);
 
-  // Convert grid col/row to pixel
   const colRowToPx = useCallback((col: number, row: number) => {
     if (!gridLayout) return { px: 0, py: 0 };
     return {
@@ -308,7 +317,6 @@ export function SectionAxisViewer({
     };
   }, [gridLayout]);
 
-  // Convert grid col/row to coordinate label values
   const colRowToCoord = useCallback((col: number, row: number) => {
     if (!gridLayout) return { hIdx: 0, vIdx: 0 };
     return {
@@ -317,7 +325,6 @@ export function SectionAxisViewer({
     };
   }, [gridLayout]);
 
-  // Snap mouse position to nearest half-grid node (0.5 precision) using SVG native coordinates
   const snapToNode = useCallback((e: React.MouseEvent<SVGSVGElement>): { col: number; row: number } | null => {
     if (!gridLayout) return null;
     const svg = e.currentTarget;
@@ -325,19 +332,15 @@ export function SectionAxisViewer({
     pt.x = e.clientX;
     pt.y = e.clientY;
     const ctm = svg.getScreenCTM();
-    if (ctm) {
-      pt = pt.matrixTransform(ctm.inverse());
-    }
+    if (ctm) pt = pt.matrixTransform(ctm.inverse());
     const rawCol = (pt.x - gridLayout.ox) / gridLayout.cellPx;
     const rawRow = (pt.y - gridLayout.oy) / gridLayout.cellPx;
-    // Round to 0.5 grid units for half-node precision
     const col = Math.round(rawCol * 2) / 2;
     const row = Math.round(rawRow * 2) / 2;
     if (col < 0 || col > gridLayout.totalCols || row < 0 || row > gridLayout.totalRows) return null;
     return { col, row };
   }, [gridLayout]);
 
-  // Snap with sub-grid precision for ruler mode
   const snapToNodePrecise = useCallback((e: React.MouseEvent<SVGSVGElement>): { col: number; row: number } | null => {
     if (!gridLayout) return null;
     const svg = e.currentTarget;
@@ -348,18 +351,32 @@ export function SectionAxisViewer({
     if (ctm) pt = pt.matrixTransform(ctm.inverse());
     const rawCol = (pt.x - gridLayout.ox) / gridLayout.cellPx;
     const rawRow = (pt.y - gridLayout.oy) / gridLayout.cellPx;
-    // Round to 0.5 grid units for sub-grid precision
     const col = Math.round(rawCol * 2) / 2;
     const row = Math.round(rawRow * 2) / 2;
     if (col < 0 || col > gridLayout.totalCols || row < 0 || row > gridLayout.totalRows) return null;
     return { col, row };
   }, [gridLayout]);
 
-  // Handle SVG click for drawing or ruler
+  /** Handle edge double-click to open face properties */
+  const handleEdgeClick = useCallback((polyId: string, edgeIdx: number) => {
+    const now = Date.now();
+    const last = lastClickRef.current;
+    if (last && last.polyId === polyId && last.edgeIdx === edgeIdx && (now - last.time) < 400) {
+      // Double click! Open face panel
+      const poly = polygons.find(p => p.id === polyId);
+      if (poly) {
+        const faceKey = `wall-${edgeIdx}`;
+        setFacePanel({ polyId, polyName: poly.name, faceKey });
+      }
+      lastClickRef.current = null;
+    } else {
+      lastClickRef.current = { time: now, polyId, edgeIdx };
+    }
+  }, [polygons]);
+
   const handleSvgClick = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
     if (!gridLayout) return;
 
-    // Ruler mode
     if (rulerMode) {
       const node = snapToNodePrecise(e);
       if (!node) return;
@@ -381,14 +398,12 @@ export function SectionAxisViewer({
     const node = snapToNode(e);
     if (!node) return;
 
-    // Check if closing the polygon (clicking first vertex)
     if (drawingVertices.length >= 3 &&
         node.col === drawingVertices[0].col && node.row === drawingVertices[0].row) {
       finishDrawing();
       return;
     }
 
-    // Don't add duplicate of last vertex
     const last = drawingVertices[drawingVertices.length - 1];
     if (last && last.col === node.col && last.row === node.row) return;
 
@@ -400,8 +415,6 @@ export function SectionAxisViewer({
       const node = snapToNodePrecise(e);
       setRulerHoverNode(node);
       setHoverNode(null);
-
-      // Handle ruler endpoint dragging
       if (draggingRulerId && draggingRulerEnd && node) {
         setRulerLines(prev => prev.map(rl => {
           if (rl.id !== draggingRulerId) return rl;
@@ -445,7 +458,6 @@ export function SectionAxisViewer({
     const name = drawingName.trim() || `Espacio ${polygons.length + 1}`;
     const heightMm = parseInt(drawingHeight) || 0;
 
-    // Convert col/row to axis coordinates
     const vertices = drawingVertices.map(v => {
       const coord = colRowToCoord(v.col, v.row);
       return { x: coord.hIdx, y: coord.vIdx, z: 0 };
@@ -483,7 +495,6 @@ export function SectionAxisViewer({
     onSavePolygons?.(updated);
   };
 
-  // Edit polygon handlers
   const startEditPolygon = (poly: SectionPolygon) => {
     setEditingPolyId(poly.id);
     setEditName(poly.name);
@@ -519,6 +530,30 @@ export function SectionAxisViewer({
     setEditVertices(prev => prev.map((v, i) => i === idx ? { ...v, [axis]: value } : v));
   };
 
+  /** Handle pattern change from the face panel */
+  const handlePatternChange = useCallback((faceKey: string, patternId: string | null) => {
+    if (!facePanel) return;
+    setFacePatterns(prev => ({
+      ...prev,
+      [facePanel.polyId]: {
+        ...(prev[facePanel.polyId] || {}),
+        [faceKey]: patternId,
+      },
+    }));
+    onFacePatternChange?.(facePanel.polyId, faceKey, patternId);
+  }, [facePanel, onFacePatternChange]);
+
+  // Collect unique patterns used by polygons for SVG <defs>
+  const usedPatternIds = useMemo(() => {
+    const ids = new Set<string>();
+    Object.values(facePatterns).forEach(faces => {
+      Object.values(faces).forEach(pid => {
+        if (pid) ids.add(pid);
+      });
+    });
+    return ids;
+  }, [facePatterns]);
+
   // Grid rendering
   const gridContent = useMemo(() => {
     if (!scale || !gridLayout) return null;
@@ -527,7 +562,6 @@ export function SectionAxisViewer({
     const gridLines: JSX.Element[] = [];
     const axisRefs: JSX.Element[] = [];
 
-    // Grid lines (these will fade during draw mode)
     for (let c = 0; c <= totalCols; c++) {
       const x = ox + c * cellPx;
       const isOrigin = c === originCol;
@@ -545,7 +579,6 @@ export function SectionAxisViewer({
       );
     }
 
-    // Tick labels (axis references - always visible)
     for (let c = 0; c <= totalCols; c++) {
       const x = ox + c * cellPx;
       const idx = c - originCol;
@@ -567,7 +600,7 @@ export function SectionAxisViewer({
       );
     }
 
-    // H axis arrow
+    // Arrows
     axisRefs.push(
       <polygon key="harrow"
         points={`${ox + gridW},${originY} ${ox + gridW - 8},${originY - 4} ${ox + gridW - 8},${originY + 4}`}
@@ -577,8 +610,6 @@ export function SectionAxisViewer({
       <text key="hlabel" x={ox + gridW + 4} y={originY - 8}
         fontSize={14} fontWeight="bold" fill={hColor} fontFamily="monospace">{hAxis}</text>
     );
-
-    // V axis arrow (up)
     axisRefs.push(
       <polygon key="varrow"
         points={`${originX},${oy} ${originX - 4},${oy + 8} ${originX + 4},${oy + 8}`}
@@ -589,7 +620,7 @@ export function SectionAxisViewer({
         fontSize={14} fontWeight="bold" fill={vColor} fontFamily="monospace">{vAxis}</text>
     );
 
-    // Origin indicator
+    // Origin
     axisRefs.push(<circle key="origin" cx={originX} cy={originY} r={5} fill={fixedColor} opacity={0.8} />);
     axisRefs.push(<circle key="originInner" cx={originX} cy={originY} r={2.5} fill="white" />);
     axisRefs.push(
@@ -605,7 +636,7 @@ export function SectionAxisViewer({
       </text>
     );
 
-    // Ridge line on Z sections
+    // Ridge line
     if (sectionType === 'vertical' && ridgeLine) {
       const RIDGE_COLOR = 'hsl(0, 0%, 45%)';
       const rx1 = originX + ridgeLine.x1 * cellPx;
@@ -642,13 +673,12 @@ export function SectionAxisViewer({
       );
     }
 
-    // ── Perimeter dimension lines (external, at 1 cellPx distance) ──
-    const dimOffset = cellPx; // 1 scale unit distance
+    // Dimension lines
+    const dimOffset = cellPx;
     const dimColor = 'hsl(0, 70%, 50%)';
     const dimFontSize = 9;
     const tickLen = 5;
 
-    // Bottom dimension (horizontal total width)
     const bottomY = oy + gridH + dimOffset;
     const totalWidthMm = totalCols * scale.hScale;
     axisRefs.push(
@@ -664,7 +694,6 @@ export function SectionAxisViewer({
       </text>
     );
 
-    // Right dimension (vertical total height)
     const rightX = ox + gridW + dimOffset;
     const totalHeightMm = totalRows * scale.vScale;
     axisRefs.push(
@@ -681,7 +710,6 @@ export function SectionAxisViewer({
       </text>
     );
 
-    // Per-cell dimension ticks on bottom (individual scale marks)
     for (let c = 0; c < totalCols; c++) {
       const x1 = ox + c * cellPx;
       const x2 = ox + (c + 1) * cellPx;
@@ -694,14 +722,12 @@ export function SectionAxisViewer({
           </text>
         );
       }
-      // Small mid-tick
       axisRefs.push(
         <line key={`dim-bt-${c}`} x1={x2} y1={bottomY - 2} x2={x2} y2={bottomY + 2}
           stroke={dimColor} strokeWidth={0.5} opacity={0.5} />
       );
     }
 
-    // Per-cell dimension ticks on right
     for (let r = 0; r < totalRows; r++) {
       const y1 = oy + r * cellPx;
       const y2 = oy + (r + 1) * cellPx;
@@ -723,7 +749,23 @@ export function SectionAxisViewer({
     return { gridLines, axisRefs };
   }, [scale, gridLayout, hAxis, vAxis, hColor, vColor, fixedColor, sectionType, ridgeLine]);
 
-  // Render saved polygons
+  // SVG pattern definitions
+  const patternDefs = useMemo(() => {
+    const defs: JSX.Element[] = [];
+    usedPatternIds.forEach(pid => {
+      const pat = getPatternById(pid);
+      if (!pat) return;
+      defs.push(
+        <pattern key={`pat-${pid}`} id={`section-pat-${pid}`}
+          patternUnits="userSpaceOnUse" width={pat.width} height={pat.height}>
+          <g dangerouslySetInnerHTML={{ __html: pat.svgContent }} />
+        </pattern>
+      );
+    });
+    return defs;
+  }, [usedPatternIds]);
+
+  // Render saved polygons with pattern fills
   const polygonElements = useMemo(() => {
     if (!gridLayout || !scale) return null;
     const { originX, originY, cellPx } = gridLayout;
@@ -734,41 +776,102 @@ export function SectionAxisViewer({
       const verts = poly.vertices;
       if (verts.length < 3) return;
 
-      // Convert to pixel positions: x is hAxis (positive right), y is vAxis (positive up → screen up)
       const pxVerts = verts.map(v => ({
         px: originX + v.x * cellPx,
         py: originY - v.y * cellPx,
       }));
 
-      // Polygon fill
       const pointsStr = pxVerts.map(p => `${p.px},${p.py}`).join(' ');
-      elements.push(
-        <polygon key={`poly-${poly.id}`} points={pointsStr}
-          fill={color} fillOpacity={0.15} stroke={color} strokeWidth={2.5} />
-      );
 
-      // Edge labels: wall number + length in mm (respects wallLabelMode)
-      if (wallLabelMode !== 'none') {
-        for (let i = 0; i < verts.length; i++) {
-          const j = (i + 1) % verts.length;
-          const a = pxVerts[i];
-          const b = pxVerts[j];
-          const edgeMidX = (a.px + b.px) / 2;
-          const edgeMidY = (a.py + b.py) / 2;
+      // Check if there's a whole-polygon pattern (we use the first wall pattern found, or floor pattern for Z sections)
+      const polyPatterns = facePatterns[poly.id] || {};
+      // For the polygon fill: use floor pattern for vertical sections, or first available pattern
+      const fillPatternId = polyPatterns['floor'] || polyPatterns['wall-0'] || null;
+      const fillPatternObj = getPatternById(fillPatternId);
 
-          // Length in mm using scale
-          const dxGrid = Math.abs(verts[j].x - verts[i].x);
-          const dyGrid = Math.abs(verts[j].y - verts[i].y);
-          const lengthMm = Math.sqrt((dxGrid * scale.hScale) ** 2 + (dyGrid * scale.vScale) ** 2);
-          const wallNum = i + 1;
+      // Polygon fill — use pattern if available, else transparent color
+      if (fillPatternObj) {
+        elements.push(
+          <polygon key={`poly-fill-${poly.id}`} points={pointsStr}
+            fill={`url(#section-pat-${fillPatternId})`} fillOpacity={0.6}
+            stroke="none" pointerEvents="none" />
+        );
+        // Border on top
+        elements.push(
+          <polygon key={`poly-border-${poly.id}`} points={pointsStr}
+            fill="none" stroke={color} strokeWidth={2.5} />
+        );
+      } else {
+        elements.push(
+          <polygon key={`poly-${poly.id}`} points={pointsStr}
+            fill={color} fillOpacity={0.15} stroke={color} strokeWidth={2.5} />
+        );
+      }
 
-          // Build label text based on mode
+      // Edge labels and clickable edges
+      for (let i = 0; i < verts.length; i++) {
+        const j = (i + 1) % verts.length;
+        const a = pxVerts[i];
+        const b = pxVerts[j];
+        const edgeMidX = (a.px + b.px) / 2;
+        const edgeMidY = (a.py + b.py) / 2;
+
+        const dxGrid = Math.abs(verts[j].x - verts[i].x);
+        const dyGrid = Math.abs(verts[j].y - verts[i].y);
+        const lengthMm = Math.sqrt((dxGrid * scale.hScale) ** 2 + (dyGrid * scale.vScale) ** 2);
+        const wallNum = i + 1;
+
+        // Check if this edge has a pattern
+        const edgePatternId = polyPatterns[`wall-${i}`];
+        const edgePattern = getPatternById(edgePatternId);
+
+        // If this edge has a pattern, render a thick band along the edge
+        if (edgePattern) {
+          const edgeDx = b.px - a.px;
+          const edgeDy = b.py - a.py;
+          const edgeLen = Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy);
+          if (edgeLen > 0) {
+            const nx = -edgeDy / edgeLen;
+            const ny = edgeDx / edgeLen;
+            const thickness = 12; // px
+            const p1x = a.px + nx * thickness / 2;
+            const p1y = a.py + ny * thickness / 2;
+            const p2x = b.px + nx * thickness / 2;
+            const p2y = b.py + ny * thickness / 2;
+            const p3x = b.px - nx * thickness / 2;
+            const p3y = b.py - ny * thickness / 2;
+            const p4x = a.px - nx * thickness / 2;
+            const p4y = a.py - ny * thickness / 2;
+            elements.push(
+              <polygon key={`edge-pat-${poly.id}-${i}`}
+                points={`${p1x},${p1y} ${p2x},${p2y} ${p3x},${p3y} ${p4x},${p4y}`}
+                fill={`url(#section-pat-${edgePatternId})`} fillOpacity={0.8}
+                stroke={color} strokeWidth={0.5} />
+            );
+          }
+        }
+
+        // Invisible thick hitbox for edge double-click
+        {
+          const edgeDx = b.px - a.px;
+          const edgeDy = b.py - a.py;
+          elements.push(
+            <line key={`edge-hit-${poly.id}-${i}`}
+              x1={a.px} y1={a.py} x2={b.px} y2={b.py}
+              stroke="transparent" strokeWidth={14}
+              style={{ cursor: '🔍', pointerEvents: 'stroke' }}
+              onClick={(e) => { e.stopPropagation(); handleEdgeClick(poly.id, i); }}
+            />
+          );
+        }
+
+        // Label text
+        if (wallLabelMode !== 'none') {
           let labelText = '';
           if (wallLabelMode === 'both') labelText = `P${wallNum} ${Math.round(lengthMm)}mm`;
           else if (wallLabelMode === 'name-only') labelText = `P${wallNum}`;
           else if (wallLabelMode === 'measure-only') labelText = `${Math.round(lengthMm)}mm`;
 
-          // Offset label slightly perpendicular to the edge
           const edgeDx = b.px - a.px;
           const edgeDy = b.py - a.py;
           const edgeLen = Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy);
@@ -778,7 +881,9 @@ export function SectionAxisViewer({
           const boxW = labelText.length * 5.5 + 10;
 
           elements.push(
-            <g key={`edge-${poly.id}-${i}`}>
+            <g key={`edge-label-${poly.id}-${i}`}
+              style={{ cursor: 'pointer' }}
+              onClick={(e) => { e.stopPropagation(); handleEdgeClick(poly.id, i); }}>
               <rect
                 x={edgeMidX + nx * offset - boxW / 2}
                 y={edgeMidY + ny * offset - 8}
@@ -791,12 +896,19 @@ export function SectionAxisViewer({
                 textAnchor="middle" fontSize={9} fontWeight={700} fill={color} fontFamily="monospace">
                 {labelText}
               </text>
+              {edgePattern && (
+                <rect
+                  x={edgeMidX + nx * offset + boxW / 2 - 14}
+                  y={edgeMidY + ny * offset - 5}
+                  width={10} height={10} rx={2}
+                  fill={edgePattern.bgColor} stroke={edgePattern.fgColor} strokeWidth={0.5} />
+              )}
             </g>
           );
         }
       }
 
-      // Vertex dots (always visible)
+      // Vertex dots
       for (let i = 0; i < verts.length; i++) {
         const a = pxVerts[i];
         elements.push(
@@ -805,19 +917,22 @@ export function SectionAxisViewer({
         );
       }
 
-      // Center label: name + area m² — NO box, text only with contrasting dark color
+      // Center label
       const areaGrid = polygonAreaGrid(verts.map(v => ({ x: v.x, y: v.y })));
       const areaM2 = areaGrid * (scale.hScale / 1000) * (scale.vScale / 1000);
       const centroid = polygonCentroid(verts.map(v => ({ x: v.x, y: v.y })));
       const cx = originX + centroid.x * cellPx;
       const cy = originY - centroid.y * cellPx;
       const heightMm = poly.zTop ? poly.zTop : null;
-
-      // Use a darkened version of the workspace color for contrast
       const darkColor = color.replace(/(\d+)%\)$/, (_, l) => `${Math.max(parseInt(l) - 20, 15)}%)`);
 
       elements.push(
-        <g key={`center-${poly.id}`}>
+        <g key={`center-${poly.id}`}
+          style={{ cursor: 'pointer' }}
+          onClick={(e) => {
+            e.stopPropagation();
+            setFacePanel({ polyId: poly.id, polyName: poly.name, faceKey: 'floor' });
+          }}>
           <text x={cx} y={cy - 4} textAnchor="middle" fontSize={11} fontWeight={800} fill={darkColor} fontFamily="sans-serif"
             stroke="white" strokeWidth={2.5} paintOrder="stroke">
             {poly.name}
@@ -831,9 +946,9 @@ export function SectionAxisViewer({
     });
 
     return elements;
-  }, [polygons, gridLayout, scale, wallLabelMode]);
+  }, [polygons, gridLayout, scale, wallLabelMode, facePatterns, handleEdgeClick]);
 
-  // Drawing overlay (current drawing in progress)
+  // Drawing overlay
   const drawingOverlay = useMemo(() => {
     if (!drawMode || !gridLayout || drawingVertices.length === 0) return null;
     const { ox, oy, cellPx } = gridLayout;
@@ -844,7 +959,6 @@ export function SectionAxisViewer({
       py: oy + v.row * cellPx,
     }));
 
-    // Lines between placed vertices
     for (let i = 0; i < pxVerts.length - 1; i++) {
       elements.push(
         <line key={`dline-${i}`}
@@ -854,7 +968,6 @@ export function SectionAxisViewer({
       );
     }
 
-    // Line from last vertex to hover node
     if (hoverNode && pxVerts.length > 0) {
       const lastPx = pxVerts[pxVerts.length - 1];
       const hPx = ox + hoverNode.col * cellPx;
@@ -864,7 +977,6 @@ export function SectionAxisViewer({
           x1={lastPx.px} y1={lastPx.py} x2={hPx} y2={hPy}
           stroke="hsl(var(--primary))" strokeWidth={1.5} strokeDasharray="4 4" opacity={0.6} />
       );
-      // If hovering first vertex and enough vertices, show close indicator
       if (drawingVertices.length >= 3 &&
           hoverNode.col === drawingVertices[0].col && hoverNode.row === drawingVertices[0].row) {
         elements.push(
@@ -874,36 +986,30 @@ export function SectionAxisViewer({
       }
     }
 
-    // Vertex dots
     pxVerts.forEach((p, i) => {
       elements.push(
         <circle key={`dvtx-${i}`} cx={p.px} cy={p.py} r={4}
-          fill={i === 0 ? 'hsl(var(--primary))' : 'hsl(var(--primary))'} stroke="white" strokeWidth={2} />
+          fill="hsl(var(--primary))" stroke="white" strokeWidth={2} />
       );
     });
 
-    // Custom round cursor at hover node
     if (hoverNode) {
       const hPx = ox + hoverNode.col * cellPx;
       const hPy = oy + hoverNode.row * cellPx;
       const isCloseNode = drawingVertices.length >= 3 &&
         hoverNode.col === drawingVertices[0].col && hoverNode.row === drawingVertices[0].row;
-      // Glow halo for visibility
       elements.push(
         <circle key="cursorGlow" cx={hPx} cy={hPy} r={isCloseNode ? 18 : 14}
           fill="hsl(var(--primary))" fillOpacity={0.12} />
       );
-      // Outer ring — bigger if closing
       elements.push(
         <circle key="cursorOuter" cx={hPx} cy={hPy} r={isCloseNode ? 14 : 10}
           fill="none" stroke="hsl(var(--primary))" strokeWidth={2.5} opacity={0.9} />
       );
-      // Inner filled dot
       elements.push(
         <circle key="cursorInner" cx={hPx} cy={hPy} r={4.5}
           fill="hsl(var(--primary))" opacity={1} />
       );
-      // Crosshair lines for precision
       elements.push(
         <line key="cursorH" x1={hPx - (isCloseNode ? 20 : 16)} y1={hPy} x2={hPx + (isCloseNode ? 20 : 16)} y2={hPy}
           stroke="hsl(var(--primary))" strokeWidth={1} opacity={0.4} />
@@ -917,12 +1023,11 @@ export function SectionAxisViewer({
     return elements;
   }, [drawMode, gridLayout, drawingVertices, hoverNode]);
 
-  // Node interaction dots (visible in draw mode) — including half-nodes
+  // Node interaction dots
   const nodeInteractionDots = useMemo(() => {
     if (!drawMode || !gridLayout) return null;
     const { totalCols, totalRows, ox, oy, cellPx } = gridLayout;
     const elements: JSX.Element[] = [];
-    // Full nodes + half nodes (step 0.5)
     for (let c = 0; c <= totalCols * 2; c++) {
       for (let r = 0; r <= totalRows * 2; r++) {
         const col = c / 2;
@@ -942,7 +1047,7 @@ export function SectionAxisViewer({
   }, [drawMode, gridLayout, hoverNode]);
 
   return (
-    <div ref={containerRef} className="rounded-lg border bg-card overflow-hidden">
+    <div ref={containerRef} className="rounded-lg border bg-card overflow-hidden relative">
       {/* Header */}
       <div className="px-3 py-2 border-b bg-muted/30 flex items-center gap-3 flex-wrap">
         <span className="text-sm font-semibold">{sectionName}</span>
@@ -1036,11 +1141,6 @@ export function SectionAxisViewer({
                 value={negHInput} onChange={e => setNegHInput(e.target.value)} placeholder="3" />
             </div>
             <div>
-              <Label className="text-[10px] text-muted-foreground">-{hAxis} (nodos)</Label>
-              <Input className="h-7 w-16 text-xs font-mono" type="number" min={0}
-                value={negHInput} onChange={e => setNegHInput(e.target.value)} placeholder="3" />
-            </div>
-            <div>
               <Label className="text-[10px] text-muted-foreground">+{hAxis} (nodos)</Label>
               <Input className="h-7 w-16 text-xs font-mono" type="number" min={1}
                 value={posHInput} onChange={e => setPosHInput(e.target.value)} placeholder="8" />
@@ -1090,7 +1190,7 @@ export function SectionAxisViewer({
               </div>
               {polygons.length > 0 && (
                 <span className="text-[10px] text-muted-foreground ml-auto">
-                  {polygons.length} espacio(s) dibujado(s)
+                  {polygons.length} espacio(s) — doble clic en arista para propiedades
                 </span>
               )}
             </>
@@ -1186,7 +1286,7 @@ export function SectionAxisViewer({
         </div>
       )}
 
-      {/* Ruler lines list (editable) */}
+      {/* Ruler lines list */}
       {rulerLines.length > 0 && !drawMode && !rulerMode && (
         <div className="px-3 py-1.5 border-b bg-muted/5 flex flex-wrap gap-1.5">
           {rulerLines.map((rl) => {
@@ -1236,6 +1336,11 @@ export function SectionAxisViewer({
           onMouseMove={handleSvgMouseMove}
           onMouseUp={handleSvgMouseUp}
         >
+          {/* Pattern definitions */}
+          <defs>
+            {patternDefs}
+          </defs>
+
           <g opacity={drawMode ? 0.25 : 1}>{gridContent?.gridLines}</g>
           {gridContent?.axisRefs}
           {nodeInteractionDots}
@@ -1258,7 +1363,6 @@ export function SectionAxisViewer({
             const my = (y1 + y2) / 2;
             const displayText = rl.label || `${Math.round(lengthMm)} mm`;
 
-            // Perpendicular offset for label
             const edgeDx = x2 - x1;
             const edgeDy = y2 - y1;
             const edgeLen = Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy);
@@ -1268,31 +1372,25 @@ export function SectionAxisViewer({
 
             return (
               <g key={`ruler-${rl.id}`}>
-                {/* Line */}
                 <line x1={x1} y1={y1} x2={x2} y2={y2}
                   stroke="hsl(30, 90%, 50%)" strokeWidth={2} strokeDasharray="6 3" />
-                {/* End ticks */}
                 <line x1={x1 - ny * 6} y1={y1 + nx * 6} x2={x1 + ny * 6} y2={y1 - nx * 6}
                   stroke="hsl(30, 90%, 50%)" strokeWidth={1.5} />
                 <line x1={x2 - ny * 6} y1={y2 + nx * 6} x2={x2 + ny * 6} y2={y2 - nx * 6}
                   stroke="hsl(30, 90%, 50%)" strokeWidth={1.5} />
-                {/* Endpoints (draggable) */}
                 <circle cx={x1} cy={y1} r={5} fill="hsl(30, 90%, 50%)" stroke="white" strokeWidth={1.5}
                   style={{ cursor: 'grab' }}
                   onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); setDraggingRulerId(rl.id); setDraggingRulerEnd('start'); setRulerMode(true); }} />
                 <circle cx={x2} cy={y2} r={5} fill="hsl(30, 90%, 50%)" stroke="white" strokeWidth={1.5}
                   style={{ cursor: 'grab' }}
                   onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); setDraggingRulerId(rl.id); setDraggingRulerEnd('end'); setRulerMode(true); }} />
-                {/* Label background */}
                 <rect x={mx + nx * labelOffset - 30} y={my + ny * labelOffset - 8}
                   width={60} height={16} rx={3}
                   fill="white" fillOpacity={0.92} stroke="hsl(30, 90%, 50%)" strokeWidth={0.5} />
-                {/* Label text */}
                 <text x={mx + nx * labelOffset} y={my + ny * labelOffset + 4}
                   textAnchor="middle" fontSize={9} fontWeight={700} fill="hsl(30, 70%, 35%)" fontFamily="monospace">
                   {displayText}
                 </text>
-                {/* Delete button */}
                 <g style={{ cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); handleDeleteRuler(rl.id); }}>
                   <circle cx={mx + nx * labelOffset + 28} cy={my + ny * labelOffset} r={6}
                     fill="hsl(0, 70%, 50%)" fillOpacity={0.8} />
@@ -1357,6 +1455,19 @@ export function SectionAxisViewer({
             Define las escalas {hAxis} y {vAxis} en milímetros y pulsa <strong>Guardar escala</strong> para generar la cuadrícula.
           </p>
         </div>
+      )}
+
+      {/* Face properties panel (floating) */}
+      {facePanel && (
+        <WorkspacePropertiesPanel
+          workspaceId={facePanel.polyId}
+          workspaceName={facePanel.polyName}
+          sectionType={sectionType}
+          sectionName={sectionName}
+          focusFace={facePanel.faceKey}
+          onClose={() => setFacePanel(null)}
+          onPatternChange={handlePatternChange}
+        />
       )}
     </div>
   );

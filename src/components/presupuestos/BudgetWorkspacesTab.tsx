@@ -515,7 +515,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
   const normalizeZoom = useCallback((nextZoom: number) => {
     const clamped = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, +nextZoom.toFixed(2)));
     return Math.abs(clamped - DEFAULT_ZOOM) <= ZOOM_EPSILON ? DEFAULT_ZOOM : clamped;
-  }, []);
+  }, [DEFAULT_ZOOM, ZOOM_EPSILON, ZOOM_MAX, ZOOM_MIN]);
 
   const applyZoom = useCallback((nextZoom: number | ((currentZoom: number) => number)) => {
     setZoomLevel((currentZoom) => {
@@ -526,13 +526,13 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
       }
       return normalized;
     });
-  }, [normalizeZoom, resetZoomViewport]);
+  }, [DEFAULT_ZOOM, normalizeZoom, resetZoomViewport]);
 
   useEffect(() => {
     if (zoomLevel <= DEFAULT_ZOOM + ZOOM_EPSILON) {
       resetZoomViewport();
     }
-  }, [zoomLevel, resetZoomViewport]);
+  }, [DEFAULT_ZOOM, ZOOM_EPSILON, zoomLevel, resetZoomViewport]);
 
   // At x1 the grid fits entirely; at higher zooms it grows and scrolls
   const baseCellSize = 28;

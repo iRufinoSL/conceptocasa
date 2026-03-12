@@ -64,6 +64,8 @@ interface WorkspacePropertiesPanelProps {
   onClose: () => void;
   /** Which face to highlight/focus (e.g., 'wall-0', 'floor', 'ceiling') */
   focusFace?: string;
+  /** Override edge count from the actual polygon in the section viewer */
+  edgeCount?: number;
   /** Callback when a pattern changes so parent can re-render */
   onPatternChange?: (faceKey: string, patternId: string | null) => void;
 }

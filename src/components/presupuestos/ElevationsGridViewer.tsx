@@ -4752,7 +4752,7 @@ function CompositeFullscreenBlockGrid({ compositeWall, plan, maxHeight, selected
           const ridgeY = rys + totalH - ridgeH * s;
           return (
             <line x1={rxs - 5} y1={ridgeY} x2={rxs + cw.totalLength * s + 5} y2={ridgeY}
-              stroke="hsl(0, 70%, 55%)" strokeWidth={0.8} strokeDasharray="6 3" opacity={0.6} />
+              stroke="hsl(0, 0%, 45%)" strokeWidth={0.8} strokeDasharray="6 3" opacity={0.6} />
           );
         }
         return null;

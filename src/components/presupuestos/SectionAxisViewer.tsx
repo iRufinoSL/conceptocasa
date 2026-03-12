@@ -100,11 +100,14 @@ export function SectionAxisViewer({
   const [vScaleInput, setVScaleInput] = useState(String(savedScale?.vScale || ''));
   const [scale, setScale] = useState<SectionScale | null>(savedScale || null);
 
-  // Negative limits
+  // Grid limits: negative and positive for each axis (in grid nodes)
   const [negHInput, setNegHInput] = useState(String(savedNegLimits?.negH ?? 3));
   const [negVInput, setNegVInput] = useState(String(savedNegLimits?.negV ?? 3));
-  const [negLimits, setNegLimits] = useState<{ negH: number; negV: number }>(
-    savedNegLimits || { negH: 3, negV: 3 }
+  const [posHInput, setPosHInput] = useState(String(savedNegLimits?.posH ?? 8));
+  const [posVInput, setPosVInput] = useState(String(savedNegLimits?.posV ?? 6));
+  const [gridLimits, setGridLimits] = useState<{ negH: number; negV: number; posH: number; posV: number }>(
+    savedNegLimits ? { negH: savedNegLimits.negH, negV: savedNegLimits.negV, posH: savedNegLimits.posH ?? 8, posV: savedNegLimits.posV ?? 6 }
+    : { negH: 3, negV: 3, posH: 8, posV: 6 }
   );
 
   // Drawing state

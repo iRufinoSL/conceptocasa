@@ -690,7 +690,7 @@ export function SectionAxisViewer({
           ) : (
             <div className="flex items-center gap-3 w-full">
               <span className="text-xs font-semibold text-primary">
-                ✏️ Dibujando: {drawingName} — Clic en nodos para trazar, cierra en el primer nodo
+                🎯 Dibujando: {drawingName} — Clic en nodos (cualquier sentido). Cierra en el 1er nodo o pulsa Cerrar.
               </span>
               <span className="text-[10px] text-muted-foreground">
                 Vértices: {drawingVertices.length}

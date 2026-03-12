@@ -4217,6 +4217,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
                   )}
                 </div>
                 <GridPolygonDrawer
+                  key={`form-z-${formSectionId || 'none'}-${editingId || 'new'}`}
                   originTopLeft
                   vertices={formVertices}
                   onChange={setFormVertices}

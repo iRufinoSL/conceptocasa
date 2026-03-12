@@ -24,6 +24,9 @@ interface SectionAxisViewerProps {
   /** Persisted scale in mm */
   savedScale?: { hScale: number; vScale: number };
   onSaveScale?: (scale: { hScale: number; vScale: number }) => void;
+  /** Persisted negative grid limits */
+  savedNegLimits?: { negH: number; negV: number };
+  onSaveNegLimits?: (limits: { negH: number; negV: number }) => void;
   /** Ridge line to draw on Z sections */
   ridgeLine?: RidgeLineData | null;
 }
@@ -49,6 +52,8 @@ export function SectionAxisViewer({
   sectionName,
   savedScale,
   onSaveScale,
+  savedNegLimits,
+  onSaveNegLimits,
   ridgeLine,
 }: SectionAxisViewerProps) {
   const { fixedAxis, hAxis, vAxis } = getConfig(sectionType);
@@ -60,6 +65,13 @@ export function SectionAxisViewer({
   const [hScaleInput, setHScaleInput] = useState(String(savedScale?.hScale || ''));
   const [vScaleInput, setVScaleInput] = useState(String(savedScale?.vScale || ''));
   const [scale, setScale] = useState<SectionScale | null>(savedScale || null);
+
+  // Negative grid limits
+  const [negHInput, setNegHInput] = useState(String(savedNegLimits?.negH ?? 3));
+  const [negVInput, setNegVInput] = useState(String(savedNegLimits?.negV ?? 3));
+  const [negLimits, setNegLimits] = useState<{ negH: number; negV: number }>(
+    savedNegLimits || { negH: 3, negV: 3 }
+  );
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ w: 800, h: 500 });
@@ -74,7 +86,7 @@ export function SectionAxisViewer({
     return () => ro.disconnect();
   }, []);
 
-  // Sync from savedScale
+  // Sync from savedScale & savedNegLimits
   useEffect(() => {
     if (savedScale) {
       setScale(savedScale);
@@ -83,6 +95,14 @@ export function SectionAxisViewer({
     }
   }, [savedScale]);
 
+  useEffect(() => {
+    if (savedNegLimits) {
+      setNegLimits(savedNegLimits);
+      setNegHInput(String(savedNegLimits.negH));
+      setNegVInput(String(savedNegLimits.negV));
+    }
+  }, [savedNegLimits]);
+
   const handleSaveScale = () => {
     const h = parseFloat(hScaleInput);
     const v = parseFloat(vScaleInput);
@@ -90,6 +110,14 @@ export function SectionAxisViewer({
     const newScale = { hScale: h, vScale: v };
     setScale(newScale);
     onSaveScale?.(newScale);
+  };
+
+  const handleSaveNegLimits = () => {
+    const nh = Math.max(0, Math.round(parseFloat(negHInput) || 0));
+    const nv = Math.max(0, Math.round(parseFloat(negVInput) || 0));
+    const newLimits = { negH: nh, negV: nv };
+    setNegLimits(newLimits);
+    onSaveNegLimits?.(newLimits);
   };
 
   const cellPx = 40; // pixels per grid cell
@@ -103,23 +131,23 @@ export function SectionAxisViewer({
 
     const drawW = w - margin * 2;
     const drawH = h - margin * 2;
-    const cols = Math.floor(drawW / cellPx);
-    const rows = Math.floor(drawH / cellPx);
-    const gridW = cols * cellPx;
-    const gridH = rows * cellPx;
-    const ox = margin + Math.floor((drawW - gridW) / 2); // grid origin x (left)
-    const oy = margin + Math.floor((drawH - gridH) / 2); // grid origin y (top)
+    const totalCols = Math.floor(drawW / cellPx);
+    const totalRows = Math.floor(drawH / cellPx);
+    const gridW = totalCols * cellPx;
+    const gridH = totalRows * cellPx;
+    const ox = margin + Math.floor((drawW - gridW) / 2);
+    const oy = margin + Math.floor((drawH - gridH) / 2);
 
-    // Origin at center of grid
-    const originCol = Math.floor(cols / 2);
-    const originRow = Math.floor(rows / 2);
+    // Origin positioned so that negH cells are to the left and negV cells below
+    const originCol = Math.min(negLimits.negH, totalCols - 1);
+    const originRow = Math.max(0, totalRows - negLimits.negV - 1);
     const originX = ox + originCol * cellPx;
     const originY = oy + originRow * cellPx;
 
     const elements: JSX.Element[] = [];
 
-    // Grid lines - discrete but visible
-    for (let c = 0; c <= cols; c++) {
+    // Grid lines - intense and visible
+    for (let c = 0; c <= totalCols; c++) {
       const x = ox + c * cellPx;
       const isOrigin = c === originCol;
       elements.push(
@@ -127,7 +155,7 @@ export function SectionAxisViewer({
           stroke={isOrigin ? hColor : 'hsl(var(--muted-foreground))'} strokeWidth={isOrigin ? 2.5 : 1} opacity={isOrigin ? 1 : 0.7} />
       );
     }
-    for (let r = 0; r <= rows; r++) {
+    for (let r = 0; r <= totalRows; r++) {
       const y = oy + r * cellPx;
       const isOrigin = r === originRow;
       elements.push(
@@ -136,8 +164,8 @@ export function SectionAxisViewer({
       );
     }
 
-    // Horizontal tick labels: X0, X1, X-1, etc.
-    for (let c = 0; c <= cols; c++) {
+    // Horizontal tick labels
+    for (let c = 0; c <= totalCols; c++) {
       const x = ox + c * cellPx;
       const idx = c - originCol;
       elements.push(
@@ -148,10 +176,10 @@ export function SectionAxisViewer({
       );
     }
 
-    // Vertical tick labels: Y0, Y1 (up), Y-1 (down), etc.
-    for (let r = 0; r <= rows; r++) {
+    // Vertical tick labels (positive up, negative down)
+    for (let r = 0; r <= totalRows; r++) {
       const y = oy + r * cellPx;
-      const idx = originRow - r; // positive up, negative down
+      const idx = originRow - r;
       elements.push(
         <text key={`vt${r}`} x={ox - 6} y={y + 4}
           textAnchor="end" fontSize={9} fill={vColor} fontFamily="monospace" fontWeight={idx === 0 ? 'bold' : 'normal'}>
@@ -201,14 +229,11 @@ export function SectionAxisViewer({
     // Ridge line on Z (vertical) sections
     if (sectionType === 'vertical' && ridgeLine) {
       const RIDGE_COLOR = 'hsl(0, 70%, 50%)';
-      // Convert ridge grid coords to pixel coords
-      // ridgeLine x1,y1,x2,y2 are in grid index units
       const rx1 = originX + ridgeLine.x1 * cellPx;
-      const ry1 = originY - ridgeLine.y1 * cellPx; // Y positive up
+      const ry1 = originY - ridgeLine.y1 * cellPx;
       const rx2 = originX + ridgeLine.x2 * cellPx;
       const ry2 = originY - ridgeLine.y2 * cellPx;
 
-      // Extend 3 grid units beyond endpoints
       const dx = ridgeLine.x2 - ridgeLine.x1;
       const dy = ridgeLine.y2 - ridgeLine.y1;
       const len = Math.sqrt(dx * dx + dy * dy);
@@ -220,20 +245,16 @@ export function SectionAxisViewer({
       const ex2 = originX + (ridgeLine.x2 + ux * ext) * cellPx;
       const ey2 = originY - (ridgeLine.y2 + uy * ext) * cellPx;
 
-      // Dashed red line (extended)
       elements.push(
         <line key="ridgeExt" x1={ex1} y1={ey1} x2={ex2} y2={ey2}
           stroke={RIDGE_COLOR} strokeWidth={2} strokeDasharray="8 4" opacity={0.7} />
       );
-      // Solid red line (defined segment)
       elements.push(
         <line key="ridgeSolid" x1={rx1} y1={ry1} x2={rx2} y2={ry2}
           stroke={RIDGE_COLOR} strokeWidth={2.5} strokeDasharray="10 5" opacity={0.9} />
       );
-      // Endpoint markers
       elements.push(<circle key="ridgeP1" cx={rx1} cy={ry1} r={3.5} fill={RIDGE_COLOR} opacity={0.9} />);
       elements.push(<circle key="ridgeP2" cx={rx2} cy={ry2} r={3.5} fill={RIDGE_COLOR} opacity={0.9} />);
-      // Label
       const mx = (rx1 + rx2) / 2;
       const my = (ry1 + ry2) / 2;
       elements.push(
@@ -245,7 +266,7 @@ export function SectionAxisViewer({
     }
 
     return elements;
-  }, [scale, w, h, hAxis, vAxis, hColor, vColor, fixedColor, fixedAxis, sectionType, ridgeLine]);
+  }, [scale, w, h, hAxis, vAxis, hColor, vColor, fixedColor, fixedAxis, sectionType, ridgeLine, negLimits]);
 
   return (
     <div ref={containerRef} className="rounded-lg border bg-card overflow-hidden">
@@ -294,6 +315,32 @@ export function SectionAxisViewer({
           </span>
         )}
       </div>
+
+      {/* Negative limits config bar */}
+      {scale && (
+        <div className="px-3 py-2 border-b bg-muted/10 flex items-end gap-3 flex-wrap">
+          <div className="flex items-end gap-2">
+            <div>
+              <Label className="text-[10px] text-muted-foreground">Límite neg. {hAxis} (nodos)</Label>
+              <Input className="h-7 w-20 text-xs font-mono" type="number" min={0}
+                value={negHInput} onChange={e => setNegHInput(e.target.value)}
+                placeholder="3" />
+            </div>
+            <div>
+              <Label className="text-[10px] text-muted-foreground">Límite neg. {vAxis} (nodos)</Label>
+              <Input className="h-7 w-20 text-xs font-mono" type="number" min={0}
+                value={negVInput} onChange={e => setNegVInput(e.target.value)}
+                placeholder="3" />
+            </div>
+            <Button size="sm" className="h-7 text-xs gap-1" onClick={handleSaveNegLimits}>
+              <Save className="h-3 w-3" /> Guardar límites
+            </Button>
+          </div>
+          <span className="text-[10px] text-muted-foreground ml-2">
+            Marco negativo: {hAxis}-{negLimits.negH} a {hAxis}+n · {vAxis}-{negLimits.negV} a {vAxis}+n
+          </span>
+        </div>
+      )}
 
       {/* SVG Canvas */}
       {scale ? (

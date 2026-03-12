@@ -271,6 +271,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
           sectionName={liveSection.name}
           savedScale={savedScale}
           onSaveScale={(scale) => handleSaveScale(liveSection.id, scale)}
+          ridgeLine={ridgeLine}
         />
       </div>
     );

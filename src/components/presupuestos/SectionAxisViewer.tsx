@@ -143,9 +143,14 @@ export function SectionAxisViewer({
 
   useEffect(() => {
     if (savedNegLimits) {
-      setNegLimits(savedNegLimits);
+      setGridLimits({
+        negH: savedNegLimits.negH, negV: savedNegLimits.negV,
+        posH: savedNegLimits.posH ?? 8, posV: savedNegLimits.posV ?? 6,
+      });
       setNegHInput(String(savedNegLimits.negH));
       setNegVInput(String(savedNegLimits.negV));
+      setPosHInput(String(savedNegLimits.posH ?? 8));
+      setPosVInput(String(savedNegLimits.posV ?? 6));
     }
   }, [savedNegLimits]);
 

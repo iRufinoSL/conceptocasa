@@ -577,6 +577,9 @@ export function PurchaseOrdersTab({ budgetId: fixedBudgetId }: { budgetId?: stri
                               <Plus className="h-4 w-4" />
                               Gestionar Líneas
                             </Button>
+                            <div className="mt-4 border-t pt-3">
+                              <AdminDocumentFiles documentType="purchase_order" documentId={order.id} />
+                            </div>
                           </CardContent>
                         </CollapsibleContent>
                       </Collapsible>

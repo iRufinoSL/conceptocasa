@@ -844,6 +844,9 @@ export function InvoicesTab({ budgetId: fixedBudgetId }: { budgetId?: string } =
                                 </Button>
                               )}
                             </div>
+                            <div className="mt-4 border-t pt-3">
+                              <AdminDocumentFiles documentType="invoice" documentId={invoice.id} />
+                            </div>
                           </CardContent>
                         </CollapsibleContent>
                       </Collapsible>

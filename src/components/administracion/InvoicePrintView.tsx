@@ -169,6 +169,8 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
   const [lines, setLines] = useState<InvoiceLine[]>([]);
   const [loading, setLoading] = useState(true);
   const [receiverContactFiscal, setReceiverContactFiscal] = useState<ContactFiscal | null>(null);
+  const [issuerContactData, setIssuerContactData] = useState<{ email?: string | null; phone?: string | null; address?: string | null; city?: string | null; province?: string | null } | null>(null);
+  const [receiverContactData, setReceiverContactData] = useState<{ email?: string | null; phone?: string | null; address?: string | null; city?: string | null; province?: string | null } | null>(null);
   const [printScale, setPrintScale] = useState<PrintScale>('normal');
   const printRef = useRef<HTMLDivElement>(null);
   const { settings: companySettings } = useCompanySettings();

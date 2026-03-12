@@ -252,6 +252,7 @@ export function SectionAxisViewer({
   const finishDrawing = useCallback(() => {
     if (drawingVertices.length < 3 || !scale || !gridLayout) return;
     const name = drawingName.trim() || `Espacio ${polygons.length + 1}`;
+    const heightMm = parseInt(drawingHeight) || 0;
 
     // Convert col/row to axis coordinates
     const vertices = drawingVertices.map(v => {
@@ -263,6 +264,8 @@ export function SectionAxisViewer({
       id: crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       name,
       vertices,
+      zBase: 0,
+      zTop: heightMm,
     };
 
     const updated = [...polygons, newPoly];
@@ -271,8 +274,9 @@ export function SectionAxisViewer({
     setDrawMode(false);
     setDrawingVertices([]);
     setDrawingName('');
+    setDrawingHeight('');
     setHoverNode(null);
-  }, [drawingVertices, drawingName, polygons, scale, gridLayout, colRowToCoord, onSavePolygons]);
+  }, [drawingVertices, drawingName, drawingHeight, polygons, scale, gridLayout, colRowToCoord, onSavePolygons]);
 
   const cancelDrawing = () => {
     setDrawMode(false);

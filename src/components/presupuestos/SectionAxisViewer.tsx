@@ -143,6 +143,16 @@ export function SectionAxisViewer({
   const [editHasFloor, setEditHasFloor] = useState(true);
   const [editHasCeiling, setEditHasCeiling] = useState(true);
 
+  // Ruler tool state
+  const [rulerMode, setRulerMode] = useState(false);
+  const [rulerLines, setRulerLines] = useState<RulerLine[]>(savedRulerLines || []);
+  const [rulerStart, setRulerStart] = useState<{ col: number; row: number } | null>(null);
+  const [draggingRulerId, setDraggingRulerId] = useState<string | null>(null);
+  const [draggingRulerEnd, setDraggingRulerEnd] = useState<'start' | 'end' | null>(null);
+  const [editingRulerId, setEditingRulerId] = useState<string | null>(null);
+  const [editRulerLabel, setEditRulerLabel] = useState('');
+  const [rulerHoverNode, setRulerHoverNode] = useState<{ col: number; row: number } | null>(null);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const [containerSize, setContainerSize] = useState({ w: 800, h: 500 });
@@ -156,6 +166,10 @@ export function SectionAxisViewer({
     ro.observe(containerRef.current);
     return () => ro.disconnect();
   }, []);
+
+  useEffect(() => {
+    if (savedRulerLines) setRulerLines(savedRulerLines);
+  }, [savedRulerLines]);
 
   useEffect(() => {
     if (savedScale) {

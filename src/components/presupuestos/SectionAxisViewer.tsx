@@ -1241,7 +1241,7 @@ export function SectionAxisViewer({
             const lengthMm = Math.sqrt(dh * dh + dv * dv);
             const mx = (x1 + x2) / 2;
             const my = (y1 + y2) / 2;
-            const displayText = rl.label || (lengthMm >= 1000 ? `${(lengthMm / 1000).toFixed(2)} m` : `${Math.round(lengthMm)} mm`);
+            const displayText = rl.label || `${Math.round(lengthMm)} mm`;
 
             // Perpendicular offset for label
             const edgeDx = x2 - x1;

@@ -1046,6 +1046,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
 
       <div ref={gridContainerRef} className={`rounded border bg-background ${isZoomed ? 'overflow-auto max-h-[70vh]' : 'overflow-hidden'}`}>
         <svg
+          key={`${viewContextKey}-${isZoomed ? 'zoomed' : 'fit'}`}
           ref={svgRef}
           {...(isZoomed
             ? { width: svgW, height: svgH, style: { minWidth: svgW, cursor: draggingIdx !== null ? 'grabbing' : undefined } }

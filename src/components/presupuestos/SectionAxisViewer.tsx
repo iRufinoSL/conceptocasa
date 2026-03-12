@@ -228,14 +228,20 @@ export function SectionAxisViewer({
     };
   }, [gridLayout]);
 
-  // Snap mouse position to nearest grid node
-  const snapToNode = useCallback((clientX: number, clientY: number): { col: number; row: number } | null => {
-    if (!gridLayout || !containerRef.current) return null;
-    const svg = containerRef.current.querySelector('svg');
-    if (!svg) return null;
-    const rect = svg.getBoundingClientRect();
-    const mx = clientX - rect.left;
-    const my = clientY - rect.top;
+  // Snap mouse position to nearest grid node using SVG native coordinates
+  const snapToNode = useCallback((e: React.MouseEvent<SVGSVGElement>): { col: number; row: number } | null => {
+    if (!gridLayout) return null;
+    const svg = e.currentTarget;
+    // Use SVG coordinate system to avoid scroll/transform/DPR offset issues
+    let pt = svg.createSVGPoint();
+    pt.x = e.clientX;
+    pt.y = e.clientY;
+    const ctm = svg.getScreenCTM();
+    if (ctm) {
+      pt = pt.matrixTransform(ctm.inverse());
+    }
+    const mx = pt.x;
+    const my = pt.y;
     const col = Math.round((mx - gridLayout.ox) / gridLayout.cellPx);
     const row = Math.round((my - gridLayout.oy) / gridLayout.cellPx);
     if (col < 0 || col > gridLayout.totalCols || row < 0 || row > gridLayout.totalRows) return null;
@@ -245,7 +251,7 @@ export function SectionAxisViewer({
   // Handle SVG click for drawing
   const handleSvgClick = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
     if (!drawMode || !gridLayout) return;
-    const node = snapToNode(e.clientX, e.clientY);
+    const node = snapToNode(e);
     if (!node) return;
 
     // Check if closing the polygon (clicking first vertex)
@@ -265,7 +271,7 @@ export function SectionAxisViewer({
 
   const handleSvgMouseMove = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
     if (!drawMode || !gridLayout) { setHoverNode(null); return; }
-    const node = snapToNode(e.clientX, e.clientY);
+    const node = snapToNode(e);
     setHoverNode(node);
   }, [drawMode, gridLayout, snapToNode]);
 

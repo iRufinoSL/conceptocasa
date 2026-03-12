@@ -817,37 +817,9 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
         )}
       </div>
 
-      {/* Zoom controls + tools + PDF */}
+      {/* Tools + PDF */}
       <div className="flex items-center gap-1.5 flex-wrap">
-        <span className="text-[9px] text-muted-foreground">Zoom:</span>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-5 text-[10px] px-1.5"
-          onClick={() => applyZoom((z) => z - ZOOM_STEP)}
-          disabled={zoomLevel <= ZOOM_MIN + ZOOM_EPSILON}
-        >
-          −
-        </Button>
-        <span className="text-[10px] font-mono min-w-[28px] text-center">{zoomLevel}×</span>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-5 text-[10px] px-1.5"
-          onClick={() => applyZoom((z) => z + ZOOM_STEP)}
-          disabled={zoomLevel >= ZOOM_MAX - ZOOM_EPSILON}
-        >
-          +
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-5 text-[10px] px-1.5"
-          onClick={() => applyZoom(DEFAULT_ZOOM)}
-        >
-          1×
-        </Button>
-        <span className="text-[9px] text-muted-foreground ml-2">Herramientas:</span>
+        <span className="text-[9px] text-muted-foreground">Herramientas:</span>
         <Button
           variant={selectMode ? 'default' : 'outline'}
           size="sm"

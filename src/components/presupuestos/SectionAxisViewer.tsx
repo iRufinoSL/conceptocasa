@@ -120,6 +120,12 @@ export function SectionAxisViewer({
   // Polygons
   const [polygons, setPolygons] = useState<SectionPolygon[]>(savedPolygons || []);
 
+  // Editing state for inline polygon editing
+  const [editingPolyId, setEditingPolyId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editHeight, setEditHeight] = useState('');
+  const [editVertices, setEditVertices] = useState<Array<{ x: number; y: number; z: number }>>([]);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ w: 800, h: 500 });
 

@@ -20,8 +20,8 @@ interface SectionAxisViewerProps {
   sectionName: string;
   savedScale?: { hScale: number; vScale: number };
   onSaveScale?: (scale: { hScale: number; vScale: number }) => void;
-  savedNegLimits?: { negH: number; negV: number };
-  onSaveNegLimits?: (limits: { negH: number; negV: number }) => void;
+  savedNegLimits?: { negH: number; negV: number; posH?: number; posV?: number };
+  onSaveNegLimits?: (limits: { negH: number; negV: number; posH: number; posV: number }) => void;
   ridgeLine?: RidgeLineData | null;
   /** Persisted polygons (workspaces) */
   polygons?: SectionPolygon[];

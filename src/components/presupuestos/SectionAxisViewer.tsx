@@ -131,6 +131,7 @@ export function SectionAxisViewer({
   const [editHasCeiling, setEditHasCeiling] = useState(true);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
   const [containerSize, setContainerSize] = useState({ w: 800, h: 500 });
 
   useEffect(() => {

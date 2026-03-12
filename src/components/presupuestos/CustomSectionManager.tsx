@@ -1873,7 +1873,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                 textAnchor="middle"
                 fontSize={10}
                 fontWeight={900}
-                fill="hsl(0 70% 40%)"
+                fill="hsl(0, 0%, 40%)"
                 style={{ textShadow: '0 0 4px white, 0 0 4px white, 0 0 4px white' }}
               >
                 CUMBRERA ({x1},{y1})→({x2},{y2})

@@ -517,12 +517,15 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
     return Math.abs(clamped - DEFAULT_ZOOM) <= ZOOM_EPSILON ? DEFAULT_ZOOM : clamped;
   }, []);
 
-  const applyZoom = useCallback((nextZoom: number) => {
-    const normalized = normalizeZoom(nextZoom);
-    setZoomLevel(normalized);
-    if (normalized <= DEFAULT_ZOOM) {
-      resetZoomViewport();
-    }
+  const applyZoom = useCallback((nextZoom: number | ((currentZoom: number) => number)) => {
+    setZoomLevel((currentZoom) => {
+      const rawNext = typeof nextZoom === 'function' ? nextZoom(currentZoom) : nextZoom;
+      const normalized = normalizeZoom(rawNext);
+      if (normalized <= DEFAULT_ZOOM) {
+        resetZoomViewport();
+      }
+      return normalized;
+    });
   }, [normalizeZoom, resetZoomViewport]);
 
   useEffect(() => {

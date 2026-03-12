@@ -555,13 +555,21 @@ export function SectionAxisViewer({
       );
     });
 
-    // Hover node highlight
+    // Custom round cursor at hover node
     if (hoverNode) {
       const hPx = ox + hoverNode.col * cellPx;
       const hPy = oy + hoverNode.row * cellPx;
+      const isCloseNode = drawingVertices.length >= 3 &&
+        hoverNode.col === drawingVertices[0].col && hoverNode.row === drawingVertices[0].row;
+      // Outer ring — bigger if closing
       elements.push(
-        <circle key="dhoverDot" cx={hPx} cy={hPy} r={6}
-          fill="none" stroke="hsl(var(--primary))" strokeWidth={2} opacity={0.5} />
+        <circle key="cursorOuter" cx={hPx} cy={hPy} r={isCloseNode ? 12 : 8}
+          fill="none" stroke="hsl(var(--primary))" strokeWidth={2} opacity={0.8} />
+      );
+      // Inner filled dot
+      elements.push(
+        <circle key="cursorInner" cx={hPx} cy={hPy} r={3.5}
+          fill="hsl(var(--primary))" opacity={0.9} />
       );
     }
 
@@ -682,7 +690,7 @@ export function SectionAxisViewer({
           ) : (
             <div className="flex items-center gap-3 w-full">
               <span className="text-xs font-semibold text-primary">
-                ✏️ Dibujando: {drawingName} — Clic en nodos para trazar, cierra en el primer nodo
+                🎯 Dibujando: {drawingName} — Clic en nodos (cualquier sentido). Cierra en el 1er nodo o pulsa Cerrar.
               </span>
               <span className="text-[10px] text-muted-foreground">
                 Vértices: {drawingVertices.length}
@@ -726,7 +734,8 @@ export function SectionAxisViewer({
       {scale ? (
         <svg
           width={w} height={h}
-          className={`block bg-background ${drawMode ? 'cursor-crosshair' : ''}`}
+          style={drawMode ? { cursor: 'none' } : undefined}
+          className="block bg-background"
           onClick={handleSvgClick}
           onMouseMove={handleSvgMouseMove}
         >

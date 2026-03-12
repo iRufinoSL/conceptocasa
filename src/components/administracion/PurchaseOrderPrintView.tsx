@@ -347,6 +347,21 @@ export function PurchaseOrderPrintView({ order, onClose }: Props) {
             </div>
           )}
 
+          {/* Signature Block */}
+          <div style={{ marginBottom: '16px', padding: '10px', background: '#f8fafc', borderRadius: '6px' }}>
+            <div style={{ fontSize: sc.sectionFontSize, textTransform: 'uppercase', color: '#666', marginBottom: '6px', letterSpacing: '0.5px' }}>
+              Firmado por: <span style={{ fontWeight: '600', color: '#1a1a1a' }}>{getContactDisplayName(order.client_contact)}</span>
+            </div>
+            {/* In print mode, show the captured signature image; in interactive mode, show the canvas */}
+            {signatureDataUrl ? (
+              <img src={signatureDataUrl} alt="Firma" style={{ width: '300px', height: '100px', objectFit: 'contain', border: '1px solid #e5e5e5', borderRadius: '4px', background: 'white' }} />
+            ) : (
+              <div style={{ width: '300px', height: '100px', border: '1px dashed #ccc', borderRadius: '4px', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999', fontSize: sc.sectionFontSize }}>
+                Firma
+              </div>
+            )}
+          </div>
+
           {/* Footer */}
           <div style={{ textAlign: 'center', paddingTop: '10px', borderTop: '1px solid #e5e5e5', fontSize: sc.sectionFontSize, color: '#666', marginTop: '16px' }}>
             <p>{companySettings.email} | {companySettings.phone}</p>

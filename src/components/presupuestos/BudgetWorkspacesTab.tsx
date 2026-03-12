@@ -506,6 +506,8 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
   // Long-press timer for context menu
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const viewContextKey = `${sectionType ?? 'none'}:${sectionAxisValue ?? 'na'}:${activeRoomId ?? 'draft'}`;
+
   const resetZoomViewport = useCallback(() => {
     requestAnimationFrame(() => {
       gridContainerRef.current?.scrollTo({ left: 0, top: 0 });
@@ -521,12 +523,14 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
     setZoomLevel((currentZoom) => {
       const rawNext = typeof nextZoom === 'function' ? nextZoom(currentZoom) : nextZoom;
       const normalized = normalizeZoom(rawNext);
-      if (normalized <= DEFAULT_ZOOM) {
-        resetZoomViewport();
-      }
-      return normalized;
+      return normalized <= DEFAULT_ZOOM + ZOOM_EPSILON ? DEFAULT_ZOOM : normalized;
     });
-  }, [DEFAULT_ZOOM, normalizeZoom, resetZoomViewport]);
+  }, [DEFAULT_ZOOM, ZOOM_EPSILON, normalizeZoom]);
+
+  useEffect(() => {
+    setZoomLevel(DEFAULT_ZOOM);
+    resetZoomViewport();
+  }, [DEFAULT_ZOOM, resetZoomViewport, viewContextKey]);
 
   useEffect(() => {
     if (zoomLevel <= DEFAULT_ZOOM + ZOOM_EPSILON) {
@@ -1042,6 +1046,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
 
       <div ref={gridContainerRef} className={`rounded border bg-background ${isZoomed ? 'overflow-auto max-h-[70vh]' : 'overflow-hidden'}`}>
         <svg
+          key={`${viewContextKey}-${isZoomed ? 'zoomed' : 'fit'}`}
           ref={svgRef}
           {...(isZoomed
             ? { width: svgW, height: svgH, style: { minWidth: svgW, cursor: draggingIdx !== null ? 'grabbing' : undefined } }
@@ -3696,6 +3701,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
                   )}
                 </div>
                 <GridPolygonDrawer
+                  key={`workspace-z-${r.id}-${r.vertical_section_id ?? 'none'}`}
                   originTopLeft
                   vertices={gridEditVertices}
                   onChange={setGridEditVertices}
@@ -4211,6 +4217,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
                   )}
                 </div>
                 <GridPolygonDrawer
+                  key={`form-z-${formSectionId || 'none'}-${editingId || 'new'}`}
                   originTopLeft
                   vertices={formVertices}
                   onChange={setFormVertices}

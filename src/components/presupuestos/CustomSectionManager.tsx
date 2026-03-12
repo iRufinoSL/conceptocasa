@@ -1224,6 +1224,23 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
     );
   };
 
+  const resetZoomToDefault = () => {
+    setZoomLevel(1);
+    requestAnimationFrame(() => {
+      gridContainerRef.current?.scrollTo({ left: 0, top: 0 });
+    });
+  };
+
+  const applyZoomLevel = (nextZoom: number) => {
+    const clamped = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, +nextZoom.toFixed(2)));
+    setZoomLevel(clamped);
+    if (Math.abs(clamped - 1) < 0.001) {
+      requestAnimationFrame(() => {
+        gridContainerRef.current?.scrollTo({ left: 0, top: 0 });
+      });
+    }
+  };
+
   return (
     <div className={isFullscreen ? 'fixed inset-0 z-50 bg-background overflow-auto p-2' : 'mt-2'}>
       <div className="flex items-center justify-between px-2 pt-1 pb-0.5 flex-wrap gap-1">
@@ -1233,21 +1250,43 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
           {section.sectionType === 'transversal' && `Vista transversal X=${section.axisValue} — Origen (0,0) abajo-izq`}
         </span>
         <div className="flex items-center gap-1.5 flex-wrap">
-          {/* Zoom controls +/- */}
+          {/* {/* Zoom controls patched */} (test) */}
           <div className="flex items-center gap-0.5 border border-border rounded px-1.5 py-0.5">
             <Button variant="ghost" size="sm" className="h-5 w-5 p-0" disabled={zoomLevel <= ZOOM_MIN}
-              onClick={() => setZoomLevel(z => Math.max(ZOOM_MIN, +(z - ZOOM_STEP).toFixed(2)))} title="Reducir zoom">
+              onClick={() => setZoomLevel(prev => {
+                const next = Math.max(ZOOM_MIN, +(prev - ZOOM_STEP).toFixed(2));
+                if (Math.abs(next - 1) < 0.001) requestAnimationFrame(() => gridContainerRef.current?.scrollTo({ left: 0, top: 0 }));
+                return next;
+              })} title="Reducir zoom">
               <ZoomOut className="h-3 w-3" />
             </Button>
             <span className="text-[9px] font-mono text-muted-foreground min-w-[32px] text-center">{zoomLevel}x</span>
             <Button variant="ghost" size="sm" className="h-5 w-5 p-0" disabled={zoomLevel >= ZOOM_MAX}
-              onClick={() => setZoomLevel(z => Math.min(ZOOM_MAX, +(z + ZOOM_STEP).toFixed(2)))} title="Ampliar zoom">
+              onClick={() => setZoomLevel(prev => {
+                const next = Math.min(ZOOM_MAX, +(prev + ZOOM_STEP).toFixed(2));
+                if (Math.abs(next - 1) < 0.001) requestAnimationFrame(() => gridContainerRef.current?.scrollTo({ left: 0, top: 0 }));
+                return next;
+              })} title="Ampliar zoom">
               <ZoomIn className="h-3 w-3" />
             </Button>
             {[1, 2, 3].map(z => (
-              <Button key={z} variant={zoomLevel === z ? 'default' : 'ghost'} size="sm"
-                className="h-4 px-1.5 text-[8px] min-w-0" onClick={() => setZoomLevel(z)}>{z}x</Button>
+              <Button key={z} variant={Math.abs(zoomLevel - z) < 0.001 ? 'default' : 'ghost'} size="sm"
+                className="h-4 px-1.5 text-[8px] min-w-0"
+                onClick={() => {
+                  setZoomLevel(z);
+                  if (z === 1) requestAnimationFrame(() => gridContainerRef.current?.scrollTo({ left: 0, top: 0 }));
+                }}
+              >{z}x</Button>
             ))}
+            <Button variant="ghost" size="sm" className="h-4 px-1.5 text-[8px] min-w-0"
+              onClick={() => {
+                setZoomLevel(1);
+                requestAnimationFrame(() => gridContainerRef.current?.scrollTo({ left: 0, top: 0 }));
+              }}
+              title="Volver a la vista inicial"
+            >
+              Reset
+            </Button>
           </div>
           {/* Grid range controls */}
           <div className="flex items-center gap-0.5 border border-border rounded px-1.5 py-0.5">

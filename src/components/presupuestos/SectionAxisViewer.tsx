@@ -49,6 +49,7 @@ export function SectionAxisViewer({
   sectionName,
   savedScale,
   onSaveScale,
+  ridgeLine,
 }: SectionAxisViewerProps) {
   const { fixedAxis, hAxis, vAxis } = getConfig(sectionType);
   const hColor = AXIS_COLORS[hAxis];

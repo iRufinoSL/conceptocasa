@@ -1858,7 +1858,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
               <line
                 x1={svgX1} y1={svgY1}
                 x2={svgX2} y2={svgY2}
-                stroke="hsl(0 70% 45%)"
+                stroke="hsl(0, 0%, 45%)"
                 strokeWidth={2.5}
                 strokeDasharray="10 5"
                 opacity={0.85}

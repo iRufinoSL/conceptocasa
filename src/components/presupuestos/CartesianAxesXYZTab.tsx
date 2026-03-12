@@ -7,9 +7,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ChevronRight, Plus, Trash2 } from 'lucide-react';
+import { ChevronRight, Plus, Trash2, ArrowLeft, Eye } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { CustomSection } from './CustomSectionManager';
+import { SectionAxisViewer } from './SectionAxisViewer';
 
 interface CartesianAxesXYZTabProps {
   budgetId: string;
@@ -40,6 +41,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
   const [openCreator, setOpenCreator] = useState<SectionType | null>('vertical');
   const [drafts, setDrafts] = useState<Record<SectionType, SectionDraft>>(INITIAL_DRAFTS);
   const [creating, setCreating] = useState(false);
+  const [activeSection, setActiveSection] = useState<CustomSection | null>(null);
 
   const { data: floorPlan } = useQuery({
     queryKey: ['floor-plan-for-workspaces', budgetId],
@@ -207,6 +209,29 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
   const creators: SectionType[] = ['vertical', 'transversal', 'longitudinal'];
   const totalSections = allSections.length;
 
+  // If viewing a section, show the viewer
+  if (activeSection) {
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" className="h-7 text-xs gap-1"
+            onClick={() => setActiveSection(null)}>
+            <ArrowLeft className="h-3 w-3" /> Volver a ejes
+          </Button>
+          <span className="text-sm font-semibold">{activeSection.name}</span>
+          <Badge variant="secondary" className="text-[10px] h-5 font-mono">
+            {activeSection.axis}={activeSection.axisValue}
+          </Badge>
+        </div>
+        <SectionAxisViewer
+          sectionType={activeSection.sectionType as 'vertical' | 'longitudinal' | 'transversal'}
+          axisValue={activeSection.axisValue}
+          sectionName={activeSection.name}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3">
       <div className="rounded-lg border bg-card p-3 flex items-center justify-between">
@@ -287,10 +312,16 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
 
                 {currentSections.length > 0 && (
                   <div className="space-y-1">
-                    <p className="text-[11px] font-medium text-muted-foreground">Secciones existentes</p>
+                    <p className="text-[11px] font-medium text-muted-foreground">Secciones existentes — clic para entrar</p>
                     <div className="flex flex-wrap gap-1">
                       {currentSections.map((section) => (
-                        <Badge key={section.id} variant="outline" className="text-[10px] h-5 gap-1 pr-1">
+                        <Badge
+                          key={section.id}
+                          variant="outline"
+                          className="text-[10px] h-6 gap-1 pr-1 cursor-pointer hover:bg-accent/60 transition-colors"
+                          onClick={() => setActiveSection(section)}
+                        >
+                          <Eye className="h-2.5 w-2.5 text-muted-foreground" />
                           {section.name} ({section.axis}={section.axisValue})
                           {isAdmin && (
                             <button

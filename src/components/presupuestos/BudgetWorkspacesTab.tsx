@@ -2188,6 +2188,9 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
   const [showNewSection, setShowNewSection] = useState(false);
   const [newSectionName, setNewSectionName] = useState('');
   const [newSectionAxisValue, setNewSectionAxisValue] = useState('');
+  const [showQuickSectionForm, setShowQuickSectionForm] = useState(false);
+  const [quickSectionName, setQuickSectionName] = useState('');
+  const [quickSectionAxisValue, setQuickSectionAxisValue] = useState('0');
   const [inputMode, setInputMode] = useState<'manual' | 'grid'>('manual');
   const [formIsBase, setFormIsBase] = useState(false);
   const [selectedOtherWorkspaceId, setSelectedOtherWorkspaceId] = useState<string | null>(null);

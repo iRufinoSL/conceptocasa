@@ -120,6 +120,12 @@ export function SectionAxisViewer({
   // Polygons
   const [polygons, setPolygons] = useState<SectionPolygon[]>(savedPolygons || []);
 
+  // Editing state for inline polygon editing
+  const [editingPolyId, setEditingPolyId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editHeight, setEditHeight] = useState('');
+  const [editVertices, setEditVertices] = useState<Array<{ x: number; y: number; z: number }>>([]);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ w: 800, h: 500 });
 
@@ -304,6 +310,38 @@ export function SectionAxisViewer({
     const updated = polygons.filter(p => p.id !== polyId);
     setPolygons(updated);
     onSavePolygons?.(updated);
+  };
+
+  // Edit polygon handlers
+  const startEditPolygon = (poly: SectionPolygon) => {
+    setEditingPolyId(poly.id);
+    setEditName(poly.name);
+    setEditHeight(String(poly.zTop || 0));
+    setEditVertices(poly.vertices.map(v => ({ ...v })));
+  };
+
+  const saveEditPolygon = () => {
+    if (!editingPolyId) return;
+    const updated = polygons.map(p => {
+      if (p.id !== editingPolyId) return p;
+      return {
+        ...p,
+        name: editName.trim() || p.name,
+        zTop: parseInt(editHeight) || p.zTop,
+        vertices: editVertices,
+      };
+    });
+    setPolygons(updated);
+    onSavePolygons?.(updated);
+    setEditingPolyId(null);
+  };
+
+  const cancelEditPolygon = () => {
+    setEditingPolyId(null);
+  };
+
+  const updateEditVertex = (idx: number, axis: 'x' | 'y', value: number) => {
+    setEditVertices(prev => prev.map((v, i) => i === idx ? { ...v, [axis]: value } : v));
   };
 
   // Grid rendering
@@ -503,31 +541,27 @@ export function SectionAxisViewer({
         );
       }
 
-      // Center label: name + area m²
+      // Center label: name + area m² — NO box, text only with contrasting dark color
       const areaGrid = polygonAreaGrid(verts.map(v => ({ x: v.x, y: v.y })));
       const areaM2 = areaGrid * (scale.hScale / 1000) * (scale.vScale / 1000);
       const centroid = polygonCentroid(verts.map(v => ({ x: v.x, y: v.y })));
       const cx = originX + centroid.x * cellPx;
       const cy = originY - centroid.y * cellPx;
-
       const heightMm = poly.zTop ? poly.zTop : null;
-      const labelLines = heightMm ? 3 : 2;
-      const boxH = labelLines * 14 + 4;
+
+      // Use a darkened version of the workspace color for contrast
+      const darkColor = color.replace(/(\d+)%\)$/, (_, l) => `${Math.max(parseInt(l) - 20, 15)}%)`);
+
       elements.push(
         <g key={`center-${poly.id}`}>
-          <rect x={cx - 55} y={cy - boxH / 2} width={110} height={boxH} rx={4}
-            fill="white" fillOpacity={0.92} stroke={color} strokeWidth={1} />
-          <text x={cx} y={cy - boxH / 2 + 14} textAnchor="middle" fontSize={12} fontWeight={700} fill={color} fontFamily="sans-serif">
+          <text x={cx} y={cy - 4} textAnchor="middle" fontSize={11} fontWeight={800} fill={darkColor} fontFamily="sans-serif"
+            stroke="white" strokeWidth={2.5} paintOrder="stroke">
             {poly.name}
           </text>
-          <text x={cx} y={cy - boxH / 2 + 28} textAnchor="middle" fontSize={10} fontWeight={600} fill="hsl(var(--muted-foreground))" fontFamily="monospace">
-            {areaM2.toFixed(2)} m²
+          <text x={cx} y={cy + 10} textAnchor="middle" fontSize={9} fontWeight={700} fill={darkColor} fontFamily="monospace"
+            stroke="white" strokeWidth={2} paintOrder="stroke">
+            {areaM2.toFixed(2)} m²{heightMm ? ` · h=${heightMm}mm` : ''}
           </text>
-          {heightMm && (
-            <text x={cx} y={cy - boxH / 2 + 42} textAnchor="middle" fontSize={9} fontWeight={500} fill="hsl(var(--muted-foreground))" fontFamily="monospace">
-              h={heightMm} mm
-            </text>
-          )}
         </g>
       );
     });
@@ -785,15 +819,53 @@ export function SectionAxisViewer({
             const areaM2 = scale ? areaGrid * (scale.hScale / 1000) * (scale.vScale / 1000) : 0;
             const heightMm = poly.zTop || 0;
             return (
-              <span key={poly.id} className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border"
-                style={{ borderColor: color, color }}>
+              <span key={poly.id}
+                className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border cursor-pointer hover:opacity-80 transition-opacity"
+                style={{ borderColor: color, color, backgroundColor: editingPolyId === poly.id ? `${color}15` : undefined }}
+                onClick={() => startEditPolygon(poly)}>
                 <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
                 {poly.name} ({areaM2.toFixed(2)} m²{heightMm ? ` · h=${heightMm}mm` : ''})
-                <button onClick={() => handleDeletePolygon(poly.id)}
+                <button onClick={(e) => { e.stopPropagation(); handleDeletePolygon(poly.id); }}
                   className="ml-0.5 hover:opacity-70" title="Eliminar">✕</button>
               </span>
             );
           })}
+        </div>
+      )}
+
+      {/* Inline edit panel */}
+      {editingPolyId && !drawMode && (
+        <div className="px-3 py-2 border-b bg-muted/10 space-y-2">
+          <div className="flex items-end gap-3 flex-wrap">
+            <div>
+              <Label className="text-[10px] text-muted-foreground">Nombre</Label>
+              <Input className="h-7 w-40 text-xs" value={editName} onChange={e => setEditName(e.target.value)} />
+            </div>
+            <div>
+              <Label className="text-[10px] text-muted-foreground">Altura (mm)</Label>
+              <Input className="h-7 w-24 text-xs font-mono" type="number" min={0}
+                value={editHeight} onChange={e => setEditHeight(e.target.value)} />
+            </div>
+            <Button size="sm" className="h-7 text-xs gap-1" onClick={saveEditPolygon}>
+              <Check className="h-3 w-3" /> Guardar
+            </Button>
+            <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={cancelEditPolygon}>
+              <X className="h-3 w-3" /> Cancelar
+            </Button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {editVertices.map((v, i) => (
+              <div key={i} className="flex items-center gap-1 text-[10px] border rounded px-1.5 py-0.5 bg-background">
+                <span className="font-mono font-bold text-muted-foreground">V{i + 1}</span>
+                <span className="text-muted-foreground">{hAxis}:</span>
+                <Input className="h-5 w-12 text-[10px] font-mono px-1" type="number"
+                  value={v.x} onChange={e => updateEditVertex(i, 'x', parseFloat(e.target.value) || 0)} />
+                <span className="text-muted-foreground">{vAxis}:</span>
+                <Input className="h-5 w-12 text-[10px] font-mono px-1" type="number"
+                  value={v.y} onChange={e => updateEditVertex(i, 'y', parseFloat(e.target.value) || 0)} />
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

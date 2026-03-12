@@ -311,13 +311,14 @@ export function SectionAxisViewer({
     if (!scale || !gridLayout) return null;
     const { totalCols, totalRows, gridW, gridH, ox, oy, originCol, originRow, originX, originY, cellPx } = gridLayout;
 
-    const elements: JSX.Element[] = [];
+    const gridLines: JSX.Element[] = [];
+    const axisRefs: JSX.Element[] = [];
 
-    // Grid lines
+    // Grid lines (these will fade during draw mode)
     for (let c = 0; c <= totalCols; c++) {
       const x = ox + c * cellPx;
       const isOrigin = c === originCol;
-      elements.push(
+      gridLines.push(
         <line key={`gv${c}`} x1={x} y1={oy} x2={x} y2={oy + gridH}
           stroke={isOrigin ? hColor : 'hsl(var(--muted-foreground))'} strokeWidth={isOrigin ? 2.5 : 1} opacity={isOrigin ? 1 : 0.7} />
       );
@@ -325,17 +326,17 @@ export function SectionAxisViewer({
     for (let r = 0; r <= totalRows; r++) {
       const y = oy + r * cellPx;
       const isOrigin = r === originRow;
-      elements.push(
+      gridLines.push(
         <line key={`gh${r}`} x1={ox} y1={y} x2={ox + gridW} y2={y}
           stroke={isOrigin ? vColor : 'hsl(var(--muted-foreground))'} strokeWidth={isOrigin ? 2.5 : 1} opacity={isOrigin ? 1 : 0.7} />
       );
     }
 
-    // Tick labels
+    // Tick labels (axis references - always visible)
     for (let c = 0; c <= totalCols; c++) {
       const x = ox + c * cellPx;
       const idx = c - originCol;
-      elements.push(
+      axisRefs.push(
         <text key={`ht${c}`} x={x} y={oy + gridH + 16}
           textAnchor="middle" fontSize={9} fill={hColor} fontFamily="monospace" fontWeight={idx === 0 ? 'bold' : 'normal'}>
           {hAxis}{idx}
@@ -345,7 +346,7 @@ export function SectionAxisViewer({
     for (let r = 0; r <= totalRows; r++) {
       const y = oy + r * cellPx;
       const idx = originRow - r;
-      elements.push(
+      axisRefs.push(
         <text key={`vt${r}`} x={ox - 6} y={y + 4}
           textAnchor="end" fontSize={9} fill={vColor} fontFamily="monospace" fontWeight={idx === 0 ? 'bold' : 'normal'}>
           {vAxis}{idx}
@@ -354,37 +355,37 @@ export function SectionAxisViewer({
     }
 
     // H axis arrow
-    elements.push(
+    axisRefs.push(
       <polygon key="harrow"
         points={`${ox + gridW},${originY} ${ox + gridW - 8},${originY - 4} ${ox + gridW - 8},${originY + 4}`}
         fill={hColor} />
     );
-    elements.push(
+    axisRefs.push(
       <text key="hlabel" x={ox + gridW + 4} y={originY - 8}
         fontSize={14} fontWeight="bold" fill={hColor} fontFamily="monospace">{hAxis}</text>
     );
 
     // V axis arrow (up)
-    elements.push(
+    axisRefs.push(
       <polygon key="varrow"
         points={`${originX},${oy} ${originX - 4},${oy + 8} ${originX + 4},${oy + 8}`}
         fill={vColor} />
     );
-    elements.push(
+    axisRefs.push(
       <text key="vlabel" x={originX + 8} y={oy + 4}
         fontSize={14} fontWeight="bold" fill={vColor} fontFamily="monospace">{vAxis}</text>
     );
 
     // Origin indicator
-    elements.push(<circle key="origin" cx={originX} cy={originY} r={5} fill={fixedColor} opacity={0.8} />);
-    elements.push(<circle key="originInner" cx={originX} cy={originY} r={2.5} fill="white" />);
-    elements.push(
+    axisRefs.push(<circle key="origin" cx={originX} cy={originY} r={5} fill={fixedColor} opacity={0.8} />);
+    axisRefs.push(<circle key="originInner" cx={originX} cy={originY} r={2.5} fill="white" />);
+    axisRefs.push(
       <text key="originLabel" x={originX + 10} y={originY + 16}
         fontSize={10} fill="hsl(var(--muted-foreground))" fontFamily="monospace">(0,0)</text>
     );
 
     // Scale legend
-    elements.push(
+    axisRefs.push(
       <text key="scaleLegend" x={ox + gridW} y={oy - 6}
         textAnchor="end" fontSize={10} fill="hsl(var(--muted-foreground))" fontFamily="monospace">
         Escala: {hAxis}={scale.hScale}mm · {vAxis}={scale.vScale}mm
@@ -408,19 +409,19 @@ export function SectionAxisViewer({
       const ey1 = originY - (ridgeLine.y1 - uy * ext) * cellPx;
       const ex2 = originX + (ridgeLine.x2 + ux * ext) * cellPx;
       const ey2 = originY - (ridgeLine.y2 + uy * ext) * cellPx;
-      elements.push(
+      axisRefs.push(
         <line key="ridgeExt" x1={ex1} y1={ey1} x2={ex2} y2={ey2}
           stroke={RIDGE_COLOR} strokeWidth={2} strokeDasharray="8 4" opacity={0.7} />
       );
-      elements.push(
+      axisRefs.push(
         <line key="ridgeSolid" x1={rx1} y1={ry1} x2={rx2} y2={ry2}
           stroke={RIDGE_COLOR} strokeWidth={2.5} strokeDasharray="10 5" opacity={0.9} />
       );
-      elements.push(<circle key="ridgeP1" cx={rx1} cy={ry1} r={3.5} fill={RIDGE_COLOR} opacity={0.9} />);
-      elements.push(<circle key="ridgeP2" cx={rx2} cy={ry2} r={3.5} fill={RIDGE_COLOR} opacity={0.9} />);
+      axisRefs.push(<circle key="ridgeP1" cx={rx1} cy={ry1} r={3.5} fill={RIDGE_COLOR} opacity={0.9} />);
+      axisRefs.push(<circle key="ridgeP2" cx={rx2} cy={ry2} r={3.5} fill={RIDGE_COLOR} opacity={0.9} />);
       const mx = (rx1 + rx2) / 2;
       const my = (ry1 + ry2) / 2;
-      elements.push(
+      axisRefs.push(
         <text key="ridgeLabel" x={mx} y={my - 10}
           textAnchor="middle" fontSize={9} fontWeight={700} fill={RIDGE_COLOR} fontFamily="monospace" opacity={0.9}>
           CUMBRERA (Z={ridgeLine.z})
@@ -428,7 +429,7 @@ export function SectionAxisViewer({
       );
     }
 
-    return elements;
+    return { gridLines, axisRefs };
   }, [scale, gridLayout, hAxis, vAxis, hColor, vColor, fixedColor, sectionType, ridgeLine]);
 
   // Render saved polygons
@@ -805,7 +806,8 @@ export function SectionAxisViewer({
           onClick={handleSvgClick}
           onMouseMove={handleSvgMouseMove}
         >
-          <g opacity={drawMode ? 0.25 : 1}>{gridContent}</g>
+          <g opacity={drawMode ? 0.25 : 1}>{gridContent?.gridLines}</g>
+          {gridContent?.axisRefs}
           {nodeInteractionDots}
           {polygonElements}
           {drawingOverlay}

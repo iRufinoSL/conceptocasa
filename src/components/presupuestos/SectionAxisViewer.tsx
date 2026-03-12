@@ -24,6 +24,9 @@ interface SectionAxisViewerProps {
   /** Persisted scale in mm */
   savedScale?: { hScale: number; vScale: number };
   onSaveScale?: (scale: { hScale: number; vScale: number }) => void;
+  /** Persisted negative grid limits */
+  savedNegLimits?: { negH: number; negV: number };
+  onSaveNegLimits?: (limits: { negH: number; negV: number }) => void;
   /** Ridge line to draw on Z sections */
   ridgeLine?: RidgeLineData | null;
 }

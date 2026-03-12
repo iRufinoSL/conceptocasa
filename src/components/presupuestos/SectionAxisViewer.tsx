@@ -110,6 +110,7 @@ export function SectionAxisViewer({
   // Drawing state
   const [drawMode, setDrawMode] = useState(false);
   const [drawingName, setDrawingName] = useState('');
+  const [drawingHeight, setDrawingHeight] = useState('');
   const [drawingVertices, setDrawingVertices] = useState<Array<{ col: number; row: number }>>([]);
   const [hoverNode, setHoverNode] = useState<{ col: number; row: number } | null>(null);
 
@@ -251,6 +252,7 @@ export function SectionAxisViewer({
   const finishDrawing = useCallback(() => {
     if (drawingVertices.length < 3 || !scale || !gridLayout) return;
     const name = drawingName.trim() || `Espacio ${polygons.length + 1}`;
+    const heightMm = parseInt(drawingHeight) || 0;
 
     // Convert col/row to axis coordinates
     const vertices = drawingVertices.map(v => {
@@ -262,6 +264,8 @@ export function SectionAxisViewer({
       id: crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       name,
       vertices,
+      zBase: 0,
+      zTop: heightMm,
     };
 
     const updated = [...polygons, newPoly];
@@ -270,13 +274,15 @@ export function SectionAxisViewer({
     setDrawMode(false);
     setDrawingVertices([]);
     setDrawingName('');
+    setDrawingHeight('');
     setHoverNode(null);
-  }, [drawingVertices, drawingName, polygons, scale, gridLayout, colRowToCoord, onSavePolygons]);
+  }, [drawingVertices, drawingName, drawingHeight, polygons, scale, gridLayout, colRowToCoord, onSavePolygons]);
 
   const cancelDrawing = () => {
     setDrawMode(false);
     setDrawingVertices([]);
     setDrawingName('');
+    setDrawingHeight('');
     setHoverNode(null);
   };
 
@@ -489,16 +495,24 @@ export function SectionAxisViewer({
       const cx = originX + centroid.x * cellPx;
       const cy = originY - centroid.y * cellPx;
 
+      const heightMm = poly.zTop ? poly.zTop : null;
+      const labelLines = heightMm ? 3 : 2;
+      const boxH = labelLines * 14 + 4;
       elements.push(
         <g key={`center-${poly.id}`}>
-          <rect x={cx - 50} y={cy - 16} width={100} height={32} rx={4}
+          <rect x={cx - 55} y={cy - boxH / 2} width={110} height={boxH} rx={4}
             fill="white" fillOpacity={0.92} stroke={color} strokeWidth={1} />
-          <text x={cx} y={cy - 2} textAnchor="middle" fontSize={12} fontWeight={700} fill={color} fontFamily="sans-serif">
+          <text x={cx} y={cy - boxH / 2 + 14} textAnchor="middle" fontSize={12} fontWeight={700} fill={color} fontFamily="sans-serif">
             {poly.name}
           </text>
-          <text x={cx} y={cy + 12} textAnchor="middle" fontSize={10} fontWeight={600} fill="hsl(var(--muted-foreground))" fontFamily="monospace">
+          <text x={cx} y={cy - boxH / 2 + 28} textAnchor="middle" fontSize={10} fontWeight={600} fill="hsl(var(--muted-foreground))" fontFamily="monospace">
             {areaM2.toFixed(2)} m²
           </text>
+          {heightMm && (
+            <text x={cx} y={cy - boxH / 2 + 42} textAnchor="middle" fontSize={9} fontWeight={500} fill="hsl(var(--muted-foreground))" fontFamily="monospace">
+              h={heightMm} mm
+            </text>
+          )}
         </g>
       );
     });
@@ -675,9 +689,14 @@ export function SectionAxisViewer({
                   <Input className="h-7 w-40 text-xs" placeholder="Ej: Salón"
                     value={drawingName} onChange={e => setDrawingName(e.target.value)} />
                 </div>
+                <div>
+                  <Label className="text-[10px] text-muted-foreground">Altura (mm)</Label>
+                  <Input className="h-7 w-24 text-xs" placeholder="Ej: 2500" type="number" min={0}
+                    value={drawingHeight} onChange={e => setDrawingHeight(e.target.value)} />
+                </div>
                 <Button size="sm" className="h-7 text-xs gap-1"
-                  onClick={() => { if (!drawingName.trim()) return; setDrawMode(true); }}
-                  disabled={!drawingName.trim()}>
+                  onClick={() => { if (!drawingName.trim() || !drawingHeight.trim()) return; setDrawMode(true); }}
+                  disabled={!drawingName.trim() || !drawingHeight.trim()}>
                   <PenTool className="h-3 w-3" /> Dibujar espacio
                 </Button>
               </div>
@@ -717,11 +736,12 @@ export function SectionAxisViewer({
             const color = WORKSPACE_COLORS[idx % WORKSPACE_COLORS.length];
             const areaGrid = polygonAreaGrid(poly.vertices.map(v => ({ x: v.x, y: v.y })));
             const areaM2 = scale ? areaGrid * (scale.hScale / 1000) * (scale.vScale / 1000) : 0;
+            const heightMm = poly.zTop || 0;
             return (
               <span key={poly.id} className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border"
                 style={{ borderColor: color, color }}>
                 <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
-                {poly.name} ({areaM2.toFixed(2)} m²)
+                {poly.name} ({areaM2.toFixed(2)} m²{heightMm ? ` · h=${heightMm}mm` : ''})
                 <button onClick={() => handleDeletePolygon(poly.id)}
                   className="ml-0.5 hover:opacity-70" title="Eliminar">✕</button>
               </span>

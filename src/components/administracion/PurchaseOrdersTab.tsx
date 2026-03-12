@@ -61,6 +61,8 @@ interface PurchaseOrder {
   lines_count?: number;
 }
 
+type FooterContactSource = 'company' | 'supplier' | 'client';
+
 interface OrderForm {
   order_number: string;
   order_date: string;
@@ -70,6 +72,7 @@ interface OrderForm {
   supplier_contact_id: string;
   client_contact_id: string;
   vat_rate: string;
+  footer_contact_source: FooterContactSource;
 }
 
 interface Filters {

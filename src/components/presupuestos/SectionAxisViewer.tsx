@@ -177,28 +177,32 @@ export function SectionAxisViewer({
     onSaveNegLimits?.(newLimits);
   };
 
-  const cellPx = 40;
   const margin = 50;
   const w = containerSize.w;
   const h = containerSize.h;
 
-  // Compute grid layout
+  // Compute grid layout: fixed number of cols/rows from limits, cellPx auto-calculated to fill viewport
   const gridLayout = useMemo(() => {
     if (!scale) return null;
+    const totalCols = gridLimits.negH + gridLimits.posH;
+    const totalRows = gridLimits.negV + gridLimits.posV;
+    if (totalCols < 1 || totalRows < 1) return null;
     const drawW = w - margin * 2;
     const drawH = h - margin * 2;
-    const totalCols = Math.floor(drawW / cellPx);
-    const totalRows = Math.floor(drawH / cellPx);
+    const cellW = drawW / totalCols;
+    const cellH = drawH / totalRows;
+    const cellPx = Math.floor(Math.min(cellW, cellH));
+    if (cellPx < 8) return null;
     const gridW = totalCols * cellPx;
     const gridH = totalRows * cellPx;
     const ox = margin + Math.floor((drawW - gridW) / 2);
     const oy = margin + Math.floor((drawH - gridH) / 2);
-    const originCol = Math.min(negLimits.negH, totalCols - 1);
-    const originRow = Math.max(0, totalRows - negLimits.negV - 1);
+    const originCol = gridLimits.negH;
+    const originRow = gridLimits.posV;
     const originX = ox + originCol * cellPx;
     const originY = oy + originRow * cellPx;
-    return { totalCols, totalRows, gridW, gridH, ox, oy, originCol, originRow, originX, originY };
-  }, [scale, w, h, negLimits]);
+    return { totalCols, totalRows, gridW, gridH, ox, oy, originCol, originRow, originX, originY, cellPx };
+  }, [scale, w, h, gridLimits]);
 
   // Convert grid col/row to pixel
   const colRowToPx = useCallback((col: number, row: number) => {

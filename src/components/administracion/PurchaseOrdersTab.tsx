@@ -90,7 +90,8 @@ const emptyForm: OrderForm = {
   budget_id: '',
   supplier_contact_id: '',
   client_contact_id: '',
-  vat_rate: '21.00'
+  vat_rate: '21.00',
+  footer_contact_source: 'company'
 };
 
 const emptyFilters: Filters = {

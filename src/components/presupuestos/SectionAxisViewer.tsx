@@ -747,45 +747,54 @@ export function SectionAxisViewer({
           fill={color} fillOpacity={0.15} stroke={color} strokeWidth={2.5} />
       );
 
-      // Edge labels: wall number + length in mm
-      for (let i = 0; i < verts.length; i++) {
-        const j = (i + 1) % verts.length;
-        const a = pxVerts[i];
-        const b = pxVerts[j];
-        const edgeMidX = (a.px + b.px) / 2;
-        const edgeMidY = (a.py + b.py) / 2;
+      // Edge labels: wall number + length in mm (respects wallLabelMode)
+      if (wallLabelMode !== 'none') {
+        for (let i = 0; i < verts.length; i++) {
+          const j = (i + 1) % verts.length;
+          const a = pxVerts[i];
+          const b = pxVerts[j];
+          const edgeMidX = (a.px + b.px) / 2;
+          const edgeMidY = (a.py + b.py) / 2;
 
-        // Length in mm using scale
-        const dxGrid = Math.abs(verts[j].x - verts[i].x);
-        const dyGrid = Math.abs(verts[j].y - verts[i].y);
-        const lengthMm = Math.sqrt((dxGrid * scale.hScale) ** 2 + (dyGrid * scale.vScale) ** 2);
-        const wallNum = i + 1;
+          // Length in mm using scale
+          const dxGrid = Math.abs(verts[j].x - verts[i].x);
+          const dyGrid = Math.abs(verts[j].y - verts[i].y);
+          const lengthMm = Math.sqrt((dxGrid * scale.hScale) ** 2 + (dyGrid * scale.vScale) ** 2);
+          const wallNum = i + 1;
 
-        // Offset label slightly perpendicular to the edge
-        const edgeDx = b.px - a.px;
-        const edgeDy = b.py - a.py;
-        const edgeLen = Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy);
-        const nx = edgeLen > 0 ? -edgeDy / edgeLen : 0;
-        const ny = edgeLen > 0 ? edgeDx / edgeLen : 0;
-        const offset = 14;
+          // Build label text based on mode
+          let labelText = '';
+          if (wallLabelMode === 'both') labelText = `P${wallNum} ${Math.round(lengthMm)}mm`;
+          else if (wallLabelMode === 'name-only') labelText = `P${wallNum}`;
+          else if (wallLabelMode === 'measure-only') labelText = `${Math.round(lengthMm)}mm`;
 
-        elements.push(
-          <g key={`edge-${poly.id}-${i}`}>
-            {/* Background */}
-            <rect
-              x={edgeMidX + nx * offset - 28}
-              y={edgeMidY + ny * offset - 8}
-              width={56} height={16} rx={3}
-              fill="white" fillOpacity={0.92} stroke={color} strokeWidth={0.5}
-            />
-            <text
-              x={edgeMidX + nx * offset}
-              y={edgeMidY + ny * offset + 4}
-              textAnchor="middle" fontSize={9} fontWeight={700} fill={color} fontFamily="monospace">
-              P{wallNum} {Math.round(lengthMm)}mm
-            </text>
-          </g>
-        );
+          // Offset label slightly perpendicular to the edge
+          const edgeDx = b.px - a.px;
+          const edgeDy = b.py - a.py;
+          const edgeLen = Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy);
+          const nx = edgeLen > 0 ? -edgeDy / edgeLen : 0;
+          const ny = edgeLen > 0 ? edgeDx / edgeLen : 0;
+          const offset = 14;
+          const boxW = labelText.length * 5.5 + 10;
+
+          elements.push(
+            <g key={`edge-${poly.id}-${i}`}>
+              <rect
+                x={edgeMidX + nx * offset - boxW / 2}
+                y={edgeMidY + ny * offset - 8}
+                width={boxW} height={16} rx={3}
+                fill="white" fillOpacity={0.92} stroke={color} strokeWidth={0.5}
+              />
+              <text
+                x={edgeMidX + nx * offset}
+                y={edgeMidY + ny * offset + 4}
+                textAnchor="middle" fontSize={9} fontWeight={700} fill={color} fontFamily="monospace">
+                {labelText}
+              </text>
+            </g>
+          );
+        }
+      }
 
         // Vertex dot
         elements.push(

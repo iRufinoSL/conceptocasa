@@ -110,6 +110,7 @@ export function SectionAxisViewer({
   // Drawing state
   const [drawMode, setDrawMode] = useState(false);
   const [drawingName, setDrawingName] = useState('');
+  const [drawingHeight, setDrawingHeight] = useState('');
   const [drawingVertices, setDrawingVertices] = useState<Array<{ col: number; row: number }>>([]);
   const [hoverNode, setHoverNode] = useState<{ col: number; row: number } | null>(null);
 

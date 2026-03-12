@@ -990,6 +990,18 @@ export function InvoicesTab({ budgetId: fixedBudgetId }: { budgetId?: string } =
             </div>
 
             <div className="space-y-2">
+              <Label>Datos de contacto al pie del documento</Label>
+              <Select value={form.footer_contact_source} onValueChange={(v) => setForm({ ...form, footer_contact_source: v as FooterContactSource })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="company">Empresa (datos propios)</SelectItem>
+                  <SelectItem value="issuer">Emisor / Proveedor</SelectItem>
+                  <SelectItem value="receiver">Receptor / Cliente</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="observations">Observaciones</Label>
               <Textarea
                 id="observations"

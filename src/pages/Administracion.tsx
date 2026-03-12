@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Wallet, ArrowLeft, BookOpen, Calculator, BarChart3, FileText, Receipt, Percent, Mic, AlertTriangle } from 'lucide-react';
+import { Wallet, ArrowLeft, BookOpen, Calculator, BarChart3, FileText, Receipt, Percent, Mic, AlertTriangle, ShoppingCart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
 import { AccountingEntriesTab } from '@/components/administracion/AccountingEntriesTab';
@@ -12,6 +12,7 @@ import { AccountingBalanceReport } from '@/components/administracion/AccountingB
 import { InvoicesTab } from '@/components/administracion/InvoicesTab';
 import { VATReportTab } from '@/components/administracion/VATReportTab';
 import { ProvisionalAccountsAlerts } from '@/components/administracion/ProvisionalAccountsAlerts';
+import { PurchaseOrdersTab } from '@/components/administracion/PurchaseOrdersTab';
 import { VoiceAssistantDialog, VoiceAction } from '@/components/voice/VoiceAssistantDialog';
 import { useVoiceAccountingEntry } from '@/hooks/useVoiceAccountingEntry';
 import { Badge } from '@/components/ui/badge';
@@ -177,6 +178,10 @@ export default function Administracion() {
                 </Badge>
               </TabsTrigger>
             )}
+            <TabsTrigger value="purchase_orders" className="gap-2">
+              <ShoppingCart className="h-4 w-4" />
+              Órdenes Pedido
+            </TabsTrigger>
             <TabsTrigger value="invoices" className="gap-2">
               <Receipt className="h-4 w-4" />
               Facturas
@@ -214,6 +219,10 @@ export default function Administracion() {
               />
             </TabsContent>
           )}
+
+          <TabsContent value="purchase_orders">
+            <PurchaseOrdersTab />
+          </TabsContent>
 
           <TabsContent value="invoices">
             <InvoicesTab />

@@ -365,8 +365,27 @@ export function PurchaseOrderPrintView({ order, onClose }: Props) {
 
           {/* Footer */}
           <div style={{ textAlign: 'center', paddingTop: '10px', borderTop: '1px solid #e5e5e5', fontSize: sc.sectionFontSize, color: '#666', marginTop: '16px' }}>
-            <p>{companySettings.email} | {companySettings.phone}</p>
-            <p>{companySettings.website}</p>
+            {(() => {
+              const src = order.footer_contact_source || 'company';
+              if (src === 'supplier' && order.supplier_contact) {
+                const c = order.supplier_contact;
+                return <>
+                  <p>{[c.email, c.phone ? `Tel: ${c.phone}` : null].filter(Boolean).join(' | ')}</p>
+                  {c.address && <p>{[c.address, c.city, c.province].filter(Boolean).join(', ')}</p>}
+                </>;
+              }
+              if (src === 'client' && order.client_contact) {
+                const c = order.client_contact;
+                return <>
+                  <p>{[c.email, c.phone ? `Tel: ${c.phone}` : null].filter(Boolean).join(' | ')}</p>
+                  {c.address && <p>{[c.address, c.city, c.province].filter(Boolean).join(', ')}</p>}
+                </>;
+              }
+              return <>
+                <p>{companySettings.email} | {companySettings.phone}</p>
+                <p>{companySettings.website}</p>
+              </>;
+            })()}
           </div>
         </div>
 

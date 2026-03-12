@@ -673,6 +673,18 @@ export function PurchaseOrdersTab({ budgetId: fixedBudgetId }: { budgetId?: stri
             </div>
 
             <div className="space-y-2">
+              <Label>Datos de contacto al pie del documento</Label>
+              <Select value={form.footer_contact_source} onValueChange={(v) => setForm({ ...form, footer_contact_source: v as FooterContactSource })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="company">Empresa (datos propios)</SelectItem>
+                  <SelectItem value="supplier">Proveedor / Suministrador</SelectItem>
+                  <SelectItem value="client">Cliente</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
               <Label>Observaciones</Label>
               <Textarea value={form.observations} onChange={(e) => setForm({ ...form, observations: e.target.value })} placeholder="Observaciones..." rows={4} />
             </div>

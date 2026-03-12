@@ -311,7 +311,8 @@ export function SectionAxisViewer({
     if (!scale || !gridLayout) return null;
     const { totalCols, totalRows, gridW, gridH, ox, oy, originCol, originRow, originX, originY, cellPx } = gridLayout;
 
-    const elements: JSX.Element[] = [];
+    const gridLines: JSX.Element[] = [];
+    const axisRefs: JSX.Element[] = [];
 
     // Grid lines
     for (let c = 0; c <= totalCols; c++) {

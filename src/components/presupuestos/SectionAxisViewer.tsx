@@ -858,6 +858,16 @@ export function SectionAxisViewer({
               <Input className="h-7 w-24 text-xs font-mono" type="number" min={0}
                 value={editHeight} onChange={e => setEditHeight(e.target.value)} />
             </div>
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-1.5 text-[10px] cursor-pointer">
+                <input type="checkbox" checked={editHasFloor} onChange={e => setEditHasFloor(e.target.checked)} className="h-3 w-3 rounded" />
+                <span className="text-muted-foreground">Tiene suelo</span>
+              </label>
+              <label className="flex items-center gap-1.5 text-[10px] cursor-pointer">
+                <input type="checkbox" checked={editHasCeiling} onChange={e => setEditHasCeiling(e.target.checked)} className="h-3 w-3 rounded" />
+                <span className="text-muted-foreground">Tiene techo</span>
+              </label>
+            </div>
             <Button size="sm" className="h-7 text-xs gap-1" onClick={saveEditPolygon}>
               <Check className="h-3 w-3" /> Guardar
             </Button>

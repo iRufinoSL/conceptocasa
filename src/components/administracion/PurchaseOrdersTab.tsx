@@ -247,7 +247,8 @@ export function PurchaseOrdersTab({ budgetId: fixedBudgetId }: { budgetId?: stri
         budget_id: form.budget_id || null,
         supplier_contact_id: form.supplier_contact_id || null,
         client_contact_id: form.client_contact_id || null,
-        vat_rate: vatRate
+        vat_rate: vatRate,
+        footer_contact_source: form.footer_contact_source
       };
 
       if (editingOrder) {

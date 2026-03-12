@@ -796,7 +796,9 @@ export function SectionAxisViewer({
         }
       }
 
-        // Vertex dot
+      // Vertex dots (always visible)
+      for (let i = 0; i < verts.length; i++) {
+        const a = pxVerts[i];
         elements.push(
           <circle key={`vtx-${poly.id}-${i}`} cx={a.px} cy={a.py} r={3.5}
             fill={color} stroke="white" strokeWidth={1.5} />
@@ -829,7 +831,7 @@ export function SectionAxisViewer({
     });
 
     return elements;
-  }, [polygons, gridLayout, scale]);
+  }, [polygons, gridLayout, scale, wallLabelMode]);
 
   // Drawing overlay (current drawing in progress)
   const drawingOverlay = useMemo(() => {

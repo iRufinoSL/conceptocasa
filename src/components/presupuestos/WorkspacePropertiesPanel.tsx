@@ -64,11 +64,13 @@ interface WorkspacePropertiesPanelProps {
   onClose: () => void;
   /** Which face to highlight/focus (e.g., 'wall-0', 'floor', 'ceiling') */
   focusFace?: string;
+  /** Override edge count from the actual polygon in the section viewer */
+  edgeCount?: number;
   /** Callback when a pattern changes so parent can re-render */
   onPatternChange?: (faceKey: string, patternId: string | null) => void;
 }
 
-export function WorkspacePropertiesPanel({ workspaceId, workspaceName, sectionType, sectionName, onClose, focusFace, onPatternChange }: WorkspacePropertiesPanelProps) {
+export function WorkspacePropertiesPanel({ workspaceId, workspaceName, sectionType, sectionName, onClose, focusFace, edgeCount: edgeCountProp, onPatternChange }: WorkspacePropertiesPanelProps) {
   const [walls, setWalls] = useState<WallRecord[]>([]);
   const [room, setRoom] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -208,7 +210,7 @@ export function WorkspacePropertiesPanel({ workspaceId, workspaceName, sectionTy
   };
 
   const poly = room?.floor_polygon as Array<{ x: number; y: number }> | null;
-  const edgeCount = poly ? poly.length : (room ? 4 : 0);
+  const edgeCount = edgeCountProp ?? (poly ? poly.length : (room ? 4 : 0));
 
   let area = 0;
   if (poly && poly.length >= 3) {

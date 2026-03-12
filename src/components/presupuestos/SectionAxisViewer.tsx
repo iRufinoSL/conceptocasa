@@ -168,7 +168,7 @@ export function SectionAxisViewer({
   const [wallLabelMode, setWallLabelMode] = useState<WallLabelMode>('both');
 
   // Face properties panel state
-  const [facePanel, setFacePanel] = useState<{ polyId: string; polyName: string; faceKey: string } | null>(null);
+  const [facePanel, setFacePanel] = useState<{ polyId: string; polyName: string; faceKey: string; edgeCount: number } | null>(null);
 
   // Local face patterns (for immediate SVG re-render)
   const [facePatterns, setFacePatterns] = useState<PolygonFacePatterns>(savedFacePatterns || {});
@@ -366,7 +366,7 @@ export function SectionAxisViewer({
       const poly = polygons.find(p => p.id === polyId);
       if (poly) {
         const faceKey = `wall-${edgeIdx}`;
-        setFacePanel({ polyId, polyName: poly.name, faceKey });
+        setFacePanel({ polyId, polyName: poly.name, faceKey, edgeCount: poly.vertices.length });
       }
       lastClickRef.current = null;
     } else {
@@ -931,7 +931,7 @@ export function SectionAxisViewer({
           style={{ cursor: 'pointer' }}
           onClick={(e) => {
             e.stopPropagation();
-            setFacePanel({ polyId: poly.id, polyName: poly.name, faceKey: 'floor' });
+            setFacePanel({ polyId: poly.id, polyName: poly.name, faceKey: 'floor', edgeCount: poly.vertices.length });
           }}>
           <text x={cx} y={cy - 4} textAnchor="middle" fontSize={11} fontWeight={800} fill={darkColor} fontFamily="sans-serif"
             stroke="white" strokeWidth={2.5} paintOrder="stroke">
@@ -1465,6 +1465,7 @@ export function SectionAxisViewer({
           sectionType={sectionType}
           sectionName={sectionName}
           focusFace={facePanel.faceKey}
+          edgeCount={facePanel.edgeCount}
           onClose={() => setFacePanel(null)}
           onPatternChange={handlePatternChange}
         />

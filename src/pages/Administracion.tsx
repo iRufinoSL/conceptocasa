@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Wallet, ArrowLeft, BookOpen, Calculator, BarChart3, FileText, Receipt, Percent, Mic, AlertTriangle } from 'lucide-react';
+import { Wallet, ArrowLeft, BookOpen, Calculator, BarChart3, FileText, Receipt, Percent, Mic, AlertTriangle, ShoppingCart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
 import { AccountingEntriesTab } from '@/components/administracion/AccountingEntriesTab';

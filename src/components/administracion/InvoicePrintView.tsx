@@ -728,6 +728,7 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
           <Button variant="outline" onClick={onClose}>
             Cerrar
           </Button>
+          <GeneratePdfButton invoice={invoice} printRef={printRef} />
           <Button onClick={handlePrint} className="gap-2">
             <Printer className="h-4 w-4" />
             Imprimir

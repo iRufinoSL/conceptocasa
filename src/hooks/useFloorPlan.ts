@@ -351,6 +351,8 @@ export function useFloorPlan(budgetId: string) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'budget_floor_plan_walls' }, handleChange)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'budget_floor_plan_rooms' }, handleChange)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'budget_floor_plan_openings' }, handleChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'budget_floor_plans', filter: `budget_id=eq.${budgetId}` }, handleChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'budget_floors' }, handleChange)
       .subscribe();
 
     return () => {

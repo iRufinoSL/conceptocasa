@@ -242,6 +242,45 @@ export type Database = {
           },
         ]
       }
+      admin_document_files: {
+        Row: {
+          created_at: string
+          document_id: string
+          document_type: string
+          file_name: string
+          file_path: string
+          file_size: number | null
+          file_type: string | null
+          id: string
+          is_generated_pdf: boolean
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          document_id: string
+          document_type: string
+          file_name: string
+          file_path: string
+          file_size?: number | null
+          file_type?: string | null
+          id?: string
+          is_generated_pdf?: boolean
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          document_id?: string
+          document_type?: string
+          file_name?: string
+          file_path?: string
+          file_size?: number | null
+          file_type?: string | null
+          id?: string
+          is_generated_pdf?: boolean
+          uploaded_by?: string | null
+        }
+        Relationships: []
+      }
       auth_otp_codes: {
         Row: {
           attempts: number

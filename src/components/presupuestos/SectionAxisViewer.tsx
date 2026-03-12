@@ -736,6 +736,7 @@ export function SectionAxisViewer({
             const color = WORKSPACE_COLORS[idx % WORKSPACE_COLORS.length];
             const areaGrid = polygonAreaGrid(poly.vertices.map(v => ({ x: v.x, y: v.y })));
             const areaM2 = scale ? areaGrid * (scale.hScale / 1000) * (scale.vScale / 1000) : 0;
+            const heightMm = poly.zTop || 0;
             return (
               <span key={poly.id} className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border"
                 style={{ borderColor: color, color }}>

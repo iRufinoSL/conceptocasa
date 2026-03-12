@@ -4594,6 +4594,136 @@ export type Database = {
           },
         ]
       }
+      purchase_order_lines: {
+        Row: {
+          activity_id: string | null
+          code: number
+          created_at: string
+          description: string | null
+          id: string
+          purchase_order_id: string
+          subtotal: number
+          unit_price: number
+          units: number
+          updated_at: string
+        }
+        Insert: {
+          activity_id?: string | null
+          code?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          purchase_order_id: string
+          subtotal?: number
+          unit_price?: number
+          units?: number
+          updated_at?: string
+        }
+        Update: {
+          activity_id?: string | null
+          code?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          purchase_order_id?: string
+          subtotal?: number
+          unit_price?: number
+          units?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_order_lines_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "budget_activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_lines_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      purchase_orders: {
+        Row: {
+          budget_id: string | null
+          client_contact_id: string | null
+          created_at: string
+          description: string | null
+          id: string
+          observations: string | null
+          order_date: string
+          order_id: string | null
+          order_number: number
+          subtotal: number
+          supplier_contact_id: string | null
+          total: number
+          updated_at: string
+          vat_amount: number
+          vat_rate: number
+        }
+        Insert: {
+          budget_id?: string | null
+          client_contact_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          observations?: string | null
+          order_date?: string
+          order_id?: string | null
+          order_number: number
+          subtotal?: number
+          supplier_contact_id?: string | null
+          total?: number
+          updated_at?: string
+          vat_amount?: number
+          vat_rate?: number
+        }
+        Update: {
+          budget_id?: string | null
+          client_contact_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          observations?: string | null
+          order_date?: string
+          order_id?: string | null
+          order_number?: number
+          subtotal?: number
+          supplier_contact_id?: string | null
+          total?: number
+          updated_at?: string
+          vat_amount?: number
+          vat_rate?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_orders_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "presupuestos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_client_contact_id_fkey"
+            columns: ["client_contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_supplier_contact_id_fkey"
+            columns: ["supplier_contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       reminders: {
         Row: {
           assigned_to: string | null

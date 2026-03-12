@@ -461,12 +461,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null);
   const [draggingIdx, setDraggingIdx] = useState<number | null>(null);
-  const DEFAULT_ZOOM = 1;
-  const ZOOM_MIN = 0.5;
-  const ZOOM_MAX = 4;
-  const ZOOM_STEP = 0.25;
-  const ZOOM_EPSILON = 0.001;
-  const [zoomLevel, setZoomLevel] = useState(DEFAULT_ZOOM);
+  const FIXED_ZOOM = 1;
   // Selected other polygon for inline editing
   const [selectedOtherId, setSelectedOtherId] = useState<string | null>(null);
   const [draggingOtherIdx, setDraggingOtherIdx] = useState<number | null>(null);
@@ -508,38 +503,8 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
 
   const viewContextKey = `${sectionType ?? 'none'}:${sectionAxisValue ?? 'na'}:${activeRoomId ?? 'draft'}`;
 
-  const resetZoomViewport = useCallback(() => {
-    requestAnimationFrame(() => {
-      gridContainerRef.current?.scrollTo({ left: 0, top: 0 });
-    });
-  }, []);
-
-  const normalizeZoom = useCallback((nextZoom: number) => {
-    const clamped = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, +nextZoom.toFixed(2)));
-    return Math.abs(clamped - DEFAULT_ZOOM) <= ZOOM_EPSILON ? DEFAULT_ZOOM : clamped;
-  }, [DEFAULT_ZOOM, ZOOM_EPSILON, ZOOM_MAX, ZOOM_MIN]);
-
-  const applyZoom = useCallback((nextZoom: number | ((currentZoom: number) => number)) => {
-    setZoomLevel((currentZoom) => {
-      const rawNext = typeof nextZoom === 'function' ? nextZoom(currentZoom) : nextZoom;
-      const normalized = normalizeZoom(rawNext);
-      return normalized <= DEFAULT_ZOOM + ZOOM_EPSILON ? DEFAULT_ZOOM : normalized;
-    });
-  }, [DEFAULT_ZOOM, ZOOM_EPSILON, normalizeZoom]);
-
-  useEffect(() => {
-    setZoomLevel(DEFAULT_ZOOM);
-    resetZoomViewport();
-  }, [DEFAULT_ZOOM, resetZoomViewport, viewContextKey]);
-
-  useEffect(() => {
-    if (zoomLevel <= DEFAULT_ZOOM + ZOOM_EPSILON) {
-      resetZoomViewport();
-    }
-  }, [DEFAULT_ZOOM, ZOOM_EPSILON, zoomLevel, resetZoomViewport]);
-
-  // At x1 the grid fits entirely; at higher zooms it grows and scrolls
-  const baseCellSize = 28;
+  // Cuadrícula con escala fija (zoom desactivado para evitar desbordes de vista)
+  const baseCellSize = sectionType === 'vertical' ? 22 : 28;
   const pad = 30;
   // Compute aspect-correct cell dimensions based on axis scales
   const hMm = hScaleMm || 625;
@@ -549,11 +514,11 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
   const baseCellH = Math.round(baseCellSize * scaleRatio);
   const logicalW = gridWidth * baseCellW + pad * 2;
   const logicalH = gridHeight * baseCellH + pad * 2;
-  const cellW = Math.round(baseCellW * zoomLevel);
-  const cellH = Math.round(baseCellH * zoomLevel);
+  const cellW = Math.round(baseCellW * FIXED_ZOOM);
+  const cellH = Math.round(baseCellH * FIXED_ZOOM);
   const svgW = gridWidth * cellW + pad * 2;
   const svgH = gridHeight * cellH + pad * 2;
-  const isZoomed = zoomLevel > DEFAULT_ZOOM + ZOOM_EPSILON;
+  const isZoomed = false;
 
   const toSvg = (gx: number, gy: number) => ({
     sx: pad + (gx - gridOffsetX) * cellW,

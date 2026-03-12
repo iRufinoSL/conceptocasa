@@ -204,6 +204,17 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
       });
   }, [invoice.receiver_account?.contact_id]);
 
+  // Fetch contact data for footer display
+  useEffect(() => {
+    const fetchContactForFooter = async (contactId: string | null | undefined, setter: (d: any) => void) => {
+      if (!contactId) { setter(null); return; }
+      const { data } = await supabase.from('crm_contacts').select('email, phone, address, city, province').eq('id', contactId).maybeSingle();
+      setter(data || null);
+    };
+    fetchContactForFooter(invoice.issuer_account?.contact_id, setIssuerContactData);
+    fetchContactForFooter(invoice.receiver_account?.contact_id, setReceiverContactData);
+  }, [invoice.issuer_account?.contact_id, invoice.receiver_account?.contact_id]);
+
   const fetchLines = async () => {
     try {
       const { data, error } = await supabase

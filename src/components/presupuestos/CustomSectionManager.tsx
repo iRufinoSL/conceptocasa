@@ -72,6 +72,8 @@ interface CustomSectionManagerProps {
   onRidgeLineChange?: (ridge: import('@/hooks/useFloorPlan').RidgeLine | null) => void;
   /** Open workspace properties panel */
   onOpenWorkspaceProperties?: (info: { workspaceId: string; workspaceName: string; sectionType: string; sectionName: string }) => void;
+  /** Refresh data from DB */
+  onRefresh?: () => Promise<void>;
 }
 
 const AXIS_MAP: Record<string, { axis: 'X' | 'Y' | 'Z'; label: string; placeholder: string }> = {

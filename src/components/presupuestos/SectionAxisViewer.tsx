@@ -317,11 +317,10 @@ export function SectionAxisViewer({
     };
   }, [gridLayout]);
 
-  // Snap mouse position to nearest grid node using SVG native coordinates
+  // Snap mouse position to nearest half-grid node (0.5 precision) using SVG native coordinates
   const snapToNode = useCallback((e: React.MouseEvent<SVGSVGElement>): { col: number; row: number } | null => {
     if (!gridLayout) return null;
     const svg = e.currentTarget;
-    // Use SVG coordinate system to avoid scroll/transform/DPR offset issues
     let pt = svg.createSVGPoint();
     pt.x = e.clientX;
     pt.y = e.clientY;
@@ -329,10 +328,11 @@ export function SectionAxisViewer({
     if (ctm) {
       pt = pt.matrixTransform(ctm.inverse());
     }
-    const mx = pt.x;
-    const my = pt.y;
-    const col = Math.round((mx - gridLayout.ox) / gridLayout.cellPx);
-    const row = Math.round((my - gridLayout.oy) / gridLayout.cellPx);
+    const rawCol = (pt.x - gridLayout.ox) / gridLayout.cellPx;
+    const rawRow = (pt.y - gridLayout.oy) / gridLayout.cellPx;
+    // Round to 0.5 grid units for half-node precision
+    const col = Math.round(rawCol * 2) / 2;
+    const row = Math.round(rawRow * 2) / 2;
     if (col < 0 || col > gridLayout.totalCols || row < 0 || row > gridLayout.totalRows) return null;
     return { col, row };
   }, [gridLayout]);

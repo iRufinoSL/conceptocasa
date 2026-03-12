@@ -97,7 +97,8 @@ const emptyForm: InvoiceForm = {
   issuer_account_id: '',
   receiver_account_id: '',
   vat_rate: '21.00',
-  document_type: 'factura'
+  document_type: 'factura',
+  footer_contact_source: 'company'
 };
 
 const emptyFilters: Filters = {

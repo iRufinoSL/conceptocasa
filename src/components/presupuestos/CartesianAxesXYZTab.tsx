@@ -368,6 +368,8 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
           ridgeLine={ridgeLine}
           polygons={liveSection.polygons || []}
           onSavePolygons={(polys) => handleSavePolygons(liveSection.id, polys)}
+          savedRulerLines={(liveSection as any).rulerLines || []}
+          onSaveRulerLines={(lines) => handleSaveRulerLines(liveSection.id, lines)}
         />
       </div>
     );

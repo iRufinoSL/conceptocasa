@@ -147,13 +147,13 @@ export function PurchaseOrdersTab({ budgetId: fixedBudgetId }: { budgetId?: stri
       const [presRes, allPresRes, contactsRes, ordersRes] = await Promise.all([
         supabase.from('presupuestos').select('id, nombre, codigo_correlativo, version').eq('archived', false).order('codigo_correlativo', { ascending: false }),
         supabase.from('presupuestos').select('id, nombre, codigo_correlativo, version').order('codigo_correlativo', { ascending: false }),
-        supabase.from('crm_contacts').select('id, first_name, last_name, company, email, phone, address, city, postal_code, province, nif_dni').order('company'),
+        supabase.from('crm_contacts').select('id, name, surname, contact_type, email, phone, address, city, postal_code, province, nif_dni').order('name'),
         (() => {
           let q = supabase.from('purchase_orders').select(`
             *,
             presupuesto:presupuestos(id, nombre, codigo_correlativo, version),
-            supplier_contact:crm_contacts!purchase_orders_supplier_contact_id_fkey(id, first_name, last_name, company, email, phone, address, city, postal_code, province, nif_dni),
-            client_contact:crm_contacts!purchase_orders_client_contact_id_fkey(id, first_name, last_name, company, email, phone, address, city, postal_code, province, nif_dni)
+            supplier_contact:crm_contacts!purchase_orders_supplier_contact_id_fkey(id, name, surname, contact_type, email, phone, address, city, postal_code, province, nif_dni),
+            client_contact:crm_contacts!purchase_orders_client_contact_id_fkey(id, name, surname, contact_type, email, phone, address, city, postal_code, province, nif_dni)
           `);
           if (fixedBudgetId) q = q.eq('budget_id', fixedBudgetId);
           return q.order('order_date', { ascending: false }).order('order_number', { ascending: false });

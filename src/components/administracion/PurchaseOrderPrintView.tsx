@@ -52,8 +52,7 @@ const DOC_COLOR = '#f97316'; // Orange
 
 const getContactDisplayName = (contact: CrmContact | null | undefined): string => {
   if (!contact) return 'No definido';
-  if (contact.company) return contact.company;
-  return [contact.first_name, contact.last_name].filter(Boolean).join(' ') || 'Sin nombre';
+  return [contact.name, contact.surname].filter(Boolean).join(' ') || 'Sin nombre';
 };
 
 const renderContactBlock = (contact: CrmContact | null | undefined, scaleConfig: typeof SCALE_CONFIGS['normal']) => {

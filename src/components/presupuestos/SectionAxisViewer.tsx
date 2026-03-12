@@ -726,7 +726,8 @@ export function SectionAxisViewer({
       {scale ? (
         <svg
           width={w} height={h}
-          className={`block bg-background ${drawMode ? 'cursor-crosshair' : ''}`}
+          style={drawMode ? { cursor: 'none' } : undefined}
+          className="block bg-background"
           onClick={handleSvgClick}
           onMouseMove={handleSvgMouseMove}
         >

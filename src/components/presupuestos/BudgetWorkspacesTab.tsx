@@ -461,7 +461,12 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null);
   const [draggingIdx, setDraggingIdx] = useState<number | null>(null);
-  const [zoomLevel, setZoomLevel] = useState(1);
+  const DEFAULT_ZOOM = 1;
+  const ZOOM_MIN = 0.5;
+  const ZOOM_MAX = 4;
+  const ZOOM_STEP = 0.25;
+  const ZOOM_EPSILON = 0.001;
+  const [zoomLevel, setZoomLevel] = useState(DEFAULT_ZOOM);
   // Selected other polygon for inline editing
   const [selectedOtherId, setSelectedOtherId] = useState<string | null>(null);
   const [draggingOtherIdx, setDraggingOtherIdx] = useState<number | null>(null);
@@ -501,6 +506,25 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
   // Long-press timer for context menu
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const resetZoomViewport = useCallback(() => {
+    requestAnimationFrame(() => {
+      gridContainerRef.current?.scrollTo({ left: 0, top: 0 });
+    });
+  }, []);
+
+  const normalizeZoom = useCallback((nextZoom: number) => {
+    const clamped = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, +nextZoom.toFixed(2)));
+    return Math.abs(clamped - DEFAULT_ZOOM) <= ZOOM_EPSILON ? DEFAULT_ZOOM : clamped;
+  }, []);
+
+  const applyZoom = useCallback((nextZoom: number) => {
+    const normalized = normalizeZoom(nextZoom);
+    setZoomLevel(normalized);
+    if (normalized <= DEFAULT_ZOOM) {
+      resetZoomViewport();
+    }
+  }, [normalizeZoom, resetZoomViewport]);
+
   // At x1 the grid fits entirely; at higher zooms it grows and scrolls
   const baseCellSize = 28;
   const pad = 30;
@@ -516,7 +540,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
   const cellH = Math.round(baseCellH * zoomLevel);
   const svgW = gridWidth * cellW + pad * 2;
   const svgH = gridHeight * cellH + pad * 2;
-  const isZoomed = zoomLevel > 1;
+  const isZoomed = zoomLevel > DEFAULT_ZOOM + ZOOM_EPSILON;
 
   const toSvg = (gx: number, gy: number) => ({
     sx: pad + (gx - gridOffsetX) * cellW,

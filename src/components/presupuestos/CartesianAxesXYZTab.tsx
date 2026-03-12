@@ -41,6 +41,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
   const [openCreator, setOpenCreator] = useState<SectionType | null>('vertical');
   const [drafts, setDrafts] = useState<Record<SectionType, SectionDraft>>(INITIAL_DRAFTS);
   const [creating, setCreating] = useState(false);
+  const [activeSection, setActiveSection] = useState<CustomSection | null>(null);
 
   const { data: floorPlan } = useQuery({
     queryKey: ['floor-plan-for-workspaces', budgetId],

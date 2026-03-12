@@ -444,7 +444,7 @@ export function SectionAxisViewer({
 
     // Ridge line on Z sections
     if (sectionType === 'vertical' && ridgeLine) {
-      const RIDGE_COLOR = 'hsl(0, 70%, 50%)';
+      const RIDGE_COLOR = 'hsl(0, 0%, 45%)';
       const rx1 = originX + ridgeLine.x1 * cellPx;
       const ry1 = originY - ridgeLine.y1 * cellPx;
       const rx2 = originX + ridgeLine.x2 * cellPx;

@@ -248,7 +248,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces', budgetId] });
   };
 
-  const handleSaveNegLimits = async (sectionId: string, negLimits: { negH: number; negV: number }) => {
+  const handleSaveNegLimits = async (sectionId: string, negLimits: { negH: number; negV: number; posH: number; posV: number }) => {
     if (!floorPlan?.id) return;
     let parsedCorners: Record<string, unknown> = {};
     try {

@@ -20,8 +20,8 @@ interface SectionAxisViewerProps {
   sectionName: string;
   savedScale?: { hScale: number; vScale: number };
   onSaveScale?: (scale: { hScale: number; vScale: number }) => void;
-  savedNegLimits?: { negH: number; negV: number };
-  onSaveNegLimits?: (limits: { negH: number; negV: number }) => void;
+  savedNegLimits?: { negH: number; negV: number; posH?: number; posV?: number };
+  onSaveNegLimits?: (limits: { negH: number; negV: number; posH: number; posV: number }) => void;
   ridgeLine?: RidgeLineData | null;
   /** Persisted polygons (workspaces) */
   polygons?: SectionPolygon[];
@@ -100,11 +100,14 @@ export function SectionAxisViewer({
   const [vScaleInput, setVScaleInput] = useState(String(savedScale?.vScale || ''));
   const [scale, setScale] = useState<SectionScale | null>(savedScale || null);
 
-  // Negative limits
+  // Grid limits: negative and positive for each axis (in grid nodes)
   const [negHInput, setNegHInput] = useState(String(savedNegLimits?.negH ?? 3));
   const [negVInput, setNegVInput] = useState(String(savedNegLimits?.negV ?? 3));
-  const [negLimits, setNegLimits] = useState<{ negH: number; negV: number }>(
-    savedNegLimits || { negH: 3, negV: 3 }
+  const [posHInput, setPosHInput] = useState(String(savedNegLimits?.posH ?? 8));
+  const [posVInput, setPosVInput] = useState(String(savedNegLimits?.posV ?? 6));
+  const [gridLimits, setGridLimits] = useState<{ negH: number; negV: number; posH: number; posV: number }>(
+    savedNegLimits ? { negH: savedNegLimits.negH, negV: savedNegLimits.negV, posH: savedNegLimits.posH ?? 8, posV: savedNegLimits.posV ?? 6 }
+    : { negH: 3, negV: 3, posH: 8, posV: 6 }
   );
 
   // Drawing state
@@ -140,9 +143,14 @@ export function SectionAxisViewer({
 
   useEffect(() => {
     if (savedNegLimits) {
-      setNegLimits(savedNegLimits);
+      setGridLimits({
+        negH: savedNegLimits.negH, negV: savedNegLimits.negV,
+        posH: savedNegLimits.posH ?? 8, posV: savedNegLimits.posV ?? 6,
+      });
       setNegHInput(String(savedNegLimits.negH));
       setNegVInput(String(savedNegLimits.negV));
+      setPosHInput(String(savedNegLimits.posH ?? 8));
+      setPosVInput(String(savedNegLimits.posV ?? 6));
     }
   }, [savedNegLimits]);
 
@@ -162,40 +170,46 @@ export function SectionAxisViewer({
   const handleSaveNegLimits = () => {
     const nh = Math.max(0, Math.round(parseFloat(negHInput) || 0));
     const nv = Math.max(0, Math.round(parseFloat(negVInput) || 0));
-    const newLimits = { negH: nh, negV: nv };
-    setNegLimits(newLimits);
+    const ph = Math.max(1, Math.round(parseFloat(posHInput) || 1));
+    const pv = Math.max(1, Math.round(parseFloat(posVInput) || 1));
+    const newLimits = { negH: nh, negV: nv, posH: ph, posV: pv };
+    setGridLimits(newLimits);
     onSaveNegLimits?.(newLimits);
   };
 
-  const cellPx = 40;
   const margin = 50;
   const w = containerSize.w;
   const h = containerSize.h;
 
-  // Compute grid layout
+  // Compute grid layout: fixed number of cols/rows from limits, cellPx auto-calculated to fill viewport
   const gridLayout = useMemo(() => {
     if (!scale) return null;
+    const totalCols = gridLimits.negH + gridLimits.posH;
+    const totalRows = gridLimits.negV + gridLimits.posV;
+    if (totalCols < 1 || totalRows < 1) return null;
     const drawW = w - margin * 2;
     const drawH = h - margin * 2;
-    const totalCols = Math.floor(drawW / cellPx);
-    const totalRows = Math.floor(drawH / cellPx);
+    const cellW = drawW / totalCols;
+    const cellH = drawH / totalRows;
+    const cellPx = Math.floor(Math.min(cellW, cellH));
+    if (cellPx < 8) return null;
     const gridW = totalCols * cellPx;
     const gridH = totalRows * cellPx;
     const ox = margin + Math.floor((drawW - gridW) / 2);
     const oy = margin + Math.floor((drawH - gridH) / 2);
-    const originCol = Math.min(negLimits.negH, totalCols - 1);
-    const originRow = Math.max(0, totalRows - negLimits.negV - 1);
+    const originCol = gridLimits.negH;
+    const originRow = gridLimits.posV;
     const originX = ox + originCol * cellPx;
     const originY = oy + originRow * cellPx;
-    return { totalCols, totalRows, gridW, gridH, ox, oy, originCol, originRow, originX, originY };
-  }, [scale, w, h, negLimits]);
+    return { totalCols, totalRows, gridW, gridH, ox, oy, originCol, originRow, originX, originY, cellPx };
+  }, [scale, w, h, gridLimits]);
 
   // Convert grid col/row to pixel
   const colRowToPx = useCallback((col: number, row: number) => {
     if (!gridLayout) return { px: 0, py: 0 };
     return {
-      px: gridLayout.ox + col * cellPx,
-      py: gridLayout.oy + row * cellPx,
+      px: gridLayout.ox + col * gridLayout.cellPx,
+      py: gridLayout.oy + row * gridLayout.cellPx,
     };
   }, [gridLayout]);
 
@@ -216,8 +230,8 @@ export function SectionAxisViewer({
     const rect = svg.getBoundingClientRect();
     const mx = clientX - rect.left;
     const my = clientY - rect.top;
-    const col = Math.round((mx - gridLayout.ox) / cellPx);
-    const row = Math.round((my - gridLayout.oy) / cellPx);
+    const col = Math.round((mx - gridLayout.ox) / gridLayout.cellPx);
+    const row = Math.round((my - gridLayout.oy) / gridLayout.cellPx);
     if (col < 0 || col > gridLayout.totalCols || row < 0 || row > gridLayout.totalRows) return null;
     return { col, row };
   }, [gridLayout]);
@@ -295,7 +309,7 @@ export function SectionAxisViewer({
   // Grid rendering
   const gridContent = useMemo(() => {
     if (!scale || !gridLayout) return null;
-    const { totalCols, totalRows, gridW, gridH, ox, oy, originCol, originRow, originX, originY } = gridLayout;
+    const { totalCols, totalRows, gridW, gridH, ox, oy, originCol, originRow, originX, originY, cellPx } = gridLayout;
 
     const elements: JSX.Element[] = [];
 
@@ -420,7 +434,7 @@ export function SectionAxisViewer({
   // Render saved polygons
   const polygonElements = useMemo(() => {
     if (!gridLayout || !scale) return null;
-    const { originX, originY } = gridLayout;
+    const { originX, originY, cellPx } = gridLayout;
     const elements: JSX.Element[] = [];
 
     polygons.forEach((poly, polyIdx) => {
@@ -523,7 +537,7 @@ export function SectionAxisViewer({
   // Drawing overlay (current drawing in progress)
   const drawingOverlay = useMemo(() => {
     if (!drawMode || !gridLayout || drawingVertices.length === 0) return null;
-    const { ox, oy } = gridLayout;
+    const { ox, oy, cellPx } = gridLayout;
     const elements: JSX.Element[] = [];
 
     const pxVerts = drawingVertices.map(v => ({
@@ -607,7 +621,7 @@ export function SectionAxisViewer({
   // Node interaction dots (visible in draw mode)
   const nodeInteractionDots = useMemo(() => {
     if (!drawMode || !gridLayout) return null;
-    const { totalCols, totalRows, ox, oy } = gridLayout;
+    const { totalCols, totalRows, ox, oy, cellPx } = gridLayout;
     const elements: JSX.Element[] = [];
     for (let c = 0; c <= totalCols; c++) {
       for (let r = 0; r <= totalRows; r++) {
@@ -670,26 +684,42 @@ export function SectionAxisViewer({
         )}
       </div>
 
-      {/* Negative limits config bar */}
+      {/* Grid limits config bar */}
       {scale && (
         <div className="px-3 py-2 border-b bg-muted/10 flex items-end gap-3 flex-wrap">
           <div className="flex items-end gap-2">
             <div>
-              <Label className="text-[10px] text-muted-foreground">Límite neg. {hAxis} (nodos)</Label>
-              <Input className="h-7 w-20 text-xs font-mono" type="number" min={0}
+              <Label className="text-[10px] text-muted-foreground">-{hAxis} (nodos)</Label>
+              <Input className="h-7 w-16 text-xs font-mono" type="number" min={0}
                 value={negHInput} onChange={e => setNegHInput(e.target.value)} placeholder="3" />
             </div>
             <div>
-              <Label className="text-[10px] text-muted-foreground">Límite neg. {vAxis} (nodos)</Label>
-              <Input className="h-7 w-20 text-xs font-mono" type="number" min={0}
+              <Label className="text-[10px] text-muted-foreground">-{hAxis} (nodos)</Label>
+              <Input className="h-7 w-16 text-xs font-mono" type="number" min={0}
+                value={negHInput} onChange={e => setNegHInput(e.target.value)} placeholder="3" />
+            </div>
+            <div>
+              <Label className="text-[10px] text-muted-foreground">+{hAxis} (nodos)</Label>
+              <Input className="h-7 w-16 text-xs font-mono" type="number" min={1}
+                value={posHInput} onChange={e => setPosHInput(e.target.value)} placeholder="8" />
+            </div>
+            <div>
+              <Label className="text-[10px] text-muted-foreground">-{vAxis} (nodos)</Label>
+              <Input className="h-7 w-16 text-xs font-mono" type="number" min={0}
                 value={negVInput} onChange={e => setNegVInput(e.target.value)} placeholder="3" />
+            </div>
+            <div>
+              <Label className="text-[10px] text-muted-foreground">+{vAxis} (nodos)</Label>
+              <Input className="h-7 w-16 text-xs font-mono" type="number" min={1}
+                value={posVInput} onChange={e => setPosVInput(e.target.value)} placeholder="6" />
             </div>
             <Button size="sm" className="h-7 text-xs gap-1" onClick={handleSaveNegLimits}>
               <Save className="h-3 w-3" /> Guardar límites
             </Button>
           </div>
           <span className="text-[10px] text-muted-foreground ml-2">
-            Marco negativo: {hAxis}-{negLimits.negH} a {hAxis}+n · {vAxis}-{negLimits.negV} a {vAxis}+n
+            {hAxis}: -{gridLimits.negH} a +{gridLimits.posH} · {vAxis}: -{gridLimits.negV} a +{gridLimits.posV}
+            {gridLayout ? ` · celda=${gridLayout.cellPx}px` : ''}
           </span>
         </div>
       )}

@@ -61,6 +61,8 @@ interface PurchaseOrder {
   lines_count?: number;
 }
 
+type FooterContactSource = 'company' | 'supplier' | 'client';
+
 interface OrderForm {
   order_number: string;
   order_date: string;
@@ -70,6 +72,7 @@ interface OrderForm {
   supplier_contact_id: string;
   client_contact_id: string;
   vat_rate: string;
+  footer_contact_source: FooterContactSource;
 }
 
 interface Filters {
@@ -87,7 +90,8 @@ const emptyForm: OrderForm = {
   budget_id: '',
   supplier_contact_id: '',
   client_contact_id: '',
-  vat_rate: '21.00'
+  vat_rate: '21.00',
+  footer_contact_source: 'company'
 };
 
 const emptyFilters: Filters = {
@@ -219,7 +223,8 @@ export function PurchaseOrdersTab({ budgetId: fixedBudgetId }: { budgetId?: stri
       budget_id: order.budget_id || '',
       supplier_contact_id: order.supplier_contact_id || '',
       client_contact_id: order.client_contact_id || '',
-      vat_rate: order.vat_rate === -1 ? VAT_RATE_NO_INCLUDED : order.vat_rate.toString()
+      vat_rate: order.vat_rate === -1 ? VAT_RATE_NO_INCLUDED : order.vat_rate.toString(),
+      footer_contact_source: (order as any).footer_contact_source || 'company'
     });
     setDialogOpen(true);
   };
@@ -242,7 +247,8 @@ export function PurchaseOrdersTab({ budgetId: fixedBudgetId }: { budgetId?: stri
         budget_id: form.budget_id || null,
         supplier_contact_id: form.supplier_contact_id || null,
         client_contact_id: form.client_contact_id || null,
-        vat_rate: vatRate
+        vat_rate: vatRate,
+        footer_contact_source: form.footer_contact_source
       };
 
       if (editingOrder) {
@@ -662,6 +668,18 @@ export function PurchaseOrdersTab({ budgetId: fixedBudgetId }: { budgetId?: stri
                     <SelectItem key={rate} value={rate}>{rate}%</SelectItem>
                   ))}
                   <SelectItem value={VAT_RATE_NO_INCLUDED}>IVA no incluido</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Datos de contacto al pie del documento</Label>
+              <Select value={form.footer_contact_source} onValueChange={(v) => setForm({ ...form, footer_contact_source: v as FooterContactSource })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="company">Empresa (datos propios)</SelectItem>
+                  <SelectItem value="supplier">Proveedor / Suministrador</SelectItem>
+                  <SelectItem value="client">Cliente</SelectItem>
                 </SelectContent>
               </Select>
             </div>

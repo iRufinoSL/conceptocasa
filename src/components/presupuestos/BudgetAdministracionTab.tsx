@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { BookOpen, Calculator, BarChart3, FileText, Receipt, Percent, Mic, AlertTriangle } from 'lucide-react';
+import { BookOpen, Calculator, BarChart3, FileText, Receipt, Percent, Mic, AlertTriangle, ShoppingCart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { AccountingEntriesTab } from '@/components/administracion/AccountingEntriesTab';
@@ -8,6 +8,7 @@ import { AccountingEntryLinesTab } from '@/components/administracion/AccountingE
 import { AccountingAccountsTab } from '@/components/administracion/AccountingAccountsTab';
 import { AccountingBalanceReport } from '@/components/administracion/AccountingBalanceReport';
 import { InvoicesTab } from '@/components/administracion/InvoicesTab';
+import { PurchaseOrdersTab } from '@/components/administracion/PurchaseOrdersTab';
 import { VATReportTab } from '@/components/administracion/VATReportTab';
 import { ProvisionalAccountsAlerts } from '@/components/administracion/ProvisionalAccountsAlerts';
 import { VoiceAssistantDialog, VoiceAction } from '@/components/voice/VoiceAssistantDialog';
@@ -21,7 +22,7 @@ interface Props {
 }
 
 export function BudgetAdministracionTab({ budgetId, isAdmin }: Props) {
-  const [activeTab, setActiveTab] = useState('invoices');
+  const [activeTab, setActiveTab] = useState('purchase-orders');
   const [highlightEntryCode, setHighlightEntryCode] = useState<string | null>(null);
   const [highlightAccountId, setHighlightAccountId] = useState<string | null>(null);
   const [voiceAssistantOpen, setVoiceAssistantOpen] = useState(false);
@@ -121,6 +122,10 @@ export function BudgetAdministracionTab({ budgetId, isAdmin }: Props) {
               </Badge>
             </TabsTrigger>
           )}
+          <TabsTrigger value="purchase-orders" className="gap-2">
+            <ShoppingCart className="h-4 w-4" />
+            Órdenes Pedido
+          </TabsTrigger>
           <TabsTrigger value="invoices" className="gap-2">
             <Receipt className="h-4 w-4" />
             Facturas
@@ -158,6 +163,10 @@ export function BudgetAdministracionTab({ budgetId, isAdmin }: Props) {
             />
           </TabsContent>
         )}
+
+        <TabsContent value="purchase-orders">
+          <PurchaseOrdersTab budgetId={budgetId} />
+        </TabsContent>
 
         <TabsContent value="invoices">
           <InvoicesTab budgetId={budgetId} />

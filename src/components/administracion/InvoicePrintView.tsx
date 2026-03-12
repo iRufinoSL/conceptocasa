@@ -99,6 +99,7 @@ interface Invoice {
   document_type?: DocumentType;
   issuer_account_id?: string | null;
   receiver_account_id?: string | null;
+  footer_contact_source?: string;
   presupuesto?: Presupuesto | null;
   issuer_account?: {
     id?: string;
@@ -169,6 +170,8 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
   const [lines, setLines] = useState<InvoiceLine[]>([]);
   const [loading, setLoading] = useState(true);
   const [receiverContactFiscal, setReceiverContactFiscal] = useState<ContactFiscal | null>(null);
+  const [issuerContactData, setIssuerContactData] = useState<{ email?: string | null; phone?: string | null; address?: string | null; city?: string | null; province?: string | null } | null>(null);
+  const [receiverContactData, setReceiverContactData] = useState<{ email?: string | null; phone?: string | null; address?: string | null; city?: string | null; province?: string | null } | null>(null);
   const [printScale, setPrintScale] = useState<PrintScale>('normal');
   const printRef = useRef<HTMLDivElement>(null);
   const { settings: companySettings } = useCompanySettings();
@@ -200,6 +203,17 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
         setReceiverContactFiscal(data || null);
       });
   }, [invoice.receiver_account?.contact_id]);
+
+  // Fetch contact data for footer display
+  useEffect(() => {
+    const fetchContactForFooter = async (contactId: string | null | undefined, setter: (d: any) => void) => {
+      if (!contactId) { setter(null); return; }
+      const { data } = await supabase.from('crm_contacts').select('email, phone, address, city, province').eq('id', contactId).maybeSingle();
+      setter(data || null);
+    };
+    fetchContactForFooter(invoice.issuer_account?.contact_id, setIssuerContactData);
+    fetchContactForFooter(invoice.receiver_account?.contact_id, setReceiverContactData);
+  }, [invoice.issuer_account?.contact_id, invoice.receiver_account?.contact_id]);
 
   const fetchLines = async () => {
     try {
@@ -685,8 +699,25 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
 
           {/* Footer */}
           <div style={{ textAlign: 'center', paddingTop: '10px', borderTop: '1px solid #e5e5e5', fontSize: scaleConfig.sectionFontSize, color: '#666', marginTop: '16px' }}>
-            <p>{companySettings.email} | {companySettings.phone}</p>
-            <p>{companySettings.website}</p>
+            {(() => {
+              const src = invoice.footer_contact_source || 'company';
+              if (src === 'issuer' && issuerContactData) {
+                return <>
+                  <p>{[issuerContactData.email, issuerContactData.phone ? `Tel: ${issuerContactData.phone}` : null].filter(Boolean).join(' | ')}</p>
+                  {issuerContactData.address && <p>{[issuerContactData.address, issuerContactData.city, issuerContactData.province].filter(Boolean).join(', ')}</p>}
+                </>;
+              }
+              if (src === 'receiver' && receiverContactData) {
+                return <>
+                  <p>{[receiverContactData.email, receiverContactData.phone ? `Tel: ${receiverContactData.phone}` : null].filter(Boolean).join(' | ')}</p>
+                  {receiverContactData.address && <p>{[receiverContactData.address, receiverContactData.city, receiverContactData.province].filter(Boolean).join(', ')}</p>}
+                </>;
+              }
+              return <>
+                <p>{companySettings.email} | {companySettings.phone}</p>
+                <p>{companySettings.website}</p>
+              </>;
+            })()}
           </div>
         </div>
 

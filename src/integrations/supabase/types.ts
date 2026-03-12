@@ -3693,6 +3693,7 @@ export type Database = {
           created_at: string
           description: string | null
           document_type: string
+          footer_contact_source: string
           id: string
           invoice_date: string
           invoice_number: number
@@ -3712,6 +3713,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           document_type?: string
+          footer_contact_source?: string
           id?: string
           invoice_date?: string
           invoice_number: number
@@ -3731,6 +3733,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           document_type?: string
+          footer_contact_source?: string
           id?: string
           invoice_date?: string
           invoice_number?: number
@@ -4654,6 +4657,7 @@ export type Database = {
           client_contact_id: string | null
           created_at: string
           description: string | null
+          footer_contact_source: string
           id: string
           observations: string | null
           order_date: string
@@ -4671,6 +4675,7 @@ export type Database = {
           client_contact_id?: string | null
           created_at?: string
           description?: string | null
+          footer_contact_source?: string
           id?: string
           observations?: string | null
           order_date?: string
@@ -4688,6 +4693,7 @@ export type Database = {
           client_contact_id?: string | null
           created_at?: string
           description?: string | null
+          footer_contact_source?: string
           id?: string
           observations?: string | null
           order_date?: string

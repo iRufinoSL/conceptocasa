@@ -65,6 +65,8 @@ interface Invoice {
   lines_count?: number;
 }
 
+type FooterContactSource = 'company' | 'issuer' | 'receiver';
+
 interface InvoiceForm {
   invoice_number: string;
   invoice_date: string;
@@ -75,6 +77,7 @@ interface InvoiceForm {
   receiver_account_id: string;
   vat_rate: string;
   document_type: DocumentType;
+  footer_contact_source: FooterContactSource;
 }
 
 interface Filters {
@@ -94,7 +97,8 @@ const emptyForm: InvoiceForm = {
   issuer_account_id: '',
   receiver_account_id: '',
   vat_rate: '21.00',
-  document_type: 'factura'
+  document_type: 'factura',
+  footer_contact_source: 'company'
 };
 
 const emptyFilters: Filters = {
@@ -274,7 +278,8 @@ export function InvoicesTab({ budgetId: fixedBudgetId }: { budgetId?: string } =
       issuer_account_id: invoice.issuer_account_id || '',
       receiver_account_id: invoice.receiver_account_id || '',
       vat_rate: invoice.vat_rate === -1 ? VAT_RATE_NO_INCLUDED : invoice.vat_rate.toString(),
-      document_type: invoice.document_type
+      document_type: invoice.document_type,
+      footer_contact_source: ((invoice as any).footer_contact_source as FooterContactSource) || 'company'
     });
     setDialogOpen(true);
   };
@@ -304,7 +309,8 @@ export function InvoicesTab({ budgetId: fixedBudgetId }: { budgetId?: string } =
         issuer_account_id: form.issuer_account_id || null,
         receiver_account_id: form.receiver_account_id || null,
         vat_rate: vatRate,
-        document_type: form.document_type
+        document_type: form.document_type,
+        footer_contact_source: form.footer_contact_source
       };
 
       if (editingInvoice) {
@@ -981,6 +987,18 @@ export function InvoicesTab({ budgetId: fixedBudgetId }: { budgetId?: string } =
                   Las facturas requieren un tipo de IVA válido
                 </p>
               )}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Datos de contacto al pie del documento</Label>
+              <Select value={form.footer_contact_source} onValueChange={(v) => setForm({ ...form, footer_contact_source: v as FooterContactSource })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="company">Empresa (datos propios)</SelectItem>
+                  <SelectItem value="issuer">Emisor / Proveedor</SelectItem>
+                  <SelectItem value="receiver">Receptor / Cliente</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">

@@ -36,6 +36,7 @@ interface PurchaseOrder {
   id: string; order_number: number; order_date: string; order_id: string;
   description: string | null; observations: string | null;
   subtotal: number; vat_rate: number; vat_amount: number; total: number;
+  footer_contact_source?: string;
   supplier_contact?: CrmContact | null;
   client_contact?: CrmContact | null;
   presupuesto?: Presupuesto | null;
@@ -364,8 +365,27 @@ export function PurchaseOrderPrintView({ order, onClose }: Props) {
 
           {/* Footer */}
           <div style={{ textAlign: 'center', paddingTop: '10px', borderTop: '1px solid #e5e5e5', fontSize: sc.sectionFontSize, color: '#666', marginTop: '16px' }}>
-            <p>{companySettings.email} | {companySettings.phone}</p>
-            <p>{companySettings.website}</p>
+            {(() => {
+              const src = order.footer_contact_source || 'company';
+              if (src === 'supplier' && order.supplier_contact) {
+                const c = order.supplier_contact;
+                return <>
+                  <p>{[c.email, c.phone ? `Tel: ${c.phone}` : null].filter(Boolean).join(' | ')}</p>
+                  {c.address && <p>{[c.address, c.city, c.province].filter(Boolean).join(', ')}</p>}
+                </>;
+              }
+              if (src === 'client' && order.client_contact) {
+                const c = order.client_contact;
+                return <>
+                  <p>{[c.email, c.phone ? `Tel: ${c.phone}` : null].filter(Boolean).join(' | ')}</p>
+                  {c.address && <p>{[c.address, c.city, c.province].filter(Boolean).join(', ')}</p>}
+                </>;
+              }
+              return <>
+                <p>{companySettings.email} | {companySettings.phone}</p>
+                <p>{companySettings.website}</p>
+              </>;
+            })()}
           </div>
         </div>
 

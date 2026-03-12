@@ -1004,9 +1004,22 @@ export function SectionAxisViewer({
                 <X className="h-3 w-3" /> Borrar reglas
               </Button>
             )}
-            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={handleExportPDF}>
-              <Printer className="h-3 w-3" /> PDF
-            </Button>
+            <div className="flex items-center gap-1">
+              <Select value={wallLabelMode} onValueChange={(v) => setWallLabelMode(v as WallLabelMode)}>
+                <SelectTrigger className="h-7 w-[130px] text-[10px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="both">P + medida</SelectItem>
+                  <SelectItem value="name-only">Solo P</SelectItem>
+                  <SelectItem value="measure-only">Solo medida</SelectItem>
+                  <SelectItem value="none">Sin etiquetas</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={handleExportPDF}>
+                <Printer className="h-3 w-3" /> PDF
+              </Button>
+            </div>
           </div>
         )}
       </div>

@@ -275,6 +275,33 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces', budgetId] });
   };
 
+  const handleSavePolygons = async (sectionId: string, polygons: import('./CustomSectionManager').SectionPolygon[]) => {
+    if (!floorPlan?.id) return;
+    let parsedCorners: Record<string, unknown> = {};
+    try {
+      parsedCorners = typeof floorPlan.custom_corners === 'string'
+        ? JSON.parse(floorPlan.custom_corners)
+        : (floorPlan.custom_corners || {});
+    } catch { parsedCorners = {}; }
+
+    const sections = Array.isArray(parsedCorners.customSections)
+      ? (parsedCorners.customSections as CustomSection[])
+      : [];
+
+    const updated = sections.map(s =>
+      s.id === sectionId ? { ...s, polygons } : s
+    );
+
+    const { error } = await supabase
+      .from('budget_floor_plans')
+      .update({ custom_corners: { ...parsedCorners, customSections: updated } as any })
+      .eq('id', floorPlan.id);
+
+    if (error) { toast.error('Error al guardar espacios'); return; }
+    toast.success('Espacio guardado');
+    queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces', budgetId] });
+  };
+
   // If viewing a section, show the viewer
   if (activeSection) {
     const liveSection = allSections.find(s => s.id === activeSection.id) || activeSection;
@@ -302,6 +329,8 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
           savedNegLimits={savedNegLimits}
           onSaveNegLimits={(limits) => handleSaveNegLimits(liveSection.id, limits)}
           ridgeLine={ridgeLine}
+          polygons={liveSection.polygons || []}
+          onSavePolygons={(polys) => handleSavePolygons(liveSection.id, polys)}
         />
       </div>
     );

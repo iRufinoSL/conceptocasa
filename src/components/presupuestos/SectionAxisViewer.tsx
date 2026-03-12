@@ -434,7 +434,7 @@ export function SectionAxisViewer({
   // Render saved polygons
   const polygonElements = useMemo(() => {
     if (!gridLayout || !scale) return null;
-    const { originX, originY } = gridLayout;
+    const { originX, originY, cellPx } = gridLayout;
     const elements: JSX.Element[] = [];
 
     polygons.forEach((poly, polyIdx) => {

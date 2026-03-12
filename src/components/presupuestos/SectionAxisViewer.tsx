@@ -555,13 +555,21 @@ export function SectionAxisViewer({
       );
     });
 
-    // Hover node highlight
+    // Custom round cursor at hover node
     if (hoverNode) {
       const hPx = ox + hoverNode.col * cellPx;
       const hPy = oy + hoverNode.row * cellPx;
+      const isCloseNode = drawingVertices.length >= 3 &&
+        hoverNode.col === drawingVertices[0].col && hoverNode.row === drawingVertices[0].row;
+      // Outer ring — bigger if closing
       elements.push(
-        <circle key="dhoverDot" cx={hPx} cy={hPy} r={6}
-          fill="none" stroke="hsl(var(--primary))" strokeWidth={2} opacity={0.5} />
+        <circle key="cursorOuter" cx={hPx} cy={hPy} r={isCloseNode ? 12 : 8}
+          fill="none" stroke="hsl(var(--primary))" strokeWidth={2} opacity={0.8} />
+      );
+      // Inner filled dot
+      elements.push(
+        <circle key="cursorInner" cx={hPx} cy={hPy} r={3.5}
+          fill="hsl(var(--primary))" opacity={0.9} />
       );
     }
 

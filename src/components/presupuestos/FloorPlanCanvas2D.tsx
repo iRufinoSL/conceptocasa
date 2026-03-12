@@ -859,11 +859,7 @@ export function FloorPlanCanvas2D({
                     );
                   })()}
 
-                  {/* Interior dimension (top) */}
-                  <line x1={0} y1={-8} x2={w} y2={-8} stroke="#9ca3af" strokeWidth={0.5} pointerEvents="none" />
-                  <text x={w / 2} y={-12} textAnchor="middle" fontSize={7} fill="#64748b" pointerEvents="none">
-                    {room.width.toFixed(1)}m
-                  </text>
+                  {/* (Wall dimensions are now shown globally outside each room) */}
 
                   {/* Resize handles — improved with hover glow */}
                   {isSelected && onResizeWall && roomWallSegments.map(({ wall, isHoriz: ih }) => {

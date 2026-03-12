@@ -48,6 +48,8 @@ interface Workspace3DViewerProps {
   selectedFace?: string | null;
   allSections?: CustomSection[];
   roomId?: string;
+  hasFloor?: boolean;
+  hasCeiling?: boolean;
 }
 
 const FACE_COLORS: Record<string, string> = {

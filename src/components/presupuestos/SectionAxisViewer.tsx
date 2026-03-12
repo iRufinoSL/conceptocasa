@@ -107,13 +107,13 @@ export function SectionAxisViewer({
 
     const elements: JSX.Element[] = [];
 
-    // Grid lines
+    // Grid lines - discrete but visible
     for (let c = 0; c <= cols; c++) {
       const x = ox + c * cellPx;
       const isOrigin = c === originCol;
       elements.push(
         <line key={`gv${c}`} x1={x} y1={oy} x2={x} y2={oy + gridH}
-          stroke={isOrigin ? hColor : 'hsl(var(--border))'} strokeWidth={isOrigin ? 2 : 0.5} opacity={isOrigin ? 1 : 0.4} />
+          stroke={isOrigin ? hColor : 'hsl(var(--border))'} strokeWidth={isOrigin ? 2 : 0.5} opacity={isOrigin ? 1 : 0.3} />
       );
     }
     for (let r = 0; r <= rows; r++) {
@@ -121,36 +121,32 @@ export function SectionAxisViewer({
       const isOrigin = r === originRow;
       elements.push(
         <line key={`gh${r}`} x1={ox} y1={y} x2={ox + gridW} y2={y}
-          stroke={isOrigin ? vColor : 'hsl(var(--border))'} strokeWidth={isOrigin ? 2 : 0.5} opacity={isOrigin ? 1 : 0.4} />
+          stroke={isOrigin ? vColor : 'hsl(var(--border))'} strokeWidth={isOrigin ? 2 : 0.5} opacity={isOrigin ? 1 : 0.3} />
       );
     }
 
-    // Horizontal tick labels (mm)
+    // Horizontal tick labels: X0, X1, X-1, etc.
     for (let c = 0; c <= cols; c++) {
       const x = ox + c * cellPx;
-      const val = (c - originCol) * scale.hScale;
-      if (c % 2 === 0 || cols <= 20) {
-        elements.push(
-          <text key={`ht${c}`} x={x} y={oy + gridH + 16}
-            textAnchor="middle" fontSize={9} fill="hsl(var(--muted-foreground))" fontFamily="monospace">
-            {val}
-          </text>
-        );
-      }
+      const idx = c - originCol;
+      elements.push(
+        <text key={`ht${c}`} x={x} y={oy + gridH + 16}
+          textAnchor="middle" fontSize={9} fill={hColor} fontFamily="monospace" fontWeight={idx === 0 ? 'bold' : 'normal'}>
+          {hAxis}{idx}
+        </text>
+      );
     }
 
-    // Vertical tick labels (mm) — up is positive
+    // Vertical tick labels: Y0, Y1 (up), Y-1 (down), etc.
     for (let r = 0; r <= rows; r++) {
       const y = oy + r * cellPx;
-      const val = (originRow - r) * scale.vScale;
-      if (r % 2 === 0 || rows <= 20) {
-        elements.push(
-          <text key={`vt${r}`} x={ox - 6} y={y + 4}
-            textAnchor="end" fontSize={9} fill="hsl(var(--muted-foreground))" fontFamily="monospace">
-            {val}
-          </text>
-        );
-      }
+      const idx = originRow - r; // positive up, negative down
+      elements.push(
+        <text key={`vt${r}`} x={ox - 6} y={y + 4}
+          textAnchor="end" fontSize={9} fill={vColor} fontFamily="monospace" fontWeight={idx === 0 ? 'bold' : 'normal'}>
+          {vAxis}{idx}
+        </text>
+      );
     }
 
     // H axis arrow

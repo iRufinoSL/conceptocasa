@@ -366,7 +366,7 @@ export function SectionAxisViewer({
       const poly = polygons.find(p => p.id === polyId);
       if (poly) {
         const faceKey = `wall-${edgeIdx}`;
-        setFacePanel({ polyId, polyName: poly.name, faceKey });
+        setFacePanel({ polyId, polyName: poly.name, faceKey, edgeCount: poly.vertices.length });
       }
       lastClickRef.current = null;
     } else {

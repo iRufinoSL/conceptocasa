@@ -541,31 +541,27 @@ export function SectionAxisViewer({
         );
       }
 
-      // Center label: name + area m²
+      // Center label: name + area m² — NO box, text only with contrasting dark color
       const areaGrid = polygonAreaGrid(verts.map(v => ({ x: v.x, y: v.y })));
       const areaM2 = areaGrid * (scale.hScale / 1000) * (scale.vScale / 1000);
       const centroid = polygonCentroid(verts.map(v => ({ x: v.x, y: v.y })));
       const cx = originX + centroid.x * cellPx;
       const cy = originY - centroid.y * cellPx;
-
       const heightMm = poly.zTop ? poly.zTop : null;
-      const labelLines = heightMm ? 3 : 2;
-      const boxH = labelLines * 14 + 4;
+
+      // Use a darkened version of the workspace color for contrast
+      const darkColor = color.replace(/(\d+)%\)$/, (_, l) => `${Math.max(parseInt(l) - 20, 15)}%)`);
+
       elements.push(
         <g key={`center-${poly.id}`}>
-          <rect x={cx - 55} y={cy - boxH / 2} width={110} height={boxH} rx={4}
-            fill="white" fillOpacity={0.92} stroke={color} strokeWidth={1} />
-          <text x={cx} y={cy - boxH / 2 + 14} textAnchor="middle" fontSize={12} fontWeight={700} fill={color} fontFamily="sans-serif">
+          <text x={cx} y={cy - 4} textAnchor="middle" fontSize={11} fontWeight={800} fill={darkColor} fontFamily="sans-serif"
+            stroke="white" strokeWidth={2.5} paintOrder="stroke">
             {poly.name}
           </text>
-          <text x={cx} y={cy - boxH / 2 + 28} textAnchor="middle" fontSize={10} fontWeight={600} fill="hsl(var(--muted-foreground))" fontFamily="monospace">
-            {areaM2.toFixed(2)} m²
+          <text x={cx} y={cy + 10} textAnchor="middle" fontSize={9} fontWeight={700} fill={darkColor} fontFamily="monospace"
+            stroke="white" strokeWidth={2} paintOrder="stroke">
+            {areaM2.toFixed(2)} m²{heightMm ? ` · h=${heightMm}mm` : ''}
           </text>
-          {heightMm && (
-            <text x={cx} y={cy - boxH / 2 + 42} textAnchor="middle" fontSize={9} fontWeight={500} fill="hsl(var(--muted-foreground))" fontFamily="monospace">
-              h={heightMm} mm
-            </text>
-          )}
         </g>
       );
     });

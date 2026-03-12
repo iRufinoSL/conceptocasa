@@ -699,8 +699,25 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
 
           {/* Footer */}
           <div style={{ textAlign: 'center', paddingTop: '10px', borderTop: '1px solid #e5e5e5', fontSize: scaleConfig.sectionFontSize, color: '#666', marginTop: '16px' }}>
-            <p>{companySettings.email} | {companySettings.phone}</p>
-            <p>{companySettings.website}</p>
+            {(() => {
+              const src = invoice.footer_contact_source || 'company';
+              if (src === 'issuer' && issuerContactData) {
+                return <>
+                  <p>{[issuerContactData.email, issuerContactData.phone ? `Tel: ${issuerContactData.phone}` : null].filter(Boolean).join(' | ')}</p>
+                  {issuerContactData.address && <p>{[issuerContactData.address, issuerContactData.city, issuerContactData.province].filter(Boolean).join(', ')}</p>}
+                </>;
+              }
+              if (src === 'receiver' && receiverContactData) {
+                return <>
+                  <p>{[receiverContactData.email, receiverContactData.phone ? `Tel: ${receiverContactData.phone}` : null].filter(Boolean).join(' | ')}</p>
+                  {receiverContactData.address && <p>{[receiverContactData.address, receiverContactData.city, receiverContactData.province].filter(Boolean).join(', ')}</p>}
+                </>;
+              }
+              return <>
+                <p>{companySettings.email} | {companySettings.phone}</p>
+                <p>{companySettings.website}</p>
+              </>;
+            })()}
           </div>
         </div>
 

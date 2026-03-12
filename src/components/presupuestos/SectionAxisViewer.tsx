@@ -324,6 +324,8 @@ export function SectionAxisViewer({
     setEditName(poly.name);
     setEditHeight(String(poly.zTop || 0));
     setEditVertices(poly.vertices.map(v => ({ ...v })));
+    setEditHasFloor(poly.hasFloor !== false);
+    setEditHasCeiling(poly.hasCeiling !== false);
   };
 
   const saveEditPolygon = () => {

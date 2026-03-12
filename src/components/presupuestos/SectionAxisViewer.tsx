@@ -188,6 +188,28 @@ export function SectionAxisViewer({
     onSaveNegLimits?.(newLimits);
   };
 
+  const handleExportPDF = useCallback(async () => {
+    if (!svgRef.current) return;
+    try {
+      const svgEl = svgRef.current;
+      const canvas = await html2canvas(svgEl as unknown as HTMLElement, {
+        backgroundColor: '#ffffff',
+        scale: 2,
+        useCORS: true,
+      });
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: canvas.width > canvas.height ? 'landscape' : 'portrait',
+        unit: 'px',
+        format: [canvas.width, canvas.height],
+      });
+      pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+      pdf.save(`Seccion_${sectionName.replace(/\s+/g, '_')}.pdf`);
+    } catch (err) {
+      console.error('PDF export error:', err);
+    }
+  }, [sectionName]);
+
   const margin = 50;
   const w = containerSize.w;
   const h = containerSize.h;

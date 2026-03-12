@@ -146,7 +146,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
 
     const { error } = await supabase
       .from('budget_floor_plans')
-      .update({ custom_corners: nextCustomCorners })
+      .update({ custom_corners: nextCustomCorners as any })
       .eq('id', floorPlan.id);
 
     if (error) {

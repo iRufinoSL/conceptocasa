@@ -525,6 +525,12 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
     }
   }, [normalizeZoom, resetZoomViewport]);
 
+  useEffect(() => {
+    if (zoomLevel <= DEFAULT_ZOOM + ZOOM_EPSILON) {
+      resetZoomViewport();
+    }
+  }, [zoomLevel, resetZoomViewport]);
+
   // At x1 the grid fits entirely; at higher zooms it grows and scrolls
   const baseCellSize = 28;
   const pad = 30;

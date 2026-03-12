@@ -279,6 +279,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
   if (activeSection) {
     const liveSection = allSections.find(s => s.id === activeSection.id) || activeSection;
     const savedScale = (liveSection as any).scale as { hScale: number; vScale: number } | undefined;
+    const savedNegLimits = (liveSection as any).negLimits as { negH: number; negV: number } | undefined;
 
     return (
       <div className="space-y-3">
@@ -298,6 +299,8 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
           sectionName={liveSection.name}
           savedScale={savedScale}
           onSaveScale={(scale) => handleSaveScale(liveSection.id, scale)}
+          savedNegLimits={savedNegLimits}
+          onSaveNegLimits={(limits) => handleSaveNegLimits(liveSection.id, limits)}
           ridgeLine={ridgeLine}
         />
       </div>

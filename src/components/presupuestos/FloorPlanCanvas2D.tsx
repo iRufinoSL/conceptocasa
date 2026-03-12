@@ -1187,18 +1187,23 @@ export function FloorPlanCanvas2D({
                   );
                 })}
 
-                {/* Building outline corners */}
-                {showCorners && buildingOutline.length >= 3 && buildingOutline.map((v, i) => (
-                  <g key={`fs-corner-${i}`}>
-                    <circle cx={v.x * SCALE} cy={v.y * SCALE} r={8}
-                      fill="#1e40af" stroke="#ffffff" strokeWidth={1.5} opacity={0.9} pointerEvents="none" />
-                    <text x={v.x * SCALE} y={v.y * SCALE + 1}
-                      textAnchor="middle" dominantBaseline="middle"
-                      fontSize={9} fontWeight="bold" fill="#ffffff" pointerEvents="none">
-                      {v.label}
-                    </text>
-                  </g>
-                ))}
+                {/* Wall dimensions in fullscreen */}
+                {rooms.map(room => {
+                  const rx = room.posX * SCALE;
+                  const ry = room.posY * SCALE;
+                  const rw = room.width * SCALE;
+                  const rh = room.length * SCALE;
+                  return (
+                    <g key={`fs-wd-${room.id}`} pointerEvents="none">
+                      <text x={rx + rw / 2} y={ry - 6} textAnchor="middle" fontSize={10} fontWeight="700" fill="#1e293b">
+                        {room.width.toFixed(2)}m
+                      </text>
+                      <text x={rx + rw + 8} y={ry + rh / 2} textAnchor="start" dominantBaseline="middle" fontSize={10} fontWeight="700" fill="#1e293b">
+                        {room.length.toFixed(2)}m
+                      </text>
+                    </g>
+                  );
+                })}
               </g>
             </svg>
           </div>

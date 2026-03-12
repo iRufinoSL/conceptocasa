@@ -575,15 +575,29 @@ export function SectionAxisViewer({
       const hPy = oy + hoverNode.row * cellPx;
       const isCloseNode = drawingVertices.length >= 3 &&
         hoverNode.col === drawingVertices[0].col && hoverNode.row === drawingVertices[0].row;
+      // Glow halo for visibility
+      elements.push(
+        <circle key="cursorGlow" cx={hPx} cy={hPy} r={isCloseNode ? 18 : 14}
+          fill="hsl(var(--primary))" fillOpacity={0.12} />
+      );
       // Outer ring — bigger if closing
       elements.push(
-        <circle key="cursorOuter" cx={hPx} cy={hPy} r={isCloseNode ? 12 : 8}
-          fill="none" stroke="hsl(var(--primary))" strokeWidth={2} opacity={0.8} />
+        <circle key="cursorOuter" cx={hPx} cy={hPy} r={isCloseNode ? 14 : 10}
+          fill="none" stroke="hsl(var(--primary))" strokeWidth={2.5} opacity={0.9} />
       );
       // Inner filled dot
       elements.push(
-        <circle key="cursorInner" cx={hPx} cy={hPy} r={3.5}
-          fill="hsl(var(--primary))" opacity={0.9} />
+        <circle key="cursorInner" cx={hPx} cy={hPy} r={4.5}
+          fill="hsl(var(--primary))" opacity={1} />
+      );
+      // Crosshair lines for precision
+      elements.push(
+        <line key="cursorH" x1={hPx - (isCloseNode ? 20 : 16)} y1={hPy} x2={hPx + (isCloseNode ? 20 : 16)} y2={hPy}
+          stroke="hsl(var(--primary))" strokeWidth={1} opacity={0.4} />
+      );
+      elements.push(
+        <line key="cursorV" x1={hPx} y1={hPy - (isCloseNode ? 20 : 16)} x2={hPx} y2={hPy + (isCloseNode ? 20 : 16)}
+          stroke="hsl(var(--primary))" strokeWidth={1} opacity={0.4} />
       );
     }
 
@@ -599,14 +613,16 @@ export function SectionAxisViewer({
       for (let r = 0; r <= totalRows; r++) {
         const x = ox + c * cellPx;
         const y = oy + r * cellPx;
+        const isHovered = hoverNode && hoverNode.col === c && hoverNode.row === r;
         elements.push(
-          <circle key={`ndot-${c}-${r}`} cx={x} cy={y} r={3}
-            fill="hsl(var(--primary))" fillOpacity={0.15} />
+          <circle key={`ndot-${c}-${r}`} cx={x} cy={y} r={isHovered ? 6 : 4}
+            fill="hsl(var(--primary))" fillOpacity={isHovered ? 0.6 : 0.35}
+            stroke="hsl(var(--primary))" strokeWidth={isHovered ? 2 : 0} strokeOpacity={0.5} />
         );
       }
     }
     return elements;
-  }, [drawMode, gridLayout]);
+  }, [drawMode, gridLayout, hoverNode]);
 
   return (
     <div ref={containerRef} className="rounded-lg border bg-card overflow-hidden">
@@ -759,7 +775,7 @@ export function SectionAxisViewer({
           onClick={handleSvgClick}
           onMouseMove={handleSvgMouseMove}
         >
-          {gridContent}
+          <g opacity={drawMode ? 0.25 : 1}>{gridContent}</g>
           {nodeInteractionDots}
           {polygonElements}
           {drawingOverlay}

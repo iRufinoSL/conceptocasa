@@ -495,16 +495,24 @@ export function SectionAxisViewer({
       const cx = originX + centroid.x * cellPx;
       const cy = originY - centroid.y * cellPx;
 
+      const heightMm = poly.zTop ? poly.zTop : null;
+      const labelLines = heightMm ? 3 : 2;
+      const boxH = labelLines * 14 + 4;
       elements.push(
         <g key={`center-${poly.id}`}>
-          <rect x={cx - 50} y={cy - 16} width={100} height={32} rx={4}
+          <rect x={cx - 55} y={cy - boxH / 2} width={110} height={boxH} rx={4}
             fill="white" fillOpacity={0.92} stroke={color} strokeWidth={1} />
-          <text x={cx} y={cy - 2} textAnchor="middle" fontSize={12} fontWeight={700} fill={color} fontFamily="sans-serif">
+          <text x={cx} y={cy - boxH / 2 + 14} textAnchor="middle" fontSize={12} fontWeight={700} fill={color} fontFamily="sans-serif">
             {poly.name}
           </text>
-          <text x={cx} y={cy + 12} textAnchor="middle" fontSize={10} fontWeight={600} fill="hsl(var(--muted-foreground))" fontFamily="monospace">
+          <text x={cx} y={cy - boxH / 2 + 28} textAnchor="middle" fontSize={10} fontWeight={600} fill="hsl(var(--muted-foreground))" fontFamily="monospace">
             {areaM2.toFixed(2)} m²
           </text>
+          {heightMm && (
+            <text x={cx} y={cy - boxH / 2 + 42} textAnchor="middle" fontSize={9} fontWeight={500} fill="hsl(var(--muted-foreground))" fontFamily="monospace">
+              h={heightMm} mm
+            </text>
+          )}
         </g>
       );
     });

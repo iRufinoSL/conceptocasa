@@ -1886,7 +1886,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                       <line x1={brX} y1={y - tickLen} x2={brX} y2={y + tickLen} stroke={dimColor} strokeWidth={0.7} />
                       {/* Label */}
                       <text x={(blX + brX) / 2} y={y + 12} textAnchor="middle" dominantBaseline="central"
-                        fontSize={Math.round(9 * Math.max(1, zoomLevel * 0.8))} fontWeight={800} fill={dimColor}>
+                        fontSize={9} fontWeight={800} fill={dimColor}>
                         {totalWidthMm} mm
                       </text>
                     </>
@@ -1909,7 +1909,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                       {/* Label */}
                       <text x={x + 14} y={(trY + brY) / 2} textAnchor="middle" dominantBaseline="central"
                         transform={`rotate(90, ${x + 14}, ${(trY + brY) / 2})`}
-                        fontSize={Math.round(9 * Math.max(1, zoomLevel * 0.8))} fontWeight={800} fill={dimColor}>
+                        fontSize={9} fontWeight={800} fill={dimColor}>
                         {totalHeightMm} mm
                       </text>
                     </>
@@ -1927,7 +1927,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                       <line x1={tlX} y1={y - tickLen} x2={tlX} y2={y + tickLen} stroke={dimColor} strokeWidth={0.7} />
                       <line x1={trX} y1={y - tickLen} x2={trX} y2={y + tickLen} stroke={dimColor} strokeWidth={0.7} />
                       <text x={(tlX + trX) / 2} y={y - 10} textAnchor="middle" dominantBaseline="central"
-                        fontSize={Math.round(9 * Math.max(1, zoomLevel * 0.8))} fontWeight={800} fill={dimColor}>
+                        fontSize={9} fontWeight={800} fill={dimColor}>
                         {totalWidthMm} mm
                       </text>
                     </>
@@ -1946,7 +1946,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                       <line x1={x - tickLen} y1={blY} x2={x + tickLen} y2={blY} stroke={dimColor} strokeWidth={0.7} />
                       <text x={x - 14} y={(tlY + blY) / 2} textAnchor="middle" dominantBaseline="central"
                         transform={`rotate(-90, ${x - 14}, ${(tlY + blY) / 2})`}
-                        fontSize={Math.round(9 * Math.max(1, zoomLevel * 0.8))} fontWeight={800} fill={dimColor}>
+                        fontSize={9} fontWeight={800} fill={dimColor}>
                         {totalHeightMm} mm
                       </text>
                     </>

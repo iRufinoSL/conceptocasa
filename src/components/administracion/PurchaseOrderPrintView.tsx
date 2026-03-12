@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Printer, ZoomIn, ZoomOut, Minus } from 'lucide-react';
+import { Printer, ZoomIn, ZoomOut, Minus, Eraser } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { formatCurrency } from '@/lib/format-utils';
@@ -93,9 +93,77 @@ export function PurchaseOrderPrintView({ order, onClose }: Props) {
   const [lines, setLines] = useState<OrderLine[]>([]);
   const [loading, setLoading] = useState(true);
   const [printScale, setPrintScale] = useState<PrintScale>('normal');
+  const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
+  const signatureCanvasRef = useRef<HTMLCanvasElement>(null);
+  const isDrawingRef = useRef(false);
   const { settings: companySettings } = useCompanySettings();
   const sc = SCALE_CONFIGS[printScale];
+
+  // Signature pad logic
+  const getCanvasPoint = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    const canvas = signatureCanvasRef.current;
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    if ('touches' in e) {
+      const touch = e.touches[0];
+      return { x: (touch.clientX - rect.left) * scaleX, y: (touch.clientY - rect.top) * scaleY };
+    }
+    return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
+  }, []);
+
+  const startDrawing = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    const canvas = signatureCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    isDrawingRef.current = true;
+    const point = getCanvasPoint(e);
+    if (point) {
+      ctx.beginPath();
+      ctx.moveTo(point.x, point.y);
+    }
+  }, [getCanvasPoint]);
+
+  const draw = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    if (!isDrawingRef.current) return;
+    const canvas = signatureCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const point = getCanvasPoint(e);
+    if (point) {
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = '#1a1a1a';
+      ctx.lineTo(point.x, point.y);
+      ctx.stroke();
+    }
+  }, [getCanvasPoint]);
+
+  const stopDrawing = useCallback(() => {
+    if (isDrawingRef.current) {
+      isDrawingRef.current = false;
+      const canvas = signatureCanvasRef.current;
+      if (canvas) {
+        setSignatureDataUrl(canvas.toDataURL('image/png'));
+      }
+    }
+  }, []);
+
+  const clearSignature = useCallback(() => {
+    const canvas = signatureCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    setSignatureDataUrl(null);
+  }, []);
 
   useEffect(() => {
     supabase.from('purchase_order_lines').select('*').eq('purchase_order_id', order.id).order('code')
@@ -279,11 +347,55 @@ export function PurchaseOrderPrintView({ order, onClose }: Props) {
             </div>
           )}
 
+          {/* Signature Block */}
+          <div style={{ marginBottom: '16px', padding: '10px', background: '#f8fafc', borderRadius: '6px' }}>
+            <div style={{ fontSize: sc.sectionFontSize, textTransform: 'uppercase', color: '#666', marginBottom: '6px', letterSpacing: '0.5px' }}>
+              Firmado por: <span style={{ fontWeight: '600', color: '#1a1a1a' }}>{getContactDisplayName(order.client_contact)}</span>
+            </div>
+            {/* In print mode, show the captured signature image; in interactive mode, show the canvas */}
+            {signatureDataUrl ? (
+              <img src={signatureDataUrl} alt="Firma" style={{ width: '300px', height: '100px', objectFit: 'contain', border: '1px solid #e5e5e5', borderRadius: '4px', background: 'white' }} />
+            ) : (
+              <div style={{ width: '300px', height: '100px', border: '1px dashed #ccc', borderRadius: '4px', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999', fontSize: sc.sectionFontSize }}>
+                Firma
+              </div>
+            )}
+          </div>
+
           {/* Footer */}
           <div style={{ textAlign: 'center', paddingTop: '10px', borderTop: '1px solid #e5e5e5', fontSize: sc.sectionFontSize, color: '#666', marginTop: '16px' }}>
             <p>{companySettings.email} | {companySettings.phone}</p>
             <p>{companySettings.website}</p>
           </div>
+        </div>
+
+        {/* Interactive Signature Pad (outside printRef) */}
+        <div className="mt-4 p-4 border rounded-lg bg-muted/30">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium">
+              Firma de: <span className="text-primary">{getContactDisplayName(order.client_contact)}</span>
+            </span>
+            {signatureDataUrl && (
+              <Button variant="ghost" size="sm" onClick={clearSignature} className="gap-1 text-xs">
+                <Eraser className="h-3 w-3" /> Borrar firma
+              </Button>
+            )}
+          </div>
+          <canvas
+            ref={signatureCanvasRef}
+            width={600}
+            height={200}
+            className="border border-border rounded-md bg-white cursor-crosshair touch-none w-full"
+            style={{ maxWidth: '100%', height: '120px' }}
+            onMouseDown={startDrawing}
+            onMouseMove={draw}
+            onMouseUp={stopDrawing}
+            onMouseLeave={stopDrawing}
+            onTouchStart={startDrawing}
+            onTouchMove={draw}
+            onTouchEnd={stopDrawing}
+          />
+          <p className="text-xs text-muted-foreground mt-1">Dibuje su firma con el ratón o el dedo (tabletas). Se incluirá en la impresión.</p>
         </div>
 
         <DialogFooter>

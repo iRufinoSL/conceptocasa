@@ -466,7 +466,7 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
     }
 
     return result;
-  }, [baseVerts3D, topVerts3D, walls, polygon, zBase, height, scaleZ]);
+  }, [baseVerts3D, topVerts3D, walls, polygon, zBase, height, scaleZ, hasFloor, hasCeiling]);
 
   // Compute edge lengths
   const edgeLengths = useMemo(() => {

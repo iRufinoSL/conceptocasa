@@ -2381,33 +2381,59 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
     setFormIsBase(false);
   };
 
-  const createVerticalSection = async (): Promise<string | null> => {
-    if (!newSectionName.trim() || !floorPlan?.id) return null;
+  const persistVerticalSection = async (name: string, axisValueInput: string): Promise<string | null> => {
+    if (!name.trim() || !floorPlan?.id) return null;
+    const parsedAxis = parseFloat(axisValueInput);
     const newSection: CustomSection = {
       id: crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      name: newSectionName.trim(),
+      name: name.trim(),
       sectionType: 'vertical',
       axis: 'Z',
-      axisValue: parseFloat(newSectionAxisValue) || 0,
+      axisValue: Number.isFinite(parsedAxis) ? parsedAxis : 0,
       polygons: [],
     };
+
     let parsed: any = {};
     try {
       parsed = typeof floorPlan.custom_corners === 'string'
         ? JSON.parse(floorPlan.custom_corners) : (floorPlan.custom_corners || {});
     } catch { parsed = {}; }
+
     const allSections: CustomSection[] = parsed.customSections || [];
     allSections.push(newSection);
     parsed.customSections = allSections;
+
     const { error } = await supabase.from('budget_floor_plans').update({ custom_corners: parsed }).eq('id', floorPlan.id);
-    if (error) { toast.error('Error al crear sección vertical'); return null; }
+    if (error) {
+      toast.error('Error al crear sección vertical');
+      return null;
+    }
+
     toast.success(`Sección vertical "${newSection.name}" creada`);
     queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces', budgetId] });
     queryClient.invalidateQueries({ queryKey: ['workspace-rooms'] });
+    return newSection.id;
+  };
+
+  const createVerticalSection = async (): Promise<string | null> => {
+    const createdId = await persistVerticalSection(newSectionName, newSectionAxisValue);
+    if (!createdId) return null;
     setShowNewSection(false);
     setNewSectionName('');
     setNewSectionAxisValue('');
-    return newSection.id;
+    setFormSectionId(createdId);
+    return createdId;
+  };
+
+  const handleCreateStandaloneVerticalSection = async () => {
+    const createdId = await persistVerticalSection(quickSectionName, quickSectionAxisValue);
+    if (!createdId) {
+      toast.error('Indica un nombre para la sección vertical');
+      return;
+    }
+    setShowQuickSectionForm(false);
+    setQuickSectionName('');
+    setQuickSectionAxisValue('0');
   };
 
   const handleSave = async () => {

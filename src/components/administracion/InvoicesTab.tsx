@@ -65,6 +65,8 @@ interface Invoice {
   lines_count?: number;
 }
 
+type FooterContactSource = 'company' | 'issuer' | 'receiver';
+
 interface InvoiceForm {
   invoice_number: string;
   invoice_date: string;
@@ -75,6 +77,7 @@ interface InvoiceForm {
   receiver_account_id: string;
   vat_rate: string;
   document_type: DocumentType;
+  footer_contact_source: FooterContactSource;
 }
 
 interface Filters {

@@ -9,6 +9,14 @@ interface SectionScale {
   vScale: number; // mm per grid cell on vertical axis
 }
 
+interface RidgeLineData {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  z: number;
+}
+
 interface SectionAxisViewerProps {
   sectionType: 'vertical' | 'longitudinal' | 'transversal';
   axisValue: number;
@@ -16,6 +24,8 @@ interface SectionAxisViewerProps {
   /** Persisted scale in mm */
   savedScale?: { hScale: number; vScale: number };
   onSaveScale?: (scale: { hScale: number; vScale: number }) => void;
+  /** Ridge line to draw on Z sections */
+  ridgeLine?: RidgeLineData | null;
 }
 
 const AXIS_COLORS = {

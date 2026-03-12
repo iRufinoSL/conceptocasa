@@ -4098,6 +4098,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
               walls: roomWalls,
               zBase: vSec ? vSec.axisValue : 0,
               sectionName: vSec ? vSec.name : 'Sin sección',
+              hasFloor: r.has_floor,
+              hasCeiling: r.has_ceiling,
             };
           });
         return (

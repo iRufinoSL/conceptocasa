@@ -461,12 +461,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null);
   const [draggingIdx, setDraggingIdx] = useState<number | null>(null);
-  const DEFAULT_ZOOM = 1;
-  const ZOOM_MIN = 0.5;
-  const ZOOM_MAX = 4;
-  const ZOOM_STEP = 0.25;
-  const ZOOM_EPSILON = 0.001;
-  const [zoomLevel, setZoomLevel] = useState(DEFAULT_ZOOM);
+  const FIXED_ZOOM = 1;
   // Selected other polygon for inline editing
   const [selectedOtherId, setSelectedOtherId] = useState<string | null>(null);
   const [draggingOtherIdx, setDraggingOtherIdx] = useState<number | null>(null);
@@ -508,38 +503,8 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
 
   const viewContextKey = `${sectionType ?? 'none'}:${sectionAxisValue ?? 'na'}:${activeRoomId ?? 'draft'}`;
 
-  const resetZoomViewport = useCallback(() => {
-    requestAnimationFrame(() => {
-      gridContainerRef.current?.scrollTo({ left: 0, top: 0 });
-    });
-  }, []);
-
-  const normalizeZoom = useCallback((nextZoom: number) => {
-    const clamped = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, +nextZoom.toFixed(2)));
-    return Math.abs(clamped - DEFAULT_ZOOM) <= ZOOM_EPSILON ? DEFAULT_ZOOM : clamped;
-  }, [DEFAULT_ZOOM, ZOOM_EPSILON, ZOOM_MAX, ZOOM_MIN]);
-
-  const applyZoom = useCallback((nextZoom: number | ((currentZoom: number) => number)) => {
-    setZoomLevel((currentZoom) => {
-      const rawNext = typeof nextZoom === 'function' ? nextZoom(currentZoom) : nextZoom;
-      const normalized = normalizeZoom(rawNext);
-      return normalized <= DEFAULT_ZOOM + ZOOM_EPSILON ? DEFAULT_ZOOM : normalized;
-    });
-  }, [DEFAULT_ZOOM, ZOOM_EPSILON, normalizeZoom]);
-
-  useEffect(() => {
-    setZoomLevel(DEFAULT_ZOOM);
-    resetZoomViewport();
-  }, [DEFAULT_ZOOM, resetZoomViewport, viewContextKey]);
-
-  useEffect(() => {
-    if (zoomLevel <= DEFAULT_ZOOM + ZOOM_EPSILON) {
-      resetZoomViewport();
-    }
-  }, [DEFAULT_ZOOM, ZOOM_EPSILON, zoomLevel, resetZoomViewport]);
-
-  // At x1 the grid fits entirely; at higher zooms it grows and scrolls
-  const baseCellSize = 28;
+  // Cuadrícula con escala fija (zoom desactivado para evitar desbordes de vista)
+  const baseCellSize = sectionType === 'vertical' ? 22 : 28;
   const pad = 30;
   // Compute aspect-correct cell dimensions based on axis scales
   const hMm = hScaleMm || 625;
@@ -549,11 +514,11 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
   const baseCellH = Math.round(baseCellSize * scaleRatio);
   const logicalW = gridWidth * baseCellW + pad * 2;
   const logicalH = gridHeight * baseCellH + pad * 2;
-  const cellW = Math.round(baseCellW * zoomLevel);
-  const cellH = Math.round(baseCellH * zoomLevel);
+  const cellW = Math.round(baseCellW * FIXED_ZOOM);
+  const cellH = Math.round(baseCellH * FIXED_ZOOM);
   const svgW = gridWidth * cellW + pad * 2;
   const svgH = gridHeight * cellH + pad * 2;
-  const isZoomed = zoomLevel > DEFAULT_ZOOM + ZOOM_EPSILON;
+  const isZoomed = false;
 
   const toSvg = (gx: number, gy: number) => ({
     sx: pad + (gx - gridOffsetX) * cellW,
@@ -852,37 +817,9 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
         )}
       </div>
 
-      {/* Zoom controls + tools + PDF */}
+      {/* Tools + PDF */}
       <div className="flex items-center gap-1.5 flex-wrap">
-        <span className="text-[9px] text-muted-foreground">Zoom:</span>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-5 text-[10px] px-1.5"
-          onClick={() => applyZoom((z) => z - ZOOM_STEP)}
-          disabled={zoomLevel <= ZOOM_MIN + ZOOM_EPSILON}
-        >
-          −
-        </Button>
-        <span className="text-[10px] font-mono min-w-[28px] text-center">{zoomLevel}×</span>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-5 text-[10px] px-1.5"
-          onClick={() => applyZoom((z) => z + ZOOM_STEP)}
-          disabled={zoomLevel >= ZOOM_MAX - ZOOM_EPSILON}
-        >
-          +
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-5 text-[10px] px-1.5"
-          onClick={() => applyZoom(DEFAULT_ZOOM)}
-        >
-          1×
-        </Button>
-        <span className="text-[9px] text-muted-foreground ml-2">Herramientas:</span>
+        <span className="text-[9px] text-muted-foreground">Herramientas:</span>
         <Button
           variant={selectMode ? 'default' : 'outline'}
           size="sm"
@@ -1949,7 +1886,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                       <line x1={brX} y1={y - tickLen} x2={brX} y2={y + tickLen} stroke={dimColor} strokeWidth={0.7} />
                       {/* Label */}
                       <text x={(blX + brX) / 2} y={y + 12} textAnchor="middle" dominantBaseline="central"
-                        fontSize={Math.round(9 * Math.max(1, zoomLevel * 0.8))} fontWeight={800} fill={dimColor}>
+                        fontSize={9} fontWeight={800} fill={dimColor}>
                         {totalWidthMm} mm
                       </text>
                     </>
@@ -1972,7 +1909,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                       {/* Label */}
                       <text x={x + 14} y={(trY + brY) / 2} textAnchor="middle" dominantBaseline="central"
                         transform={`rotate(90, ${x + 14}, ${(trY + brY) / 2})`}
-                        fontSize={Math.round(9 * Math.max(1, zoomLevel * 0.8))} fontWeight={800} fill={dimColor}>
+                        fontSize={9} fontWeight={800} fill={dimColor}>
                         {totalHeightMm} mm
                       </text>
                     </>
@@ -1990,7 +1927,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                       <line x1={tlX} y1={y - tickLen} x2={tlX} y2={y + tickLen} stroke={dimColor} strokeWidth={0.7} />
                       <line x1={trX} y1={y - tickLen} x2={trX} y2={y + tickLen} stroke={dimColor} strokeWidth={0.7} />
                       <text x={(tlX + trX) / 2} y={y - 10} textAnchor="middle" dominantBaseline="central"
-                        fontSize={Math.round(9 * Math.max(1, zoomLevel * 0.8))} fontWeight={800} fill={dimColor}>
+                        fontSize={9} fontWeight={800} fill={dimColor}>
                         {totalWidthMm} mm
                       </text>
                     </>
@@ -2009,7 +1946,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                       <line x1={x - tickLen} y1={blY} x2={x + tickLen} y2={blY} stroke={dimColor} strokeWidth={0.7} />
                       <text x={x - 14} y={(tlY + blY) / 2} textAnchor="middle" dominantBaseline="central"
                         transform={`rotate(-90, ${x - 14}, ${(tlY + blY) / 2})`}
-                        fontSize={Math.round(9 * Math.max(1, zoomLevel * 0.8))} fontWeight={800} fill={dimColor}>
+                        fontSize={9} fontWeight={800} fill={dimColor}>
                         {totalHeightMm} mm
                       </text>
                     </>
@@ -2251,6 +2188,9 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
   const [showNewSection, setShowNewSection] = useState(false);
   const [newSectionName, setNewSectionName] = useState('');
   const [newSectionAxisValue, setNewSectionAxisValue] = useState('');
+  const [showQuickSectionForm, setShowQuickSectionForm] = useState(false);
+  const [quickSectionName, setQuickSectionName] = useState('');
+  const [quickSectionAxisValue, setQuickSectionAxisValue] = useState('0');
   const [inputMode, setInputMode] = useState<'manual' | 'grid'>('manual');
   const [formIsBase, setFormIsBase] = useState(false);
   const [selectedOtherWorkspaceId, setSelectedOtherWorkspaceId] = useState<string | null>(null);
@@ -2441,33 +2381,59 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
     setFormIsBase(false);
   };
 
-  const createVerticalSection = async (): Promise<string | null> => {
-    if (!newSectionName.trim() || !floorPlan?.id) return null;
+  const persistVerticalSection = async (name: string, axisValueInput: string): Promise<string | null> => {
+    if (!name.trim() || !floorPlan?.id) return null;
+    const parsedAxis = parseFloat(axisValueInput);
     const newSection: CustomSection = {
       id: crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      name: newSectionName.trim(),
+      name: name.trim(),
       sectionType: 'vertical',
       axis: 'Z',
-      axisValue: parseFloat(newSectionAxisValue) || 0,
+      axisValue: Number.isFinite(parsedAxis) ? parsedAxis : 0,
       polygons: [],
     };
+
     let parsed: any = {};
     try {
       parsed = typeof floorPlan.custom_corners === 'string'
         ? JSON.parse(floorPlan.custom_corners) : (floorPlan.custom_corners || {});
     } catch { parsed = {}; }
+
     const allSections: CustomSection[] = parsed.customSections || [];
     allSections.push(newSection);
     parsed.customSections = allSections;
+
     const { error } = await supabase.from('budget_floor_plans').update({ custom_corners: parsed }).eq('id', floorPlan.id);
-    if (error) { toast.error('Error al crear sección vertical'); return null; }
+    if (error) {
+      toast.error('Error al crear sección vertical');
+      return null;
+    }
+
     toast.success(`Sección vertical "${newSection.name}" creada`);
     queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces', budgetId] });
     queryClient.invalidateQueries({ queryKey: ['workspace-rooms'] });
+    return newSection.id;
+  };
+
+  const createVerticalSection = async (): Promise<string | null> => {
+    const createdId = await persistVerticalSection(newSectionName, newSectionAxisValue);
+    if (!createdId) return null;
     setShowNewSection(false);
     setNewSectionName('');
     setNewSectionAxisValue('');
-    return newSection.id;
+    setFormSectionId(createdId);
+    return createdId;
+  };
+
+  const handleCreateStandaloneVerticalSection = async () => {
+    const createdId = await persistVerticalSection(quickSectionName, quickSectionAxisValue);
+    if (!createdId) {
+      toast.error('Indica un nombre para la sección vertical');
+      return;
+    }
+    setShowQuickSectionForm(false);
+    setQuickSectionName('');
+    setQuickSectionAxisValue('0');
   };
 
   const handleSave = async () => {
@@ -4056,12 +4022,64 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
             <RefreshCw className="h-3 w-3" /> Actualizar
           </Button>
           {isAdmin && (
-            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => { resetForm(); setFormHeight(String(floorPlan?.default_height ?? '')); setShowForm(true); }}>
-              <Plus className="h-3 w-3" /> Añadir
-            </Button>
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs gap-1"
+                onClick={() => setShowQuickSectionForm(v => !v)}
+              >
+                <Grid3x3 className="h-3 w-3" /> Nueva sección Z
+              </Button>
+              <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => { resetForm(); setFormHeight(String(floorPlan?.default_height ?? '')); setShowForm(true); }}>
+                <Plus className="h-3 w-3" /> Añadir
+              </Button>
+            </>
           )}
         </div>
       </div>
+
+      {isAdmin && showQuickSectionForm && (
+        <div className="border rounded-lg p-3 bg-muted/30 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold">Crear Sección Vertical limpia (Z)</p>
+            <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => setShowQuickSectionForm(false)}>
+              Cancelar
+            </Button>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label className="text-[10px]">Nombre</Label>
+              <Input
+                className="h-7 text-xs"
+                placeholder="Ej: Sección Z=0"
+                value={quickSectionName}
+                onChange={(e) => setQuickSectionName(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label className="text-[10px]">Eje Z</Label>
+              <Input
+                className="h-7 text-xs"
+                type="number"
+                placeholder="0"
+                value={quickSectionAxisValue}
+                onChange={(e) => setQuickSectionAxisValue(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <Button
+              size="sm"
+              className="h-6 text-[10px]"
+              onClick={handleCreateStandaloneVerticalSection}
+              disabled={!quickSectionName.trim()}
+            >
+              Crear sección
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* ── 3D List View ── */}
       {show3DList && (() => {

@@ -102,6 +102,8 @@ export function SectionAxisViewer({
   ridgeLine,
   polygons: savedPolygons,
   onSavePolygons,
+  savedRulerLines,
+  onSaveRulerLines,
 }: SectionAxisViewerProps) {
   const { fixedAxis, hAxis, vAxis } = getConfig(sectionType);
   const hColor = AXIS_COLORS[hAxis];

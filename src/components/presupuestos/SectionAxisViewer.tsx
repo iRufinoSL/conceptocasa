@@ -1203,7 +1203,7 @@ export function SectionAxisViewer({
                 className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border cursor-pointer hover:opacity-80 transition-opacity"
                 style={{ borderColor: 'hsl(30 90% 50%)', color: 'hsl(30 70% 40%)' }}
                 onClick={() => { setEditingRulerId(rl.id); setEditRulerLabel(rl.label || ''); }}>
-                📏 {rl.label || `${Math.round(lengthMm)}mm`}
+                📏 {rl.label || `${Math.round(lengthMm)} mm`}
                 {isEditing && (
                   <Input className="h-5 w-20 text-[10px] font-mono px-1 ml-1" placeholder="Etiqueta"
                     value={editRulerLabel}

@@ -1,34 +1,31 @@
-import { useMemo, useState, useRef, useEffect } from 'react';
+import { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Save } from 'lucide-react';
+import { Save, PenTool, X, Check } from 'lucide-react';
+import type { SectionPolygon } from './CustomSectionManager';
 
 interface SectionScale {
-  hScale: number; // mm per grid cell on horizontal axis
-  vScale: number; // mm per grid cell on vertical axis
+  hScale: number;
+  vScale: number;
 }
 
 interface RidgeLineData {
-  x1: number;
-  y1: number;
-  x2: number;
-  y2: number;
-  z: number;
+  x1: number; y1: number; x2: number; y2: number; z: number;
 }
 
 interface SectionAxisViewerProps {
   sectionType: 'vertical' | 'longitudinal' | 'transversal';
   axisValue: number;
   sectionName: string;
-  /** Persisted scale in mm */
   savedScale?: { hScale: number; vScale: number };
   onSaveScale?: (scale: { hScale: number; vScale: number }) => void;
-  /** Persisted negative grid limits */
   savedNegLimits?: { negH: number; negV: number };
   onSaveNegLimits?: (limits: { negH: number; negV: number }) => void;
-  /** Ridge line to draw on Z sections */
   ridgeLine?: RidgeLineData | null;
+  /** Persisted polygons (workspaces) */
+  polygons?: SectionPolygon[];
+  onSavePolygons?: (polygons: SectionPolygon[]) => void;
 }
 
 const AXIS_COLORS = {
@@ -37,6 +34,17 @@ const AXIS_COLORS = {
   Z: 'hsl(220, 70%, 55%)',
 };
 
+const WORKSPACE_COLORS = [
+  'hsl(200, 70%, 55%)',
+  'hsl(30, 80%, 55%)',
+  'hsl(280, 60%, 55%)',
+  'hsl(160, 60%, 45%)',
+  'hsl(350, 70%, 55%)',
+  'hsl(60, 70%, 45%)',
+  'hsl(220, 50%, 55%)',
+  'hsl(100, 60%, 45%)',
+];
+
 function getConfig(sectionType: string) {
   switch (sectionType) {
     case 'vertical': return { fixedAxis: 'Z' as const, hAxis: 'X' as const, vAxis: 'Y' as const };
@@ -44,6 +52,30 @@ function getConfig(sectionType: string) {
     case 'longitudinal': return { fixedAxis: 'Y' as const, hAxis: 'X' as const, vAxis: 'Z' as const };
     default: return { fixedAxis: 'Z' as const, hAxis: 'X' as const, vAxis: 'Y' as const };
   }
+}
+
+/** Compute polygon area using the Shoelace formula (in grid units²) */
+function polygonAreaGrid(vertices: Array<{ x: number; y: number }>): number {
+  let area = 0;
+  const n = vertices.length;
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    area += vertices[i].x * vertices[j].y;
+    area -= vertices[j].x * vertices[i].y;
+  }
+  return Math.abs(area) / 2;
+}
+
+/** Compute centroid of polygon */
+function polygonCentroid(vertices: Array<{ x: number; y: number }>): { x: number; y: number } {
+  let cx = 0, cy = 0;
+  vertices.forEach(v => { cx += v.x; cy += v.y; });
+  return { x: cx / vertices.length, y: cy / vertices.length };
+}
+
+/** Distance between two points in grid coords */
+function edgeLengthGrid(a: { x: number; y: number }, b: { x: number; y: number }): number {
+  return Math.sqrt((b.x - a.x) ** 2 + (b.y - a.y) ** 2);
 }
 
 export function SectionAxisViewer({
@@ -55,23 +87,34 @@ export function SectionAxisViewer({
   savedNegLimits,
   onSaveNegLimits,
   ridgeLine,
+  polygons: savedPolygons,
+  onSavePolygons,
 }: SectionAxisViewerProps) {
   const { fixedAxis, hAxis, vAxis } = getConfig(sectionType);
   const hColor = AXIS_COLORS[hAxis];
   const vColor = AXIS_COLORS[vAxis];
   const fixedColor = AXIS_COLORS[fixedAxis];
 
-  // Scale inputs (mm per cell)
+  // Scale inputs
   const [hScaleInput, setHScaleInput] = useState(String(savedScale?.hScale || ''));
   const [vScaleInput, setVScaleInput] = useState(String(savedScale?.vScale || ''));
   const [scale, setScale] = useState<SectionScale | null>(savedScale || null);
 
-  // Negative grid limits
+  // Negative limits
   const [negHInput, setNegHInput] = useState(String(savedNegLimits?.negH ?? 3));
   const [negVInput, setNegVInput] = useState(String(savedNegLimits?.negV ?? 3));
   const [negLimits, setNegLimits] = useState<{ negH: number; negV: number }>(
     savedNegLimits || { negH: 3, negV: 3 }
   );
+
+  // Drawing state
+  const [drawMode, setDrawMode] = useState(false);
+  const [drawingName, setDrawingName] = useState('');
+  const [drawingVertices, setDrawingVertices] = useState<Array<{ col: number; row: number }>>([]);
+  const [hoverNode, setHoverNode] = useState<{ col: number; row: number } | null>(null);
+
+  // Polygons
+  const [polygons, setPolygons] = useState<SectionPolygon[]>(savedPolygons || []);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ w: 800, h: 500 });
@@ -86,7 +129,6 @@ export function SectionAxisViewer({
     return () => ro.disconnect();
   }, []);
 
-  // Sync from savedScale & savedNegLimits
   useEffect(() => {
     if (savedScale) {
       setScale(savedScale);
@@ -102,6 +144,10 @@ export function SectionAxisViewer({
       setNegVInput(String(savedNegLimits.negV));
     }
   }, [savedNegLimits]);
+
+  useEffect(() => {
+    if (savedPolygons) setPolygons(savedPolygons);
+  }, [savedPolygons]);
 
   const handleSaveScale = () => {
     const h = parseFloat(hScaleInput);
@@ -120,15 +166,14 @@ export function SectionAxisViewer({
     onSaveNegLimits?.(newLimits);
   };
 
-  const cellPx = 40; // pixels per grid cell
+  const cellPx = 40;
   const margin = 50;
   const w = containerSize.w;
   const h = containerSize.h;
 
-  // Grid rendering
-  const gridContent = useMemo(() => {
+  // Compute grid layout
+  const gridLayout = useMemo(() => {
     if (!scale) return null;
-
     const drawW = w - margin * 2;
     const drawH = h - margin * 2;
     const totalCols = Math.floor(drawW / cellPx);
@@ -137,16 +182,118 @@ export function SectionAxisViewer({
     const gridH = totalRows * cellPx;
     const ox = margin + Math.floor((drawW - gridW) / 2);
     const oy = margin + Math.floor((drawH - gridH) / 2);
-
-    // Origin positioned so that negH cells are to the left and negV cells below
     const originCol = Math.min(negLimits.negH, totalCols - 1);
     const originRow = Math.max(0, totalRows - negLimits.negV - 1);
     const originX = ox + originCol * cellPx;
     const originY = oy + originRow * cellPx;
+    return { totalCols, totalRows, gridW, gridH, ox, oy, originCol, originRow, originX, originY };
+  }, [scale, w, h, negLimits]);
+
+  // Convert grid col/row to pixel
+  const colRowToPx = useCallback((col: number, row: number) => {
+    if (!gridLayout) return { px: 0, py: 0 };
+    return {
+      px: gridLayout.ox + col * cellPx,
+      py: gridLayout.oy + row * cellPx,
+    };
+  }, [gridLayout]);
+
+  // Convert grid col/row to coordinate label values
+  const colRowToCoord = useCallback((col: number, row: number) => {
+    if (!gridLayout) return { hIdx: 0, vIdx: 0 };
+    return {
+      hIdx: col - gridLayout.originCol,
+      vIdx: gridLayout.originRow - row,
+    };
+  }, [gridLayout]);
+
+  // Snap mouse position to nearest grid node
+  const snapToNode = useCallback((clientX: number, clientY: number): { col: number; row: number } | null => {
+    if (!gridLayout || !containerRef.current) return null;
+    const svg = containerRef.current.querySelector('svg');
+    if (!svg) return null;
+    const rect = svg.getBoundingClientRect();
+    const mx = clientX - rect.left;
+    const my = clientY - rect.top;
+    const col = Math.round((mx - gridLayout.ox) / cellPx);
+    const row = Math.round((my - gridLayout.oy) / cellPx);
+    if (col < 0 || col > gridLayout.totalCols || row < 0 || row > gridLayout.totalRows) return null;
+    return { col, row };
+  }, [gridLayout]);
+
+  // Handle SVG click for drawing
+  const handleSvgClick = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
+    if (!drawMode || !gridLayout) return;
+    const node = snapToNode(e.clientX, e.clientY);
+    if (!node) return;
+
+    // Check if closing the polygon (clicking first vertex)
+    if (drawingVertices.length >= 3 &&
+        node.col === drawingVertices[0].col && node.row === drawingVertices[0].row) {
+      // Close polygon and save
+      finishDrawing();
+      return;
+    }
+
+    // Don't add duplicate of last vertex
+    const last = drawingVertices[drawingVertices.length - 1];
+    if (last && last.col === node.col && last.row === node.row) return;
+
+    setDrawingVertices(prev => [...prev, node]);
+  }, [drawMode, gridLayout, drawingVertices, snapToNode]);
+
+  const handleSvgMouseMove = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
+    if (!drawMode || !gridLayout) { setHoverNode(null); return; }
+    const node = snapToNode(e.clientX, e.clientY);
+    setHoverNode(node);
+  }, [drawMode, gridLayout, snapToNode]);
+
+  const finishDrawing = useCallback(() => {
+    if (drawingVertices.length < 3 || !scale || !gridLayout) return;
+    const name = drawingName.trim() || `Espacio ${polygons.length + 1}`;
+
+    // Convert col/row to axis coordinates
+    const vertices = drawingVertices.map(v => {
+      const coord = colRowToCoord(v.col, v.row);
+      return { x: coord.hIdx, y: coord.vIdx, z: 0 };
+    });
+
+    const newPoly: SectionPolygon = {
+      id: crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      name,
+      vertices,
+    };
+
+    const updated = [...polygons, newPoly];
+    setPolygons(updated);
+    onSavePolygons?.(updated);
+    setDrawMode(false);
+    setDrawingVertices([]);
+    setDrawingName('');
+    setHoverNode(null);
+  }, [drawingVertices, drawingName, polygons, scale, gridLayout, colRowToCoord, onSavePolygons]);
+
+  const cancelDrawing = () => {
+    setDrawMode(false);
+    setDrawingVertices([]);
+    setDrawingName('');
+    setHoverNode(null);
+  };
+
+  const handleDeletePolygon = (polyId: string) => {
+    const updated = polygons.filter(p => p.id !== polyId);
+    setPolygons(updated);
+    onSavePolygons?.(updated);
+  };
+
+  // Grid rendering
+  const gridContent = useMemo(() => {
+    if (!scale || !gridLayout) return null;
+    const { totalCols, totalRows, gridW, gridH, ox, oy, originCol, originRow, originX, originY } = gridLayout;
 
     const elements: JSX.Element[] = [];
 
-    // Grid lines - intense and visible
+    // Grid lines
     for (let c = 0; c <= totalCols; c++) {
       const x = ox + c * cellPx;
       const isOrigin = c === originCol;
@@ -164,7 +311,7 @@ export function SectionAxisViewer({
       );
     }
 
-    // Horizontal tick labels
+    // Tick labels
     for (let c = 0; c <= totalCols; c++) {
       const x = ox + c * cellPx;
       const idx = c - originCol;
@@ -175,8 +322,6 @@ export function SectionAxisViewer({
         </text>
       );
     }
-
-    // Vertical tick labels (positive up, negative down)
     for (let r = 0; r <= totalRows; r++) {
       const y = oy + r * cellPx;
       const idx = originRow - r;
@@ -226,14 +371,13 @@ export function SectionAxisViewer({
       </text>
     );
 
-    // Ridge line on Z (vertical) sections
+    // Ridge line on Z sections
     if (sectionType === 'vertical' && ridgeLine) {
       const RIDGE_COLOR = 'hsl(0, 70%, 50%)';
       const rx1 = originX + ridgeLine.x1 * cellPx;
       const ry1 = originY - ridgeLine.y1 * cellPx;
       const rx2 = originX + ridgeLine.x2 * cellPx;
       const ry2 = originY - ridgeLine.y2 * cellPx;
-
       const dx = ridgeLine.x2 - ridgeLine.x1;
       const dy = ridgeLine.y2 - ridgeLine.y1;
       const len = Math.sqrt(dx * dx + dy * dy);
@@ -244,7 +388,6 @@ export function SectionAxisViewer({
       const ey1 = originY - (ridgeLine.y1 - uy * ext) * cellPx;
       const ex2 = originX + (ridgeLine.x2 + ux * ext) * cellPx;
       const ey2 = originY - (ridgeLine.y2 + uy * ext) * cellPx;
-
       elements.push(
         <line key="ridgeExt" x1={ex1} y1={ey1} x2={ex2} y2={ey2}
           stroke={RIDGE_COLOR} strokeWidth={2} strokeDasharray="8 4" opacity={0.7} />
@@ -266,7 +409,182 @@ export function SectionAxisViewer({
     }
 
     return elements;
-  }, [scale, w, h, hAxis, vAxis, hColor, vColor, fixedColor, fixedAxis, sectionType, ridgeLine, negLimits]);
+  }, [scale, gridLayout, hAxis, vAxis, hColor, vColor, fixedColor, sectionType, ridgeLine]);
+
+  // Render saved polygons
+  const polygonElements = useMemo(() => {
+    if (!gridLayout || !scale) return null;
+    const { originX, originY } = gridLayout;
+    const elements: JSX.Element[] = [];
+
+    polygons.forEach((poly, polyIdx) => {
+      const color = WORKSPACE_COLORS[polyIdx % WORKSPACE_COLORS.length];
+      const verts = poly.vertices;
+      if (verts.length < 3) return;
+
+      // Convert to pixel positions: x is hAxis (positive right), y is vAxis (positive up → screen up)
+      const pxVerts = verts.map(v => ({
+        px: originX + v.x * cellPx,
+        py: originY - v.y * cellPx,
+      }));
+
+      // Polygon fill
+      const pointsStr = pxVerts.map(p => `${p.px},${p.py}`).join(' ');
+      elements.push(
+        <polygon key={`poly-${poly.id}`} points={pointsStr}
+          fill={color} fillOpacity={0.15} stroke={color} strokeWidth={2.5} />
+      );
+
+      // Edge labels: wall number + length in mm
+      for (let i = 0; i < verts.length; i++) {
+        const j = (i + 1) % verts.length;
+        const a = pxVerts[i];
+        const b = pxVerts[j];
+        const edgeMidX = (a.px + b.px) / 2;
+        const edgeMidY = (a.py + b.py) / 2;
+
+        // Length in mm using scale
+        const dxGrid = Math.abs(verts[j].x - verts[i].x);
+        const dyGrid = Math.abs(verts[j].y - verts[i].y);
+        const lengthMm = Math.sqrt((dxGrid * scale.hScale) ** 2 + (dyGrid * scale.vScale) ** 2);
+        const wallNum = i + 1;
+
+        // Offset label slightly perpendicular to the edge
+        const edgeDx = b.px - a.px;
+        const edgeDy = b.py - a.py;
+        const edgeLen = Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy);
+        const nx = edgeLen > 0 ? -edgeDy / edgeLen : 0;
+        const ny = edgeLen > 0 ? edgeDx / edgeLen : 0;
+        const offset = 14;
+
+        elements.push(
+          <g key={`edge-${poly.id}-${i}`}>
+            {/* Background */}
+            <rect
+              x={edgeMidX + nx * offset - 28}
+              y={edgeMidY + ny * offset - 8}
+              width={56} height={16} rx={3}
+              fill="white" fillOpacity={0.92} stroke={color} strokeWidth={0.5}
+            />
+            <text
+              x={edgeMidX + nx * offset}
+              y={edgeMidY + ny * offset + 4}
+              textAnchor="middle" fontSize={9} fontWeight={700} fill={color} fontFamily="monospace">
+              P{wallNum} {Math.round(lengthMm)}mm
+            </text>
+          </g>
+        );
+
+        // Vertex dot
+        elements.push(
+          <circle key={`vtx-${poly.id}-${i}`} cx={a.px} cy={a.py} r={3.5}
+            fill={color} stroke="white" strokeWidth={1.5} />
+        );
+      }
+
+      // Center label: name + area m²
+      const areaGrid = polygonAreaGrid(verts.map(v => ({ x: v.x, y: v.y })));
+      const areaM2 = areaGrid * (scale.hScale / 1000) * (scale.vScale / 1000);
+      const centroid = polygonCentroid(verts.map(v => ({ x: v.x, y: v.y })));
+      const cx = originX + centroid.x * cellPx;
+      const cy = originY - centroid.y * cellPx;
+
+      elements.push(
+        <g key={`center-${poly.id}`}>
+          <rect x={cx - 50} y={cy - 16} width={100} height={32} rx={4}
+            fill="white" fillOpacity={0.92} stroke={color} strokeWidth={1} />
+          <text x={cx} y={cy - 2} textAnchor="middle" fontSize={12} fontWeight={700} fill={color} fontFamily="sans-serif">
+            {poly.name}
+          </text>
+          <text x={cx} y={cy + 12} textAnchor="middle" fontSize={10} fontWeight={600} fill="hsl(var(--muted-foreground))" fontFamily="monospace">
+            {areaM2.toFixed(2)} m²
+          </text>
+        </g>
+      );
+    });
+
+    return elements;
+  }, [polygons, gridLayout, scale]);
+
+  // Drawing overlay (current drawing in progress)
+  const drawingOverlay = useMemo(() => {
+    if (!drawMode || !gridLayout || drawingVertices.length === 0) return null;
+    const { ox, oy } = gridLayout;
+    const elements: JSX.Element[] = [];
+
+    const pxVerts = drawingVertices.map(v => ({
+      px: ox + v.col * cellPx,
+      py: oy + v.row * cellPx,
+    }));
+
+    // Lines between placed vertices
+    for (let i = 0; i < pxVerts.length - 1; i++) {
+      elements.push(
+        <line key={`dline-${i}`}
+          x1={pxVerts[i].px} y1={pxVerts[i].py}
+          x2={pxVerts[i + 1].px} y2={pxVerts[i + 1].py}
+          stroke="hsl(var(--primary))" strokeWidth={2} strokeDasharray="6 3" />
+      );
+    }
+
+    // Line from last vertex to hover node
+    if (hoverNode && pxVerts.length > 0) {
+      const lastPx = pxVerts[pxVerts.length - 1];
+      const hPx = ox + hoverNode.col * cellPx;
+      const hPy = oy + hoverNode.row * cellPx;
+      elements.push(
+        <line key="dhover"
+          x1={lastPx.px} y1={lastPx.py} x2={hPx} y2={hPy}
+          stroke="hsl(var(--primary))" strokeWidth={1.5} strokeDasharray="4 4" opacity={0.6} />
+      );
+      // If hovering first vertex and enough vertices, show close indicator
+      if (drawingVertices.length >= 3 &&
+          hoverNode.col === drawingVertices[0].col && hoverNode.row === drawingVertices[0].row) {
+        elements.push(
+          <circle key="dclose" cx={pxVerts[0].px} cy={pxVerts[0].py} r={10}
+            fill="hsl(var(--primary))" fillOpacity={0.25} stroke="hsl(var(--primary))" strokeWidth={2} />
+        );
+      }
+    }
+
+    // Vertex dots
+    pxVerts.forEach((p, i) => {
+      elements.push(
+        <circle key={`dvtx-${i}`} cx={p.px} cy={p.py} r={4}
+          fill={i === 0 ? 'hsl(var(--primary))' : 'hsl(var(--primary))'} stroke="white" strokeWidth={2} />
+      );
+    });
+
+    // Hover node highlight
+    if (hoverNode) {
+      const hPx = ox + hoverNode.col * cellPx;
+      const hPy = oy + hoverNode.row * cellPx;
+      elements.push(
+        <circle key="dhoverDot" cx={hPx} cy={hPy} r={6}
+          fill="none" stroke="hsl(var(--primary))" strokeWidth={2} opacity={0.5} />
+      );
+    }
+
+    return elements;
+  }, [drawMode, gridLayout, drawingVertices, hoverNode]);
+
+  // Node interaction dots (visible in draw mode)
+  const nodeInteractionDots = useMemo(() => {
+    if (!drawMode || !gridLayout) return null;
+    const { totalCols, totalRows, ox, oy } = gridLayout;
+    const elements: JSX.Element[] = [];
+    for (let c = 0; c <= totalCols; c++) {
+      for (let r = 0; r <= totalRows; r++) {
+        const x = ox + c * cellPx;
+        const y = oy + r * cellPx;
+        elements.push(
+          <circle key={`ndot-${c}-${r}`} cx={x} cy={y} r={3}
+            fill="hsl(var(--primary))" fillOpacity={0.15} />
+        );
+      }
+    }
+    return elements;
+  }, [drawMode, gridLayout]);
 
   return (
     <div ref={containerRef} className="rounded-lg border bg-card overflow-hidden">
@@ -295,14 +613,12 @@ export function SectionAxisViewer({
           <div>
             <Label className="text-[10px] text-muted-foreground">Escala {hAxis} (mm)</Label>
             <Input className="h-7 w-24 text-xs font-mono" type="number" min={1}
-              value={hScaleInput} onChange={e => setHScaleInput(e.target.value)}
-              placeholder="625" />
+              value={hScaleInput} onChange={e => setHScaleInput(e.target.value)} placeholder="625" />
           </div>
           <div>
             <Label className="text-[10px] text-muted-foreground">Escala {vAxis} (mm)</Label>
             <Input className="h-7 w-24 text-xs font-mono" type="number" min={1}
-              value={vScaleInput} onChange={e => setVScaleInput(e.target.value)}
-              placeholder="625" />
+              value={vScaleInput} onChange={e => setVScaleInput(e.target.value)} placeholder="625" />
           </div>
           <Button size="sm" className="h-7 text-xs gap-1" onClick={handleSaveScale}
             disabled={!parseFloat(hScaleInput) || !parseFloat(vScaleInput)}>
@@ -323,14 +639,12 @@ export function SectionAxisViewer({
             <div>
               <Label className="text-[10px] text-muted-foreground">Límite neg. {hAxis} (nodos)</Label>
               <Input className="h-7 w-20 text-xs font-mono" type="number" min={0}
-                value={negHInput} onChange={e => setNegHInput(e.target.value)}
-                placeholder="3" />
+                value={negHInput} onChange={e => setNegHInput(e.target.value)} placeholder="3" />
             </div>
             <div>
               <Label className="text-[10px] text-muted-foreground">Límite neg. {vAxis} (nodos)</Label>
               <Input className="h-7 w-20 text-xs font-mono" type="number" min={0}
-                value={negVInput} onChange={e => setNegVInput(e.target.value)}
-                placeholder="3" />
+                value={negVInput} onChange={e => setNegVInput(e.target.value)} placeholder="3" />
             </div>
             <Button size="sm" className="h-7 text-xs gap-1" onClick={handleSaveNegLimits}>
               <Save className="h-3 w-3" /> Guardar límites
@@ -342,10 +656,84 @@ export function SectionAxisViewer({
         </div>
       )}
 
+      {/* Drawing toolbar */}
+      {scale && (
+        <div className="px-3 py-2 border-b bg-muted/10 flex items-center gap-3 flex-wrap">
+          {!drawMode ? (
+            <>
+              <div className="flex items-end gap-2">
+                <div>
+                  <Label className="text-[10px] text-muted-foreground">Nombre del espacio</Label>
+                  <Input className="h-7 w-40 text-xs" placeholder="Ej: Salón"
+                    value={drawingName} onChange={e => setDrawingName(e.target.value)} />
+                </div>
+                <Button size="sm" className="h-7 text-xs gap-1"
+                  onClick={() => { if (!drawingName.trim()) return; setDrawMode(true); }}
+                  disabled={!drawingName.trim()}>
+                  <PenTool className="h-3 w-3" /> Dibujar espacio
+                </Button>
+              </div>
+              {polygons.length > 0 && (
+                <span className="text-[10px] text-muted-foreground ml-auto">
+                  {polygons.length} espacio(s) dibujado(s)
+                </span>
+              )}
+            </>
+          ) : (
+            <div className="flex items-center gap-3 w-full">
+              <span className="text-xs font-semibold text-primary">
+                ✏️ Dibujando: {drawingName} — Clic en nodos para trazar, cierra en el primer nodo
+              </span>
+              <span className="text-[10px] text-muted-foreground">
+                Vértices: {drawingVertices.length}
+              </span>
+              <div className="ml-auto flex items-center gap-1">
+                {drawingVertices.length >= 3 && (
+                  <Button size="sm" variant="default" className="h-7 text-xs gap-1" onClick={finishDrawing}>
+                    <Check className="h-3 w-3" /> Cerrar
+                  </Button>
+                )}
+                <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={cancelDrawing}>
+                  <X className="h-3 w-3" /> Cancelar
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Polygon list */}
+      {polygons.length > 0 && !drawMode && (
+        <div className="px-3 py-1.5 border-b bg-muted/5 flex flex-wrap gap-1.5">
+          {polygons.map((poly, idx) => {
+            const color = WORKSPACE_COLORS[idx % WORKSPACE_COLORS.length];
+            const areaGrid = polygonAreaGrid(poly.vertices.map(v => ({ x: v.x, y: v.y })));
+            const areaM2 = scale ? areaGrid * (scale.hScale / 1000) * (scale.vScale / 1000) : 0;
+            return (
+              <span key={poly.id} className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border"
+                style={{ borderColor: color, color }}>
+                <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
+                {poly.name} ({areaM2.toFixed(2)} m²)
+                <button onClick={() => handleDeletePolygon(poly.id)}
+                  className="ml-0.5 hover:opacity-70" title="Eliminar">✕</button>
+              </span>
+            );
+          })}
+        </div>
+      )}
+
       {/* SVG Canvas */}
       {scale ? (
-        <svg width={w} height={h} className="block bg-background">
+        <svg
+          width={w} height={h}
+          className={`block bg-background ${drawMode ? 'cursor-crosshair' : ''}`}
+          onClick={handleSvgClick}
+          onMouseMove={handleSvgMouseMove}
+        >
           {gridContent}
+          {nodeInteractionDots}
+          {polygonElements}
+          {drawingOverlay}
         </svg>
       ) : (
         <div className="flex items-center justify-center bg-background" style={{ height: h }}>

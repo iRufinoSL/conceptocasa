@@ -70,7 +70,7 @@ interface WorkspacePropertiesPanelProps {
   onPatternChange?: (faceKey: string, patternId: string | null) => void;
 }
 
-export function WorkspacePropertiesPanel({ workspaceId, workspaceName, sectionType, sectionName, onClose, focusFace, onPatternChange }: WorkspacePropertiesPanelProps) {
+export function WorkspacePropertiesPanel({ workspaceId, workspaceName, sectionType, sectionName, onClose, focusFace, edgeCount: edgeCountProp, onPatternChange }: WorkspacePropertiesPanelProps) {
   const [walls, setWalls] = useState<WallRecord[]>([]);
   const [room, setRoom] = useState<any>(null);
   const [loading, setLoading] = useState(true);

@@ -20,6 +20,8 @@ interface WorkspaceEntry {
   walls: WallData[];
   zBase: number;
   sectionName?: string;
+  hasFloor?: boolean;
+  hasCeiling?: boolean;
 }
 
 interface FaceInfo {

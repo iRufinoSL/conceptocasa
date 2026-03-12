@@ -741,7 +741,7 @@ export function SectionAxisViewer({
               <span key={poly.id} className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border"
                 style={{ borderColor: color, color }}>
                 <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
-                {poly.name} ({areaM2.toFixed(2)} m²)
+                {poly.name} ({areaM2.toFixed(2)} m²{heightMm ? ` · h=${heightMm}mm` : ''})
                 <button onClick={() => handleDeletePolygon(poly.id)}
                   className="ml-0.5 hover:opacity-70" title="Eliminar">✕</button>
               </span>

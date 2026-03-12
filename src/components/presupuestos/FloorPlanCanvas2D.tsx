@@ -447,9 +447,9 @@ export function FloorPlanCanvas2D({
         return (
           <g pointerEvents="none">
             <line x1={x1} y1={ridgeY} x2={x2} y2={ridgeY}
-              stroke="#dc2626" strokeWidth={2.5} strokeDasharray="10 4" opacity={0.9} />
+              stroke="hsl(0, 0%, 45%)" strokeWidth={2.5} strokeDasharray="10 4" opacity={0.9} />
             <text x={x2 - 4} y={ridgeY - 6}
-              textAnchor="end" fontSize={9} fill="#dc2626" opacity={0.95} fontWeight="700">
+              textAnchor="end" fontSize={9} fill="hsl(0, 0%, 45%)" opacity={0.95} fontWeight="700">
               ▲ Cumbrera
             </text>
           </g>

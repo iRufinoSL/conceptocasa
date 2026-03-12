@@ -787,11 +787,11 @@ export function FloorPlanGridView({
                   top: ridgeTop - 1.25,
                   width: totalCols * CS + 20,
                   height: 0,
-                  borderTop: '2.5px dashed #dc2626',
+                  borderTop: '2.5px dashed hsl(0, 0%, 45%)',
                   zIndex: 25,
                 }}
               >
-                <div className="absolute -top-5 right-1 text-[9px] font-bold whitespace-nowrap" style={{ color: '#dc2626' }}>
+                <div className="absolute -top-5 right-1 text-[9px] font-bold whitespace-nowrap" style={{ color: 'hsl(0, 0%, 45%)' }}>
                   ▲ Cumbrera
                 </div>
               </div>

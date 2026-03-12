@@ -2,11 +2,14 @@ import { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Save, PenTool, X, Check, Printer, Ruler } from 'lucide-react';
 import type { SectionPolygon } from './CustomSectionManager';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { toast } from 'sonner';
+
+type WallLabelMode = 'both' | 'name-only' | 'measure-only' | 'none';
 
 interface SectionScale {
   hScale: number;
@@ -152,6 +155,9 @@ export function SectionAxisViewer({
   const [editingRulerId, setEditingRulerId] = useState<string | null>(null);
   const [editRulerLabel, setEditRulerLabel] = useState('');
   const [rulerHoverNode, setRulerHoverNode] = useState<{ col: number; row: number } | null>(null);
+
+  // Wall label display mode for PDF and screen
+  const [wallLabelMode, setWallLabelMode] = useState<WallLabelMode>('both');
 
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -311,11 +317,10 @@ export function SectionAxisViewer({
     };
   }, [gridLayout]);
 
-  // Snap mouse position to nearest grid node using SVG native coordinates
+  // Snap mouse position to nearest half-grid node (0.5 precision) using SVG native coordinates
   const snapToNode = useCallback((e: React.MouseEvent<SVGSVGElement>): { col: number; row: number } | null => {
     if (!gridLayout) return null;
     const svg = e.currentTarget;
-    // Use SVG coordinate system to avoid scroll/transform/DPR offset issues
     let pt = svg.createSVGPoint();
     pt.x = e.clientX;
     pt.y = e.clientY;
@@ -323,10 +328,11 @@ export function SectionAxisViewer({
     if (ctm) {
       pt = pt.matrixTransform(ctm.inverse());
     }
-    const mx = pt.x;
-    const my = pt.y;
-    const col = Math.round((mx - gridLayout.ox) / gridLayout.cellPx);
-    const row = Math.round((my - gridLayout.oy) / gridLayout.cellPx);
+    const rawCol = (pt.x - gridLayout.ox) / gridLayout.cellPx;
+    const rawRow = (pt.y - gridLayout.oy) / gridLayout.cellPx;
+    // Round to 0.5 grid units for half-node precision
+    const col = Math.round(rawCol * 2) / 2;
+    const row = Math.round(rawRow * 2) / 2;
     if (col < 0 || col > gridLayout.totalCols || row < 0 || row > gridLayout.totalRows) return null;
     return { col, row };
   }, [gridLayout]);
@@ -741,47 +747,58 @@ export function SectionAxisViewer({
           fill={color} fillOpacity={0.15} stroke={color} strokeWidth={2.5} />
       );
 
-      // Edge labels: wall number + length in mm
+      // Edge labels: wall number + length in mm (respects wallLabelMode)
+      if (wallLabelMode !== 'none') {
+        for (let i = 0; i < verts.length; i++) {
+          const j = (i + 1) % verts.length;
+          const a = pxVerts[i];
+          const b = pxVerts[j];
+          const edgeMidX = (a.px + b.px) / 2;
+          const edgeMidY = (a.py + b.py) / 2;
+
+          // Length in mm using scale
+          const dxGrid = Math.abs(verts[j].x - verts[i].x);
+          const dyGrid = Math.abs(verts[j].y - verts[i].y);
+          const lengthMm = Math.sqrt((dxGrid * scale.hScale) ** 2 + (dyGrid * scale.vScale) ** 2);
+          const wallNum = i + 1;
+
+          // Build label text based on mode
+          let labelText = '';
+          if (wallLabelMode === 'both') labelText = `P${wallNum} ${Math.round(lengthMm)}mm`;
+          else if (wallLabelMode === 'name-only') labelText = `P${wallNum}`;
+          else if (wallLabelMode === 'measure-only') labelText = `${Math.round(lengthMm)}mm`;
+
+          // Offset label slightly perpendicular to the edge
+          const edgeDx = b.px - a.px;
+          const edgeDy = b.py - a.py;
+          const edgeLen = Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy);
+          const nx = edgeLen > 0 ? -edgeDy / edgeLen : 0;
+          const ny = edgeLen > 0 ? edgeDx / edgeLen : 0;
+          const offset = 14;
+          const boxW = labelText.length * 5.5 + 10;
+
+          elements.push(
+            <g key={`edge-${poly.id}-${i}`}>
+              <rect
+                x={edgeMidX + nx * offset - boxW / 2}
+                y={edgeMidY + ny * offset - 8}
+                width={boxW} height={16} rx={3}
+                fill="white" fillOpacity={0.92} stroke={color} strokeWidth={0.5}
+              />
+              <text
+                x={edgeMidX + nx * offset}
+                y={edgeMidY + ny * offset + 4}
+                textAnchor="middle" fontSize={9} fontWeight={700} fill={color} fontFamily="monospace">
+                {labelText}
+              </text>
+            </g>
+          );
+        }
+      }
+
+      // Vertex dots (always visible)
       for (let i = 0; i < verts.length; i++) {
-        const j = (i + 1) % verts.length;
         const a = pxVerts[i];
-        const b = pxVerts[j];
-        const edgeMidX = (a.px + b.px) / 2;
-        const edgeMidY = (a.py + b.py) / 2;
-
-        // Length in mm using scale
-        const dxGrid = Math.abs(verts[j].x - verts[i].x);
-        const dyGrid = Math.abs(verts[j].y - verts[i].y);
-        const lengthMm = Math.sqrt((dxGrid * scale.hScale) ** 2 + (dyGrid * scale.vScale) ** 2);
-        const wallNum = i + 1;
-
-        // Offset label slightly perpendicular to the edge
-        const edgeDx = b.px - a.px;
-        const edgeDy = b.py - a.py;
-        const edgeLen = Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy);
-        const nx = edgeLen > 0 ? -edgeDy / edgeLen : 0;
-        const ny = edgeLen > 0 ? edgeDx / edgeLen : 0;
-        const offset = 14;
-
-        elements.push(
-          <g key={`edge-${poly.id}-${i}`}>
-            {/* Background */}
-            <rect
-              x={edgeMidX + nx * offset - 28}
-              y={edgeMidY + ny * offset - 8}
-              width={56} height={16} rx={3}
-              fill="white" fillOpacity={0.92} stroke={color} strokeWidth={0.5}
-            />
-            <text
-              x={edgeMidX + nx * offset}
-              y={edgeMidY + ny * offset + 4}
-              textAnchor="middle" fontSize={9} fontWeight={700} fill={color} fontFamily="monospace">
-              P{wallNum} {Math.round(lengthMm)}mm
-            </text>
-          </g>
-        );
-
-        // Vertex dot
         elements.push(
           <circle key={`vtx-${poly.id}-${i}`} cx={a.px} cy={a.py} r={3.5}
             fill={color} stroke="white" strokeWidth={1.5} />
@@ -814,7 +831,7 @@ export function SectionAxisViewer({
     });
 
     return elements;
-  }, [polygons, gridLayout, scale]);
+  }, [polygons, gridLayout, scale, wallLabelMode]);
 
   // Drawing overlay (current drawing in progress)
   const drawingOverlay = useMemo(() => {
@@ -900,19 +917,23 @@ export function SectionAxisViewer({
     return elements;
   }, [drawMode, gridLayout, drawingVertices, hoverNode]);
 
-  // Node interaction dots (visible in draw mode)
+  // Node interaction dots (visible in draw mode) — including half-nodes
   const nodeInteractionDots = useMemo(() => {
     if (!drawMode || !gridLayout) return null;
     const { totalCols, totalRows, ox, oy, cellPx } = gridLayout;
     const elements: JSX.Element[] = [];
-    for (let c = 0; c <= totalCols; c++) {
-      for (let r = 0; r <= totalRows; r++) {
-        const x = ox + c * cellPx;
-        const y = oy + r * cellPx;
-        const isHovered = hoverNode && hoverNode.col === c && hoverNode.row === r;
+    // Full nodes + half nodes (step 0.5)
+    for (let c = 0; c <= totalCols * 2; c++) {
+      for (let r = 0; r <= totalRows * 2; r++) {
+        const col = c / 2;
+        const row = r / 2;
+        const x = ox + col * cellPx;
+        const y = oy + row * cellPx;
+        const isHalf = (c % 2 !== 0) || (r % 2 !== 0);
+        const isHovered = hoverNode && hoverNode.col === col && hoverNode.row === row;
         elements.push(
-          <circle key={`ndot-${c}-${r}`} cx={x} cy={y} r={isHovered ? 6 : 4}
-            fill="hsl(var(--primary))" fillOpacity={isHovered ? 0.6 : 0.35}
+          <circle key={`ndot-${c}-${r}`} cx={x} cy={y} r={isHovered ? 6 : (isHalf ? 2.5 : 4)}
+            fill="hsl(var(--primary))" fillOpacity={isHovered ? 0.6 : (isHalf ? 0.2 : 0.35)}
             stroke="hsl(var(--primary))" strokeWidth={isHovered ? 2 : 0} strokeOpacity={0.5} />
         );
       }
@@ -985,9 +1006,22 @@ export function SectionAxisViewer({
                 <X className="h-3 w-3" /> Borrar reglas
               </Button>
             )}
-            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={handleExportPDF}>
-              <Printer className="h-3 w-3" /> PDF
-            </Button>
+            <div className="flex items-center gap-1">
+              <Select value={wallLabelMode} onValueChange={(v) => setWallLabelMode(v as WallLabelMode)}>
+                <SelectTrigger className="h-7 w-[130px] text-[10px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="both">P + medida</SelectItem>
+                  <SelectItem value="name-only">Solo P</SelectItem>
+                  <SelectItem value="measure-only">Solo medida</SelectItem>
+                  <SelectItem value="none">Sin etiquetas</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={handleExportPDF}>
+                <Printer className="h-3 w-3" /> PDF
+              </Button>
+            </div>
           </div>
         )}
       </div>
@@ -1169,7 +1203,7 @@ export function SectionAxisViewer({
                 className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border cursor-pointer hover:opacity-80 transition-opacity"
                 style={{ borderColor: 'hsl(30 90% 50%)', color: 'hsl(30 70% 40%)' }}
                 onClick={() => { setEditingRulerId(rl.id); setEditRulerLabel(rl.label || ''); }}>
-                📏 {rl.label || `${Math.round(lengthMm)}mm`}
+                📏 {rl.label || `${Math.round(lengthMm)} mm`}
                 {isEditing && (
                   <Input className="h-5 w-20 text-[10px] font-mono px-1 ml-1" placeholder="Etiqueta"
                     value={editRulerLabel}
@@ -1222,7 +1256,7 @@ export function SectionAxisViewer({
             const lengthMm = Math.sqrt(dh * dh + dv * dv);
             const mx = (x1 + x2) / 2;
             const my = (y1 + y2) / 2;
-            const displayText = rl.label || (lengthMm >= 1000 ? `${(lengthMm / 1000).toFixed(2)} m` : `${Math.round(lengthMm)} mm`);
+            const displayText = rl.label || `${Math.round(lengthMm)} mm`;
 
             // Perpendicular offset for label
             const edgeDx = x2 - x1;

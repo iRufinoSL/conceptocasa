@@ -447,21 +447,23 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
       });
     }
 
-    // Techo (T1)
-    const topCenter = new THREE.Vector3(
-      topVerts3D.reduce((s, v) => s + v.x, 0) / n,
-      topVerts3D.reduce((s, v) => s + v.y, 0) / n + 0.01,
-      topVerts3D.reduce((s, v) => s + v.z, 0) / n
-    );
-    result.push({
-      type: 'techo', index: 1, label: 'T1',
-      vertices: [...topVerts3D], labelPos: topCenter, labelRot: [-Math.PI / 2, 0, 0],
-      color: FACE_COLORS.techo,
-      realVertices: polygon.map((v, i) => {
-        const zTopVal = Math.round(topVerts3D[i].y / zScaleBlocks);
-        return { x: v.x, y: v.y, z: zTopVal };
-      }),
-    });
+    // Techo (T1) — only if hasCeiling
+    if (hasCeiling) {
+      const topCenter = new THREE.Vector3(
+        topVerts3D.reduce((s, v) => s + v.x, 0) / n,
+        topVerts3D.reduce((s, v) => s + v.y, 0) / n + 0.01,
+        topVerts3D.reduce((s, v) => s + v.z, 0) / n
+      );
+      result.push({
+        type: 'techo', index: 1, label: 'T1',
+        vertices: [...topVerts3D], labelPos: topCenter, labelRot: [-Math.PI / 2, 0, 0],
+        color: FACE_COLORS.techo,
+        realVertices: polygon.map((v, i) => {
+          const zTopVal = Math.round(topVerts3D[i].y / zScaleBlocks);
+          return { x: v.x, y: v.y, z: zTopVal };
+        }),
+      });
+    }
 
     return result;
   }, [baseVerts3D, topVerts3D, walls, polygon, zBase, height, scaleZ]);

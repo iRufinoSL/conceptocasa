@@ -223,7 +223,8 @@ export function PurchaseOrdersTab({ budgetId: fixedBudgetId }: { budgetId?: stri
       budget_id: order.budget_id || '',
       supplier_contact_id: order.supplier_contact_id || '',
       client_contact_id: order.client_contact_id || '',
-      vat_rate: order.vat_rate === -1 ? VAT_RATE_NO_INCLUDED : order.vat_rate.toString()
+      vat_rate: order.vat_rate === -1 ? VAT_RATE_NO_INCLUDED : order.vat_rate.toString(),
+      footer_contact_source: (order as any).footer_contact_source || 'company'
     });
     setDialogOpen(true);
   };

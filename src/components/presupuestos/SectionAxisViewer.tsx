@@ -230,8 +230,8 @@ export function SectionAxisViewer({
     const rect = svg.getBoundingClientRect();
     const mx = clientX - rect.left;
     const my = clientY - rect.top;
-    const col = Math.round((mx - gridLayout.ox) / cellPx);
-    const row = Math.round((my - gridLayout.oy) / cellPx);
+    const col = Math.round((mx - gridLayout.ox) / gridLayout.cellPx);
+    const row = Math.round((my - gridLayout.oy) / gridLayout.cellPx);
     if (col < 0 || col > gridLayout.totalCols || row < 0 || row > gridLayout.totalRows) return null;
     return { col, row };
   }, [gridLayout]);

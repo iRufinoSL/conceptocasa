@@ -2,10 +2,11 @@ import { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Save, PenTool, X, Check, Printer } from 'lucide-react';
+import { Save, PenTool, X, Check, Printer, Ruler } from 'lucide-react';
 import type { SectionPolygon } from './CustomSectionManager';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
+import { toast } from 'sonner';
 
 interface SectionScale {
   hScale: number;
@@ -14,6 +15,13 @@ interface SectionScale {
 
 interface RidgeLineData {
   x1: number; y1: number; x2: number; y2: number; z: number;
+}
+
+export interface RulerLine {
+  id: string;
+  start: { col: number; row: number };
+  end: { col: number; row: number };
+  label?: string;
 }
 
 interface SectionAxisViewerProps {
@@ -28,6 +36,9 @@ interface SectionAxisViewerProps {
   /** Persisted polygons (workspaces) */
   polygons?: SectionPolygon[];
   onSavePolygons?: (polygons: SectionPolygon[]) => void;
+  /** Persisted ruler lines */
+  savedRulerLines?: RulerLine[];
+  onSaveRulerLines?: (lines: RulerLine[]) => void;
 }
 
 const AXIS_COLORS = {
@@ -91,6 +102,8 @@ export function SectionAxisViewer({
   ridgeLine,
   polygons: savedPolygons,
   onSavePolygons,
+  savedRulerLines,
+  onSaveRulerLines,
 }: SectionAxisViewerProps) {
   const { fixedAxis, hAxis, vAxis } = getConfig(sectionType);
   const hColor = AXIS_COLORS[hAxis];
@@ -130,6 +143,16 @@ export function SectionAxisViewer({
   const [editHasFloor, setEditHasFloor] = useState(true);
   const [editHasCeiling, setEditHasCeiling] = useState(true);
 
+  // Ruler tool state
+  const [rulerMode, setRulerMode] = useState(false);
+  const [rulerLines, setRulerLines] = useState<RulerLine[]>(savedRulerLines || []);
+  const [rulerStart, setRulerStart] = useState<{ col: number; row: number } | null>(null);
+  const [draggingRulerId, setDraggingRulerId] = useState<string | null>(null);
+  const [draggingRulerEnd, setDraggingRulerEnd] = useState<'start' | 'end' | null>(null);
+  const [editingRulerId, setEditingRulerId] = useState<string | null>(null);
+  const [editRulerLabel, setEditRulerLabel] = useState('');
+  const [rulerHoverNode, setRulerHoverNode] = useState<{ col: number; row: number } | null>(null);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const [containerSize, setContainerSize] = useState({ w: 800, h: 500 });
@@ -143,6 +166,10 @@ export function SectionAxisViewer({
     ro.observe(containerRef.current);
     return () => ro.disconnect();
   }, []);
+
+  useEffect(() => {
+    if (savedRulerLines) setRulerLines(savedRulerLines);
+  }, [savedRulerLines]);
 
   useEffect(() => {
     if (savedScale) {
@@ -304,16 +331,53 @@ export function SectionAxisViewer({
     return { col, row };
   }, [gridLayout]);
 
-  // Handle SVG click for drawing
+  // Snap with sub-grid precision for ruler mode
+  const snapToNodePrecise = useCallback((e: React.MouseEvent<SVGSVGElement>): { col: number; row: number } | null => {
+    if (!gridLayout) return null;
+    const svg = e.currentTarget;
+    let pt = svg.createSVGPoint();
+    pt.x = e.clientX;
+    pt.y = e.clientY;
+    const ctm = svg.getScreenCTM();
+    if (ctm) pt = pt.matrixTransform(ctm.inverse());
+    const rawCol = (pt.x - gridLayout.ox) / gridLayout.cellPx;
+    const rawRow = (pt.y - gridLayout.oy) / gridLayout.cellPx;
+    // Round to 0.5 grid units for sub-grid precision
+    const col = Math.round(rawCol * 2) / 2;
+    const row = Math.round(rawRow * 2) / 2;
+    if (col < 0 || col > gridLayout.totalCols || row < 0 || row > gridLayout.totalRows) return null;
+    return { col, row };
+  }, [gridLayout]);
+
+  // Handle SVG click for drawing or ruler
   const handleSvgClick = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
-    if (!drawMode || !gridLayout) return;
+    if (!gridLayout) return;
+
+    // Ruler mode
+    if (rulerMode) {
+      const node = snapToNodePrecise(e);
+      if (!node) return;
+      if (!rulerStart) {
+        setRulerStart(node);
+      } else {
+        const newLine: RulerLine = {
+          id: crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          start: rulerStart,
+          end: node,
+        };
+        setRulerLines(prev => [...prev, newLine]);
+        setRulerStart(null);
+      }
+      return;
+    }
+
+    if (!drawMode) return;
     const node = snapToNode(e);
     if (!node) return;
 
     // Check if closing the polygon (clicking first vertex)
     if (drawingVertices.length >= 3 &&
         node.col === drawingVertices[0].col && node.row === drawingVertices[0].row) {
-      // Close polygon and save
       finishDrawing();
       return;
     }
@@ -323,13 +387,52 @@ export function SectionAxisViewer({
     if (last && last.col === node.col && last.row === node.row) return;
 
     setDrawingVertices(prev => [...prev, node]);
-  }, [drawMode, gridLayout, drawingVertices, snapToNode]);
+  }, [drawMode, rulerMode, gridLayout, drawingVertices, snapToNode, snapToNodePrecise, rulerStart]);
 
   const handleSvgMouseMove = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
-    if (!drawMode || !gridLayout) { setHoverNode(null); return; }
+    if (rulerMode && gridLayout) {
+      const node = snapToNodePrecise(e);
+      setRulerHoverNode(node);
+      setHoverNode(null);
+
+      // Handle ruler endpoint dragging
+      if (draggingRulerId && draggingRulerEnd && node) {
+        setRulerLines(prev => prev.map(rl => {
+          if (rl.id !== draggingRulerId) return rl;
+          return draggingRulerEnd === 'start'
+            ? { ...rl, start: node }
+            : { ...rl, end: node };
+        }));
+      }
+      return;
+    }
+    if (!drawMode || !gridLayout) { setHoverNode(null); setRulerHoverNode(null); return; }
     const node = snapToNode(e);
     setHoverNode(node);
-  }, [drawMode, gridLayout, snapToNode]);
+  }, [drawMode, rulerMode, gridLayout, snapToNode, snapToNodePrecise, draggingRulerId, draggingRulerEnd]);
+
+  const handleSvgMouseUp = useCallback(() => {
+    if (draggingRulerId) {
+      setDraggingRulerId(null);
+      setDraggingRulerEnd(null);
+    }
+  }, [draggingRulerId]);
+
+  const handleDeleteRuler = useCallback((id: string) => {
+    setRulerLines(prev => prev.filter(rl => rl.id !== id));
+  }, []);
+
+  const handleSaveRulers = useCallback(() => {
+    onSaveRulerLines?.(rulerLines);
+    toast.success(`${rulerLines.length} regla(s) guardada(s)`);
+  }, [rulerLines, onSaveRulerLines]);
+
+  const handleClearRulers = useCallback(() => {
+    setRulerLines([]);
+    setRulerStart(null);
+    onSaveRulerLines?.([]);
+    toast.success('Reglas borradas');
+  }, [onSaveRulerLines]);
 
   const finishDrawing = useCallback(() => {
     if (drawingVertices.length < 3 || !scale || !gridLayout) return;
@@ -862,9 +965,30 @@ export function SectionAxisViewer({
           </span>
         )}
         {scale && (
-          <Button size="sm" variant="outline" className="h-7 text-xs gap-1 ml-auto" onClick={handleExportPDF}>
-            <Printer className="h-3 w-3" /> PDF
-          </Button>
+          <div className="flex items-center gap-1 ml-auto">
+            <Button
+              size="sm"
+              variant={rulerMode ? 'default' : 'outline'}
+              className="h-7 text-xs gap-1"
+              style={rulerMode ? { backgroundColor: 'hsl(30 90% 50%)', borderColor: 'hsl(30 90% 50%)' } : {}}
+              onClick={() => { setRulerMode(!rulerMode); setRulerStart(null); if (!rulerMode) { setDrawMode(false); } }}
+            >
+              <Ruler className="h-3 w-3" /> {rulerMode ? 'Regla ON' : 'Regla'}
+            </Button>
+            {rulerLines.length > 0 && onSaveRulerLines && (
+              <Button size="sm" variant="ghost" className="h-7 text-xs gap-1 text-green-600" onClick={handleSaveRulers}>
+                <Save className="h-3 w-3" /> Guardar ({rulerLines.length})
+              </Button>
+            )}
+            {rulerLines.length > 0 && (
+              <Button size="sm" variant="ghost" className="h-7 text-xs gap-1 text-destructive" onClick={handleClearRulers}>
+                <X className="h-3 w-3" /> Borrar reglas
+              </Button>
+            )}
+            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={handleExportPDF}>
+              <Printer className="h-3 w-3" /> PDF
+            </Button>
+          </div>
         )}
       </div>
 
@@ -1028,21 +1152,170 @@ export function SectionAxisViewer({
         </div>
       )}
 
+      {/* Ruler lines list (editable) */}
+      {rulerLines.length > 0 && !drawMode && !rulerMode && (
+        <div className="px-3 py-1.5 border-b bg-muted/5 flex flex-wrap gap-1.5">
+          {rulerLines.map((rl) => {
+            if (!scale || !gridLayout) return null;
+            const { originCol, originRow } = gridLayout;
+            const startCoord = { h: rl.start.col - originCol, v: originRow - rl.start.row };
+            const endCoord = { h: rl.end.col - originCol, v: originRow - rl.end.row };
+            const dh = Math.abs(endCoord.h - startCoord.h) * scale.hScale;
+            const dv = Math.abs(endCoord.v - startCoord.v) * scale.vScale;
+            const lengthMm = Math.sqrt(dh * dh + dv * dv);
+            const isEditing = editingRulerId === rl.id;
+            return (
+              <span key={rl.id}
+                className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border cursor-pointer hover:opacity-80 transition-opacity"
+                style={{ borderColor: 'hsl(30 90% 50%)', color: 'hsl(30 70% 40%)' }}
+                onClick={() => { setEditingRulerId(rl.id); setEditRulerLabel(rl.label || ''); }}>
+                📏 {rl.label || `${Math.round(lengthMm)}mm`}
+                {isEditing && (
+                  <Input className="h-5 w-20 text-[10px] font-mono px-1 ml-1" placeholder="Etiqueta"
+                    value={editRulerLabel}
+                    onClick={e => e.stopPropagation()}
+                    onChange={e => setEditRulerLabel(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        setRulerLines(prev => prev.map(r => r.id === rl.id ? { ...r, label: editRulerLabel.trim() || undefined } : r));
+                        setEditingRulerId(null);
+                      }
+                    }}
+                  />
+                )}
+                <button onClick={(e) => { e.stopPropagation(); handleDeleteRuler(rl.id); }}
+                  className="ml-0.5 hover:opacity-70" title="Eliminar">✕</button>
+              </span>
+            );
+          })}
+        </div>
+      )}
+
       {/* SVG Canvas */}
       {scale ? (
         <svg
           ref={svgRef}
           width={w} height={h}
-          style={drawMode ? { cursor: 'none' } : undefined}
+          style={(drawMode || rulerMode) ? { cursor: rulerMode ? 'crosshair' : 'none' } : undefined}
           className="block bg-background"
           onClick={handleSvgClick}
           onMouseMove={handleSvgMouseMove}
+          onMouseUp={handleSvgMouseUp}
         >
           <g opacity={drawMode ? 0.25 : 1}>{gridContent?.gridLines}</g>
           {gridContent?.axisRefs}
           {nodeInteractionDots}
           {polygonElements}
           {drawingOverlay}
+
+          {/* Ruler lines rendering */}
+          {gridLayout && scale && rulerLines.map((rl) => {
+            const { ox, oy, cellPx, originCol, originRow } = gridLayout;
+            const x1 = ox + rl.start.col * cellPx;
+            const y1 = oy + rl.start.row * cellPx;
+            const x2 = ox + rl.end.col * cellPx;
+            const y2 = oy + rl.end.row * cellPx;
+            const startCoord = { h: rl.start.col - originCol, v: originRow - rl.start.row };
+            const endCoord = { h: rl.end.col - originCol, v: originRow - rl.end.row };
+            const dh = Math.abs(endCoord.h - startCoord.h) * scale.hScale;
+            const dv = Math.abs(endCoord.v - startCoord.v) * scale.vScale;
+            const lengthMm = Math.sqrt(dh * dh + dv * dv);
+            const mx = (x1 + x2) / 2;
+            const my = (y1 + y2) / 2;
+            const displayText = rl.label || (lengthMm >= 1000 ? `${(lengthMm / 1000).toFixed(2)} m` : `${Math.round(lengthMm)} mm`);
+
+            // Perpendicular offset for label
+            const edgeDx = x2 - x1;
+            const edgeDy = y2 - y1;
+            const edgeLen = Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy);
+            const nx = edgeLen > 0 ? -edgeDy / edgeLen : 0;
+            const ny = edgeLen > 0 ? edgeDx / edgeLen : 0;
+            const labelOffset = 12;
+
+            return (
+              <g key={`ruler-${rl.id}`}>
+                {/* Line */}
+                <line x1={x1} y1={y1} x2={x2} y2={y2}
+                  stroke="hsl(30, 90%, 50%)" strokeWidth={2} strokeDasharray="6 3" />
+                {/* End ticks */}
+                <line x1={x1 - ny * 6} y1={y1 + nx * 6} x2={x1 + ny * 6} y2={y1 - nx * 6}
+                  stroke="hsl(30, 90%, 50%)" strokeWidth={1.5} />
+                <line x1={x2 - ny * 6} y1={y2 + nx * 6} x2={x2 + ny * 6} y2={y2 - nx * 6}
+                  stroke="hsl(30, 90%, 50%)" strokeWidth={1.5} />
+                {/* Endpoints (draggable) */}
+                <circle cx={x1} cy={y1} r={5} fill="hsl(30, 90%, 50%)" stroke="white" strokeWidth={1.5}
+                  style={{ cursor: 'grab' }}
+                  onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); setDraggingRulerId(rl.id); setDraggingRulerEnd('start'); setRulerMode(true); }} />
+                <circle cx={x2} cy={y2} r={5} fill="hsl(30, 90%, 50%)" stroke="white" strokeWidth={1.5}
+                  style={{ cursor: 'grab' }}
+                  onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); setDraggingRulerId(rl.id); setDraggingRulerEnd('end'); setRulerMode(true); }} />
+                {/* Label background */}
+                <rect x={mx + nx * labelOffset - 30} y={my + ny * labelOffset - 8}
+                  width={60} height={16} rx={3}
+                  fill="white" fillOpacity={0.92} stroke="hsl(30, 90%, 50%)" strokeWidth={0.5} />
+                {/* Label text */}
+                <text x={mx + nx * labelOffset} y={my + ny * labelOffset + 4}
+                  textAnchor="middle" fontSize={9} fontWeight={700} fill="hsl(30, 70%, 35%)" fontFamily="monospace">
+                  {displayText}
+                </text>
+                {/* Delete button */}
+                <g style={{ cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); handleDeleteRuler(rl.id); }}>
+                  <circle cx={mx + nx * labelOffset + 28} cy={my + ny * labelOffset} r={6}
+                    fill="hsl(0, 70%, 50%)" fillOpacity={0.8} />
+                  <text x={mx + nx * labelOffset + 28} y={my + ny * labelOffset + 3.5}
+                    textAnchor="middle" fontSize={8} fill="white" fontWeight={700}>✕</text>
+                </g>
+              </g>
+            );
+          })}
+
+          {/* Ruler drawing preview */}
+          {rulerMode && rulerStart && rulerHoverNode && gridLayout && (
+            (() => {
+              const { ox, oy, cellPx, originCol, originRow } = gridLayout;
+              const x1 = ox + rulerStart.col * cellPx;
+              const y1 = oy + rulerStart.row * cellPx;
+              const x2 = ox + rulerHoverNode.col * cellPx;
+              const y2 = oy + rulerHoverNode.row * cellPx;
+              const startCoord = { h: rulerStart.col - originCol, v: originRow - rulerStart.row };
+              const endCoord = { h: rulerHoverNode.col - originCol, v: originRow - rulerHoverNode.row };
+              const dh = Math.abs(endCoord.h - startCoord.h) * (scale?.hScale || 1);
+              const dv = Math.abs(endCoord.v - startCoord.v) * (scale?.vScale || 1);
+              const lengthMm = Math.sqrt(dh * dh + dv * dv);
+              const mx = (x1 + x2) / 2;
+              const my = (y1 + y2) / 2;
+              return (
+                <g>
+                  <line x1={x1} y1={y1} x2={x2} y2={y2}
+                    stroke="hsl(30, 90%, 50%)" strokeWidth={1.5} strokeDasharray="4 4" opacity={0.7} />
+                  <circle cx={x1} cy={y1} r={4} fill="hsl(30, 90%, 50%)" opacity={0.8} />
+                  <circle cx={x2} cy={y2} r={4} fill="hsl(30, 90%, 50%)" opacity={0.6} />
+                  <text x={mx} y={my - 8} textAnchor="middle" fontSize={9} fontWeight={700}
+                    fill="hsl(30, 70%, 35%)" fontFamily="monospace"
+                    stroke="white" strokeWidth={2} paintOrder="stroke">
+                    {Math.round(lengthMm)} mm
+                  </text>
+                </g>
+              );
+            })()
+          )}
+
+          {/* Ruler mode: start point indicator */}
+          {rulerMode && rulerHoverNode && !rulerStart && gridLayout && (
+            (() => {
+              const { ox, oy, cellPx } = gridLayout;
+              const hx = ox + rulerHoverNode.col * cellPx;
+              const hy = oy + rulerHoverNode.row * cellPx;
+              return (
+                <g>
+                  <circle cx={hx} cy={hy} r={8} fill="hsl(30, 90%, 50%)" fillOpacity={0.2} />
+                  <circle cx={hx} cy={hy} r={4} fill="hsl(30, 90%, 50%)" opacity={0.8} />
+                  <line x1={hx - 12} y1={hy} x2={hx + 12} y2={hy} stroke="hsl(30, 90%, 50%)" strokeWidth={1} opacity={0.5} />
+                  <line x1={hx} y1={hy - 12} x2={hx} y2={hy + 12} stroke="hsl(30, 90%, 50%)" strokeWidth={1} opacity={0.5} />
+                </g>
+              );
+            })()
+          )}
         </svg>
       ) : (
         <div className="flex items-center justify-center bg-background" style={{ height: h }}>

@@ -220,6 +220,10 @@ export default function Administracion() {
             </TabsContent>
           )}
 
+          <TabsContent value="purchase_orders">
+            <PurchaseOrdersTab />
+          </TabsContent>
+
           <TabsContent value="invoices">
             <InvoicesTab />
           </TabsContent>

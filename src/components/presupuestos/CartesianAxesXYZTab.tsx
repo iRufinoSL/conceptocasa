@@ -209,8 +209,38 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
   const creators: SectionType[] = ['vertical', 'transversal', 'longitudinal'];
   const totalSections = allSections.length;
 
+  const handleSaveScale = async (sectionId: string, scale: { hScale: number; vScale: number }) => {
+    if (!floorPlan?.id) return;
+    let parsedCorners: Record<string, unknown> = {};
+    try {
+      parsedCorners = typeof floorPlan.custom_corners === 'string'
+        ? JSON.parse(floorPlan.custom_corners)
+        : (floorPlan.custom_corners || {});
+    } catch { parsedCorners = {}; }
+
+    const sections = Array.isArray(parsedCorners.customSections)
+      ? (parsedCorners.customSections as CustomSection[])
+      : [];
+
+    const updated = sections.map(s =>
+      s.id === sectionId ? { ...s, scale } : s
+    );
+
+    const { error } = await supabase
+      .from('budget_floor_plans')
+      .update({ custom_corners: { ...parsedCorners, customSections: updated } as any })
+      .eq('id', floorPlan.id);
+
+    if (error) { toast.error('Error al guardar escala'); return; }
+    toast.success('Escala guardada');
+    queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces', budgetId] });
+  };
+
   // If viewing a section, show the viewer
   if (activeSection) {
+    const liveSection = allSections.find(s => s.id === activeSection.id) || activeSection;
+    const savedScale = (liveSection as any).scale as { hScale: number; vScale: number } | undefined;
+
     return (
       <div className="space-y-3">
         <div className="flex items-center gap-2">
@@ -218,15 +248,17 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
             onClick={() => setActiveSection(null)}>
             <ArrowLeft className="h-3 w-3" /> Volver a ejes
           </Button>
-          <span className="text-sm font-semibold">{activeSection.name}</span>
+          <span className="text-sm font-semibold">{liveSection.name}</span>
           <Badge variant="secondary" className="text-[10px] h-5 font-mono">
-            {activeSection.axis}={activeSection.axisValue}
+            {liveSection.axis}={liveSection.axisValue}
           </Badge>
         </div>
         <SectionAxisViewer
-          sectionType={activeSection.sectionType as 'vertical' | 'longitudinal' | 'transversal'}
-          axisValue={activeSection.axisValue}
-          sectionName={activeSection.name}
+          sectionType={liveSection.sectionType as 'vertical' | 'longitudinal' | 'transversal'}
+          axisValue={liveSection.axisValue}
+          sectionName={liveSection.name}
+          savedScale={savedScale}
+          onSaveScale={(scale) => handleSaveScale(liveSection.id, scale)}
         />
       </div>
     );

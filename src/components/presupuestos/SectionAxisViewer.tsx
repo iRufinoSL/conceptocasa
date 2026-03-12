@@ -622,7 +622,7 @@ export function SectionAxisViewer({
       }
     }
     return elements;
-  }, [drawMode, gridLayout]);
+  }, [drawMode, gridLayout, hoverNode]);
 
   return (
     <div ref={containerRef} className="rounded-lg border bg-card overflow-hidden">

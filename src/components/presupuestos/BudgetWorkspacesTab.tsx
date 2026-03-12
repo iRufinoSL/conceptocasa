@@ -2447,6 +2447,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
       name: formName.trim(),
       length: Math.round(bbox.w * scale * 100) / 100,
       width: Math.round(bbox.h * scale * 100) / 100,
+      pos_x: Math.round(bbox.minX * scale * 100) / 100,
+      pos_y: Math.round(bbox.minY * scale * 100) / 100,
       height: parseFloat(formHeight) || 0,
       floor_plan_id: floorPlan.id,
       vertical_section_id: sectionId,

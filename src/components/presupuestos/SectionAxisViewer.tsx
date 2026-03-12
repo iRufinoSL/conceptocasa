@@ -819,15 +819,53 @@ export function SectionAxisViewer({
             const areaM2 = scale ? areaGrid * (scale.hScale / 1000) * (scale.vScale / 1000) : 0;
             const heightMm = poly.zTop || 0;
             return (
-              <span key={poly.id} className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border"
-                style={{ borderColor: color, color }}>
+              <span key={poly.id}
+                className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border cursor-pointer hover:opacity-80 transition-opacity"
+                style={{ borderColor: color, color, backgroundColor: editingPolyId === poly.id ? `${color}15` : undefined }}
+                onClick={() => startEditPolygon(poly)}>
                 <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
                 {poly.name} ({areaM2.toFixed(2)} m²{heightMm ? ` · h=${heightMm}mm` : ''})
-                <button onClick={() => handleDeletePolygon(poly.id)}
+                <button onClick={(e) => { e.stopPropagation(); handleDeletePolygon(poly.id); }}
                   className="ml-0.5 hover:opacity-70" title="Eliminar">✕</button>
               </span>
             );
           })}
+        </div>
+      )}
+
+      {/* Inline edit panel */}
+      {editingPolyId && !drawMode && (
+        <div className="px-3 py-2 border-b bg-muted/10 space-y-2">
+          <div className="flex items-end gap-3 flex-wrap">
+            <div>
+              <Label className="text-[10px] text-muted-foreground">Nombre</Label>
+              <Input className="h-7 w-40 text-xs" value={editName} onChange={e => setEditName(e.target.value)} />
+            </div>
+            <div>
+              <Label className="text-[10px] text-muted-foreground">Altura (mm)</Label>
+              <Input className="h-7 w-24 text-xs font-mono" type="number" min={0}
+                value={editHeight} onChange={e => setEditHeight(e.target.value)} />
+            </div>
+            <Button size="sm" className="h-7 text-xs gap-1" onClick={saveEditPolygon}>
+              <Check className="h-3 w-3" /> Guardar
+            </Button>
+            <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={cancelEditPolygon}>
+              <X className="h-3 w-3" /> Cancelar
+            </Button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {editVertices.map((v, i) => (
+              <div key={i} className="flex items-center gap-1 text-[10px] border rounded px-1.5 py-0.5 bg-background">
+                <span className="font-mono font-bold text-muted-foreground">V{i + 1}</span>
+                <span className="text-muted-foreground">{hAxis}:</span>
+                <Input className="h-5 w-12 text-[10px] font-mono px-1" type="number"
+                  value={v.x} onChange={e => updateEditVertex(i, 'x', parseFloat(e.target.value) || 0)} />
+                <span className="text-muted-foreground">{vAxis}:</span>
+                <Input className="h-5 w-12 text-[10px] font-mono px-1" type="number"
+                  value={v.y} onChange={e => updateEditVertex(i, 'y', parseFloat(e.target.value) || 0)} />
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

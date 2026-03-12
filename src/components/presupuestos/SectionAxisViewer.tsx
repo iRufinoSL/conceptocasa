@@ -681,9 +681,14 @@ export function SectionAxisViewer({
                   <Input className="h-7 w-40 text-xs" placeholder="Ej: Salón"
                     value={drawingName} onChange={e => setDrawingName(e.target.value)} />
                 </div>
+                <div>
+                  <Label className="text-[10px] text-muted-foreground">Altura (mm)</Label>
+                  <Input className="h-7 w-24 text-xs" placeholder="Ej: 2500" type="number" min={0}
+                    value={drawingHeight} onChange={e => setDrawingHeight(e.target.value)} />
+                </div>
                 <Button size="sm" className="h-7 text-xs gap-1"
-                  onClick={() => { if (!drawingName.trim()) return; setDrawMode(true); }}
-                  disabled={!drawingName.trim()}>
+                  onClick={() => { if (!drawingName.trim() || !drawingHeight.trim()) return; setDrawMode(true); }}
+                  disabled={!drawingName.trim() || !drawingHeight.trim()}>
                   <PenTool className="h-3 w-3" /> Dibujar espacio
                 </Button>
               </div>

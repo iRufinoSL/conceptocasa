@@ -3701,6 +3701,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
                   )}
                 </div>
                 <GridPolygonDrawer
+                  key={`workspace-z-${r.id}-${r.vertical_section_id ?? 'none'}`}
                   originTopLeft
                   vertices={gridEditVertices}
                   onChange={setGridEditVertices}

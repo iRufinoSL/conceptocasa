@@ -1250,7 +1250,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
           {section.sectionType === 'transversal' && `Vista transversal X=${section.axisValue} — Origen (0,0) abajo-izq`}
         </span>
         <div className="flex items-center gap-1.5 flex-wrap">
-          {/* {/* Zoom controls patched */} (test) */}
+          {/* Zoom controls */}
           <div className="flex items-center gap-0.5 border border-border rounded px-1.5 py-0.5">
             <Button variant="ghost" size="sm" className="h-5 w-5 p-0" disabled={zoomLevel <= ZOOM_MIN}
               onClick={() => setZoomLevel(prev => {

@@ -521,7 +521,7 @@ export function FloorPlanCanvas2D({
 
   return (
     <div className="w-full bg-background rounded-lg border border-border">
-      {/* {/* Zoom toolbar patched */} */}
+      {/* Zoom toolbar */}
       <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border bg-muted/30 flex-wrap">
         <span className="text-[10px] font-medium text-muted-foreground mr-1">Zoom:</span>
         {ZOOM_STEPS.map(z => (

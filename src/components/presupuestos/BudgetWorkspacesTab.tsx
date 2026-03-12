@@ -1743,7 +1743,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
           })}
           {/* ── Ridge line axis (cumbrera) ── */}
           {ridgeLine && (() => {
-            const RIDGE_COLOR = 'hsl(0 70% 50%)';
+            const RIDGE_COLOR = 'hsl(0, 0%, 45%)';
             if (sectionType === 'vertical' || !sectionType) {
               // On Z sections: draw the ridge as a projected line on the XY plane
               const { sx: sx1, sy: sy1 } = toSvg(ridgeLine.x1, ridgeLine.y1);

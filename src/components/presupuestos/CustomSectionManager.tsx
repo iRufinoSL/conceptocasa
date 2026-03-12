@@ -1858,22 +1858,22 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
               <line
                 x1={svgX1} y1={svgY1}
                 x2={svgX2} y2={svgY2}
-                stroke="hsl(0 70% 45%)"
+                stroke="hsl(0, 0%, 45%)"
                 strokeWidth={2.5}
                 strokeDasharray="10 5"
                 opacity={0.85}
               />
               {/* Start marker */}
-              <circle cx={svgX1} cy={svgY1} r={4} fill="hsl(0 70% 45%)" opacity={0.9} />
+              <circle cx={svgX1} cy={svgY1} r={4} fill="hsl(0, 0%, 45%)" opacity={0.9} />
               {/* End marker */}
-              <circle cx={svgX2} cy={svgY2} r={4} fill="hsl(0 70% 45%)" opacity={0.9} />
+              <circle cx={svgX2} cy={svgY2} r={4} fill="hsl(0, 0%, 45%)" opacity={0.9} />
               <text
                 x={midSvgX}
                 y={midSvgY}
                 textAnchor="middle"
                 fontSize={10}
                 fontWeight={900}
-                fill="hsl(0 70% 40%)"
+                fill="hsl(0, 0%, 40%)"
                 style={{ textShadow: '0 0 4px white, 0 0 4px white, 0 0 4px white' }}
               >
                 CUMBRERA ({x1},{y1})→({x2},{y2})
@@ -1924,12 +1924,12 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
               <line
                 x1={svgX} y1={gridTop}
                 x2={svgX} y2={gridBottom}
-                stroke="hsl(0 70% 50%)"
+                stroke="hsl(0, 0%, 45%)"
                 strokeWidth={1.5}
                 strokeDasharray="6 3"
                 opacity={0.5}
               />
-              <text x={svgX} y={gridTop - 4} textAnchor="middle" fontSize={6} fontWeight={700} fill="hsl(0 70% 45%)">
+              <text x={svgX} y={gridTop - 4} textAnchor="middle" fontSize={6} fontWeight={700} fill="hsl(0, 0%, 40%)">
                 ▽ CUMBRERA
               </text>
             </g>

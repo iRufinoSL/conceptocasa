@@ -1465,6 +1465,7 @@ export function SectionAxisViewer({
           sectionType={sectionType}
           sectionName={sectionName}
           focusFace={facePanel.faceKey}
+          edgeCount={facePanel.edgeCount}
           onClose={() => setFacePanel(null)}
           onPatternChange={handlePatternChange}
         />

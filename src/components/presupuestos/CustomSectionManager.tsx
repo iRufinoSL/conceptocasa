@@ -1140,16 +1140,22 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
           let nx = -edy / len;
           let ny = edx / len;
           if ((cxSvg - emx) * nx + (cySvg - emy) * ny > 0) { nx = -nx; ny = -ny; }
-          const offPx = isEditingThis ? 14 : 10;
+          const offPx = isEditingThis ? 18 : 14;
+          const labelX = emx + nx * offPx;
+          const labelY = emy + ny * offPx;
+          const labelText = `${eLenMm} mm`;
+          const labelW = labelText.length * 5.5 + 8;
+          const labelH = fontSize + 6;
           return (
-            <text key={`emm-${ei}`}
-              x={emx + nx * offPx} y={emy + ny * offPx}
-              textAnchor="middle" dominantBaseline="central"
-              transform={`rotate(${eRotAngle}, ${emx + nx * offPx}, ${emy + ny * offPx})`}
-              fontSize={fontSize} fontWeight={700} fill={color}
-              className="pointer-events-none select-none"
-              data-pdf-dimension=""
-            >{eLenMm} mm</text>
+            <g key={`emm-${ei}`} className="pointer-events-none select-none" data-pdf-dimension=""
+              transform={`rotate(${eRotAngle}, ${labelX}, ${labelY})`}>
+              <rect x={labelX - labelW / 2} y={labelY - labelH / 2} width={labelW} height={labelH} rx={3}
+                fill="rgba(255,255,255,0.9)" stroke={color} strokeWidth={0.5} />
+              <text x={labelX} y={labelY}
+                textAnchor="middle" dominantBaseline="central"
+                fontSize={fontSize} fontWeight={700} fill={color}
+              >{labelText}</text>
+            </g>
           );
         })}
         {/* Vertex labels */}

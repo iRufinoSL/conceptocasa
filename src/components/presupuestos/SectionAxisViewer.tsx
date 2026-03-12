@@ -694,16 +694,32 @@ export function SectionAxisViewer({
                 value={negHInput} onChange={e => setNegHInput(e.target.value)} placeholder="3" />
             </div>
             <div>
-              <Label className="text-[10px] text-muted-foreground">Límite neg. {vAxis} (nodos)</Label>
-              <Input className="h-7 w-20 text-xs font-mono" type="number" min={0}
+              <Label className="text-[10px] text-muted-foreground">-{hAxis} (nodos)</Label>
+              <Input className="h-7 w-16 text-xs font-mono" type="number" min={0}
+                value={negHInput} onChange={e => setNegHInput(e.target.value)} placeholder="3" />
+            </div>
+            <div>
+              <Label className="text-[10px] text-muted-foreground">+{hAxis} (nodos)</Label>
+              <Input className="h-7 w-16 text-xs font-mono" type="number" min={1}
+                value={posHInput} onChange={e => setPosHInput(e.target.value)} placeholder="8" />
+            </div>
+            <div>
+              <Label className="text-[10px] text-muted-foreground">-{vAxis} (nodos)</Label>
+              <Input className="h-7 w-16 text-xs font-mono" type="number" min={0}
                 value={negVInput} onChange={e => setNegVInput(e.target.value)} placeholder="3" />
+            </div>
+            <div>
+              <Label className="text-[10px] text-muted-foreground">+{vAxis} (nodos)</Label>
+              <Input className="h-7 w-16 text-xs font-mono" type="number" min={1}
+                value={posVInput} onChange={e => setPosVInput(e.target.value)} placeholder="6" />
             </div>
             <Button size="sm" className="h-7 text-xs gap-1" onClick={handleSaveNegLimits}>
               <Save className="h-3 w-3" /> Guardar límites
             </Button>
           </div>
           <span className="text-[10px] text-muted-foreground ml-2">
-            Marco negativo: {hAxis}-{negLimits.negH} a {hAxis}+n · {vAxis}-{negLimits.negV} a {vAxis}+n
+            {hAxis}: -{gridLimits.negH} a +{gridLimits.posH} · {vAxis}: -{gridLimits.negV} a +{gridLimits.posV}
+            {gridLayout ? ` · celda=${gridLayout.cellPx}px` : ''}
           </span>
         </div>
       )}

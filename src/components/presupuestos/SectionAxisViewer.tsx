@@ -192,19 +192,48 @@ export function SectionAxisViewer({
     if (!svgRef.current) return;
     try {
       const svgEl = svgRef.current;
-      const canvas = await html2canvas(svgEl as unknown as HTMLElement, {
-        backgroundColor: '#ffffff',
-        scale: 2,
-        useCORS: true,
-      });
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: canvas.width > canvas.height ? 'landscape' : 'portrait',
-        unit: 'px',
-        format: [canvas.width, canvas.height],
-      });
-      pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
-      pdf.save(`Seccion_${sectionName.replace(/\s+/g, '_')}.pdf`);
+      const svgClone = svgEl.cloneNode(true) as SVGSVGElement;
+      // Ensure the clone has explicit dimensions and white background
+      const svgW = svgEl.width.baseVal.value || svgEl.clientWidth || 800;
+      const svgH = svgEl.height.baseVal.value || svgEl.clientHeight || 500;
+      svgClone.setAttribute('width', String(svgW));
+      svgClone.setAttribute('height', String(svgH));
+      svgClone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      // Add white background rect
+      const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      bgRect.setAttribute('width', '100%');
+      bgRect.setAttribute('height', '100%');
+      bgRect.setAttribute('fill', '#ffffff');
+      svgClone.insertBefore(bgRect, svgClone.firstChild);
+
+      const serializer = new XMLSerializer();
+      const svgString = serializer.serializeToString(svgClone);
+      const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+
+      const img = new Image();
+      const scaleFactor = 2;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = svgW * scaleFactor;
+        canvas.height = svgH * scaleFactor;
+        const ctx = canvas.getContext('2d')!;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        URL.revokeObjectURL(url);
+
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF({
+          orientation: canvas.width > canvas.height ? 'landscape' : 'portrait',
+          unit: 'px',
+          format: [canvas.width, canvas.height],
+        });
+        pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+        pdf.save(`Seccion_${sectionName.replace(/\s+/g, '_')}.pdf`);
+      };
+      img.onerror = (e) => console.error('SVG to image failed:', e);
+      img.src = url;
     } catch (err) {
       console.error('PDF export error:', err);
     }

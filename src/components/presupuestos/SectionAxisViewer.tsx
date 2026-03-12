@@ -156,6 +156,9 @@ export function SectionAxisViewer({
   const [editRulerLabel, setEditRulerLabel] = useState('');
   const [rulerHoverNode, setRulerHoverNode] = useState<{ col: number; row: number } | null>(null);
 
+  // Wall label display mode for PDF and screen
+  const [wallLabelMode, setWallLabelMode] = useState<WallLabelMode>('both');
+
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const [containerSize, setContainerSize] = useState({ w: 800, h: 500 });

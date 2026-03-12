@@ -2,12 +2,14 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Printer, ZoomIn, ZoomOut, Minus, Eraser } from 'lucide-react';
+import { Printer, ZoomIn, ZoomOut, Minus, Eraser, FileDown, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { formatCurrency } from '@/lib/format-utils';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { generateAndSaveAdminPdf } from '@/lib/generate-admin-pdf';
+import { toast } from 'sonner';
 
 type PrintScale = 'compact' | 'normal' | 'large';
 

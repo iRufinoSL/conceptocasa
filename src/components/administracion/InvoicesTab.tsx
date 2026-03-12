@@ -278,7 +278,8 @@ export function InvoicesTab({ budgetId: fixedBudgetId }: { budgetId?: string } =
       issuer_account_id: invoice.issuer_account_id || '',
       receiver_account_id: invoice.receiver_account_id || '',
       vat_rate: invoice.vat_rate === -1 ? VAT_RATE_NO_INCLUDED : invoice.vat_rate.toString(),
-      document_type: invoice.document_type
+      document_type: invoice.document_type,
+      footer_contact_source: ((invoice as any).footer_contact_source as FooterContactSource) || 'company'
     });
     setDialogOpen(true);
   };

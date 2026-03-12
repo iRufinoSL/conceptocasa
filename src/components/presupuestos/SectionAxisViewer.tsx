@@ -2,8 +2,10 @@ import { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Save, PenTool, X, Check } from 'lucide-react';
+import { Save, PenTool, X, Check, Printer } from 'lucide-react';
 import type { SectionPolygon } from './CustomSectionManager';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 
 interface SectionScale {
   hScale: number;
@@ -129,6 +131,7 @@ export function SectionAxisViewer({
   const [editHasCeiling, setEditHasCeiling] = useState(true);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
   const [containerSize, setContainerSize] = useState({ w: 800, h: 500 });
 
   useEffect(() => {
@@ -184,6 +187,28 @@ export function SectionAxisViewer({
     setGridLimits(newLimits);
     onSaveNegLimits?.(newLimits);
   };
+
+  const handleExportPDF = useCallback(async () => {
+    if (!svgRef.current) return;
+    try {
+      const svgEl = svgRef.current;
+      const canvas = await html2canvas(svgEl as unknown as HTMLElement, {
+        backgroundColor: '#ffffff',
+        scale: 2,
+        useCORS: true,
+      });
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: canvas.width > canvas.height ? 'landscape' : 'portrait',
+        unit: 'px',
+        format: [canvas.width, canvas.height],
+      });
+      pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+      pdf.save(`Seccion_${sectionName.replace(/\s+/g, '_')}.pdf`);
+    } catch (err) {
+      console.error('PDF export error:', err);
+    }
+  }, [sectionName]);
 
   const margin = 50;
   const w = containerSize.w;
@@ -479,6 +504,84 @@ export function SectionAxisViewer({
       );
     }
 
+    // ── Perimeter dimension lines (external, at 1 cellPx distance) ──
+    const dimOffset = cellPx; // 1 scale unit distance
+    const dimColor = 'hsl(0, 70%, 50%)';
+    const dimFontSize = 9;
+    const tickLen = 5;
+
+    // Bottom dimension (horizontal total width)
+    const bottomY = oy + gridH + dimOffset;
+    const totalWidthMm = totalCols * scale.hScale;
+    axisRefs.push(
+      <line key="dim-bottom" x1={ox} y1={bottomY} x2={ox + gridW} y2={bottomY}
+        stroke={dimColor} strokeWidth={1} />
+    );
+    axisRefs.push(<line key="dim-bottom-t1" x1={ox} y1={bottomY - tickLen} x2={ox} y2={bottomY + tickLen} stroke={dimColor} strokeWidth={1} />);
+    axisRefs.push(<line key="dim-bottom-t2" x1={ox + gridW} y1={bottomY - tickLen} x2={ox + gridW} y2={bottomY + tickLen} stroke={dimColor} strokeWidth={1} />);
+    axisRefs.push(
+      <text key="dim-bottom-label" x={ox + gridW / 2} y={bottomY + 14}
+        textAnchor="middle" fontSize={dimFontSize} fontWeight={700} fill={dimColor} fontFamily="monospace">
+        {totalWidthMm >= 1000 ? `${(totalWidthMm / 1000).toFixed(2)} m` : `${totalWidthMm} mm`}
+      </text>
+    );
+
+    // Right dimension (vertical total height)
+    const rightX = ox + gridW + dimOffset;
+    const totalHeightMm = totalRows * scale.vScale;
+    axisRefs.push(
+      <line key="dim-right" x1={rightX} y1={oy} x2={rightX} y2={oy + gridH}
+        stroke={dimColor} strokeWidth={1} />
+    );
+    axisRefs.push(<line key="dim-right-t1" x1={rightX - tickLen} y1={oy} x2={rightX + tickLen} y2={oy} stroke={dimColor} strokeWidth={1} />);
+    axisRefs.push(<line key="dim-right-t2" x1={rightX - tickLen} y1={oy + gridH} x2={rightX + tickLen} y2={oy + gridH} stroke={dimColor} strokeWidth={1} />);
+    axisRefs.push(
+      <text key="dim-right-label" x={rightX + 6} y={oy + gridH / 2}
+        textAnchor="start" fontSize={dimFontSize} fontWeight={700} fill={dimColor} fontFamily="monospace"
+        transform={`rotate(90, ${rightX + 6}, ${oy + gridH / 2})`}>
+        {totalHeightMm >= 1000 ? `${(totalHeightMm / 1000).toFixed(2)} m` : `${totalHeightMm} mm`}
+      </text>
+    );
+
+    // Per-cell dimension ticks on bottom (individual scale marks)
+    for (let c = 0; c < totalCols; c++) {
+      const x1 = ox + c * cellPx;
+      const x2 = ox + (c + 1) * cellPx;
+      const midX = (x1 + x2) / 2;
+      if (totalCols <= 20) {
+        axisRefs.push(
+          <text key={`dim-bc-${c}`} x={midX} y={bottomY - 3}
+            textAnchor="middle" fontSize={7} fill={dimColor} fontFamily="monospace" opacity={0.7}>
+            {scale.hScale}
+          </text>
+        );
+      }
+      // Small mid-tick
+      axisRefs.push(
+        <line key={`dim-bt-${c}`} x1={x2} y1={bottomY - 2} x2={x2} y2={bottomY + 2}
+          stroke={dimColor} strokeWidth={0.5} opacity={0.5} />
+      );
+    }
+
+    // Per-cell dimension ticks on right
+    for (let r = 0; r < totalRows; r++) {
+      const y1 = oy + r * cellPx;
+      const y2 = oy + (r + 1) * cellPx;
+      const midY = (y1 + y2) / 2;
+      if (totalRows <= 20) {
+        axisRefs.push(
+          <text key={`dim-rc-${r}`} x={rightX - 3} y={midY + 3}
+            textAnchor="end" fontSize={7} fill={dimColor} fontFamily="monospace" opacity={0.7}>
+            {scale.vScale}
+          </text>
+        );
+      }
+      axisRefs.push(
+        <line key={`dim-rt-${r}`} x1={rightX - 2} y1={y2} x2={rightX + 2} y2={y2}
+          stroke={dimColor} strokeWidth={0.5} opacity={0.5} />
+      );
+    }
+
     return { gridLines, axisRefs };
   }, [scale, gridLayout, hAxis, vAxis, hColor, vColor, fixedColor, sectionType, ridgeLine]);
 
@@ -729,6 +832,11 @@ export function SectionAxisViewer({
             ✓ {hAxis}={scale.hScale}mm · {vAxis}={scale.vScale}mm
           </span>
         )}
+        {scale && (
+          <Button size="sm" variant="outline" className="h-7 text-xs gap-1 ml-auto" onClick={handleExportPDF}>
+            <Printer className="h-3 w-3" /> PDF
+          </Button>
+        )}
       </div>
 
       {/* Grid limits config bar */}
@@ -894,6 +1002,7 @@ export function SectionAxisViewer({
       {/* SVG Canvas */}
       {scale ? (
         <svg
+          ref={svgRef}
           width={w} height={h}
           style={drawMode ? { cursor: 'none' } : undefined}
           className="block bg-background"

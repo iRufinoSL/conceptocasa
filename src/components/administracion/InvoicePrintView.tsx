@@ -102,6 +102,7 @@ interface Invoice {
   issuer_account_id?: string | null;
   receiver_account_id?: string | null;
   footer_contact_source?: string;
+  budget_id?: string | null;
   presupuesto?: Presupuesto | null;
   issuer_account?: {
     id?: string;

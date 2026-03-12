@@ -125,6 +125,8 @@ export function SectionAxisViewer({
   const [editName, setEditName] = useState('');
   const [editHeight, setEditHeight] = useState('');
   const [editVertices, setEditVertices] = useState<Array<{ x: number; y: number; z: number }>>([]);
+  const [editHasFloor, setEditHasFloor] = useState(true);
+  const [editHasCeiling, setEditHasCeiling] = useState(true);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ w: 800, h: 500 });

@@ -759,7 +759,7 @@ export function SectionAxisViewer({
           onClick={handleSvgClick}
           onMouseMove={handleSvgMouseMove}
         >
-          {gridContent}
+          <g opacity={drawMode ? 0.25 : 1}>{gridContent}</g>
           {nodeInteractionDots}
           {polygonElements}
           {drawingOverlay}

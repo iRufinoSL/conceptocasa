@@ -68,6 +68,18 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     }
   }, [floorPlan?.custom_corners]);
 
+  const ridgeLine = useMemo(() => {
+    if (!floorPlan?.custom_corners) return null;
+    try {
+      const parsed = typeof floorPlan.custom_corners === 'string'
+        ? JSON.parse(floorPlan.custom_corners)
+        : floorPlan.custom_corners;
+      return parsed?.ridgeLine ?? null;
+    } catch {
+      return null;
+    }
+  }, [floorPlan?.custom_corners]);
+
   const sectionsByType = useMemo(() => ({
     vertical: allSections.filter(s => s.sectionType === 'vertical').sort((a, b) => a.axisValue - b.axisValue),
     longitudinal: allSections.filter(s => s.sectionType === 'longitudinal').sort((a, b) => a.axisValue - b.axisValue),
@@ -259,6 +271,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
           sectionName={liveSection.name}
           savedScale={savedScale}
           onSaveScale={(scale) => handleSaveScale(liveSection.id, scale)}
+          ridgeLine={ridgeLine}
         />
       </div>
     );

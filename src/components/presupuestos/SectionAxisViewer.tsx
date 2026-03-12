@@ -9,6 +9,14 @@ interface SectionScale {
   vScale: number; // mm per grid cell on vertical axis
 }
 
+interface RidgeLineData {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  z: number;
+}
+
 interface SectionAxisViewerProps {
   sectionType: 'vertical' | 'longitudinal' | 'transversal';
   axisValue: number;
@@ -16,6 +24,8 @@ interface SectionAxisViewerProps {
   /** Persisted scale in mm */
   savedScale?: { hScale: number; vScale: number };
   onSaveScale?: (scale: { hScale: number; vScale: number }) => void;
+  /** Ridge line to draw on Z sections */
+  ridgeLine?: RidgeLineData | null;
 }
 
 const AXIS_COLORS = {
@@ -39,6 +49,7 @@ export function SectionAxisViewer({
   sectionName,
   savedScale,
   onSaveScale,
+  ridgeLine,
 }: SectionAxisViewerProps) {
   const { fixedAxis, hAxis, vAxis } = getConfig(sectionType);
   const hColor = AXIS_COLORS[hAxis];
@@ -187,8 +198,54 @@ export function SectionAxisViewer({
       </text>
     );
 
+    // Ridge line on Z (vertical) sections
+    if (sectionType === 'vertical' && ridgeLine) {
+      const RIDGE_COLOR = 'hsl(0, 70%, 50%)';
+      // Convert ridge grid coords to pixel coords
+      // ridgeLine x1,y1,x2,y2 are in grid index units
+      const rx1 = originX + ridgeLine.x1 * cellPx;
+      const ry1 = originY - ridgeLine.y1 * cellPx; // Y positive up
+      const rx2 = originX + ridgeLine.x2 * cellPx;
+      const ry2 = originY - ridgeLine.y2 * cellPx;
+
+      // Extend 3 grid units beyond endpoints
+      const dx = ridgeLine.x2 - ridgeLine.x1;
+      const dy = ridgeLine.y2 - ridgeLine.y1;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      const ext = len > 0 ? 3 : 0;
+      const ux = len > 0 ? dx / len : 0;
+      const uy = len > 0 ? dy / len : 0;
+      const ex1 = originX + (ridgeLine.x1 - ux * ext) * cellPx;
+      const ey1 = originY - (ridgeLine.y1 - uy * ext) * cellPx;
+      const ex2 = originX + (ridgeLine.x2 + ux * ext) * cellPx;
+      const ey2 = originY - (ridgeLine.y2 + uy * ext) * cellPx;
+
+      // Dashed red line (extended)
+      elements.push(
+        <line key="ridgeExt" x1={ex1} y1={ey1} x2={ex2} y2={ey2}
+          stroke={RIDGE_COLOR} strokeWidth={2} strokeDasharray="8 4" opacity={0.7} />
+      );
+      // Solid red line (defined segment)
+      elements.push(
+        <line key="ridgeSolid" x1={rx1} y1={ry1} x2={rx2} y2={ry2}
+          stroke={RIDGE_COLOR} strokeWidth={2.5} strokeDasharray="10 5" opacity={0.9} />
+      );
+      // Endpoint markers
+      elements.push(<circle key="ridgeP1" cx={rx1} cy={ry1} r={3.5} fill={RIDGE_COLOR} opacity={0.9} />);
+      elements.push(<circle key="ridgeP2" cx={rx2} cy={ry2} r={3.5} fill={RIDGE_COLOR} opacity={0.9} />);
+      // Label
+      const mx = (rx1 + rx2) / 2;
+      const my = (ry1 + ry2) / 2;
+      elements.push(
+        <text key="ridgeLabel" x={mx} y={my - 10}
+          textAnchor="middle" fontSize={9} fontWeight={700} fill={RIDGE_COLOR} fontFamily="monospace" opacity={0.9}>
+          CUMBRERA (Z={ridgeLine.z})
+        </text>
+      );
+    }
+
     return elements;
-  }, [scale, w, h, hAxis, vAxis, hColor, vColor, fixedColor, fixedAxis]);
+  }, [scale, w, h, hAxis, vAxis, hColor, vColor, fixedColor, fixedAxis, sectionType, ridgeLine]);
 
   return (
     <div ref={containerRef} className="rounded-lg border bg-card overflow-hidden">

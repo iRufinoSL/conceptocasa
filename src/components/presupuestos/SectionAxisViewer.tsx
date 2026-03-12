@@ -621,7 +621,7 @@ export function SectionAxisViewer({
   // Node interaction dots (visible in draw mode)
   const nodeInteractionDots = useMemo(() => {
     if (!drawMode || !gridLayout) return null;
-    const { totalCols, totalRows, ox, oy } = gridLayout;
+    const { totalCols, totalRows, ox, oy, cellPx } = gridLayout;
     const elements: JSX.Element[] = [];
     for (let c = 0; c <= totalCols; c++) {
       for (let r = 0; r <= totalRows; r++) {

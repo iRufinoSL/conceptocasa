@@ -15,6 +15,7 @@ import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { InvoiceLinesEditor } from './InvoiceLinesEditor';
 import { InvoicePrintView } from './InvoicePrintView';
 import { AccountSelectWithCreate } from './AccountSelectWithCreate';
+import { AdminDocumentFiles } from './AdminDocumentFiles';
 import { PostInvoiceDialog } from './PostInvoiceDialog';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -842,6 +843,9 @@ export function InvoicesTab({ budgetId: fixedBudgetId }: { budgetId?: string } =
                                   Contabilizar
                                 </Button>
                               )}
+                            </div>
+                            <div className="mt-4 border-t pt-3">
+                              <AdminDocumentFiles documentType="invoice" documentId={invoice.id} />
                             </div>
                           </CardContent>
                         </CollapsibleContent>

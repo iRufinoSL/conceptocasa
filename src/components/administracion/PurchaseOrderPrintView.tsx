@@ -2,12 +2,14 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Printer, ZoomIn, ZoomOut, Minus, Eraser } from 'lucide-react';
+import { Printer, ZoomIn, ZoomOut, Minus, Eraser, FileDown, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { formatCurrency } from '@/lib/format-utils';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { generateAndSaveAdminPdf } from '@/lib/generate-admin-pdf';
+import { toast } from 'sonner';
 
 type PrintScale = 'compact' | 'normal' | 'large';
 
@@ -37,6 +39,7 @@ interface PurchaseOrder {
   description: string | null; observations: string | null;
   subtotal: number; vat_rate: number; vat_amount: number; total: number;
   footer_contact_source?: string;
+  budget_id?: string | null;
   supplier_contact?: CrmContact | null;
   client_contact?: CrmContact | null;
   presupuesto?: Presupuesto | null;
@@ -420,9 +423,43 @@ export function PurchaseOrderPrintView({ order, onClose }: Props) {
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cerrar</Button>
+          <GenerateOrderPdfButton order={order} printRef={printRef} />
           <Button onClick={handlePrint} className="gap-2"><Printer className="h-4 w-4" />Imprimir</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function GenerateOrderPdfButton({ order, printRef }: { order: PurchaseOrder; printRef: React.RefObject<HTMLDivElement | null> }) {
+  const [generating, setGenerating] = useState(false);
+  
+  const handleGeneratePdf = async () => {
+    if (!printRef.current) return;
+    setGenerating(true);
+    const fileName = `OP_${order.order_id}`;
+    
+    const success = await generateAndSaveAdminPdf({
+      element: printRef.current,
+      fileName,
+      documentType: 'purchase_order',
+      documentId: order.id,
+      budgetId: order.budget_id,
+      description: `Orden de Pedido ${order.order_id} - ${order.description || ''}`.trim(),
+    });
+    
+    setGenerating(false);
+    if (success) {
+      toast.success('PDF generado y guardado correctamente');
+    } else {
+      toast.error('Error al generar el PDF');
+    }
+  };
+
+  return (
+    <Button variant="secondary" onClick={handleGeneratePdf} disabled={generating} className="gap-2">
+      {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+      Generar PDF
+    </Button>
   );
 }

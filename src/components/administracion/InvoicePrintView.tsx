@@ -2,12 +2,14 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Printer, Download, Home, ZoomIn, ZoomOut, Minus } from 'lucide-react';
+import { Printer, Download, Home, ZoomIn, ZoomOut, Minus, FileDown, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { formatCurrency } from '@/lib/format-utils';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { generateAndSaveAdminPdf } from '@/lib/generate-admin-pdf';
+import { toast } from 'sonner';
 
 type PrintScale = 'compact' | 'normal' | 'large';
 
@@ -100,6 +102,7 @@ interface Invoice {
   issuer_account_id?: string | null;
   receiver_account_id?: string | null;
   footer_contact_source?: string;
+  budget_id?: string | null;
   presupuesto?: Presupuesto | null;
   issuer_account?: {
     id?: string;
@@ -725,6 +728,7 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
           <Button variant="outline" onClick={onClose}>
             Cerrar
           </Button>
+          <GeneratePdfButton invoice={invoice} printRef={printRef} />
           <Button onClick={handlePrint} className="gap-2">
             <Printer className="h-4 w-4" />
             Imprimir
@@ -732,5 +736,40 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function GeneratePdfButton({ invoice, printRef }: { invoice: Invoice; printRef: React.RefObject<HTMLDivElement | null> }) {
+  const [generating, setGenerating] = useState(false);
+  
+  const handleGeneratePdf = async () => {
+    if (!printRef.current) return;
+    setGenerating(true);
+    const docType = invoice.document_type || 'factura';
+    const docLabel = DOCUMENT_TYPE_LABELS[docType];
+    const fileName = `${docLabel}_${formatInvoiceNumber(invoice.invoice_number, invoice.invoice_date).replace('#', '')}`;
+    
+    const success = await generateAndSaveAdminPdf({
+      element: printRef.current,
+      fileName,
+      documentType: 'invoice',
+      documentId: invoice.id,
+      budgetId: invoice.budget_id,
+      description: `${docLabel} ${formatInvoiceNumber(invoice.invoice_number, invoice.invoice_date)} - ${invoice.description || ''}`.trim(),
+    });
+    
+    setGenerating(false);
+    if (success) {
+      toast.success('PDF generado y guardado correctamente');
+    } else {
+      toast.error('Error al generar el PDF');
+    }
+  };
+
+  return (
+    <Button variant="secondary" onClick={handleGeneratePdf} disabled={generating} className="gap-2">
+      {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+      Generar PDF
+    </Button>
   );
 }

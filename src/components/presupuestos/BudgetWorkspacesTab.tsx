@@ -3216,6 +3216,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
       floor_polygon: newVertices as any,
       length: Math.round(bbox.w * cellSizeM * 100) / 100,
       width: Math.round(bbox.h * cellSizeM * 100) / 100,
+      pos_x: Math.round(bbox.minX * cellSizeM * 100) / 100,
+      pos_y: Math.round(bbox.minY * cellSizeM * 100) / 100,
     }).eq('id', otherId);
     // Smart rebuild: only recreate walls if vertex count changed
     await rebuildWallsSmart(otherId, newVertices.length);

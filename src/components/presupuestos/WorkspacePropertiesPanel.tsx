@@ -3,9 +3,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { X, Box, Layers } from 'lucide-react';
+import { X, Box, Layers, Paintbrush } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { VISUAL_PATTERNS, PATTERN_CATEGORIES, getPatternById, patternPreviewDataUri, type VisualPattern } from '@/lib/visual-patterns';
 
 const WALL_TYPES = [
   { value: 'exterior', label: 'Exterior' },
@@ -14,6 +15,7 @@ const WALL_TYPES = [
   { value: 'exterior_compartida', label: 'Ext. compartida' },
   { value: 'interior_compartida', label: 'Int. compartida' },
   { value: 'interior_invisible', label: 'Int. invisible' },
+  { value: 'invisible', label: 'Invisible' },
 ];
 
 const FLOOR_CEILING_TYPES = [
@@ -27,7 +29,6 @@ function normalizeWallType(type?: string | null): string {
     case 'external': return 'exterior';
     case 'internal': return 'interior';
     case 'shared': return 'interior_compartida';
-    case 'invisible': return 'exterior_invisible';
     default: return type || 'exterior';
   }
 }
@@ -40,18 +41,40 @@ interface WallRecord {
   height: number | null;
 }
 
+interface WallObjectRecord {
+  id: string;
+  wall_id: string;
+  layer_order: number;
+  name: string;
+  description: string | null;
+  visual_pattern: string | null;
+  surface_m2: number | null;
+  object_type: string;
+}
+
+export interface FacePatterns {
+  [faceKey: string]: string | null; // faceKey: "floor" | "ceiling" | "wall-{index}" → pattern id
+}
+
 interface WorkspacePropertiesPanelProps {
   workspaceId: string;
   workspaceName: string;
   sectionType: string;
   sectionName: string;
   onClose: () => void;
+  /** Which face to highlight/focus (e.g., 'wall-0', 'floor', 'ceiling') */
+  focusFace?: string;
+  /** Callback when a pattern changes so parent can re-render */
+  onPatternChange?: (faceKey: string, patternId: string | null) => void;
 }
 
-export function WorkspacePropertiesPanel({ workspaceId, workspaceName, sectionType, sectionName, onClose }: WorkspacePropertiesPanelProps) {
+export function WorkspacePropertiesPanel({ workspaceId, workspaceName, sectionType, sectionName, onClose, focusFace, onPatternChange }: WorkspacePropertiesPanelProps) {
   const [walls, setWalls] = useState<WallRecord[]>([]);
   const [room, setRoom] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [wallObjects, setWallObjects] = useState<WallObjectRecord[]>([]);
+  const [expandedFace, setExpandedFace] = useState<string | null>(focusFace || null);
+  const [patternPickerFace, setPatternPickerFace] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -60,11 +83,24 @@ export function WorkspacePropertiesPanel({ workspaceId, workspaceName, sectionTy
       supabase.from('budget_floor_plan_walls').select('*').eq('room_id', workspaceId).order('wall_index'),
     ]);
     setRoom(roomRes.data);
-    setWalls((wallsRes.data || []) as WallRecord[]);
+    const wallData = (wallsRes.data || []) as WallRecord[];
+    setWalls(wallData);
+
+    // Fetch wall objects (layer 0 = Superficie) for all walls
+    if (wallData.length > 0) {
+      const wallIds = wallData.map(w => w.id);
+      const { data: objData } = await supabase
+        .from('budget_wall_objects')
+        .select('*')
+        .in('wall_id', wallIds)
+        .eq('layer_order', 0);
+      setWallObjects((objData || []) as WallObjectRecord[]);
+    }
     setLoading(false);
   }, [workspaceId]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => { if (focusFace) setExpandedFace(focusFace); }, [focusFace]);
 
   const getFloorType = () => {
     if (!room) return 'normal';
@@ -104,6 +140,73 @@ export function WorkspacePropertiesPanel({ workspaceId, workspaceName, sectionTy
     toast.success(`Pared ${dbWallIndex} actualizada`);
   };
 
+  /** Ensure wall record exists, then ensure layer 0 Superficie object exists, then update pattern */
+  const updateFacePattern = async (faceKey: string, patternId: string | null) => {
+    let wallId: string | null = null;
+    let wallIndex: number;
+
+    if (faceKey === 'floor') {
+      wallIndex = -1; // Convention: floor uses wall_index = -1
+    } else if (faceKey === 'ceiling') {
+      wallIndex = -2; // Convention: ceiling uses wall_index = -2
+    } else {
+      // wall-N where N is 0-based
+      const idx = parseInt(faceKey.replace('wall-', ''));
+      wallIndex = idx + 1; // DB is 1-based
+    }
+
+    // Find or create wall record
+    let existingWall = walls.find(w => w.wall_index === wallIndex);
+    if (!existingWall) {
+      const wallType = wallIndex === -1 ? 'suelo_basico' : wallIndex === -2 ? 'techo_basico' : 'exterior';
+      const { data } = await supabase.from('budget_floor_plan_walls').insert({
+        room_id: workspaceId,
+        wall_index: wallIndex,
+        wall_type: wallType,
+      }).select().single();
+      if (data) {
+        existingWall = data as WallRecord;
+        setWalls(prev => [...prev, existingWall!]);
+      }
+    }
+    if (!existingWall) return;
+    wallId = existingWall.id;
+
+    // Find or create layer 0 Superficie object
+    let surfObj = wallObjects.find(o => o.wall_id === wallId && o.layer_order === 0);
+    if (surfObj) {
+      await supabase.from('budget_wall_objects').update({ visual_pattern: patternId }).eq('id', surfObj.id);
+      setWallObjects(prev => prev.map(o => o.id === surfObj!.id ? { ...o, visual_pattern: patternId } : o));
+    } else {
+      const faceLabel = faceKey === 'floor' ? 'Suelo' : faceKey === 'ceiling' ? 'Techo' : `Pared ${wallIndex}`;
+      const { data } = await supabase.from('budget_wall_objects').insert({
+        wall_id: wallId,
+        layer_order: 0,
+        name: 'Superficie',
+        description: `${faceLabel}/${workspaceName}`,
+        object_type: 'superficie',
+        visual_pattern: patternId,
+      }).select().single();
+      if (data) setWallObjects(prev => [...prev, data as WallObjectRecord]);
+    }
+
+    onPatternChange?.(faceKey, patternId);
+    setPatternPickerFace(null);
+    toast.success('Patrón visual actualizado');
+  };
+
+  const getPatternForFace = (faceKey: string): string | null => {
+    let wallIndex: number;
+    if (faceKey === 'floor') wallIndex = -1;
+    else if (faceKey === 'ceiling') wallIndex = -2;
+    else wallIndex = parseInt(faceKey.replace('wall-', '')) + 1;
+
+    const wall = walls.find(w => w.wall_index === wallIndex);
+    if (!wall) return null;
+    const obj = wallObjects.find(o => o.wall_id === wall.id && o.layer_order === 0);
+    return obj?.visual_pattern || null;
+  };
+
   const poly = room?.floor_polygon as Array<{ x: number; y: number }> | null;
   const edgeCount = poly ? poly.length : (room ? 4 : 0);
 
@@ -119,7 +222,7 @@ export function WorkspacePropertiesPanel({ workspaceId, workspaceName, sectionTy
   const sectionLabel = sectionType === 'vertical' ? 'Z' : sectionType === 'longitudinal' ? 'Y' : sectionType === 'transversal' ? 'X' : 'I';
 
   return (
-    <div className="absolute right-2 top-2 z-50 w-64 bg-card border rounded-lg shadow-lg overflow-hidden">
+    <div className="absolute right-2 top-2 z-50 w-72 bg-card border rounded-lg shadow-lg overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 bg-muted/50 border-b">
         <div className="flex items-center gap-1.5 min-w-0">
@@ -154,27 +257,38 @@ export function WorkspacePropertiesPanel({ workspaceId, workspaceName, sectionTy
       {loading ? (
         <div className="px-3 py-4 text-center text-xs text-muted-foreground">Cargando...</div>
       ) : (
-        <div className="px-2 py-2 space-y-0.5 max-h-[50vh] overflow-y-auto">
+        <div className="px-2 py-2 space-y-0.5 max-h-[60vh] overflow-y-auto">
           <p className="text-[9px] text-muted-foreground font-medium uppercase tracking-wider px-1 mb-1">Caras del volumen</p>
 
           {/* Floor */}
           <FaceRow
             label="🟫 Suelo"
+            faceKey="floor"
             type={getFloorType()}
             options={FLOOR_CEILING_TYPES}
             onChange={(v) => updateFloorCeiling('has_floor', v)}
+            pattern={getPatternForFace('floor')}
+            isExpanded={expandedFace === 'floor'}
+            onToggle={() => setExpandedFace(expandedFace === 'floor' ? null : 'floor')}
+            onOpenPatternPicker={() => setPatternPickerFace('floor')}
           />
 
           {/* Walls */}
           {Array.from({ length: edgeCount }).map((_, i) => {
+            const faceKey = `wall-${i}`;
             const wall = walls.find(w => w.wall_index === i + 1);
             return (
               <FaceRow
                 key={i}
                 label={`🧱 P${i + 1}`}
+                faceKey={faceKey}
                 type={normalizeWallType(wall?.wall_type)}
                 options={WALL_TYPES}
                 onChange={(v) => ensureAndUpdateWallType(i, v)}
+                pattern={getPatternForFace(faceKey)}
+                isExpanded={expandedFace === faceKey}
+                onToggle={() => setExpandedFace(expandedFace === faceKey ? null : faceKey)}
+                onOpenPatternPicker={() => setPatternPickerFace(faceKey)}
               />
             );
           })}
@@ -182,9 +296,14 @@ export function WorkspacePropertiesPanel({ workspaceId, workspaceName, sectionTy
           {/* Ceiling */}
           <FaceRow
             label={room?.has_roof ? '🏠 Techo (cubierta)' : '⬜ Techo'}
+            faceKey="ceiling"
             type={getCeilingType()}
             options={FLOOR_CEILING_TYPES}
             onChange={(v) => updateFloorCeiling('has_ceiling', v)}
+            pattern={getPatternForFace('ceiling')}
+            isExpanded={expandedFace === 'ceiling'}
+            onToggle={() => setExpandedFace(expandedFace === 'ceiling' ? null : 'ceiling')}
+            onOpenPatternPicker={() => setPatternPickerFace('ceiling')}
           />
 
           {/* Interior space */}
@@ -194,29 +313,115 @@ export function WorkspacePropertiesPanel({ workspaceId, workspaceName, sectionTy
           </div>
         </div>
       )}
+
+      {/* Pattern picker overlay */}
+      {patternPickerFace && (
+        <div className="px-2 py-2 border-t bg-muted/20">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-semibold text-muted-foreground uppercase">Patrón visual — Superficie</span>
+            <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => setPatternPickerFace(null)}>
+              <X className="h-3 w-3" />
+            </Button>
+          </div>
+          <div className="space-y-1.5 max-h-48 overflow-y-auto">
+            {/* None option */}
+            <button
+              className="flex items-center gap-2 w-full text-left px-1.5 py-1 rounded hover:bg-accent/40 text-[10px]"
+              onClick={() => updateFacePattern(patternPickerFace, null)}
+            >
+              <span className="w-5 h-5 border rounded bg-background" />
+              <span>Sin patrón</span>
+            </button>
+            {PATTERN_CATEGORIES.map(cat => {
+              const patterns = VISUAL_PATTERNS.filter(p => p.category === cat.id);
+              if (!patterns.length) return null;
+              return (
+                <div key={cat.id}>
+                  <span className="text-[9px] text-muted-foreground font-medium uppercase px-1">{cat.label}</span>
+                  <div className="flex flex-wrap gap-1 mt-0.5">
+                    {patterns.map(p => (
+                      <button
+                        key={p.id}
+                        className="w-8 h-8 border rounded hover:ring-2 ring-primary overflow-hidden"
+                        title={p.label}
+                        style={{
+                          backgroundImage: `url("${patternPreviewDataUri(p, 32)}")`,
+                          backgroundSize: 'cover',
+                        }}
+                        onClick={() => updateFacePattern(patternPickerFace, p.id)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function FaceRow({ label, type, options, onChange }: {
+function FaceRow({ label, faceKey, type, options, onChange, pattern, isExpanded, onToggle, onOpenPatternPicker }: {
   label: string;
+  faceKey: string;
   type: string;
   options: { value: string; label: string }[];
   onChange: (value: string) => void;
+  pattern: string | null;
+  isExpanded: boolean;
+  onToggle: () => void;
+  onOpenPatternPicker: () => void;
 }) {
+  const patternObj = getPatternById(pattern);
   return (
-    <div className="flex items-center justify-between gap-2 py-0.5 px-1 rounded hover:bg-accent/30">
-      <span className="text-xs flex-shrink-0">{label}</span>
-      <Select value={type} onValueChange={onChange}>
-        <SelectTrigger className="h-6 w-[110px] text-[10px]">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {options.map(o => (
-            <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+    <div className={`rounded ${isExpanded ? 'bg-accent/20 border border-accent/30' : ''}`}>
+      <div className="flex items-center justify-between gap-1 py-0.5 px-1 hover:bg-accent/30 cursor-pointer" onClick={onToggle}>
+        <div className="flex items-center gap-1 min-w-0">
+          <span className="text-xs flex-shrink-0">{label}</span>
+          {patternObj && (
+            <span className="w-4 h-4 border rounded overflow-hidden inline-block flex-shrink-0"
+              style={{
+                backgroundImage: `url("${patternPreviewDataUri(patternObj, 16)}")`,
+                backgroundSize: 'cover',
+              }}
+              title={patternObj.label} />
+          )}
+        </div>
+        <Select value={type} onValueChange={onChange}>
+          <SelectTrigger className="h-6 w-[110px] text-[10px]" onClick={e => e.stopPropagation()}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {options.map(o => (
+              <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      {isExpanded && (
+        <div className="px-2 pb-1.5 pt-0.5">
+          <div className="flex items-center gap-1.5">
+            <Badge variant="outline" className="text-[8px] h-3.5 px-1">Capa 0</Badge>
+            <span className="text-[9px] text-muted-foreground">Superficie</span>
+            <Button variant="ghost" size="icon" className="h-5 w-5 ml-auto" onClick={onOpenPatternPicker} title="Cambiar patrón visual">
+              <Paintbrush className="h-3 w-3" />
+            </Button>
+          </div>
+          {patternObj ? (
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="w-5 h-5 border rounded overflow-hidden inline-block"
+                style={{
+                  backgroundImage: `url("${patternPreviewDataUri(patternObj, 20)}")`,
+                  backgroundSize: 'cover',
+                }} />
+              <span className="text-[9px] text-muted-foreground">{patternObj.label}</span>
+            </div>
+          ) : (
+            <span className="text-[9px] text-muted-foreground italic mt-0.5 block">Sin patrón asignado</span>
+          )}
+        </div>
+      )}
     </div>
   );
 }

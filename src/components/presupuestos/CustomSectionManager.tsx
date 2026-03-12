@@ -929,7 +929,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
 
     const color = PROJ_COLORS[pi % PROJ_COLORS.length];
     const svgPts = verts.map(v => toSvg(v.x, v.y));
-    const fontSize = Math.round(7 * Math.max(1, zoomLevel * 0.8));
+    const fontSize = Math.round(10 * Math.max(1, zoomLevel * 0.8));
 
     // ─── POINT (1 vertex) ───
     if (verts.length === 1) {

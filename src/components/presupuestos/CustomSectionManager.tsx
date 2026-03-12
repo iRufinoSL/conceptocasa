@@ -17,6 +17,8 @@ export interface SectionPolygon {
   vertices: Array<{ x: number; y: number; z: number; label?: string }>;
   zBase?: number;
   zTop?: number;
+  hasFloor?: boolean;
+  hasCeiling?: boolean;
 }
 
 export interface CustomSection {

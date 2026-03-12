@@ -298,6 +298,17 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       .eq('id', floorPlan.id);
 
     if (error) { toast.error('Error al guardar espacios'); return; }
+
+    // Sync has_floor / has_ceiling to budget_floor_plan_rooms
+    for (const poly of polygons) {
+      if (poly.hasFloor !== undefined || poly.hasCeiling !== undefined) {
+        const roomUpdate: Record<string, boolean> = {};
+        if (poly.hasFloor !== undefined) roomUpdate.has_floor = poly.hasFloor;
+        if (poly.hasCeiling !== undefined) roomUpdate.has_ceiling = poly.hasCeiling;
+        await supabase.from('budget_floor_plan_rooms').update(roomUpdate).eq('id', poly.id);
+      }
+    }
+
     toast.success('Espacio guardado');
     queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces', budgetId] });
   };

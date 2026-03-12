@@ -20,6 +20,8 @@ interface WorkspaceEntry {
   walls: WallData[];
   zBase: number;
   sectionName?: string;
+  hasFloor?: boolean;
+  hasCeiling?: boolean;
 }
 
 interface FaceInfo {
@@ -222,13 +224,15 @@ function MultiPrism({ ws, scaleXY, scaleZ, offsetX, offsetZ, onFaceDoubleClick, 
     // Build interactive faces
     const facesList: { vertices: THREE.Vector3[]; color: string; label: string; labelPos: THREE.Vector3; labelRot?: [number, number, number]; faceType: string; faceIndex: number }[] = [];
 
-    // Floor
-    const floorCenter = new THREE.Vector3(
-      base.reduce((s, v) => s + v.x, 0) / n, base[0].y - 0.01,
-      base.reduce((s, v) => s + v.z, 0) / n
-    );
-    const floorArea = calcFaceAreaM2(base);
-    facesList.push({ vertices: [...base], color: FACE_COLORS.suelo, label: `S1\n${ws.name}\n${floorArea.toFixed(2)} m²`, labelPos: floorCenter, labelRot: [-Math.PI / 2, 0, 0], faceType: 'suelo', faceIndex: 1 });
+    // Floor — only if hasFloor
+    if (ws.hasFloor !== false) {
+      const floorCenter = new THREE.Vector3(
+        base.reduce((s, v) => s + v.x, 0) / n, base[0].y - 0.01,
+        base.reduce((s, v) => s + v.z, 0) / n
+      );
+      const floorArea = calcFaceAreaM2(base);
+      facesList.push({ vertices: [...base], color: FACE_COLORS.suelo, label: `S1\n${ws.name}\n${floorArea.toFixed(2)} m²`, labelPos: floorCenter, labelRot: [-Math.PI / 2, 0, 0], faceType: 'suelo', faceIndex: 1 });
+    }
 
     // Walls
     for (let i = 0; i < n; i++) {
@@ -244,14 +248,16 @@ function MultiPrism({ ws, scaleXY, scaleZ, offsetX, offsetZ, onFaceDoubleClick, 
       facesList.push({ vertices: wallVerts, color: getWallColor(wall?.wall_type), label: `P${i + 1}\n${ws.name}\n${areaM2.toFixed(2)} m²`, labelPos: wc, faceType: 'pared', faceIndex: i + 1 });
     }
 
-    // Ceiling
-    const topCenter = new THREE.Vector3(
-      top.reduce((s, v) => s + v.x, 0) / n,
-      top.reduce((s, v) => s + v.y, 0) / n + 0.01,
-      top.reduce((s, v) => s + v.z, 0) / n
-    );
-    const ceilArea = calcFaceAreaM2(top);
-    facesList.push({ vertices: [...top], color: FACE_COLORS.techo, label: `T1\n${ws.name}\n${ceilArea.toFixed(2)} m²`, labelPos: topCenter, labelRot: [-Math.PI / 2, 0, 0], faceType: 'techo', faceIndex: 1 });
+    // Ceiling — only if hasCeiling
+    if (ws.hasCeiling !== false) {
+      const topCenter = new THREE.Vector3(
+        top.reduce((s, v) => s + v.x, 0) / n,
+        top.reduce((s, v) => s + v.y, 0) / n + 0.01,
+        top.reduce((s, v) => s + v.z, 0) / n
+      );
+      const ceilArea = calcFaceAreaM2(top);
+      facesList.push({ vertices: [...top], color: FACE_COLORS.techo, label: `T1\n${ws.name}\n${ceilArea.toFixed(2)} m²`, labelPos: topCenter, labelRot: [-Math.PI / 2, 0, 0], faceType: 'techo', faceIndex: 1 });
+    }
 
     return { baseVerts: base, topVerts: top, faces: facesList, cornerLabels: labels, edgeLabels: edges };
   }, [ws, sMxy, zScaleM, offsetX, offsetZ, scaleXY, allSections]);

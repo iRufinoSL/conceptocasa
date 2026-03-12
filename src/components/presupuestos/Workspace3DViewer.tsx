@@ -48,6 +48,8 @@ interface Workspace3DViewerProps {
   selectedFace?: string | null;
   allSections?: CustomSection[];
   roomId?: string;
+  hasFloor?: boolean;
+  hasCeiling?: boolean;
 }
 
 const FACE_COLORS: Record<string, string> = {
@@ -333,7 +335,7 @@ interface PrismModelProps extends Omit<Workspace3DViewerProps, 'name' | 'onFaceE
   orbitRef?: React.RefObject<any>;
 }
 
-function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase = 0, onFaceClick, onFaceDoubleClick, selectedFace, workspaceName, showDraggableNodes, onNodeDrag, orbitRef, allSections, roomId }: PrismModelProps) {
+function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase = 0, onFaceClick, onFaceDoubleClick, selectedFace, workspaceName, showDraggableNodes, onNodeDrag, orbitRef, allSections, roomId, hasFloor = true, hasCeiling = true }: PrismModelProps) {
   const groupRef = useRef<THREE.Group>(null);
 
   const { baseVerts3D, topVerts3D, heightM, cornerLabels, centroid } = useMemo(() => {
@@ -397,7 +399,7 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
 
     const zScaleBlocks = scaleZ / 1000;
 
-    // Suelo (S1)
+    // Suelo (S1) — only if hasFloor
     // Centroid of base polygon for outward direction calculation
     const baseCentroid = new THREE.Vector3(
       baseVerts3D.reduce((s, v) => s + v.x, 0) / n,
@@ -405,13 +407,15 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
       baseVerts3D.reduce((s, v) => s + v.z, 0) / n
     );
 
-    const floorCenter = new THREE.Vector3(baseCentroid.x, baseCentroid.y - 0.01, baseCentroid.z);
-    result.push({
-      type: 'suelo', index: 1, label: 'S1',
-      vertices: [...baseVerts3D], labelPos: floorCenter, labelRot: [-Math.PI / 2, 0, 0],
-      color: FACE_COLORS.suelo,
-      realVertices: polygon.map(v => ({ x: v.x, y: v.y, z: zBase })),
-    });
+    if (hasFloor) {
+      const floorCenter = new THREE.Vector3(baseCentroid.x, baseCentroid.y - 0.01, baseCentroid.z);
+      result.push({
+        type: 'suelo', index: 1, label: 'S1',
+        vertices: [...baseVerts3D], labelPos: floorCenter, labelRot: [-Math.PI / 2, 0, 0],
+        color: FACE_COLORS.suelo,
+        realVertices: polygon.map(v => ({ x: v.x, y: v.y, z: zBase })),
+      });
+    }
 
     // Paredes (P1, P2, ...)
     for (let i = 0; i < n; i++) {
@@ -443,24 +447,26 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
       });
     }
 
-    // Techo (T1)
-    const topCenter = new THREE.Vector3(
-      topVerts3D.reduce((s, v) => s + v.x, 0) / n,
-      topVerts3D.reduce((s, v) => s + v.y, 0) / n + 0.01,
-      topVerts3D.reduce((s, v) => s + v.z, 0) / n
-    );
-    result.push({
-      type: 'techo', index: 1, label: 'T1',
-      vertices: [...topVerts3D], labelPos: topCenter, labelRot: [-Math.PI / 2, 0, 0],
-      color: FACE_COLORS.techo,
-      realVertices: polygon.map((v, i) => {
-        const zTopVal = Math.round(topVerts3D[i].y / zScaleBlocks);
-        return { x: v.x, y: v.y, z: zTopVal };
-      }),
-    });
+    // Techo (T1) — only if hasCeiling
+    if (hasCeiling) {
+      const topCenter = new THREE.Vector3(
+        topVerts3D.reduce((s, v) => s + v.x, 0) / n,
+        topVerts3D.reduce((s, v) => s + v.y, 0) / n + 0.01,
+        topVerts3D.reduce((s, v) => s + v.z, 0) / n
+      );
+      result.push({
+        type: 'techo', index: 1, label: 'T1',
+        vertices: [...topVerts3D], labelPos: topCenter, labelRot: [-Math.PI / 2, 0, 0],
+        color: FACE_COLORS.techo,
+        realVertices: polygon.map((v, i) => {
+          const zTopVal = Math.round(topVerts3D[i].y / zScaleBlocks);
+          return { x: v.x, y: v.y, z: zTopVal };
+        }),
+      });
+    }
 
     return result;
-  }, [baseVerts3D, topVerts3D, walls, polygon, zBase, height, scaleZ]);
+  }, [baseVerts3D, topVerts3D, walls, polygon, zBase, height, scaleZ, hasFloor, hasCeiling]);
 
   // Compute edge lengths
   const edgeLengths = useMemo(() => {
@@ -735,7 +741,7 @@ function CenteredOrbitControls({ orbitRef, target }: { orbitRef: React.RefObject
   );
 }
 
-export function Workspace3DViewer({ name, polygon, height, walls, scaleXY, scaleZ = 250, zBase = 0, onFaceClick, onFaceEdit, onVertexEdit, onNavigateTo2D, selectedFace, allSections, roomId }: Workspace3DViewerProps) {
+export function Workspace3DViewer({ name, polygon, height, walls, scaleXY, scaleZ = 250, zBase = 0, onFaceClick, onFaceEdit, onVertexEdit, onNavigateTo2D, selectedFace, allSections, roomId, hasFloor = true, hasCeiling = true }: Workspace3DViewerProps) {
   const [editingFace, setEditingFace] = useState<FaceEditData | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showNodes, setShowNodes] = useState(false);
@@ -839,6 +845,8 @@ export function Workspace3DViewer({ name, polygon, height, walls, scaleXY, scale
             orbitRef={orbitRef}
             allSections={allSections}
             roomId={roomId}
+            hasFloor={hasFloor}
+            hasCeiling={hasCeiling}
           />
           <CenteredOrbitControls orbitRef={orbitRef} target={centroid} />
           <gridHelper args={[20, 40, '#888888', '#cccccc']} />

@@ -3561,6 +3561,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
                     zBase={zBase3D}
                     allSections={allSections}
                     roomId={r.id}
+                    hasFloor={r.has_floor}
+                    hasCeiling={r.has_ceiling}
                     onFaceClick={(faceType, faceIndex) => {
                       const key = `${faceType}_${faceIndex}`;
                       setSelected3DFace(prev => prev === key ? null : key);
@@ -4096,6 +4098,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
               walls: roomWalls,
               zBase: vSec ? vSec.axisValue : 0,
               sectionName: vSec ? vSec.name : 'Sin sección',
+              hasFloor: r.has_floor,
+              hasCeiling: r.has_ceiling,
             };
           });
         return (

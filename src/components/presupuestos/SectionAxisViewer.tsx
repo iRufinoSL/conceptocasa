@@ -832,6 +832,11 @@ export function SectionAxisViewer({
             ✓ {hAxis}={scale.hScale}mm · {vAxis}={scale.vScale}mm
           </span>
         )}
+        {scale && (
+          <Button size="sm" variant="outline" className="h-7 text-xs gap-1 ml-auto" onClick={handleExportPDF}>
+            <Printer className="h-3 w-3" /> PDF
+          </Button>
+        )}
       </div>
 
       {/* Grid limits config bar */}

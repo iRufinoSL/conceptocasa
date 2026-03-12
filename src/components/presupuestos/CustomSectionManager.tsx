@@ -1866,7 +1866,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
               {/* Start marker */}
               <circle cx={svgX1} cy={svgY1} r={4} fill="hsl(0, 0%, 45%)" opacity={0.9} />
               {/* End marker */}
-              <circle cx={svgX2} cy={svgY2} r={4} fill="hsl(0 70% 45%)" opacity={0.9} />
+              <circle cx={svgX2} cy={svgY2} r={4} fill="hsl(0, 0%, 45%)" opacity={0.9} />
               <text
                 x={midSvgX}
                 y={midSvgY}

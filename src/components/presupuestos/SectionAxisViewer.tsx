@@ -599,9 +599,11 @@ export function SectionAxisViewer({
       for (let r = 0; r <= totalRows; r++) {
         const x = ox + c * cellPx;
         const y = oy + r * cellPx;
+        const isHovered = hoverNode && hoverNode.col === c && hoverNode.row === r;
         elements.push(
-          <circle key={`ndot-${c}-${r}`} cx={x} cy={y} r={3}
-            fill="hsl(var(--primary))" fillOpacity={0.15} />
+          <circle key={`ndot-${c}-${r}`} cx={x} cy={y} r={isHovered ? 6 : 4}
+            fill="hsl(var(--primary))" fillOpacity={isHovered ? 0.6 : 0.35}
+            stroke="hsl(var(--primary))" strokeWidth={isHovered ? 2 : 0} strokeOpacity={0.5} />
         );
       }
     }

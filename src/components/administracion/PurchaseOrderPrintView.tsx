@@ -23,7 +23,7 @@ const SCALE_CONFIGS: Record<PrintScale, {
 };
 
 interface CrmContact {
-  id: string; first_name: string | null; last_name: string | null; company: string | null;
+  id: string; name: string; surname: string | null; contact_type: string;
   email: string | null; phone: string | null; address: string | null; city: string | null;
   postal_code: string | null; province: string | null; nif_dni: string | null;
 }

@@ -369,6 +369,35 @@ export function PurchaseOrderPrintView({ order, onClose }: Props) {
           </div>
         </div>
 
+        {/* Interactive Signature Pad (outside printRef) */}
+        <div className="mt-4 p-4 border rounded-lg bg-muted/30">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium">
+              Firma de: <span className="text-primary">{getContactDisplayName(order.client_contact)}</span>
+            </span>
+            {signatureDataUrl && (
+              <Button variant="ghost" size="sm" onClick={clearSignature} className="gap-1 text-xs">
+                <Eraser className="h-3 w-3" /> Borrar firma
+              </Button>
+            )}
+          </div>
+          <canvas
+            ref={signatureCanvasRef}
+            width={600}
+            height={200}
+            className="border border-border rounded-md bg-white cursor-crosshair touch-none w-full"
+            style={{ maxWidth: '100%', height: '120px' }}
+            onMouseDown={startDrawing}
+            onMouseMove={draw}
+            onMouseUp={stopDrawing}
+            onMouseLeave={stopDrawing}
+            onTouchStart={startDrawing}
+            onTouchMove={draw}
+            onTouchEnd={stopDrawing}
+          />
+          <p className="text-xs text-muted-foreground mt-1">Dibuje su firma con el ratón o el dedo (tabletas). Se incluirá en la impresión.</p>
+        </div>
+
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cerrar</Button>
           <Button onClick={handlePrint} className="gap-2"><Printer className="h-4 w-4" />Imprimir</Button>

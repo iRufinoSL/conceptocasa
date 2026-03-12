@@ -312,6 +312,38 @@ export function SectionAxisViewer({
     onSavePolygons?.(updated);
   };
 
+  // Edit polygon handlers
+  const startEditPolygon = (poly: SectionPolygon) => {
+    setEditingPolyId(poly.id);
+    setEditName(poly.name);
+    setEditHeight(String(poly.zTop || 0));
+    setEditVertices(poly.vertices.map(v => ({ ...v })));
+  };
+
+  const saveEditPolygon = () => {
+    if (!editingPolyId) return;
+    const updated = polygons.map(p => {
+      if (p.id !== editingPolyId) return p;
+      return {
+        ...p,
+        name: editName.trim() || p.name,
+        zTop: parseInt(editHeight) || p.zTop,
+        vertices: editVertices,
+      };
+    });
+    setPolygons(updated);
+    onSavePolygons?.(updated);
+    setEditingPolyId(null);
+  };
+
+  const cancelEditPolygon = () => {
+    setEditingPolyId(null);
+  };
+
+  const updateEditVertex = (idx: number, axis: 'x' | 'y', value: number) => {
+    setEditVertices(prev => prev.map((v, i) => i === idx ? { ...v, [axis]: value } : v));
+  };
+
   // Grid rendering
   const gridContent = useMemo(() => {
     if (!scale || !gridLayout) return null;

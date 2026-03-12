@@ -906,19 +906,23 @@ export function SectionAxisViewer({
     return elements;
   }, [drawMode, gridLayout, drawingVertices, hoverNode]);
 
-  // Node interaction dots (visible in draw mode)
+  // Node interaction dots (visible in draw mode) — including half-nodes
   const nodeInteractionDots = useMemo(() => {
     if (!drawMode || !gridLayout) return null;
     const { totalCols, totalRows, ox, oy, cellPx } = gridLayout;
     const elements: JSX.Element[] = [];
-    for (let c = 0; c <= totalCols; c++) {
-      for (let r = 0; r <= totalRows; r++) {
-        const x = ox + c * cellPx;
-        const y = oy + r * cellPx;
-        const isHovered = hoverNode && hoverNode.col === c && hoverNode.row === r;
+    // Full nodes + half nodes (step 0.5)
+    for (let c = 0; c <= totalCols * 2; c++) {
+      for (let r = 0; r <= totalRows * 2; r++) {
+        const col = c / 2;
+        const row = r / 2;
+        const x = ox + col * cellPx;
+        const y = oy + row * cellPx;
+        const isHalf = (c % 2 !== 0) || (r % 2 !== 0);
+        const isHovered = hoverNode && hoverNode.col === col && hoverNode.row === row;
         elements.push(
-          <circle key={`ndot-${c}-${r}`} cx={x} cy={y} r={isHovered ? 6 : 4}
-            fill="hsl(var(--primary))" fillOpacity={isHovered ? 0.6 : 0.35}
+          <circle key={`ndot-${c}-${r}`} cx={x} cy={y} r={isHovered ? 6 : (isHalf ? 2.5 : 4)}
+            fill="hsl(var(--primary))" fillOpacity={isHovered ? 0.6 : (isHalf ? 0.2 : 0.35)}
             stroke="hsl(var(--primary))" strokeWidth={isHovered ? 2 : 0} strokeOpacity={0.5} />
         );
       }

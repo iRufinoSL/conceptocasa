@@ -313,6 +313,32 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces', budgetId] });
   };
 
+  const handleSaveRulerLines = async (sectionId: string, rulerLines: import('./SectionAxisViewer').RulerLine[]) => {
+    if (!floorPlan?.id) return;
+    let parsedCorners: Record<string, unknown> = {};
+    try {
+      parsedCorners = typeof floorPlan.custom_corners === 'string'
+        ? JSON.parse(floorPlan.custom_corners)
+        : (floorPlan.custom_corners || {});
+    } catch { parsedCorners = {}; }
+
+    const sections = Array.isArray(parsedCorners.customSections)
+      ? (parsedCorners.customSections as CustomSection[])
+      : [];
+
+    const updated = sections.map(s =>
+      s.id === sectionId ? { ...s, rulerLines } : s
+    );
+
+    const { error } = await supabase
+      .from('budget_floor_plans')
+      .update({ custom_corners: { ...parsedCorners, customSections: updated } as any })
+      .eq('id', floorPlan.id);
+
+    if (error) { toast.error('Error al guardar reglas'); return; }
+    queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces', budgetId] });
+  };
+
   // If viewing a section, show the viewer
   if (activeSection) {
     const liveSection = allSections.find(s => s.id === activeSection.id) || activeSection;

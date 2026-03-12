@@ -1002,6 +1002,7 @@ export function SectionAxisViewer({
       {/* SVG Canvas */}
       {scale ? (
         <svg
+          ref={svgRef}
           width={w} height={h}
           style={drawMode ? { cursor: 'none' } : undefined}
           className="block bg-background"

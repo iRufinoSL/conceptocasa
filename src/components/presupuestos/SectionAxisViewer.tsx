@@ -271,7 +271,7 @@ export function SectionAxisViewer({
 
   const handleSvgMouseMove = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
     if (!drawMode || !gridLayout) { setHoverNode(null); return; }
-    const node = snapToNode(e.clientX, e.clientY);
+    const node = snapToNode(e);
     setHoverNode(node);
   }, [drawMode, gridLayout, snapToNode]);
 

@@ -684,13 +684,13 @@ export function SectionAxisViewer({
         )}
       </div>
 
-      {/* Negative limits config bar */}
+      {/* Grid limits config bar */}
       {scale && (
         <div className="px-3 py-2 border-b bg-muted/10 flex items-end gap-3 flex-wrap">
           <div className="flex items-end gap-2">
             <div>
-              <Label className="text-[10px] text-muted-foreground">Límite neg. {hAxis} (nodos)</Label>
-              <Input className="h-7 w-20 text-xs font-mono" type="number" min={0}
+              <Label className="text-[10px] text-muted-foreground">-{hAxis} (nodos)</Label>
+              <Input className="h-7 w-16 text-xs font-mono" type="number" min={0}
                 value={negHInput} onChange={e => setNegHInput(e.target.value)} placeholder="3" />
             </div>
             <div>

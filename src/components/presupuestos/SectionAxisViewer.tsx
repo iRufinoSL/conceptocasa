@@ -168,7 +168,7 @@ export function SectionAxisViewer({
   const [wallLabelMode, setWallLabelMode] = useState<WallLabelMode>('both');
 
   // Face properties panel state
-  const [facePanel, setFacePanel] = useState<{ polyId: string; polyName: string; faceKey: string } | null>(null);
+  const [facePanel, setFacePanel] = useState<{ polyId: string; polyName: string; faceKey: string; edgeCount: number } | null>(null);
 
   // Local face patterns (for immediate SVG re-render)
   const [facePatterns, setFacePatterns] = useState<PolygonFacePatterns>(savedFacePatterns || {});

@@ -4039,6 +4039,48 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
         </div>
       </div>
 
+      {isAdmin && showQuickSectionForm && (
+        <div className="border rounded-lg p-3 bg-muted/30 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold">Crear Sección Vertical limpia (Z)</p>
+            <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => setShowQuickSectionForm(false)}>
+              Cancelar
+            </Button>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label className="text-[10px]">Nombre</Label>
+              <Input
+                className="h-7 text-xs"
+                placeholder="Ej: Sección Z=0"
+                value={quickSectionName}
+                onChange={(e) => setQuickSectionName(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label className="text-[10px]">Eje Z</Label>
+              <Input
+                className="h-7 text-xs"
+                type="number"
+                placeholder="0"
+                value={quickSectionAxisValue}
+                onChange={(e) => setQuickSectionAxisValue(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <Button
+              size="sm"
+              className="h-6 text-[10px]"
+              onClick={handleCreateStandaloneVerticalSection}
+              disabled={!quickSectionName.trim()}
+            >
+              Crear sección
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* ── 3D List View ── */}
       {show3DList && (() => {
         const wsEntries = rooms

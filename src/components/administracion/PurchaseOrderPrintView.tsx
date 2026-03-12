@@ -423,9 +423,43 @@ export function PurchaseOrderPrintView({ order, onClose }: Props) {
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cerrar</Button>
+          <GenerateOrderPdfButton order={order} printRef={printRef} />
           <Button onClick={handlePrint} className="gap-2"><Printer className="h-4 w-4" />Imprimir</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function GenerateOrderPdfButton({ order, printRef }: { order: PurchaseOrder; printRef: React.RefObject<HTMLDivElement | null> }) {
+  const [generating, setGenerating] = useState(false);
+  
+  const handleGeneratePdf = async () => {
+    if (!printRef.current) return;
+    setGenerating(true);
+    const fileName = `OP_${order.order_id}`;
+    
+    const success = await generateAndSaveAdminPdf({
+      element: printRef.current,
+      fileName,
+      documentType: 'purchase_order',
+      documentId: order.id,
+      budgetId: order.budget_id,
+      description: `Orden de Pedido ${order.order_id} - ${order.description || ''}`.trim(),
+    });
+    
+    setGenerating(false);
+    if (success) {
+      toast.success('PDF generado y guardado correctamente');
+    } else {
+      toast.error('Error al generar el PDF');
+    }
+  };
+
+  return (
+    <Button variant="secondary" onClick={handleGeneratePdf} disabled={generating} className="gap-2">
+      {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+      Generar PDF
+    </Button>
   );
 }

@@ -309,7 +309,8 @@ export function InvoicesTab({ budgetId: fixedBudgetId }: { budgetId?: string } =
         issuer_account_id: form.issuer_account_id || null,
         receiver_account_id: form.receiver_account_id || null,
         vat_rate: vatRate,
-        document_type: form.document_type
+        document_type: form.document_type,
+        footer_contact_source: form.footer_contact_source
       };
 
       if (editingInvoice) {

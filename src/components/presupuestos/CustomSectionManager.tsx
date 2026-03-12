@@ -1096,34 +1096,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                   handleWallEdgeClick(pseudoRoom, ei, v, next, emx, emy);
                 }}
               />
-              {/* Wall number badge */}
-              {(() => {
-                const len = Math.sqrt(edx * edx + edy * edy) || 1;
-                let wnx = -edy / len;
-                let wny = edx / len;
-                const toCenter = (cxSvg - emx) * wnx + (cySvg - emy) * wny;
-                if (toCenter > 0) { wnx = -wnx; wny = -wny; }
-                const offX = emx + wnx * 12;
-                const offY = emy + wny * 12;
-                return (
-                  <>
-                    <circle cx={offX} cy={offY} r={6}
-                      fill={isThisWallSelected ? (isHoriz ? 'hsl(150 70% 40%)' : 'hsl(30 80% 50%)') : 'hsl(210 60% 50%)'}
-                      className="cursor-pointer"
-                      data-pdf-wall-number=""
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleWallNumberClick(pseudoRoom, ei, v, next, emx, emy);
-                      }}
-                    />
-                    <text x={offX} y={offY} textAnchor="middle" dominantBaseline="central" fill="#ffffff" fontSize="7" fontWeight="bold" className="pointer-events-none select-none"
-                      data-pdf-wall-number=""
-                    >
-                      {ei + 1}
-                    </text>
-                  </>
-                );
-              })()}
+              {/* Wall number badge removed for cleaner visuals */}
               {/* Section type hint on selected wall */}
               {isThisWallSelected && (
                 <text

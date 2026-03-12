@@ -28,9 +28,9 @@ interface Presupuesto {
 
 interface CrmContact {
   id: string;
-  first_name: string | null;
-  last_name: string | null;
-  company: string | null;
+  name: string;
+  surname: string | null;
+  contact_type: string;
   email: string | null;
   phone: string | null;
   address: string | null;

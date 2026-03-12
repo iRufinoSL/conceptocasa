@@ -2,10 +2,11 @@ import { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Save, PenTool, X, Check, Printer } from 'lucide-react';
+import { Save, PenTool, X, Check, Printer, Ruler } from 'lucide-react';
 import type { SectionPolygon } from './CustomSectionManager';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
+import { toast } from 'sonner';
 
 interface SectionScale {
   hScale: number;
@@ -14,6 +15,13 @@ interface SectionScale {
 
 interface RidgeLineData {
   x1: number; y1: number; x2: number; y2: number; z: number;
+}
+
+export interface RulerLine {
+  id: string;
+  start: { col: number; row: number };
+  end: { col: number; row: number };
+  label?: string;
 }
 
 interface SectionAxisViewerProps {
@@ -28,6 +36,9 @@ interface SectionAxisViewerProps {
   /** Persisted polygons (workspaces) */
   polygons?: SectionPolygon[];
   onSavePolygons?: (polygons: SectionPolygon[]) => void;
+  /** Persisted ruler lines */
+  savedRulerLines?: RulerLine[];
+  onSaveRulerLines?: (lines: RulerLine[]) => void;
 }
 
 const AXIS_COLORS = {

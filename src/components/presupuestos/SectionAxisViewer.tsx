@@ -965,9 +965,30 @@ export function SectionAxisViewer({
           </span>
         )}
         {scale && (
-          <Button size="sm" variant="outline" className="h-7 text-xs gap-1 ml-auto" onClick={handleExportPDF}>
-            <Printer className="h-3 w-3" /> PDF
-          </Button>
+          <div className="flex items-center gap-1 ml-auto">
+            <Button
+              size="sm"
+              variant={rulerMode ? 'default' : 'outline'}
+              className="h-7 text-xs gap-1"
+              style={rulerMode ? { backgroundColor: 'hsl(30 90% 50%)', borderColor: 'hsl(30 90% 50%)' } : {}}
+              onClick={() => { setRulerMode(!rulerMode); setRulerStart(null); if (!rulerMode) { setDrawMode(false); } }}
+            >
+              <Ruler className="h-3 w-3" /> {rulerMode ? 'Regla ON' : 'Regla'}
+            </Button>
+            {rulerLines.length > 0 && onSaveRulerLines && (
+              <Button size="sm" variant="ghost" className="h-7 text-xs gap-1 text-green-600" onClick={handleSaveRulers}>
+                <Save className="h-3 w-3" /> Guardar ({rulerLines.length})
+              </Button>
+            )}
+            {rulerLines.length > 0 && (
+              <Button size="sm" variant="ghost" className="h-7 text-xs gap-1 text-destructive" onClick={handleClearRulers}>
+                <X className="h-3 w-3" /> Borrar reglas
+              </Button>
+            )}
+            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={handleExportPDF}>
+              <Printer className="h-3 w-3" /> PDF
+            </Button>
+          </div>
         )}
       </div>
 

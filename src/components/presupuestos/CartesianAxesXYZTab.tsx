@@ -224,7 +224,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
           </Badge>
         </div>
         <SectionAxisViewer
-          sectionType={activeSection.sectionType}
+          sectionType={activeSection.sectionType as 'vertical' | 'longitudinal' | 'transversal'}
           axisValue={activeSection.axisValue}
           sectionName={activeSection.name}
         />

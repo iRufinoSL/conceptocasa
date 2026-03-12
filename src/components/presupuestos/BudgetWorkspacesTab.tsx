@@ -855,7 +855,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
           variant="outline"
           size="sm"
           className="h-5 text-[10px] px-1.5"
-          onClick={() => applyZoom(zoomLevel - ZOOM_STEP)}
+          onClick={() => applyZoom((z) => z - ZOOM_STEP)}
           disabled={zoomLevel <= ZOOM_MIN + ZOOM_EPSILON}
         >
           −
@@ -865,7 +865,7 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
           variant="outline"
           size="sm"
           className="h-5 text-[10px] px-1.5"
-          onClick={() => applyZoom(zoomLevel + ZOOM_STEP)}
+          onClick={() => applyZoom((z) => z + ZOOM_STEP)}
           disabled={zoomLevel >= ZOOM_MAX - ZOOM_EPSILON}
         >
           +

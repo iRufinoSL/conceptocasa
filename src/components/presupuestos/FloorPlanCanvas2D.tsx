@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
+import { useMemo, useState, useCallback, useRef, useEffect } from 'react'; // zoom-fix-test
 import type { FloorPlanData, RoomData, OutlineVertex } from '@/lib/floor-plan-calculations';
 import { autoClassifyWalls, generateExternalWallNames, computeWallSegments, isExteriorType, isInvisibleType, isCompartidaType, computeGroupPerimeterWalls, computeBuildingOutline } from '@/lib/floor-plan-calculations';
 import { Button } from '@/components/ui/button';
@@ -216,14 +216,22 @@ export function FloorPlanCanvas2D({
     const scaleBy = 1.08;
     const newScale = e.deltaY < 0 ? oldScale * scaleBy : oldScale / scaleBy;
     const clampedScale = Math.max(0.3, Math.min(5, newScale));
+    const normalizedScale = Math.abs(clampedScale - 1) < 0.03 ? 1 : clampedScale;
+
+    if (normalizedScale === 1) {
+      setZoom(1);
+      setPan({ x: 80, y: 80 });
+      return;
+    }
+
     const mousePointTo = {
       x: (pointerX - pan.x) / oldScale,
       y: (pointerY - pan.y) / oldScale,
     };
-    setZoom(clampedScale);
+    setZoom(normalizedScale);
     setPan({
-      x: pointerX - mousePointTo.x * clampedScale,
-      y: pointerY - mousePointTo.y * clampedScale,
+      x: pointerX - mousePointTo.x * normalizedScale,
+      y: pointerY - mousePointTo.y * normalizedScale,
     });
   }, [zoom, pan]);
 
@@ -513,12 +521,18 @@ export function FloorPlanCanvas2D({
 
   return (
     <div className="w-full bg-background rounded-lg border border-border">
-      {/* Zoom toolbar */}
+      {/* {/* Zoom toolbar patched */} */}
       <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border bg-muted/30 flex-wrap">
         <span className="text-[10px] font-medium text-muted-foreground mr-1">Zoom:</span>
         {ZOOM_STEPS.map(z => (
           <button key={z}
-            onClick={() => setZoom(z / 100)}
+            onClick={() => {
+              const nextZoom = z / 100;
+              setZoom(nextZoom);
+              if (z === 100) {
+                setPan({ x: 80, y: 80 });
+              }
+            }}
             className={`text-[10px] px-1.5 py-0.5 rounded transition-colors ${
               Math.round(zoom * 100) === z
                 ? 'bg-primary text-primary-foreground font-semibold'
@@ -528,6 +542,18 @@ export function FloorPlanCanvas2D({
             {z}%
           </button>
         ))}
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 text-[10px] px-2 ml-1"
+          onClick={() => {
+            setZoom(1);
+            setPan({ x: 80, y: 80 });
+          }}
+          title="Volver a tamaño y posición inicial"
+        >
+          Reset vista
+        </Button>
         <Button
           variant={showCorners ? 'default' : 'outline'}
           size="sm"

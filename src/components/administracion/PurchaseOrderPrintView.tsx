@@ -93,9 +93,77 @@ export function PurchaseOrderPrintView({ order, onClose }: Props) {
   const [lines, setLines] = useState<OrderLine[]>([]);
   const [loading, setLoading] = useState(true);
   const [printScale, setPrintScale] = useState<PrintScale>('normal');
+  const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
+  const signatureCanvasRef = useRef<HTMLCanvasElement>(null);
+  const isDrawingRef = useRef(false);
   const { settings: companySettings } = useCompanySettings();
   const sc = SCALE_CONFIGS[printScale];
+
+  // Signature pad logic
+  const getCanvasPoint = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    const canvas = signatureCanvasRef.current;
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    if ('touches' in e) {
+      const touch = e.touches[0];
+      return { x: (touch.clientX - rect.left) * scaleX, y: (touch.clientY - rect.top) * scaleY };
+    }
+    return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
+  }, []);
+
+  const startDrawing = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    const canvas = signatureCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    isDrawingRef.current = true;
+    const point = getCanvasPoint(e);
+    if (point) {
+      ctx.beginPath();
+      ctx.moveTo(point.x, point.y);
+    }
+  }, [getCanvasPoint]);
+
+  const draw = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    if (!isDrawingRef.current) return;
+    const canvas = signatureCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const point = getCanvasPoint(e);
+    if (point) {
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = '#1a1a1a';
+      ctx.lineTo(point.x, point.y);
+      ctx.stroke();
+    }
+  }, [getCanvasPoint]);
+
+  const stopDrawing = useCallback(() => {
+    if (isDrawingRef.current) {
+      isDrawingRef.current = false;
+      const canvas = signatureCanvasRef.current;
+      if (canvas) {
+        setSignatureDataUrl(canvas.toDataURL('image/png'));
+      }
+    }
+  }, []);
+
+  const clearSignature = useCallback(() => {
+    const canvas = signatureCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    setSignatureDataUrl(null);
+  }, []);
 
   useEffect(() => {
     supabase.from('purchase_order_lines').select('*').eq('purchase_order_id', order.id).order('code')

@@ -114,8 +114,7 @@ const getYearFromDate = (date: string): number => {
 
 const getContactDisplayName = (contact: CrmContact | null | undefined): string => {
   if (!contact) return 'No definido';
-  if (contact.company) return contact.company;
-  const parts = [contact.first_name, contact.last_name].filter(Boolean);
+  const parts = [contact.name, contact.surname].filter(Boolean);
   return parts.length > 0 ? parts.join(' ') : 'Sin nombre';
 };
 

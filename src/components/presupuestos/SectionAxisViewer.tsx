@@ -316,6 +316,32 @@ export function SectionAxisViewer({
         )}
       </div>
 
+      {/* Negative limits config bar */}
+      {scale && (
+        <div className="px-3 py-2 border-b bg-muted/10 flex items-end gap-3 flex-wrap">
+          <div className="flex items-end gap-2">
+            <div>
+              <Label className="text-[10px] text-muted-foreground">Límite neg. {hAxis} (nodos)</Label>
+              <Input className="h-7 w-20 text-xs font-mono" type="number" min={0}
+                value={negHInput} onChange={e => setNegHInput(e.target.value)}
+                placeholder="3" />
+            </div>
+            <div>
+              <Label className="text-[10px] text-muted-foreground">Límite neg. {vAxis} (nodos)</Label>
+              <Input className="h-7 w-20 text-xs font-mono" type="number" min={0}
+                value={negVInput} onChange={e => setNegVInput(e.target.value)}
+                placeholder="3" />
+            </div>
+            <Button size="sm" className="h-7 text-xs gap-1" onClick={handleSaveNegLimits}>
+              <Save className="h-3 w-3" /> Guardar límites
+            </Button>
+          </div>
+          <span className="text-[10px] text-muted-foreground ml-2">
+            Marco negativo: {hAxis}-{negLimits.negH} a {hAxis}+n · {vAxis}-{negLimits.negV} a {vAxis}+n
+          </span>
+        </div>
+      )}
+
       {/* SVG Canvas */}
       {scale ? (
         <svg width={w} height={h} className="block bg-background">

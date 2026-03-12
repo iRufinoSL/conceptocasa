@@ -15,6 +15,7 @@ import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { InvoiceLinesEditor } from './InvoiceLinesEditor';
 import { InvoicePrintView } from './InvoicePrintView';
 import { AccountSelectWithCreate } from './AccountSelectWithCreate';
+import { AdminDocumentFiles } from './AdminDocumentFiles';
 import { PostInvoiceDialog } from './PostInvoiceDialog';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';

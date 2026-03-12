@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { PenTool, MapPin, Home, Box, Layers, ChevronRight } from 'lucide-react';
+import { PenTool, MapPin, Home, Box, Layers, ChevronRight, Grid3x3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { FloorPlanTab } from './FloorPlanTab';
 import { BudgetWorkAreasTab } from './BudgetWorkAreasTab';
 import { BudgetSpacesTab } from './BudgetSpacesTab';
 import { BudgetWorkspacesTab } from './BudgetWorkspacesTab';
 import { WallObjectsList } from './WallObjectsList';
+import { CartesianAxesXYZTab } from './CartesianAxesXYZTab';
 
 interface BudgetDondeTabProps {
   budgetId: string;
@@ -23,6 +24,7 @@ export function BudgetDondeTab({ budgetId, budgetName, isAdmin }: BudgetDondeTab
     { id: 'areas-trabajo', label: 'Áreas de trabajo', icon: MapPin, color: 'text-emerald-600' },
     { id: 'espacios', label: 'Espacios', icon: Home, color: 'text-green-600' },
     { id: 'espacios-trabajo', label: 'Espacios de trabajo', icon: Box, color: 'text-blue-600' },
+    { id: 'ejes-cartesianos-xyz', label: 'Ejes cartesianos XYZ', icon: Grid3x3, color: 'text-primary' },
     { id: 'objetos', label: 'Objetos', icon: Layers, color: 'text-purple-600' },
   ];
 
@@ -65,6 +67,9 @@ export function BudgetDondeTab({ budgetId, budgetName, isAdmin }: BudgetDondeTab
             )}
             {id === 'espacios-trabajo' && (
               <BudgetWorkspacesTab budgetId={budgetId} isAdmin={isAdmin} autoShow3D={autoShow3D} onAutoShow3DHandled={() => setAutoShow3D(false)} />
+            )}
+            {id === 'ejes-cartesianos-xyz' && (
+              <CartesianAxesXYZTab budgetId={budgetId} isAdmin={isAdmin} />
             )}
             {id === 'objetos' && (
               <WallObjectsList budgetId={budgetId} />

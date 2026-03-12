@@ -4022,9 +4022,19 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
             <RefreshCw className="h-3 w-3" /> Actualizar
           </Button>
           {isAdmin && (
-            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => { resetForm(); setFormHeight(String(floorPlan?.default_height ?? '')); setShowForm(true); }}>
-              <Plus className="h-3 w-3" /> Añadir
-            </Button>
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs gap-1"
+                onClick={() => setShowQuickSectionForm(v => !v)}
+              >
+                <Grid3x3 className="h-3 w-3" /> Nueva sección Z
+              </Button>
+              <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => { resetForm(); setFormHeight(String(floorPlan?.default_height ?? '')); setShowForm(true); }}>
+                <Plus className="h-3 w-3" /> Añadir
+              </Button>
+            </>
           )}
         </div>
       </div>

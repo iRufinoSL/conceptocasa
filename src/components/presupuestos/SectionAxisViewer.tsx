@@ -282,6 +282,7 @@ export function SectionAxisViewer({
     setDrawMode(false);
     setDrawingVertices([]);
     setDrawingName('');
+    setDrawingHeight('');
     setHoverNode(null);
   };
 

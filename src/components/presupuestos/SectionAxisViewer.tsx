@@ -331,16 +331,53 @@ export function SectionAxisViewer({
     return { col, row };
   }, [gridLayout]);
 
-  // Handle SVG click for drawing
+  // Snap with sub-grid precision for ruler mode
+  const snapToNodePrecise = useCallback((e: React.MouseEvent<SVGSVGElement>): { col: number; row: number } | null => {
+    if (!gridLayout) return null;
+    const svg = e.currentTarget;
+    let pt = svg.createSVGPoint();
+    pt.x = e.clientX;
+    pt.y = e.clientY;
+    const ctm = svg.getScreenCTM();
+    if (ctm) pt = pt.matrixTransform(ctm.inverse());
+    const rawCol = (pt.x - gridLayout.ox) / gridLayout.cellPx;
+    const rawRow = (pt.y - gridLayout.oy) / gridLayout.cellPx;
+    // Round to 0.5 grid units for sub-grid precision
+    const col = Math.round(rawCol * 2) / 2;
+    const row = Math.round(rawRow * 2) / 2;
+    if (col < 0 || col > gridLayout.totalCols || row < 0 || row > gridLayout.totalRows) return null;
+    return { col, row };
+  }, [gridLayout]);
+
+  // Handle SVG click for drawing or ruler
   const handleSvgClick = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
-    if (!drawMode || !gridLayout) return;
+    if (!gridLayout) return;
+
+    // Ruler mode
+    if (rulerMode) {
+      const node = snapToNodePrecise(e);
+      if (!node) return;
+      if (!rulerStart) {
+        setRulerStart(node);
+      } else {
+        const newLine: RulerLine = {
+          id: crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          start: rulerStart,
+          end: node,
+        };
+        setRulerLines(prev => [...prev, newLine]);
+        setRulerStart(null);
+      }
+      return;
+    }
+
+    if (!drawMode) return;
     const node = snapToNode(e);
     if (!node) return;
 
     // Check if closing the polygon (clicking first vertex)
     if (drawingVertices.length >= 3 &&
         node.col === drawingVertices[0].col && node.row === drawingVertices[0].row) {
-      // Close polygon and save
       finishDrawing();
       return;
     }
@@ -350,13 +387,52 @@ export function SectionAxisViewer({
     if (last && last.col === node.col && last.row === node.row) return;
 
     setDrawingVertices(prev => [...prev, node]);
-  }, [drawMode, gridLayout, drawingVertices, snapToNode]);
+  }, [drawMode, rulerMode, gridLayout, drawingVertices, snapToNode, snapToNodePrecise, rulerStart]);
 
   const handleSvgMouseMove = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
-    if (!drawMode || !gridLayout) { setHoverNode(null); return; }
+    if (rulerMode && gridLayout) {
+      const node = snapToNodePrecise(e);
+      setRulerHoverNode(node);
+      setHoverNode(null);
+
+      // Handle ruler endpoint dragging
+      if (draggingRulerId && draggingRulerEnd && node) {
+        setRulerLines(prev => prev.map(rl => {
+          if (rl.id !== draggingRulerId) return rl;
+          return draggingRulerEnd === 'start'
+            ? { ...rl, start: node }
+            : { ...rl, end: node };
+        }));
+      }
+      return;
+    }
+    if (!drawMode || !gridLayout) { setHoverNode(null); setRulerHoverNode(null); return; }
     const node = snapToNode(e);
     setHoverNode(node);
-  }, [drawMode, gridLayout, snapToNode]);
+  }, [drawMode, rulerMode, gridLayout, snapToNode, snapToNodePrecise, draggingRulerId, draggingRulerEnd]);
+
+  const handleSvgMouseUp = useCallback(() => {
+    if (draggingRulerId) {
+      setDraggingRulerId(null);
+      setDraggingRulerEnd(null);
+    }
+  }, [draggingRulerId]);
+
+  const handleDeleteRuler = useCallback((id: string) => {
+    setRulerLines(prev => prev.filter(rl => rl.id !== id));
+  }, []);
+
+  const handleSaveRulers = useCallback(() => {
+    onSaveRulerLines?.(rulerLines);
+    toast.success(`${rulerLines.length} regla(s) guardada(s)`);
+  }, [rulerLines, onSaveRulerLines]);
+
+  const handleClearRulers = useCallback(() => {
+    setRulerLines([]);
+    setRulerStart(null);
+    onSaveRulerLines?.([]);
+    toast.success('Reglas borradas');
+  }, [onSaveRulerLines]);
 
   const finishDrawing = useCallback(() => {
     if (drawingVertices.length < 3 || !scale || !gridLayout) return;

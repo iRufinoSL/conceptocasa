@@ -36,6 +36,7 @@ interface PurchaseOrder {
   id: string; order_number: number; order_date: string; order_id: string;
   description: string | null; observations: string | null;
   subtotal: number; vat_rate: number; vat_amount: number; total: number;
+  footer_contact_source?: string;
   supplier_contact?: CrmContact | null;
   client_contact?: CrmContact | null;
   presupuesto?: Presupuesto | null;

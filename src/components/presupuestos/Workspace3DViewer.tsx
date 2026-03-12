@@ -335,7 +335,7 @@ interface PrismModelProps extends Omit<Workspace3DViewerProps, 'name' | 'onFaceE
   orbitRef?: React.RefObject<any>;
 }
 
-function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase = 0, onFaceClick, onFaceDoubleClick, selectedFace, workspaceName, showDraggableNodes, onNodeDrag, orbitRef, allSections, roomId }: PrismModelProps) {
+function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase = 0, onFaceClick, onFaceDoubleClick, selectedFace, workspaceName, showDraggableNodes, onNodeDrag, orbitRef, allSections, roomId, hasFloor = true, hasCeiling = true }: PrismModelProps) {
   const groupRef = useRef<THREE.Group>(null);
 
   const { baseVerts3D, topVerts3D, heightM, cornerLabels, centroid } = useMemo(() => {

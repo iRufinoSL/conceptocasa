@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { PurchaseOrderLinesEditor } from './PurchaseOrderLinesEditor';
 import { PurchaseOrderPrintView } from './PurchaseOrderPrintView';
+import { AdminDocumentFiles } from './AdminDocumentFiles';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { formatCurrency } from '@/lib/format-utils';

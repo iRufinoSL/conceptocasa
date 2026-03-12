@@ -170,8 +170,10 @@ export function SectionAxisViewer({
   const handleSaveNegLimits = () => {
     const nh = Math.max(0, Math.round(parseFloat(negHInput) || 0));
     const nv = Math.max(0, Math.round(parseFloat(negVInput) || 0));
-    const newLimits = { negH: nh, negV: nv };
-    setNegLimits(newLimits);
+    const ph = Math.max(1, Math.round(parseFloat(posHInput) || 1));
+    const pv = Math.max(1, Math.round(parseFloat(posVInput) || 1));
+    const newLimits = { negH: nh, negV: nv, posH: ph, posV: pv };
+    setGridLimits(newLimits);
     onSaveNegLimits?.(newLimits);
   };
 

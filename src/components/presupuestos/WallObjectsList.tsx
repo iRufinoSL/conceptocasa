@@ -160,6 +160,18 @@ interface ObjectTemplate {
   object_type: string;
   unit_measure: string | null;
   image_url: string | null;
+  resource_id: string | null;
+}
+
+interface ExternalResourceRow {
+  id: string;
+  name: string;
+  description: string | null;
+  unit_cost: number | null;
+  unit_measure: string | null;
+  resource_type: string | null;
+  image_url: string | null;
+  vat_included_percent: number | null;
 }
 
 const UNIT_MEASURES = ['m2', 'm3', 'ml', 'ud', 'kg', 'hora', 'día', 'mes'];
@@ -222,7 +234,95 @@ function ObjectTypeManager({ budgetId, types, onRefresh }: {
   );
 }
 
-/* ── Template form ── */
+/* ── Import from Resources ── */
+function ImportResourceSelector({ budgetId, objectTypes, existingResourceIds, onImported, onClose }: {
+  budgetId: string;
+  objectTypes: { id: string; name: string }[];
+  existingResourceIds: Set<string>;
+  onImported: () => void;
+  onClose: () => void;
+}) {
+  const [resources, setResources] = useState<ExternalResourceRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState('');
+  const [importing, setImporting] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from('external_resources')
+        .select('id, name, description, unit_cost, unit_measure, resource_type, image_url, vat_included_percent')
+        .order('name');
+      setResources((data || []) as ExternalResourceRow[]);
+      setLoading(false);
+    })();
+  }, []);
+
+  const filtered = useMemo(() => {
+    if (!filter.trim()) return resources;
+    const q = filter.toLowerCase();
+    return resources.filter(r => r.name.toLowerCase().includes(q) || (r.resource_type || '').toLowerCase().includes(q));
+  }, [resources, filter]);
+
+  const handleImport = async (res: ExternalResourceRow) => {
+    setImporting(res.id);
+    const matchedType = objectTypes.find(t => t.name.toLowerCase() === (res.resource_type || '').toLowerCase());
+    const objectType = matchedType?.name || objectTypes[0]?.name || 'Material';
+    const { error } = await supabase.from('budget_object_templates').insert({
+      budget_id: budgetId,
+      name: res.name,
+      technical_description: res.description || null,
+      purchase_price_vat_included: res.unit_cost || 0,
+      vat_included_percent: res.vat_included_percent || 21,
+      object_type: objectType,
+      unit_measure: res.unit_measure || 'ud',
+      image_url: res.image_url || null,
+      resource_id: res.id,
+    });
+    setImporting(null);
+    if (error) { toast.error('Error importando recurso'); return; }
+    toast.success(`"${res.name}" importado como objeto modelo`);
+    onImported();
+  };
+
+  return (
+    <div className="border rounded-lg p-3 space-y-2 bg-muted/20">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold text-muted-foreground">Importar desde Recursos</p>
+        <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={onClose}><X className="h-3 w-3" /></Button>
+      </div>
+      <Input className="h-7 text-sm" placeholder="Filtrar recursos..." value={filter} onChange={e => setFilter(e.target.value)} />
+      {loading ? (
+        <p className="text-xs text-muted-foreground py-2">Cargando recursos...</p>
+      ) : (
+        <div className="max-h-48 overflow-y-auto space-y-0.5">
+          {filtered.length === 0 && <p className="text-xs text-muted-foreground py-2 text-center">Sin resultados</p>}
+          {filtered.map(r => {
+            const alreadyLinked = existingResourceIds.has(r.id);
+            return (
+              <div key={r.id} className="flex items-center justify-between px-2 py-1 rounded hover:bg-accent/30 text-sm">
+                <div className="flex-1 min-w-0">
+                  <span className="font-medium truncate block">{r.name}</span>
+                  <span className="text-[10px] text-muted-foreground">{r.resource_type} · {r.unit_measure} · {r.unit_cost ?? 0}€</span>
+                </div>
+                {alreadyLinked ? (
+                  <Badge variant="secondary" className="text-[10px] h-5">Ya vinculado</Badge>
+                ) : (
+                  <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" disabled={importing === r.id}
+                    onClick={() => handleImport(r)}>
+                    {importing === r.id ? '...' : 'Importar'}
+                  </Button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 function TemplateForm({ budgetId, template, objectTypes, onSaved, onCancel }: {
   budgetId: string;
   template?: ObjectTemplate | null;
@@ -261,6 +361,26 @@ function TemplateForm({ budgetId, template, objectTypes, onSaved, onCancel }: {
     toast.success('Imagen subida');
   };
 
+  const syncToExternalResource = async (templatePayload: any, resourceId: string | null): Promise<string | null> => {
+    const resourcePayload = {
+      name: templatePayload.name,
+      description: templatePayload.technical_description || null,
+      unit_cost: templatePayload.purchase_price_vat_included || 0,
+      unit_measure: templatePayload.unit_measure || 'ud',
+      resource_type: templatePayload.object_type || 'Material',
+      image_url: templatePayload.image_url || null,
+      vat_included_percent: templatePayload.vat_included_percent || 0,
+    };
+    if (resourceId) {
+      await supabase.from('external_resources').update(resourcePayload).eq('id', resourceId);
+      return resourceId;
+    } else {
+      const { data, error } = await supabase.from('external_resources').insert(resourcePayload).select('id').single();
+      if (error || !data) return null;
+      return data.id;
+    }
+  };
+
   const handleSave = async () => {
     if (!name.trim()) { toast.error('El nombre es obligatorio'); return; }
     setSaving(true);
@@ -280,20 +400,28 @@ function TemplateForm({ budgetId, template, objectTypes, onSaved, onCancel }: {
       unit_measure: unitMeasure,
       image_url: imageUrl || null,
     };
+
+    // Sync to external_resources
+    const currentResourceId = template?.resource_id || null;
+    const newResourceId = await syncToExternalResource(payload, currentResourceId);
+
     let error;
     if (template) {
-      ({ error } = await supabase.from('budget_object_templates').update(payload).eq('id', template.id));
+      ({ error } = await supabase.from('budget_object_templates').update({ ...payload, resource_id: newResourceId }).eq('id', template.id));
     } else {
-      ({ error } = await supabase.from('budget_object_templates').insert(payload));
+      ({ error } = await supabase.from('budget_object_templates').insert({ ...payload, resource_id: newResourceId }));
     }
     setSaving(false);
     if (error) { toast.error('Error guardando objeto modelo'); return; }
-    toast.success(template ? 'Objeto modelo actualizado' : 'Objeto modelo creado');
+    toast.success(template ? 'Objeto modelo actualizado (y recurso sincronizado)' : 'Objeto modelo creado (y recurso registrado)');
     onSaved();
   };
 
   return (
     <div className="border rounded-lg p-3 space-y-3 bg-muted/20">
+      {template?.resource_id && (
+        <Badge variant="outline" className="text-[10px] h-5 gap-1">🔗 Vinculado a Recursos</Badge>
+      )}
       <div className="grid grid-cols-2 gap-2">
         <div className="col-span-2">
           <label className="text-xs font-medium text-muted-foreground">Nombre *</label>
@@ -427,6 +555,7 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
   const [editingTemplate, setEditingTemplate] = useState<ObjectTemplate | null>(null);
   const [showTypeManager, setShowTypeManager] = useState(false);
   const [modelView, setModelView] = useState<'alpha' | 'type'>('alpha');
+  const [showImportResources, setShowImportResources] = useState(false);
 
   /* ── Object type catalog query ── */
   const { data: objectTypes = [], refetch: refetchTypes } = useQuery({
@@ -462,7 +591,9 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
     },
   });
 
-  /* ── Auto faces query ── */
+  const existingResourceIds = useMemo(() => new Set(templates.filter(t => t.resource_id).map(t => t.resource_id!)), [templates]);
+
+
   const { data: autoFaces = [], isLoading } = useQuery({
     queryKey: ['budget-auto-faces', budgetId],
     queryFn: async () => {
@@ -737,7 +868,7 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
     face: t as any,
     cells: {
       img: t.image_url ? '🖼️' : '',
-      name: t.name,
+      name: t.resource_id ? `🔗 ${t.name}` : t.name,
       type: t.object_type || '',
       unit: t.unit_measure || 'ud',
       material: t.material_type || '',
@@ -795,11 +926,26 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
               <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => setShowTypeManager(!showTypeManager)}>
                 <Tag className="h-3 w-3" /> Tipos
               </Button>
+              <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => setShowImportResources(!showImportResources)}>
+                <Package className="h-3 w-3" /> Importar recurso
+              </Button>
               <Button size="sm" className="h-7 text-xs gap-1" onClick={() => { setEditingTemplate(null); setShowTemplateForm(true); }}>
                 <Plus className="h-3 w-3" /> Nuevo modelo
               </Button>
             </div>
           </div>
+
+          {showImportResources && (
+            <ImportResourceSelector
+              budgetId={budgetId}
+              objectTypes={objectTypes}
+              existingResourceIds={existingResourceIds}
+              onImported={() => {
+                queryClient.invalidateQueries({ queryKey: ['budget-object-templates', budgetId] });
+              }}
+              onClose={() => setShowImportResources(false)}
+            />
+          )}
 
           {showTypeManager && (
             <ObjectTypeManager

@@ -559,6 +559,7 @@ export function SectionAxisViewer({
   };
 
   const handleDeletePolygon = (polyId: string) => {
+    pushUndo();
     const updated = polygons.filter(p => p.id !== polyId);
     setPolygons(updated);
     onSavePolygons?.(updated);

@@ -530,6 +530,25 @@ export function SectionAxisViewer({
     setEditVertices(prev => prev.map((v, i) => i === idx ? { ...v, [axis]: value } : v));
   };
 
+  /** Handle local face type change from panel (persists into section polygon JSON) */
+  const handleLocalFaceTypeChange = useCallback((faceKey: string, wallType: string) => {
+    if (!facePanel) return;
+    setPolygons(prev => {
+      const updated = prev.map(poly => {
+        if (poly.id !== facePanel.polyId) return poly;
+        return {
+          ...poly,
+          faceTypes: {
+            ...(poly.faceTypes || {}),
+            [faceKey]: wallType,
+          },
+        };
+      });
+      onSavePolygons?.(updated);
+      return updated;
+    });
+  }, [facePanel, onSavePolygons]);
+
   /** Handle pattern change from the face panel */
   const handlePatternChange = useCallback((faceKey: string, patternId: string | null) => {
     if (!facePanel) return;

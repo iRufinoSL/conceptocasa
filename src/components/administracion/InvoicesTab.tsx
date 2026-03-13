@@ -138,7 +138,7 @@ const getYearFromDate = (date: string): number => {
   return new Date(date).getFullYear();
 };
 
-export function InvoicesTab({ budgetId: fixedBudgetId }: { budgetId?: string } = {}) {
+export function InvoicesTab({ budgetId: fixedBudgetId, ledgerId }: { budgetId?: string; ledgerId?: string } = {}) {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [presupuestos, setPresupuestos] = useState<Presupuesto[]>([]);
   const [allPresupuestos, setAllPresupuestos] = useState<Presupuesto[]>([]);

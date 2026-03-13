@@ -51,7 +51,7 @@ const getTypeBadgeVariant = (type: string): "default" | "secondary" | "destructi
   }
 };
 
-export function AccountingBalanceReport({ budgetId: fixedBudgetId }: { budgetId?: string } = {}) {
+export function AccountingBalanceReport({ budgetId: fixedBudgetId, ledgerId }: { budgetId?: string; ledgerId?: string } = {}) {
   const [accounts, setAccounts] = useState<AccountWithBalance[]>([]);
   const [loading, setLoading] = useState(true);
 

@@ -86,7 +86,7 @@ const MONTHS = [
   { value: '12', label: 'Diciembre' },
 ];
 
-export function VATReportTab({ budgetId: fixedBudgetId }: { budgetId?: string } = {}) {
+export function VATReportTab({ budgetId: fixedBudgetId, ledgerId }: { budgetId?: string; ledgerId?: string } = {}) {
   const [entries, setEntries] = useState<AccountingEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [year, setYear] = useState(new Date().getFullYear().toString());

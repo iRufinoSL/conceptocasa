@@ -42,9 +42,10 @@ interface Props {
   onNavigateToEntry?: (entryCode: string) => void;
   onNavigateToAccount?: (accountId: string) => void;
   budgetId?: string;
+  ledgerId?: string;
 }
 
-export function AccountingEntryLinesTab({ onNavigateToEntry, onNavigateToAccount, budgetId: fixedBudgetId }: Props) {
+export function AccountingEntryLinesTab({ onNavigateToEntry, onNavigateToAccount, budgetId: fixedBudgetId, ledgerId }: Props) {
   const [lines, setLines] = useState<EntryLine[]>([]);
   const [accounts, setAccounts] = useState<AccountingAccount[]>([]);
   const [loading, setLoading] = useState(true);

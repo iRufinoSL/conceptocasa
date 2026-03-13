@@ -64,9 +64,10 @@ interface Props {
   highlightAccountId?: string | null;
   onHighlightHandled?: () => void;
   onNavigateToEntry?: (entryCode: string) => void;
+  ledgerId?: string;
 }
 
-export function AccountingAccountsTab({ highlightAccountId, onHighlightHandled, onNavigateToEntry }: Props) {
+export function AccountingAccountsTab({ highlightAccountId, onHighlightHandled, onNavigateToEntry, ledgerId }: Props) {
   const [accounts, setAccounts] = useState<AccountingAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);

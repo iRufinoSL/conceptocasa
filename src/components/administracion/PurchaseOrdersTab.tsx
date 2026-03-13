@@ -266,7 +266,7 @@ export function PurchaseOrdersTab({ budgetId: fixedBudgetId, ledgerId }: { budge
       } else {
         const { data, error } = await supabase
           .from('purchase_orders')
-          .insert(orderData)
+          .insert(orderData as any)
           .select()
           .single();
         if (error) {

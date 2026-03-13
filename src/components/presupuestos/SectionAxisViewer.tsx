@@ -523,6 +523,7 @@ export function SectionAxisViewer({
 
   const finishDrawing = useCallback(() => {
     if (drawingVertices.length < 3 || !scale || !gridLayout) return;
+    pushUndo();
     const name = drawingName.trim() || `Espacio ${polygons.length + 1}`;
     const heightMm = parseInt(drawingHeight) || 0;
 

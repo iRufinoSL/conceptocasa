@@ -13,6 +13,7 @@ import { InvoicesTab } from '@/components/administracion/InvoicesTab';
 import { VATReportTab } from '@/components/administracion/VATReportTab';
 import { ProvisionalAccountsAlerts } from '@/components/administracion/ProvisionalAccountsAlerts';
 import { PurchaseOrdersTab } from '@/components/administracion/PurchaseOrdersTab';
+import { LedgerSelector } from '@/components/administracion/LedgerSelector';
 import { VoiceAssistantDialog, VoiceAction } from '@/components/voice/VoiceAssistantDialog';
 import { useVoiceAccountingEntry } from '@/hooks/useVoiceAccountingEntry';
 import { Badge } from '@/components/ui/badge';
@@ -21,6 +22,7 @@ export default function Administracion() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('invoices');
+  const [selectedLedgerId, setSelectedLedgerId] = useState('');
   const [highlightEntryCode, setHighlightEntryCode] = useState<string | null>(null);
   const [highlightAccountId, setHighlightAccountId] = useState<string | null>(null);
   const [voiceAssistantOpen, setVoiceAssistantOpen] = useState(false);
@@ -156,14 +158,17 @@ export default function Administracion() {
               </div>
             </div>
           </div>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setVoiceAssistantOpen(true)}
-            title="Asistente de voz"
-          >
-            <Mic className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-3">
+            <LedgerSelector selectedLedgerId={selectedLedgerId} onLedgerChange={setSelectedLedgerId} />
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setVoiceAssistantOpen(true)}
+              title="Asistente de voz"
+            >
+              <Mic className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </header>
       <main className="container mx-auto px-4 py-6">
@@ -221,11 +226,11 @@ export default function Administracion() {
           )}
 
           <TabsContent value="purchase_orders">
-            <PurchaseOrdersTab />
+            <PurchaseOrdersTab ledgerId={selectedLedgerId} />
           </TabsContent>
 
           <TabsContent value="invoices">
-            <InvoicesTab />
+            <InvoicesTab ledgerId={selectedLedgerId} />
           </TabsContent>
 
           <TabsContent value="entries">
@@ -234,6 +239,7 @@ export default function Administracion() {
               highlightCode={highlightEntryCode}
               onHighlightHandled={() => setHighlightEntryCode(null)}
               onNavigateToAccount={handleNavigateToAccount}
+              ledgerId={selectedLedgerId}
             />
           </TabsContent>
 
@@ -241,6 +247,7 @@ export default function Administracion() {
             <AccountingEntryLinesTab 
               onNavigateToEntry={handleNavigateToEntry}
               onNavigateToAccount={handleNavigateToAccount}
+              ledgerId={selectedLedgerId}
             />
           </TabsContent>
 
@@ -249,15 +256,16 @@ export default function Administracion() {
               highlightAccountId={highlightAccountId}
               onHighlightHandled={() => setHighlightAccountId(null)}
               onNavigateToEntry={handleNavigateToEntry}
+              ledgerId={selectedLedgerId}
             />
           </TabsContent>
 
           <TabsContent value="balance">
-            <AccountingBalanceReport />
+            <AccountingBalanceReport ledgerId={selectedLedgerId} />
           </TabsContent>
 
           <TabsContent value="vat">
-            <VATReportTab />
+            <VATReportTab ledgerId={selectedLedgerId} />
           </TabsContent>
         </Tabs>
 

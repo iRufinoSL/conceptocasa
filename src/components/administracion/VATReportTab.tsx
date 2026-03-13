@@ -86,7 +86,7 @@ const MONTHS = [
   { value: '12', label: 'Diciembre' },
 ];
 
-export function VATReportTab({ budgetId: fixedBudgetId }: { budgetId?: string } = {}) {
+export function VATReportTab({ budgetId: fixedBudgetId, ledgerId }: { budgetId?: string; ledgerId?: string } = {}) {
   const [entries, setEntries] = useState<AccountingEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [year, setYear] = useState(new Date().getFullYear().toString());
@@ -103,7 +103,7 @@ export function VATReportTab({ budgetId: fixedBudgetId }: { budgetId?: string } 
 
   useEffect(() => {
     fetchEntries();
-  }, []);
+  }, [ledgerId]);
 
   // Initialize date range when switching to dateRange mode
   useEffect(() => {
@@ -134,6 +134,9 @@ export function VATReportTab({ budgetId: fixedBudgetId }: { budgetId?: string } 
       
       if (fixedBudgetId) {
         query = query.eq('budget_id', fixedBudgetId);
+      }
+      if (ledgerId && ledgerId !== '__total__') {
+        query = query.eq('ledger_id', ledgerId);
       }
       
       const { data, error } = await query.order('entry_date', { ascending: true });

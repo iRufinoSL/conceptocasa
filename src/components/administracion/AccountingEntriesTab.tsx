@@ -87,9 +87,10 @@ interface Props {
   onHighlightHandled?: () => void;
   budgetId?: string;
   onNavigateToAccount?: (accountId: string) => void;
+  ledgerId?: string;
 }
 
-export function AccountingEntriesTab({ highlightCode, onHighlightHandled, budgetId: fixedBudgetId, onNavigateToAccount }: Props) {
+export function AccountingEntriesTab({ highlightCode, onHighlightHandled, budgetId: fixedBudgetId, onNavigateToAccount, ledgerId }: Props) {
   const [entries, setEntries] = useState<AccountingEntry[]>([]);
   const [presupuestos, setPresupuestos] = useState<Presupuesto[]>([]);
   const [allPresupuestos, setAllPresupuestos] = useState<Presupuesto[]>([]);
@@ -112,7 +113,7 @@ export function AccountingEntriesTab({ highlightCode, onHighlightHandled, budget
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [ledgerId]);
 
   // Handle highlight from navigation
   useEffect(() => {
@@ -161,6 +162,9 @@ export function AccountingEntriesTab({ highlightCode, onHighlightHandled, budget
       
       if (fixedBudgetId) {
         entriesQuery = entriesQuery.eq('budget_id', fixedBudgetId);
+      }
+      if (ledgerId && ledgerId !== '__total__') {
+        entriesQuery = entriesQuery.eq('ledger_id', ledgerId);
       }
       
       const { data: entriesData, error: entriesError } = await entriesQuery
@@ -241,12 +245,15 @@ export function AccountingEntriesTab({ highlightCode, onHighlightHandled, budget
 
     setSaving(true);
     try {
-      const entryData = {
+      const entryData: Record<string, any> = {
         description: form.description.trim(),
         entry_date: form.entry_date,
         budget_id: form.budget_id,
         total_amount: parseFloat(form.total_amount) || 0
       };
+      if (ledgerId && ledgerId !== '__total__') {
+        entryData.ledger_id = ledgerId;
+      }
 
       if (editingEntry) {
         // Check if the year has changed - if so, we need to regenerate the code
@@ -274,7 +281,7 @@ export function AccountingEntriesTab({ highlightCode, onHighlightHandled, budget
       } else {
         const { data, error } = await supabase
           .from('accounting_entries')
-          .insert(entryData)
+          .insert(entryData as any)
           .select()
           .single();
 
@@ -316,9 +323,7 @@ export function AccountingEntriesTab({ highlightCode, onHighlightHandled, budget
       if (codeError) throw codeError;
 
       // Create the duplicated entry
-      const { data: newEntry, error: insertError } = await supabase
-        .from('accounting_entries')
-        .insert({
+      const duplicateData: Record<string, any> = {
           code: newCode,
           description: entry.description,
           entry_date: format(today, 'yyyy-MM-dd'),
@@ -328,7 +333,14 @@ export function AccountingEntriesTab({ highlightCode, onHighlightHandled, budget
           vat_rate: (entry as any).vat_rate || null,
           supplier_id: (entry as any).supplier_id || null,
           expense_account_id: (entry as any).expense_account_id || null
-        })
+      };
+      if (ledgerId && ledgerId !== '__total__') {
+        duplicateData.ledger_id = ledgerId;
+      }
+
+      const { data: newEntry, error: insertError } = await supabase
+        .from('accounting_entries')
+        .insert(duplicateData as any)
         .select()
         .single();
 

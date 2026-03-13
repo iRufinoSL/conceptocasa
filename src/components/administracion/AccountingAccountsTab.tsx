@@ -64,9 +64,10 @@ interface Props {
   highlightAccountId?: string | null;
   onHighlightHandled?: () => void;
   onNavigateToEntry?: (entryCode: string) => void;
+  ledgerId?: string;
 }
 
-export function AccountingAccountsTab({ highlightAccountId, onHighlightHandled, onNavigateToEntry }: Props) {
+export function AccountingAccountsTab({ highlightAccountId, onHighlightHandled, onNavigateToEntry, ledgerId }: Props) {
   const [accounts, setAccounts] = useState<AccountingAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -82,7 +83,7 @@ export function AccountingAccountsTab({ highlightAccountId, onHighlightHandled, 
 
   useEffect(() => {
     fetchAccounts();
-  }, []);
+  }, [ledgerId]);
 
   // Handle highlight from navigation
   useEffect(() => {
@@ -101,9 +102,13 @@ export function AccountingAccountsTab({ highlightAccountId, onHighlightHandled, 
 
   const fetchAccounts = async () => {
     try {
-      const { data: accountsData, error: accountsError } = await supabase
+      let accountsQuery = supabase
         .from('accounting_accounts')
-        .select('*')
+        .select('*');
+      if (ledgerId && ledgerId !== '__total__') {
+        accountsQuery = accountsQuery.eq('ledger_id', ledgerId);
+      }
+      const { data: accountsData, error: accountsError } = await accountsQuery
         .order('name', { ascending: true });
 
       if (accountsError) throw accountsError;
@@ -202,7 +207,7 @@ export function AccountingAccountsTab({ highlightAccountId, onHighlightHandled, 
 
     setSaving(true);
     try {
-      const accountData = {
+      const accountData: Record<string, any> = {
         name: form.name.trim(),
         account_type: form.account_type,
         address: form.address.trim() || null,
@@ -211,6 +216,9 @@ export function AccountingAccountsTab({ highlightAccountId, onHighlightHandled, 
         province: form.province.trim() || null,
         nif_cif: form.nif_cif.trim() || null
       };
+      if (ledgerId && ledgerId !== '__total__') {
+        accountData.ledger_id = ledgerId;
+      }
 
       if (editingAccount) {
         const { error } = await supabase
@@ -223,7 +231,7 @@ export function AccountingAccountsTab({ highlightAccountId, onHighlightHandled, 
       } else {
         const { error } = await supabase
           .from('accounting_accounts')
-          .insert(accountData);
+          .insert(accountData as any);
 
         if (error) throw error;
         toast.success('Cuenta creada');

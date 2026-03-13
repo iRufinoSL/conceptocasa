@@ -11,6 +11,7 @@ import { InvoicesTab } from '@/components/administracion/InvoicesTab';
 import { PurchaseOrdersTab } from '@/components/administracion/PurchaseOrdersTab';
 import { VATReportTab } from '@/components/administracion/VATReportTab';
 import { ProvisionalAccountsAlerts } from '@/components/administracion/ProvisionalAccountsAlerts';
+import { LedgerSelector } from '@/components/administracion/LedgerSelector';
 import { VoiceAssistantDialog, VoiceAction } from '@/components/voice/VoiceAssistantDialog';
 import { useVoiceAccountingEntry } from '@/hooks/useVoiceAccountingEntry';
 import { supabase } from '@/integrations/supabase/client';
@@ -25,6 +26,7 @@ export function BudgetAdministracionTab({ budgetId, isAdmin }: Props) {
   const [activeTab, setActiveTab] = useState('purchase-orders');
   const [highlightEntryCode, setHighlightEntryCode] = useState<string | null>(null);
   const [highlightAccountId, setHighlightAccountId] = useState<string | null>(null);
+  const [selectedLedgerId, setSelectedLedgerId] = useState('');
   const [voiceAssistantOpen, setVoiceAssistantOpen] = useState(false);
   const [entriesKey, setEntriesKey] = useState(0);
   const [provisionalCount, setProvisionalCount] = useState(0);
@@ -101,14 +103,17 @@ export function BudgetAdministracionTab({ budgetId, isAdmin }: Props) {
             Contabilidad y facturación asociada a este presupuesto
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={() => setVoiceAssistantOpen(true)}
-          title="Asistente de voz"
-        >
-          <Mic className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-3">
+          <LedgerSelector selectedLedgerId={selectedLedgerId} onLedgerChange={setSelectedLedgerId} />
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setVoiceAssistantOpen(true)}
+            title="Asistente de voz"
+          >
+            <Mic className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
@@ -165,11 +170,11 @@ export function BudgetAdministracionTab({ budgetId, isAdmin }: Props) {
         )}
 
         <TabsContent value="purchase-orders">
-          <PurchaseOrdersTab budgetId={budgetId} />
+          <PurchaseOrdersTab budgetId={budgetId} ledgerId={selectedLedgerId} />
         </TabsContent>
 
         <TabsContent value="invoices">
-          <InvoicesTab budgetId={budgetId} />
+          <InvoicesTab budgetId={budgetId} ledgerId={selectedLedgerId} />
         </TabsContent>
 
         <TabsContent value="entries">
@@ -179,6 +184,7 @@ export function BudgetAdministracionTab({ budgetId, isAdmin }: Props) {
             onHighlightHandled={() => setHighlightEntryCode(null)}
             budgetId={budgetId}
             onNavigateToAccount={handleNavigateToAccount}
+            ledgerId={selectedLedgerId}
           />
         </TabsContent>
 
@@ -187,6 +193,7 @@ export function BudgetAdministracionTab({ budgetId, isAdmin }: Props) {
             onNavigateToEntry={handleNavigateToEntry}
             onNavigateToAccount={handleNavigateToAccount}
             budgetId={budgetId}
+            ledgerId={selectedLedgerId}
           />
         </TabsContent>
 
@@ -195,15 +202,16 @@ export function BudgetAdministracionTab({ budgetId, isAdmin }: Props) {
             highlightAccountId={highlightAccountId}
             onHighlightHandled={() => setHighlightAccountId(null)}
             onNavigateToEntry={handleNavigateToEntry}
+            ledgerId={selectedLedgerId}
           />
         </TabsContent>
 
         <TabsContent value="balance">
-          <AccountingBalanceReport budgetId={budgetId} />
+          <AccountingBalanceReport budgetId={budgetId} ledgerId={selectedLedgerId} />
         </TabsContent>
 
         <TabsContent value="vat">
-          <VATReportTab budgetId={budgetId} />
+          <VATReportTab budgetId={budgetId} ledgerId={selectedLedgerId} />
         </TabsContent>
       </Tabs>
 

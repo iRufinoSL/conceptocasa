@@ -51,19 +51,23 @@ const getTypeBadgeVariant = (type: string): "default" | "secondary" | "destructi
   }
 };
 
-export function AccountingBalanceReport({ budgetId: fixedBudgetId }: { budgetId?: string } = {}) {
+export function AccountingBalanceReport({ budgetId: fixedBudgetId, ledgerId }: { budgetId?: string; ledgerId?: string } = {}) {
   const [accounts, setAccounts] = useState<AccountWithBalance[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [ledgerId]);
 
   const fetchData = async () => {
     try {
-      const { data: accountsData, error: accountsError } = await supabase
+      let accountsQuery = supabase
         .from('accounting_accounts')
-        .select('*')
+        .select('*');
+      if (ledgerId && ledgerId !== '__total__') {
+        accountsQuery = accountsQuery.eq('ledger_id', ledgerId);
+      }
+      const { data: accountsData, error: accountsError } = await accountsQuery
         .order('account_type')
         .order('name');
 

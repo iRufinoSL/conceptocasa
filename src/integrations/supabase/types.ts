@@ -22,6 +22,7 @@ export type Database = {
           contact_id: string | null
           created_at: string
           id: string
+          ledger_id: string | null
           name: string
           nif_cif: string | null
           postal_code: string | null
@@ -35,6 +36,7 @@ export type Database = {
           contact_id?: string | null
           created_at?: string
           id?: string
+          ledger_id?: string | null
           name: string
           nif_cif?: string | null
           postal_code?: string | null
@@ -48,6 +50,7 @@ export type Database = {
           contact_id?: string | null
           created_at?: string
           id?: string
+          ledger_id?: string | null
           name?: string
           nif_cif?: string | null
           postal_code?: string | null
@@ -60,6 +63,13 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accounting_accounts_ledger_id_fkey"
+            columns: ["ledger_id"]
+            isOneToOne: false
+            referencedRelation: "accounting_ledgers"
             referencedColumns: ["id"]
           },
         ]
@@ -129,6 +139,7 @@ export type Database = {
           expense_account_id: string | null
           has_provisional_account: boolean | null
           id: string
+          ledger_id: string | null
           supplier_id: string | null
           total_amount: number
           updated_at: string
@@ -144,6 +155,7 @@ export type Database = {
           expense_account_id?: string | null
           has_provisional_account?: boolean | null
           id?: string
+          ledger_id?: string | null
           supplier_id?: string | null
           total_amount?: number
           updated_at?: string
@@ -159,6 +171,7 @@ export type Database = {
           expense_account_id?: string | null
           has_provisional_account?: boolean | null
           id?: string
+          ledger_id?: string | null
           supplier_id?: string | null
           total_amount?: number
           updated_at?: string
@@ -177,6 +190,13 @@ export type Database = {
             columns: ["expense_account_id"]
             isOneToOne: false
             referencedRelation: "accounting_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accounting_entries_ledger_id_fkey"
+            columns: ["ledger_id"]
+            isOneToOne: false
+            referencedRelation: "accounting_ledgers"
             referencedColumns: ["id"]
           },
           {
@@ -241,6 +261,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      accounting_ledgers: {
+        Row: {
+          code: string
+          created_at: string
+          id: string
+          name: string
+          operations_start_date: string | null
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          id?: string
+          name: string
+          operations_start_date?: string | null
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          id?: string
+          name?: string
+          operations_start_date?: string | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       admin_document_files: {
         Row: {
@@ -3880,6 +3927,7 @@ export type Database = {
           invoice_number: number
           is_posted: boolean | null
           issuer_account_id: string | null
+          ledger_id: string | null
           observations: string | null
           receiver_account_id: string | null
           subtotal: number
@@ -3900,6 +3948,7 @@ export type Database = {
           invoice_number: number
           is_posted?: boolean | null
           issuer_account_id?: string | null
+          ledger_id?: string | null
           observations?: string | null
           receiver_account_id?: string | null
           subtotal?: number
@@ -3920,6 +3969,7 @@ export type Database = {
           invoice_number?: number
           is_posted?: boolean | null
           issuer_account_id?: string | null
+          ledger_id?: string | null
           observations?: string | null
           receiver_account_id?: string | null
           subtotal?: number
@@ -3948,6 +3998,13 @@ export type Database = {
             columns: ["issuer_account_id"]
             isOneToOne: false
             referencedRelation: "accounting_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_ledger_id_fkey"
+            columns: ["ledger_id"]
+            isOneToOne: false
+            referencedRelation: "accounting_ledgers"
             referencedColumns: ["id"]
           },
           {
@@ -4840,6 +4897,7 @@ export type Database = {
           description: string | null
           footer_contact_source: string
           id: string
+          ledger_id: string | null
           observations: string | null
           order_date: string
           order_id: string | null
@@ -4858,6 +4916,7 @@ export type Database = {
           description?: string | null
           footer_contact_source?: string
           id?: string
+          ledger_id?: string | null
           observations?: string | null
           order_date?: string
           order_id?: string | null
@@ -4876,6 +4935,7 @@ export type Database = {
           description?: string | null
           footer_contact_source?: string
           id?: string
+          ledger_id?: string | null
           observations?: string | null
           order_date?: string
           order_id?: string | null
@@ -4900,6 +4960,13 @@ export type Database = {
             columns: ["client_contact_id"]
             isOneToOne: false
             referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_ledger_id_fkey"
+            columns: ["ledger_id"]
+            isOneToOne: false
+            referencedRelation: "accounting_ledgers"
             referencedColumns: ["id"]
           },
           {

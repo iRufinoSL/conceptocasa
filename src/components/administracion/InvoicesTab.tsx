@@ -138,7 +138,7 @@ const getYearFromDate = (date: string): number => {
   return new Date(date).getFullYear();
 };
 
-export function InvoicesTab({ budgetId: fixedBudgetId }: { budgetId?: string } = {}) {
+export function InvoicesTab({ budgetId: fixedBudgetId, ledgerId }: { budgetId?: string; ledgerId?: string } = {}) {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [presupuestos, setPresupuestos] = useState<Presupuesto[]>([]);
   const [allPresupuestos, setAllPresupuestos] = useState<Presupuesto[]>([]);
@@ -161,7 +161,7 @@ export function InvoicesTab({ budgetId: fixedBudgetId }: { budgetId?: string } =
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [ledgerId]);
 
   const fetchData = async () => {
     try {
@@ -205,6 +205,9 @@ export function InvoicesTab({ budgetId: fixedBudgetId }: { budgetId?: string } =
       
       if (fixedBudgetId) {
         invoicesQuery = invoicesQuery.eq('budget_id', fixedBudgetId);
+      }
+      if (ledgerId && ledgerId !== '__total__') {
+        invoicesQuery = invoicesQuery.eq('ledger_id', ledgerId);
       }
       
       const { data: invoicesData, error: invoicesError } = await invoicesQuery
@@ -301,7 +304,7 @@ export function InvoicesTab({ budgetId: fixedBudgetId }: { budgetId?: string } =
     try {
       const vatRate = form.vat_rate === VAT_RATE_NO_INCLUDED ? -1 : parseFloat(form.vat_rate);
       
-      const invoiceData = {
+      const invoiceData: Record<string, any> = {
         invoice_number: parseInt(form.invoice_number),
         invoice_date: form.invoice_date,
         description: form.description.trim() || null,
@@ -313,6 +316,9 @@ export function InvoicesTab({ budgetId: fixedBudgetId }: { budgetId?: string } =
         document_type: form.document_type,
         footer_contact_source: form.footer_contact_source
       };
+      if (ledgerId && ledgerId !== '__total__') {
+        invoiceData.ledger_id = ledgerId;
+      }
 
       if (editingInvoice) {
         const { error } = await supabase
@@ -325,7 +331,7 @@ export function InvoicesTab({ budgetId: fixedBudgetId }: { budgetId?: string } =
       } else {
         const { data, error } = await supabase
           .from('invoices')
-          .insert(invoiceData)
+          .insert(invoiceData as any)
           .select()
           .single();
 

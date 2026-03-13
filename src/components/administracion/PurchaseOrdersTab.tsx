@@ -123,7 +123,7 @@ const getContactDisplayName = (contact: CrmContact | null | undefined): string =
   return parts.length > 0 ? parts.join(' ') : 'Sin nombre';
 };
 
-export function PurchaseOrdersTab({ budgetId: fixedBudgetId }: { budgetId?: string } = {}) {
+export function PurchaseOrdersTab({ budgetId: fixedBudgetId, ledgerId }: { budgetId?: string; ledgerId?: string } = {}) {
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
   const [presupuestos, setPresupuestos] = useState<Presupuesto[]>([]);
   const [allPresupuestos, setAllPresupuestos] = useState<Presupuesto[]>([]);
@@ -145,7 +145,7 @@ export function PurchaseOrdersTab({ budgetId: fixedBudgetId }: { budgetId?: stri
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [ledgerId]);
 
   const fetchData = async () => {
     try {
@@ -161,6 +161,7 @@ export function PurchaseOrdersTab({ budgetId: fixedBudgetId }: { budgetId?: stri
             client_contact:crm_contacts!purchase_orders_client_contact_id_fkey(id, name, surname, contact_type, email, phone, address, city, postal_code, province, nif_dni)
           `);
           if (fixedBudgetId) q = q.eq('budget_id', fixedBudgetId);
+          if (ledgerId && ledgerId !== '__total__') q = q.eq('ledger_id', ledgerId);
           return q.order('order_date', { ascending: false }).order('order_number', { ascending: false });
         })()
       ]);
@@ -240,7 +241,7 @@ export function PurchaseOrdersTab({ budgetId: fixedBudgetId }: { budgetId?: stri
     try {
       const vatRate = form.vat_rate === VAT_RATE_NO_INCLUDED ? -1 : parseFloat(form.vat_rate);
       
-      const orderData = {
+      const orderData: Record<string, any> = {
         order_number: parseInt(form.order_number),
         order_date: form.order_date,
         description: form.description.trim() || null,
@@ -251,6 +252,9 @@ export function PurchaseOrdersTab({ budgetId: fixedBudgetId }: { budgetId?: stri
         vat_rate: vatRate,
         footer_contact_source: form.footer_contact_source
       };
+      if (ledgerId && ledgerId !== '__total__') {
+        orderData.ledger_id = ledgerId;
+      }
 
       if (editingOrder) {
         const { error } = await supabase
@@ -262,7 +266,7 @@ export function PurchaseOrdersTab({ budgetId: fixedBudgetId }: { budgetId?: stri
       } else {
         const { data, error } = await supabase
           .from('purchase_orders')
-          .insert(orderData)
+          .insert(orderData as any)
           .select()
           .single();
         if (error) {

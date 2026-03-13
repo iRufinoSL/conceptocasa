@@ -1446,6 +1446,7 @@ export function SectionAxisViewer({
           {drawingOverlay}
 
           {/* Ruler lines rendering */}
+          <g data-pdf-layer="rulers">
           {gridLayout && scale && rulerLines.map((rl) => {
             const { ox, oy, cellPx, originCol, originRow } = gridLayout;
             const x1 = ox + rl.start.col * cellPx;
@@ -1471,22 +1472,22 @@ export function SectionAxisViewer({
             return (
               <g key={`ruler-${rl.id}`}>
                 <line x1={x1} y1={y1} x2={x2} y2={y2}
-                  stroke="hsl(30, 90%, 50%)" strokeWidth={2} strokeDasharray="6 3" />
+                  stroke={RULER_STROKE} strokeWidth={2.5} strokeDasharray="8 4" />
                 <line x1={x1 - ny * 6} y1={y1 + nx * 6} x2={x1 + ny * 6} y2={y1 - nx * 6}
-                  stroke="hsl(30, 90%, 50%)" strokeWidth={1.5} />
+                  stroke={RULER_STROKE} strokeWidth={2} />
                 <line x1={x2 - ny * 6} y1={y2 + nx * 6} x2={x2 + ny * 6} y2={y2 - nx * 6}
-                  stroke="hsl(30, 90%, 50%)" strokeWidth={1.5} />
-                <circle cx={x1} cy={y1} r={5} fill="hsl(30, 90%, 50%)" stroke="white" strokeWidth={1.5}
+                  stroke={RULER_STROKE} strokeWidth={2} />
+                <circle cx={x1} cy={y1} r={5} fill={RULER_STROKE} stroke="white" strokeWidth={1.5}
                   style={{ cursor: 'grab' }}
                   onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); setDraggingRulerId(rl.id); setDraggingRulerEnd('start'); setRulerMode(true); }} />
-                <circle cx={x2} cy={y2} r={5} fill="hsl(30, 90%, 50%)" stroke="white" strokeWidth={1.5}
+                <circle cx={x2} cy={y2} r={5} fill={RULER_STROKE} stroke="white" strokeWidth={1.5}
                   style={{ cursor: 'grab' }}
                   onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); setDraggingRulerId(rl.id); setDraggingRulerEnd('end'); setRulerMode(true); }} />
                 <rect x={mx + nx * labelOffset - 30} y={my + ny * labelOffset - 8}
                   width={60} height={16} rx={3}
-                  fill="white" fillOpacity={0.92} stroke="hsl(30, 90%, 50%)" strokeWidth={0.5} />
+                  fill="white" fillOpacity={0.95} stroke={RULER_STROKE} strokeWidth={1} />
                 <text x={mx + nx * labelOffset} y={my + ny * labelOffset + 4}
-                  textAnchor="middle" fontSize={9} fontWeight={700} fill="hsl(30, 70%, 35%)" fontFamily="monospace">
+                  textAnchor="middle" fontSize={10} fontWeight={800} fill={RULER_TEXT} fontFamily="monospace">
                   {displayText}
                 </text>
                 <g style={{ cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); handleDeleteRuler(rl.id); }}>
@@ -1498,6 +1499,7 @@ export function SectionAxisViewer({
               </g>
             );
           })}
+          </g>
 
           {/* Ruler drawing preview */}
           {rulerMode && rulerStart && rulerHoverNode && gridLayout && (

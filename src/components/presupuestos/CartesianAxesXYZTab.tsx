@@ -361,6 +361,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
           sectionType={liveSection.sectionType as 'vertical' | 'longitudinal' | 'transversal'}
           axisValue={liveSection.axisValue}
           sectionName={liveSection.name}
+          floorPlanId={floorPlan?.id}
           savedScale={savedScale}
           onSaveScale={(scale) => handleSaveScale(liveSection.id, scale)}
           savedNegLimits={savedNegLimits}

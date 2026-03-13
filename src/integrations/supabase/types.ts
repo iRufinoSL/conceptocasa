@@ -1649,6 +1649,7 @@ export type Database = {
           created_at: string
           height_mm: number | null
           id: string
+          image_url: string | null
           material_type: string | null
           name: string
           object_type: string
@@ -1667,6 +1668,7 @@ export type Database = {
           created_at?: string
           height_mm?: number | null
           id?: string
+          image_url?: string | null
           material_type?: string | null
           name: string
           object_type?: string
@@ -1685,6 +1687,7 @@ export type Database = {
           created_at?: string
           height_mm?: number | null
           id?: string
+          image_url?: string | null
           material_type?: string | null
           name?: string
           object_type?: string

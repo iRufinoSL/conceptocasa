@@ -1,0 +1,1 @@
+ALTER TABLE public.budget_object_templates ADD COLUMN image_url text;

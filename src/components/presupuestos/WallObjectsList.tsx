@@ -868,7 +868,7 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
     face: t as any,
     cells: {
       img: t.image_url ? '🖼️' : '',
-      name: t.name,
+      name: t.resource_id ? `🔗 ${t.name}` : t.name,
       type: t.object_type || '',
       unit: t.unit_measure || 'ud',
       material: t.material_type || '',

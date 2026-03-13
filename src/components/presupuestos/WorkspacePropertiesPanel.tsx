@@ -95,6 +95,8 @@ export function WorkspacePropertiesPanel({
   const [wallObjects, setWallObjects] = useState<WallObjectRecord[]>([]);
   const [expandedFace, setExpandedFace] = useState<string | null>(focusFace || null);
   const [patternPickerFace, setPatternPickerFace] = useState<string | null>(null);
+  // Local override for immediate UI feedback (avoids round-trip through parent)
+  const [localOverrides, setLocalOverrides] = useState<Record<string, string>>({});
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -144,8 +146,13 @@ export function WorkspacePropertiesPanel({
 
   const getWallTypeForFace = (wallIndex: number) => {
     const faceKey = `wall-${wallIndex}`;
+    // 1. Local override (immediate feedback within this panel)
+    const localOverride = localOverrides[faceKey];
+    if (localOverride) return localOverride;
+    // 2. Parent-level face types (section polygon JSON metadata)
     const localType = localFaceTypes?.[faceKey];
     if (localType) return normalizeWallType(localType);
+    // 3. DB wall record
     const wall = walls.find(w => w.wall_index === wallIndex + 1);
     return normalizeWallType(wall?.wall_type);
   };
@@ -155,7 +162,10 @@ export function WorkspacePropertiesPanel({
     const dbWallIndex = wallIndex + 1;
     const faceKey = `wall-${wallIndex}`;
 
-    // Always persist in section polygon metadata (for synthetic X/Y/Z polygons)
+    // Immediate UI feedback — no round-trip needed
+    setLocalOverrides(prev => ({ ...prev, [faceKey]: normalized }));
+
+    // Persist in section polygon metadata (for synthetic X/Y/Z polygons)
     onLocalFaceTypeChange?.(faceKey, normalized);
 
     // If this polygon is not tied to a real room row, stop at local persistence
@@ -282,7 +292,9 @@ export function WorkspacePropertiesPanel({
   const sectionLabel = sectionType === 'vertical' ? 'Z' : sectionType === 'longitudinal' ? 'Y' : sectionType === 'transversal' ? 'X' : 'I';
 
   return (
-    <div className="absolute right-2 top-2 z-50 w-72 bg-card border rounded-lg shadow-lg overflow-hidden">
+    <div className="absolute right-2 top-2 z-50 w-72 bg-card border rounded-lg shadow-lg overflow-hidden"
+      onPointerDown={e => e.stopPropagation()}
+      onClick={e => e.stopPropagation()}>
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 bg-muted/50 border-b">
         <div className="flex items-center gap-1.5 min-w-0">

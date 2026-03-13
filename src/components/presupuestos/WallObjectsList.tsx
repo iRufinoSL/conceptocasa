@@ -234,7 +234,95 @@ function ObjectTypeManager({ budgetId, types, onRefresh }: {
   );
 }
 
-/* ── Template form ── */
+/* ── Import from Resources ── */
+function ImportResourceSelector({ budgetId, objectTypes, existingResourceIds, onImported, onClose }: {
+  budgetId: string;
+  objectTypes: { id: string; name: string }[];
+  existingResourceIds: Set<string>;
+  onImported: () => void;
+  onClose: () => void;
+}) {
+  const [resources, setResources] = useState<ExternalResourceRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState('');
+  const [importing, setImporting] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from('external_resources')
+        .select('id, name, description, unit_cost, unit_measure, resource_type, image_url, vat_included_percent')
+        .order('name');
+      setResources((data || []) as ExternalResourceRow[]);
+      setLoading(false);
+    })();
+  }, []);
+
+  const filtered = useMemo(() => {
+    if (!filter.trim()) return resources;
+    const q = filter.toLowerCase();
+    return resources.filter(r => r.name.toLowerCase().includes(q) || (r.resource_type || '').toLowerCase().includes(q));
+  }, [resources, filter]);
+
+  const handleImport = async (res: ExternalResourceRow) => {
+    setImporting(res.id);
+    const matchedType = objectTypes.find(t => t.name.toLowerCase() === (res.resource_type || '').toLowerCase());
+    const objectType = matchedType?.name || objectTypes[0]?.name || 'Material';
+    const { error } = await supabase.from('budget_object_templates').insert({
+      budget_id: budgetId,
+      name: res.name,
+      technical_description: res.description || null,
+      purchase_price_vat_included: res.unit_cost || 0,
+      vat_included_percent: res.vat_included_percent || 21,
+      object_type: objectType,
+      unit_measure: res.unit_measure || 'ud',
+      image_url: res.image_url || null,
+      resource_id: res.id,
+    });
+    setImporting(null);
+    if (error) { toast.error('Error importando recurso'); return; }
+    toast.success(`"${res.name}" importado como objeto modelo`);
+    onImported();
+  };
+
+  return (
+    <div className="border rounded-lg p-3 space-y-2 bg-muted/20">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold text-muted-foreground">Importar desde Recursos</p>
+        <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={onClose}><X className="h-3 w-3" /></Button>
+      </div>
+      <Input className="h-7 text-sm" placeholder="Filtrar recursos..." value={filter} onChange={e => setFilter(e.target.value)} />
+      {loading ? (
+        <p className="text-xs text-muted-foreground py-2">Cargando recursos...</p>
+      ) : (
+        <div className="max-h-48 overflow-y-auto space-y-0.5">
+          {filtered.length === 0 && <p className="text-xs text-muted-foreground py-2 text-center">Sin resultados</p>}
+          {filtered.map(r => {
+            const alreadyLinked = existingResourceIds.has(r.id);
+            return (
+              <div key={r.id} className="flex items-center justify-between px-2 py-1 rounded hover:bg-accent/30 text-sm">
+                <div className="flex-1 min-w-0">
+                  <span className="font-medium truncate block">{r.name}</span>
+                  <span className="text-[10px] text-muted-foreground">{r.resource_type} · {r.unit_measure} · {r.unit_cost ?? 0}€</span>
+                </div>
+                {alreadyLinked ? (
+                  <Badge variant="secondary" className="text-[10px] h-5">Ya vinculado</Badge>
+                ) : (
+                  <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" disabled={importing === r.id}
+                    onClick={() => handleImport(r)}>
+                    {importing === r.id ? '...' : 'Importar'}
+                  </Button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 function TemplateForm({ budgetId, template, objectTypes, onSaved, onCancel }: {
   budgetId: string;
   template?: ObjectTemplate | null;

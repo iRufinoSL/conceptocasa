@@ -13,9 +13,9 @@ import jsPDF from 'jspdf';
 import { toast } from 'sonner';
 
 // Ruler distinctive color — vivid magenta (not used by axes/dimensions/workspaces)
-const RULER_STROKE = 'hsl(280, 85%, 50%)';
-const RULER_TEXT = 'hsl(280, 65%, 30%)';
-const RULER_BTN = 'hsl(280 85% 50%)';
+const RULER_STROKE = 'hsl(310, 100%, 42%)';
+const RULER_TEXT = 'hsl(310, 80%, 28%)';
+const RULER_BTN = 'hsl(310 100% 42%)';
 
 type WallLabelMode = 'both' | 'name-only' | 'measure-only' | 'none';
 

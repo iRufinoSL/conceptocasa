@@ -113,7 +113,7 @@ export function AccountingEntriesTab({ highlightCode, onHighlightHandled, budget
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [ledgerId]);
 
   // Handle highlight from navigation
   useEffect(() => {

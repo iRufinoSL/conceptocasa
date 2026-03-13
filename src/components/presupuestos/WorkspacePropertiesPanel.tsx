@@ -163,8 +163,33 @@ export function WorkspacePropertiesPanel({
       supabase.from('budget_floor_plan_rooms').select('*').eq('id', workspaceId).maybeSingle(),
       supabase.from('budget_floor_plan_walls').select('*').eq('room_id', workspaceId).order('wall_index'),
     ]);
-    setRoom(roomRes.data);
+    const roomData = roomRes.data;
     const wallData = (wallsRes.data || []) as WallRecord[];
+
+    // Sync room flags from wall records if they disagree
+    if (roomData && wallData.length > 0) {
+      const floorWall = wallData.find(w => w.wall_index === -1);
+      const ceilingWall = wallData.find(w => w.wall_index === -2);
+      const updates: Record<string, boolean> = {};
+      if (floorWall) {
+        const wallSaysInvisible = floorWall.wall_type === 'invisible';
+        if (roomData.has_floor === wallSaysInvisible) {
+          updates.has_floor = !wallSaysInvisible;
+        }
+      }
+      if (ceilingWall) {
+        const wallSaysInvisible = ceilingWall.wall_type === 'invisible';
+        if (roomData.has_ceiling === wallSaysInvisible) {
+          updates.has_ceiling = !wallSaysInvisible;
+        }
+      }
+      if (Object.keys(updates).length > 0) {
+        await supabase.from('budget_floor_plan_rooms').update(updates).eq('id', workspaceId);
+        Object.assign(roomData, updates);
+      }
+    }
+
+    setRoom(roomData);
     setWalls(wallData);
 
     if (wallData.length > 0) {
@@ -204,6 +229,13 @@ export function WorkspacePropertiesPanel({
       updatePayload.has_roof = false;
     }
 
+    // Ensure room record exists before updating
+    const roomOk = await ensureRoomRecord();
+    if (!roomOk) {
+      toast.error('No se pudo crear el registro del espacio');
+      return;
+    }
+
     await supabase.from('budget_floor_plan_rooms').update(updatePayload).eq('id', workspaceId);
     setRoom((prev: any) => prev ? { ...prev, ...updatePayload } : prev);
 
@@ -214,6 +246,12 @@ export function WorkspacePropertiesPanel({
     if (existingWall) {
       await supabase.from('budget_floor_plan_walls').update({ wall_type: newWallType }).eq('id', existingWall.id);
       setWalls(prev => prev.map(w => w.id === existingWall.id ? { ...w, wall_type: newWallType } : w));
+    } else {
+      // Create the wall record if it doesn't exist
+      const { data } = await supabase.from('budget_floor_plan_walls')
+        .insert({ room_id: workspaceId, wall_index: wallIndex, wall_type: newWallType })
+        .select().single();
+      if (data) setWalls(prev => [...prev, data as WallRecord]);
     }
 
     toast.success('Actualizado');

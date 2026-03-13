@@ -1519,11 +1519,11 @@ export function SectionAxisViewer({
               return (
                 <g>
                   <line x1={x1} y1={y1} x2={x2} y2={y2}
-                    stroke="hsl(30, 90%, 50%)" strokeWidth={1.5} strokeDasharray="4 4" opacity={0.7} />
-                  <circle cx={x1} cy={y1} r={4} fill="hsl(30, 90%, 50%)" opacity={0.8} />
-                  <circle cx={x2} cy={y2} r={4} fill="hsl(30, 90%, 50%)" opacity={0.6} />
-                  <text x={mx} y={my - 8} textAnchor="middle" fontSize={9} fontWeight={700}
-                    fill="hsl(30, 70%, 35%)" fontFamily="monospace"
+                    stroke={RULER_STROKE} strokeWidth={1.5} strokeDasharray="4 4" opacity={0.7} />
+                  <circle cx={x1} cy={y1} r={4} fill={RULER_STROKE} opacity={0.8} />
+                  <circle cx={x2} cy={y2} r={4} fill={RULER_STROKE} opacity={0.6} />
+                  <text x={mx} y={my - 8} textAnchor="middle" fontSize={10} fontWeight={800}
+                    fill={RULER_TEXT} fontFamily="monospace"
                     stroke="white" strokeWidth={2} paintOrder="stroke">
                     {Math.round(lengthMm)} mm
                   </text>
@@ -1540,10 +1540,10 @@ export function SectionAxisViewer({
               const hy = oy + rulerHoverNode.row * cellPx;
               return (
                 <g>
-                  <circle cx={hx} cy={hy} r={8} fill="hsl(30, 90%, 50%)" fillOpacity={0.2} />
-                  <circle cx={hx} cy={hy} r={4} fill="hsl(30, 90%, 50%)" opacity={0.8} />
-                  <line x1={hx - 12} y1={hy} x2={hx + 12} y2={hy} stroke="hsl(30, 90%, 50%)" strokeWidth={1} opacity={0.5} />
-                  <line x1={hx} y1={hy - 12} x2={hx} y2={hy + 12} stroke="hsl(30, 90%, 50%)" strokeWidth={1} opacity={0.5} />
+                  <circle cx={hx} cy={hy} r={8} fill={RULER_STROKE} fillOpacity={0.2} />
+                  <circle cx={hx} cy={hy} r={4} fill={RULER_STROKE} opacity={0.8} />
+                  <line x1={hx - 12} y1={hy} x2={hx + 12} y2={hy} stroke={RULER_STROKE} strokeWidth={1} opacity={0.5} />
+                  <line x1={hx} y1={hy - 12} x2={hx} y2={hy + 12} stroke={RULER_STROKE} strokeWidth={1} opacity={0.5} />
                 </g>
               );
             })()

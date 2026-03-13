@@ -1165,7 +1165,7 @@ export function SectionAxisViewer({
               size="sm"
               variant={rulerMode ? 'default' : 'outline'}
               className="h-7 text-xs gap-1"
-              style={rulerMode ? { backgroundColor: 'hsl(30 90% 50%)', borderColor: 'hsl(30 90% 50%)' } : {}}
+              style={rulerMode ? { backgroundColor: RULER_BTN, borderColor: RULER_BTN } : {}}
               onClick={() => { setRulerMode(!rulerMode); setRulerStart(null); if (!rulerMode) { setDrawMode(false); } }}
             >
               <Ruler className="h-3 w-3" /> {rulerMode ? 'Regla ON' : 'Regla'}
@@ -1192,9 +1192,37 @@ export function SectionAxisViewer({
                   <SelectItem value="none">Sin etiquetas</SelectItem>
                 </SelectContent>
               </Select>
-              <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={handleExportPDF}>
-                <Printer className="h-3 w-3" /> PDF
-              </Button>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1">
+                    <Printer className="h-3 w-3" /> PDF ▾
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-56 p-3" align="end">
+                  <p className="text-xs font-semibold mb-2">Capas a imprimir</p>
+                  <div className="space-y-2">
+                    {([
+                      ['grid', 'Cuadrícula'],
+                      ['axes', 'Ejes y escala'],
+                      ['dimensions', 'Cotas perimetrales'],
+                      ['wallLabels', 'Etiquetas de pared'],
+                      ['rulers', 'Medidas de regla'],
+                      ['names', 'Nombres y m²'],
+                    ] as const).map(([key, label]) => (
+                      <label key={key} className="flex items-center gap-2 text-xs cursor-pointer">
+                        <Checkbox
+                          checked={pdfLayers[key]}
+                          onCheckedChange={(v) => setPdfLayers(prev => ({ ...prev, [key]: !!v }))}
+                        />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
+                  <Button size="sm" className="w-full mt-3 h-7 text-xs gap-1" onClick={handleExportPDF}>
+                    <Printer className="h-3 w-3" /> Exportar PDF
+                  </Button>
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
         )}

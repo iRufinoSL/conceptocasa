@@ -163,8 +163,33 @@ export function WorkspacePropertiesPanel({
       supabase.from('budget_floor_plan_rooms').select('*').eq('id', workspaceId).maybeSingle(),
       supabase.from('budget_floor_plan_walls').select('*').eq('room_id', workspaceId).order('wall_index'),
     ]);
-    setRoom(roomRes.data);
+    const roomData = roomRes.data;
     const wallData = (wallsRes.data || []) as WallRecord[];
+
+    // Sync room flags from wall records if they disagree
+    if (roomData && wallData.length > 0) {
+      const floorWall = wallData.find(w => w.wall_index === -1);
+      const ceilingWall = wallData.find(w => w.wall_index === -2);
+      const updates: Record<string, boolean> = {};
+      if (floorWall) {
+        const wallSaysInvisible = floorWall.wall_type === 'invisible';
+        if (roomData.has_floor === wallSaysInvisible) {
+          updates.has_floor = !wallSaysInvisible;
+        }
+      }
+      if (ceilingWall) {
+        const wallSaysInvisible = ceilingWall.wall_type === 'invisible';
+        if (roomData.has_ceiling === wallSaysInvisible) {
+          updates.has_ceiling = !wallSaysInvisible;
+        }
+      }
+      if (Object.keys(updates).length > 0) {
+        await supabase.from('budget_floor_plan_rooms').update(updates).eq('id', workspaceId);
+        Object.assign(roomData, updates);
+      }
+    }
+
+    setRoom(roomData);
     setWalls(wallData);
 
     if (wallData.length > 0) {

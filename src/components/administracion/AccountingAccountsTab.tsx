@@ -231,7 +231,7 @@ export function AccountingAccountsTab({ highlightAccountId, onHighlightHandled, 
       } else {
         const { error } = await supabase
           .from('accounting_accounts')
-          .insert(accountData);
+          .insert(accountData as any);
 
         if (error) throw error;
         toast.success('Cuenta creada');

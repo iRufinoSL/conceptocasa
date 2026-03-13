@@ -331,7 +331,7 @@ export function InvoicesTab({ budgetId: fixedBudgetId, ledgerId }: { budgetId?: 
       } else {
         const { data, error } = await supabase
           .from('invoices')
-          .insert(invoiceData)
+          .insert(invoiceData as any)
           .select()
           .single();
 

@@ -83,11 +83,13 @@ interface WorkspacePropertiesPanelProps {
   workspaceName: string;
   sectionType: string;
   sectionName: string;
+  floorPlanId?: string;
   onClose: () => void;
   focusFace?: string;
   edgeCount?: number;
   vertices?: Array<{ x: number; y: number }>;
   onPatternChange?: (faceKey: string, patternId: string | null) => void;
+  onOpeningsChange?: () => void;
   localFaceTypes?: Record<string, string>;
   onLocalFaceTypeChange?: (faceKey: string, wallType: string) => void;
 }

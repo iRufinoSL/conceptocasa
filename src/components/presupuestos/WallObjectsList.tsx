@@ -554,6 +554,7 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
   const [showTemplateForm, setShowTemplateForm] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<ObjectTemplate | null>(null);
   const [showTypeManager, setShowTypeManager] = useState(false);
+  const [modelView, setModelView] = useState<'alpha' | 'type'>('alpha');
   const [showImportResources, setShowImportResources] = useState(false);
 
   /* ── Object type catalog query ── */

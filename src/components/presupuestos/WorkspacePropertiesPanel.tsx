@@ -335,9 +335,10 @@ export function WorkspacePropertiesPanel({
           const minY = Math.min(...ys), maxY = Math.max(...ys);
           const rangeX = maxX - minX || 1;
           const rangeY = maxY - minY || 1;
-          const svgW = 260;
-          const svgH = 100;
-          const pad = 28;
+          const edgeN = diagramVerts.length;
+          const svgW = 320;
+          const svgH = edgeN > 4 ? 220 : 180;
+          const pad = 36;
           const drawW = svgW - pad * 2;
           const drawH = svgH - pad * 2;
           const scaleF = Math.min(drawW / rangeX, drawH / rangeY);

@@ -281,7 +281,7 @@ export function AccountingEntriesTab({ highlightCode, onHighlightHandled, budget
       } else {
         const { data, error } = await supabase
           .from('accounting_entries')
-          .insert(entryData)
+          .insert(entryData as any)
           .select()
           .single();
 

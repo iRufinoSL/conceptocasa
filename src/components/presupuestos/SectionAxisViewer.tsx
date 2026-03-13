@@ -204,6 +204,34 @@ export function SectionAxisViewer({
   // Double-click timer for edge detection
   const lastClickRef = useRef<{ time: number; polyId: string; edgeIdx: number } | null>(null);
 
+  // ── Undo history ──
+  const [undoStack, setUndoStack] = useState<UndoSnapshot[]>([]);
+
+  const pushUndo = useCallback(() => {
+    setUndoStack(prev => {
+      const snap: UndoSnapshot = {
+        polygons: JSON.parse(JSON.stringify(polygons)),
+        rulerLines: JSON.parse(JSON.stringify(rulerLines)),
+        facePatterns: JSON.parse(JSON.stringify(facePatterns)),
+      };
+      const next = [...prev, snap];
+      if (next.length > MAX_UNDO) next.shift();
+      return next;
+    });
+  }, [polygons, rulerLines, facePatterns]);
+
+  const handleUndo = useCallback(() => {
+    if (undoStack.length === 0) return;
+    const snap = undoStack[undoStack.length - 1];
+    setUndoStack(prev => prev.slice(0, -1));
+    setPolygons(snap.polygons);
+    setRulerLines(snap.rulerLines);
+    setFacePatterns(snap.facePatterns);
+    onSavePolygons?.(snap.polygons);
+    onSaveRulerLines?.(snap.rulerLines);
+    toast.success('Deshacer aplicado');
+  }, [undoStack, onSavePolygons, onSaveRulerLines]);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const [containerSize, setContainerSize] = useState({ w: 800, h: 500 });

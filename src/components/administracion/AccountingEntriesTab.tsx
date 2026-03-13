@@ -245,12 +245,15 @@ export function AccountingEntriesTab({ highlightCode, onHighlightHandled, budget
 
     setSaving(true);
     try {
-      const entryData = {
+      const entryData: Record<string, any> = {
         description: form.description.trim(),
         entry_date: form.entry_date,
         budget_id: form.budget_id,
         total_amount: parseFloat(form.total_amount) || 0
       };
+      if (ledgerId && ledgerId !== '__total__') {
+        entryData.ledger_id = ledgerId;
+      }
 
       if (editingEntry) {
         // Check if the year has changed - if so, we need to regenerate the code

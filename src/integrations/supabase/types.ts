@@ -1643,6 +1643,68 @@ export type Database = {
           },
         ]
       }
+      budget_object_templates: {
+        Row: {
+          budget_id: string
+          created_at: string
+          height_mm: number | null
+          id: string
+          material_type: string | null
+          name: string
+          object_type: string
+          purchase_price_vat_included: number | null
+          safety_margin_percent: number | null
+          sales_margin_percent: number | null
+          technical_description: string | null
+          thickness_mm: number | null
+          updated_at: string
+          vat_included_percent: number | null
+          width_mm: number | null
+        }
+        Insert: {
+          budget_id: string
+          created_at?: string
+          height_mm?: number | null
+          id?: string
+          material_type?: string | null
+          name: string
+          object_type?: string
+          purchase_price_vat_included?: number | null
+          safety_margin_percent?: number | null
+          sales_margin_percent?: number | null
+          technical_description?: string | null
+          thickness_mm?: number | null
+          updated_at?: string
+          vat_included_percent?: number | null
+          width_mm?: number | null
+        }
+        Update: {
+          budget_id?: string
+          created_at?: string
+          height_mm?: number | null
+          id?: string
+          material_type?: string | null
+          name?: string
+          object_type?: string
+          purchase_price_vat_included?: number | null
+          safety_margin_percent?: number | null
+          sales_margin_percent?: number | null
+          technical_description?: string | null
+          thickness_mm?: number | null
+          updated_at?: string
+          vat_included_percent?: number | null
+          width_mm?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_object_templates_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "presupuestos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       budget_phases: {
         Row: {
           actual_end_date: string | null
@@ -2178,6 +2240,7 @@ export type Database = {
           name: string
           object_type: string
           surface_m2: number | null
+          template_id: string | null
           thickness_mm: number | null
           updated_at: string
           visual_pattern: string | null
@@ -2194,6 +2257,7 @@ export type Database = {
           name: string
           object_type?: string
           surface_m2?: number | null
+          template_id?: string | null
           thickness_mm?: number | null
           updated_at?: string
           visual_pattern?: string | null
@@ -2210,6 +2274,7 @@ export type Database = {
           name?: string
           object_type?: string
           surface_m2?: number | null
+          template_id?: string | null
           thickness_mm?: number | null
           updated_at?: string
           visual_pattern?: string | null
@@ -2217,6 +2282,13 @@ export type Database = {
           wall_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "budget_wall_objects_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "budget_object_templates"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "budget_wall_objects_wall_id_fkey"
             columns: ["wall_id"]

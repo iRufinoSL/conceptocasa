@@ -1,15 +1,16 @@
 import { useMemo, useState, useRef, useCallback } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Layers, List, Search, Box, ChevronRight, Package } from 'lucide-react';
+import { Layers, List, Search, Box, ChevronRight, Package, Plus, Trash2, Edit2, Save, X, Archive } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WallObjectsPanel } from './WallObjectsPanel';
 import { toast } from 'sonner';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 /* ── Resizable column table ── */
 interface ColDef {
@@ -72,7 +73,6 @@ function ResizableTable<T>({
             <col key={i} style={{ width: w }} />
           ))}
         </colgroup>
-        {/* Header */}
         <thead>
           <tr className="bg-muted/50">
             {columns.map((col, ci) => (
@@ -81,7 +81,6 @@ function ResizableTable<T>({
                 className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1.5 relative select-none"
               >
                 {col.header}
-                {/* Resize handle */}
                 <span
                   onPointerDown={e => onPointerDown(ci, e)}
                   className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors"
@@ -145,10 +144,161 @@ interface AutoFace {
   wallIndex: number;
 }
 
+interface ObjectTemplate {
+  id: string;
+  budget_id: string;
+  name: string;
+  material_type: string | null;
+  technical_description: string | null;
+  width_mm: number | null;
+  height_mm: number | null;
+  thickness_mm: number | null;
+  purchase_price_vat_included: number | null;
+  vat_included_percent: number | null;
+  safety_margin_percent: number | null;
+  sales_margin_percent: number | null;
+  object_type: string;
+}
+
+const OBJECT_TYPES = [
+  { value: 'material', label: 'Material' },
+  { value: 'aislamiento', label: 'Aislamiento' },
+  { value: 'revestimiento', label: 'Revestimiento' },
+  { value: 'estructura', label: 'Estructura' },
+  { value: 'instalacion', label: 'Instalación' },
+  { value: 'acabado', label: 'Acabado' },
+  { value: 'otro', label: 'Otro' },
+];
+
+/* ── Template form ── */
+function TemplateForm({ budgetId, template, onSaved, onCancel }: {
+  budgetId: string;
+  template?: ObjectTemplate | null;
+  onSaved: () => void;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState(template?.name || '');
+  const [materialType, setMaterialType] = useState(template?.material_type || '');
+  const [techDesc, setTechDesc] = useState(template?.technical_description || '');
+  const [widthMm, setWidthMm] = useState(template?.width_mm?.toString() || '');
+  const [heightMm, setHeightMm] = useState(template?.height_mm?.toString() || '');
+  const [thicknessMm, setThicknessMm] = useState(template?.thickness_mm?.toString() || '');
+  const [price, setPrice] = useState(template?.purchase_price_vat_included?.toString() || '0');
+  const [vatPct, setVatPct] = useState(template?.vat_included_percent?.toString() || '21');
+  const [safetyPct, setSafetyPct] = useState(template?.safety_margin_percent?.toString() || '0');
+  const [salesPct, setSalesPct] = useState(template?.sales_margin_percent?.toString() || '0');
+  const [objectType, setObjectType] = useState(template?.object_type || 'material');
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!name.trim()) { toast.error('El nombre es obligatorio'); return; }
+    setSaving(true);
+    const payload = {
+      budget_id: budgetId,
+      name: name.trim(),
+      material_type: materialType || null,
+      technical_description: techDesc || null,
+      width_mm: widthMm ? parseFloat(widthMm) : null,
+      height_mm: heightMm ? parseFloat(heightMm) : null,
+      thickness_mm: thicknessMm ? parseFloat(thicknessMm) : null,
+      purchase_price_vat_included: parseFloat(price) || 0,
+      vat_included_percent: parseFloat(vatPct) || 0,
+      safety_margin_percent: parseFloat(safetyPct) || 0,
+      sales_margin_percent: parseFloat(salesPct) || 0,
+      object_type: objectType,
+    };
+    let error;
+    if (template) {
+      ({ error } = await supabase.from('budget_object_templates').update(payload).eq('id', template.id));
+    } else {
+      ({ error } = await supabase.from('budget_object_templates').insert(payload));
+    }
+    setSaving(false);
+    if (error) { toast.error('Error guardando objeto modelo'); return; }
+    toast.success(template ? 'Objeto modelo actualizado' : 'Objeto modelo creado');
+    onSaved();
+  };
+
+  return (
+    <div className="border rounded-lg p-3 space-y-3 bg-muted/20">
+      <div className="grid grid-cols-2 gap-2">
+        <div className="col-span-2">
+          <label className="text-xs font-medium text-muted-foreground">Nombre *</label>
+          <Input className="h-8 text-sm" value={name} onChange={e => setName(e.target.value)} />
+        </div>
+        <div>
+          <label className="text-xs font-medium text-muted-foreground">Tipo de objeto</label>
+          <Select value={objectType} onValueChange={setObjectType}>
+            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {OBJECT_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <label className="text-xs font-medium text-muted-foreground">Tipo de material</label>
+          <Input className="h-8 text-sm" value={materialType} onChange={e => setMaterialType(e.target.value)} placeholder="Ej: Cerámica, Madera..." />
+        </div>
+        <div className="col-span-2">
+          <label className="text-xs font-medium text-muted-foreground">Ficha técnica / Descripción</label>
+          <textarea className="w-full border rounded px-2 py-1 text-sm min-h-[50px] bg-background" value={techDesc} onChange={e => setTechDesc(e.target.value)} />
+        </div>
+      </div>
+
+      <div className="border-t pt-2">
+        <p className="text-xs font-semibold text-muted-foreground mb-1">Descripción Espacial (mm)</p>
+        <div className="grid grid-cols-3 gap-2">
+          <div>
+            <label className="text-[10px] text-muted-foreground">Ancho</label>
+            <Input className="h-7 text-sm" type="number" value={widthMm} onChange={e => setWidthMm(e.target.value)} />
+          </div>
+          <div>
+            <label className="text-[10px] text-muted-foreground">Alto</label>
+            <Input className="h-7 text-sm" type="number" value={heightMm} onChange={e => setHeightMm(e.target.value)} />
+          </div>
+          <div>
+            <label className="text-[10px] text-muted-foreground">Espesor</label>
+            <Input className="h-7 text-sm" type="number" value={thicknessMm} onChange={e => setThicknessMm(e.target.value)} />
+          </div>
+        </div>
+      </div>
+
+      <div className="border-t pt-2">
+        <p className="text-xs font-semibold text-muted-foreground mb-1">Precios y Márgenes</p>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="text-[10px] text-muted-foreground">Precio Compra/Ud (IVA incl.)</label>
+            <Input className="h-7 text-sm" type="number" step="0.01" value={price} onChange={e => setPrice(e.target.value)} />
+          </div>
+          <div>
+            <label className="text-[10px] text-muted-foreground">% IVA incluido</label>
+            <Input className="h-7 text-sm" type="number" value={vatPct} onChange={e => setVatPct(e.target.value)} />
+          </div>
+          <div>
+            <label className="text-[10px] text-muted-foreground">% Margen seguridad</label>
+            <Input className="h-7 text-sm" type="number" value={safetyPct} onChange={e => setSafetyPct(e.target.value)} />
+          </div>
+          <div>
+            <label className="text-[10px] text-muted-foreground">% Margen venta</label>
+            <Input className="h-7 text-sm" type="number" value={salesPct} onChange={e => setSalesPct(e.target.value)} />
+          </div>
+        </div>
+      </div>
+
+      <div className="flex justify-end gap-2 pt-1">
+        <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={onCancel}><X className="h-3 w-3 mr-1" />Cancelar</Button>
+        <Button size="sm" className="h-7 text-xs" onClick={handleSave} disabled={saving}><Save className="h-3 w-3 mr-1" />{template ? 'Actualizar' : 'Crear'}</Button>
+      </div>
+    </div>
+  );
+}
+
 /* ── Main component ── */
 export function WallObjectsList({ budgetId }: WallObjectsListProps) {
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
+  const [mainTab, setMainTab] = useState<'modelos' | 'espacios'>('modelos');
 
   // Panel state
   const [panelOpen, setPanelOpen] = useState(false);
@@ -158,6 +308,24 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
   const [panelWallLabel, setPanelWallLabel] = useState('');
   const [panelRoomName, setPanelRoomName] = useState('');
 
+  // Template state
+  const [showTemplateForm, setShowTemplateForm] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<ObjectTemplate | null>(null);
+
+  /* ── Objetos modelo query ── */
+  const { data: templates = [], isLoading: templatesLoading } = useQuery({
+    queryKey: ['budget-object-templates', budgetId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('budget_object_templates')
+        .select('*')
+        .eq('budget_id', budgetId)
+        .order('name', { ascending: true });
+      return (data || []) as ObjectTemplate[];
+    },
+  });
+
+  /* ── Auto faces query ── */
   const { data: autoFaces = [], isLoading } = useQuery({
     queryKey: ['budget-auto-faces', budgetId],
     queryFn: async () => {
@@ -241,7 +409,7 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
     },
   });
 
-  /* ── Recursos: all wall objects across the budget ── */
+  /* ── Placed objects (Objetos del espacio) ── */
   const { data: allObjects = [] } = useQuery({
     queryKey: ['budget-wall-objects-all', budgetId],
     queryFn: async () => {
@@ -279,7 +447,7 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
     },
   });
 
-  const [resourcesView, setResourcesView] = useState<'alpha' | 'workspace'>('alpha');
+  const [placedView, setPlacedView] = useState<'alpha' | 'workspace' | 'type'>('alpha');
   const [resourceOpenGroups, setResourceOpenGroups] = useState<Set<string>>(new Set());
 
   const toggleResourceGroup = (name: string) => {
@@ -313,8 +481,20 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
       .sort(([a], [b]) => a.localeCompare(b, 'es'))
       .map(([name, objs]) => ({ name, objects: objs.sort((a: any, b: any) => a.layer_order - b.layer_order) }));
   }, [filteredObjects]);
+
+  const objectsByType = useMemo(() => {
+    const groups = new Map<string, any[]>();
+    for (const o of filteredObjects) {
+      const type = o.object_type || 'Sin tipo';
+      if (!groups.has(type)) groups.set(type, []);
+      groups.get(type)!.push(o);
+    }
+    return Array.from(groups.entries())
+      .sort(([a], [b]) => a.localeCompare(b, 'es'))
+      .map(([name, objs]) => ({ name, objects: objs.sort((a: any, b: any) => a.name.localeCompare(b.name, 'es')) }));
+  }, [filteredObjects]);
+
   const ensureSuperficieObject = async (wallId: string, face: AutoFace) => {
-    // Check if order-0 Superficie already exists
     const { data: existing } = await supabase
       .from('budget_wall_objects')
       .select('id')
@@ -326,12 +506,11 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
     const surfaceM2 = face.m2 ?? null;
     const volumeM3 = face.m3 ?? null;
     const faceLabel = face.faceName;
-    const uniqueName = `Superficie`;
 
     await supabase.from('budget_wall_objects').insert({
       wall_id: wallId,
       layer_order: 0,
-      name: uniqueName,
+      name: 'Superficie',
       description: `${faceLabel}/${face.workspace}`,
       object_type: 'material',
       is_core: false,
@@ -355,9 +534,7 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
       }
       wall = newWall;
     }
-    // Ensure the automatic Superficie object exists
     await ensureSuperficieObject(wall.id, face);
-
     setPanelWallId(wall.id);
     setPanelWallIndex(face.wallIndex);
     setPanelWallType(wall.wall_type);
@@ -366,215 +543,158 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
     setPanelOpen(true);
   };
 
-  const filtered = useMemo(() => {
-    if (!search.trim()) return autoFaces;
-    const q = search.toLowerCase();
-    return autoFaces.filter(f =>
-      f.workspace.toLowerCase().includes(q) || f.faceName.toLowerCase().includes(q)
-    );
-  }, [autoFaces, search]);
-
-  const byWorkspace = useMemo(() => {
-    const groups = new Map<string, AutoFace[]>();
-    for (const f of filtered) {
-      if (!groups.has(f.workspace)) groups.set(f.workspace, []);
-      groups.get(f.workspace)!.push(f);
-    }
-    return Array.from(groups.entries())
-      .sort(([a], [b]) => a.localeCompare(b, 'es'))
-      .map(([name, faces]) => ({ name, faces: faces.sort((a, b) => a.sortKey - b.sortKey) }));
-  }, [filtered]);
-
-  const alphabetical = useMemo(() => {
-    return [...filtered].sort((a, b) => {
-      const cmp = a.faceName.localeCompare(b.faceName, 'es');
-      return cmp !== 0 ? cmp : a.workspace.localeCompare(b.workspace, 'es');
-    });
-  }, [filtered]);
-
-  const totalM2 = filtered.reduce((s, f) => s + (f.m2 || 0), 0);
-  const totalM3 = filtered.reduce((s, f) => s + (f.m3 || 0), 0);
-  const workspaceCount = new Set(filtered.map(f => f.workspace)).size;
-
-  const toggleGroup = (name: string) => {
-    setOpenGroups(prev => {
-      const next = new Set(prev);
-      if (next.has(name)) next.delete(name);
-      else next.add(name);
-      return next;
-    });
+  const handleDeleteTemplate = async (id: string) => {
+    const { error } = await supabase.from('budget_object_templates').delete().eq('id', id);
+    if (error) { toast.error('Error eliminando'); return; }
+    toast.success('Objeto modelo eliminado');
+    queryClient.invalidateQueries({ queryKey: ['budget-object-templates', budgetId] });
   };
 
-  if (isLoading) return <p className="text-sm text-muted-foreground py-2">Cargando objetos...</p>;
-
-  if (autoFaces.length === 0) {
-    return (
-      <div className="text-center py-6 text-muted-foreground">
-        <Box className="h-8 w-8 mx-auto mb-2 opacity-40" />
-        <p className="text-sm">No hay Espacios de trabajo definidos</p>
-        <p className="text-xs">Crea espacios en la cuadrícula para ver su desglose automático</p>
-      </div>
-    );
-  }
+  const filteredTemplates = useMemo(() => {
+    if (!search.trim()) return templates;
+    const q = search.toLowerCase();
+    return templates.filter(t => t.name.toLowerCase().includes(q) || (t.material_type || '').toLowerCase().includes(q) || (t.object_type || '').toLowerCase().includes(q));
+  }, [templates, search]);
 
   const faceIcon = (name: string) =>
     name === 'Espacio' ? '🔷' : name === 'Suelo' ? '⬛' : name === 'Techo' ? '⬜' : '🧱';
 
+  const placedColumns: ColDef[] = [
+    { key: 'order', header: '#', defaultWidth: 36, minWidth: 30 },
+    { key: 'name', header: 'Objeto', defaultWidth: 150, minWidth: 80 },
+    { key: 'face', header: 'Cara', defaultWidth: 80, minWidth: 50 },
+    { key: 'workspace', header: 'Espacio', defaultWidth: 110, minWidth: 60 },
+    { key: 'type', header: 'Tipo', defaultWidth: 80, minWidth: 50 },
+    { key: 'thickness', header: 'Espesor', defaultWidth: 65, minWidth: 45 },
+    { key: 'm2', header: 'm²', defaultWidth: 65, minWidth: 45 },
+    { key: 'm3', header: 'm³', defaultWidth: 65, minWidth: 45 },
+  ];
+
+  const placedRow = (o: any) => ({
+    face: { workspace: o.workspace, roomId: '', faceName: o.faceName, m2: o.surface_m2, m3: o.volume_m3, sortKey: 0, wallIndex: 0 } as AutoFace,
+    cells: {
+      order: String(o.layer_order),
+      name: o.layer_order === 0 ? `⭐ ${o.name}` : o.name,
+      face: o.faceName,
+      workspace: o.workspace,
+      type: o.object_type || '',
+      thickness: o.thickness_mm ? `${o.thickness_mm} mm` : '',
+      m2: o.surface_m2 != null ? o.surface_m2.toFixed(2) : '',
+      m3: o.volume_m3 != null ? o.volume_m3.toFixed(3) : '',
+    },
+  });
+
+  if (isLoading || templatesLoading) return <p className="text-sm text-muted-foreground py-2">Cargando objetos...</p>;
+
   return (
     <div className="space-y-3">
-      {/* Summary */}
-      <div className="flex flex-wrap gap-2 items-center">
-        <Badge variant="secondary" className="text-xs h-6 gap-1">
-          <Layers className="h-3.5 w-3.5" /> {workspaceCount} espacios
-        </Badge>
-        <Badge variant="secondary" className="text-xs h-6 gap-1">
-          <Box className="h-3.5 w-3.5" /> {autoFaces.length} ámbitos
-        </Badge>
-        {totalM2 > 0 && <Badge variant="secondary" className="text-xs h-6">📐 {totalM2.toFixed(2)} m²</Badge>}
-        {totalM3 > 0 && <Badge variant="secondary" className="text-xs h-6">📦 {totalM3.toFixed(3)} m³</Badge>}
-      </div>
-
       {/* Search */}
       <div className="relative max-w-sm">
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
           className="h-9 text-sm pl-8"
-          placeholder="Buscar espacio o ámbito..."
+          placeholder="Buscar..."
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
       </div>
 
-      <Tabs defaultValue="workspace" className="w-full">
+      <Tabs value={mainTab} onValueChange={v => setMainTab(v as any)} className="w-full">
         <TabsList className="h-8">
-          <TabsTrigger value="workspace" className="text-xs h-7 gap-1">
-            <Layers className="h-3.5 w-3.5" /> Por espacio
+          <TabsTrigger value="modelos" className="text-xs h-7 gap-1">
+            <Archive className="h-3.5 w-3.5" /> Objetos modelo
           </TabsTrigger>
-          <TabsTrigger value="alpha" className="text-xs h-7 gap-1">
-            <List className="h-3.5 w-3.5" /> Alfabético
-          </TabsTrigger>
-          <TabsTrigger value="recursos" className="text-xs h-7 gap-1">
-            <Package className="h-3.5 w-3.5" /> Recursos
+          <TabsTrigger value="espacios" className="text-xs h-7 gap-1">
+            <Box className="h-3.5 w-3.5" /> Objetos del espacio
           </TabsTrigger>
         </TabsList>
 
-        {/* By Workspace — collapsible with resizable columns */}
-        <TabsContent value="workspace" className="space-y-1.5 mt-2">
-          {byWorkspace.map(group => {
-            const groupM2 = group.faces.reduce((s, f) => s + (f.m2 || 0), 0);
-            const groupM3 = group.faces.reduce((s, f) => s + (f.m3 || 0), 0);
-            const isOpen = openGroups.has(group.name);
-            return (
-              <Collapsible key={group.name} open={isOpen} onOpenChange={() => toggleGroup(group.name)}>
-                <CollapsibleTrigger className="flex items-center gap-2 w-full rounded-md px-2 py-1.5 bg-accent/30 hover:bg-accent/50 transition-colors text-left">
-                  <ChevronRight className={cn('h-4 w-4 text-muted-foreground transition-transform duration-200', isOpen && 'rotate-90')} />
-                  <span className="text-sm font-semibold flex-1">{group.name}</span>
-                  <Badge variant="outline" className="text-[10px] h-5">{group.faces.length}</Badge>
-                  {groupM2 > 0 && <span className="text-xs text-muted-foreground tabular-nums">{groupM2.toFixed(2)} m²</span>}
-                  {groupM3 > 0 && <span className="text-xs text-muted-foreground tabular-nums">{groupM3.toFixed(3)} m³</span>}
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <ResizableTable
-                    columns={[
-                      { key: 'icon', header: '', defaultWidth: 32, minWidth: 28 },
-                      { key: 'name', header: 'Ámbito', defaultWidth: 130, minWidth: 60 },
-                      { key: 'measure', header: 'Medición', defaultWidth: 120, minWidth: 60 },
-                    ]}
-                    rows={group.faces.map((f) => ({
-                      face: f,
-                      cells: {
-                        icon: faceIcon(f.faceName),
-                        name: f.faceName,
-                        measure: f.m2 != null ? `${f.m2.toFixed(2)} m²` : f.m3 != null ? `${f.m3.toFixed(3)} m³` : '',
-                      },
-                    }))}
-                    onRowClick={(row) => handleFaceClick(row.face)}
-                    className="ml-6 mt-1"
-                  />
-                </CollapsibleContent>
-              </Collapsible>
-            );
-          })}
+        {/* ── Objetos modelo ── */}
+        <TabsContent value="modelos" className="mt-2 space-y-2">
+          <div className="flex items-center justify-between">
+            <Badge variant="secondary" className="text-xs h-6 gap-1">
+              <Package className="h-3.5 w-3.5" /> {filteredTemplates.length} modelos
+            </Badge>
+            <Button size="sm" className="h-7 text-xs gap-1" onClick={() => { setEditingTemplate(null); setShowTemplateForm(true); }}>
+              <Plus className="h-3 w-3" /> Nuevo modelo
+            </Button>
+          </div>
+
+          {showTemplateForm && (
+            <TemplateForm
+              budgetId={budgetId}
+              template={editingTemplate}
+              onSaved={() => {
+                setShowTemplateForm(false);
+                setEditingTemplate(null);
+                queryClient.invalidateQueries({ queryKey: ['budget-object-templates', budgetId] });
+              }}
+              onCancel={() => { setShowTemplateForm(false); setEditingTemplate(null); }}
+            />
+          )}
+
+          {filteredTemplates.length === 0 && !showTemplateForm ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">No hay objetos modelo definidos</p>
+          ) : (
+            <ResizableTable
+              columns={[
+                { key: 'name', header: 'Nombre', defaultWidth: 140, minWidth: 80 },
+                { key: 'type', header: 'Tipo', defaultWidth: 90, minWidth: 50 },
+                { key: 'material', header: 'Material', defaultWidth: 100, minWidth: 50 },
+                { key: 'dims', header: 'Dimensiones (mm)', defaultWidth: 130, minWidth: 70 },
+                { key: 'price', header: 'Precio', defaultWidth: 80, minWidth: 50 },
+                { key: 'actions', header: '', defaultWidth: 60, minWidth: 50 },
+              ]}
+              rows={filteredTemplates.map(t => ({
+                face: t as any,
+                cells: {
+                  name: t.name,
+                  type: OBJECT_TYPES.find(ot => ot.value === t.object_type)?.label || t.object_type,
+                  material: t.material_type || '',
+                  dims: [t.width_mm && `A:${t.width_mm}`, t.height_mm && `H:${t.height_mm}`, t.thickness_mm && `E:${t.thickness_mm}`].filter(Boolean).join(' '),
+                  price: t.purchase_price_vat_included ? `${t.purchase_price_vat_included}€` : '',
+                  actions: '✎ 🗑',
+                },
+              }))}
+              onRowClick={(row) => {
+                const t = row.face as unknown as ObjectTemplate;
+                setEditingTemplate(t);
+                setShowTemplateForm(true);
+              }}
+            />
+          )}
         </TabsContent>
 
-        {/* Alphabetical with resizable columns */}
-        <TabsContent value="alpha" className="mt-2">
-          <ResizableTable
-            columns={[
-              { key: 'icon', header: '', defaultWidth: 32, minWidth: 28 },
-              { key: 'name', header: 'Ámbito', defaultWidth: 130, minWidth: 60 },
-              { key: 'workspace', header: 'Espacio', defaultWidth: 140, minWidth: 60 },
-              { key: 'measure', header: 'Medición', defaultWidth: 120, minWidth: 60 },
-            ]}
-            rows={alphabetical.map((f) => ({
-              face: f,
-              cells: {
-                icon: faceIcon(f.faceName),
-                name: f.faceName,
-                workspace: f.workspace,
-                measure: f.m2 != null ? `${f.m2.toFixed(2)} m²` : f.m3 != null ? `${f.m3.toFixed(3)} m³` : '',
-              },
-            }))}
-            onRowClick={(row) => handleFaceClick(row.face)}
-          />
-        </TabsContent>
+        {/* ── Objetos del espacio ── */}
+        <TabsContent value="espacios" className="mt-2 space-y-2">
+          <div className="flex flex-wrap gap-2 items-center">
+            <Badge variant="secondary" className="text-xs h-6 gap-1">
+              <Layers className="h-3.5 w-3.5" /> {filteredObjects.length} objetos colocados
+            </Badge>
+          </div>
 
-        {/* Recursos tab */}
-        <TabsContent value="recursos" className="mt-2 space-y-2">
           <div className="flex gap-1">
-            <Button
-              variant={resourcesView === 'alpha' ? 'default' : 'outline'}
-              size="sm"
-              className="h-7 text-xs gap-1"
-              onClick={() => setResourcesView('alpha')}
-            >
+            <Button variant={placedView === 'alpha' ? 'default' : 'outline'} size="sm" className="h-7 text-xs gap-1" onClick={() => setPlacedView('alpha')}>
               <List className="h-3 w-3" /> Alfabético
             </Button>
-            <Button
-              variant={resourcesView === 'workspace' ? 'default' : 'outline'}
-              size="sm"
-              className="h-7 text-xs gap-1"
-              onClick={() => setResourcesView('workspace')}
-            >
+            <Button variant={placedView === 'workspace' ? 'default' : 'outline'} size="sm" className="h-7 text-xs gap-1" onClick={() => setPlacedView('workspace')}>
               <Layers className="h-3 w-3" /> Por espacio
+            </Button>
+            <Button variant={placedView === 'type' ? 'default' : 'outline'} size="sm" className="h-7 text-xs gap-1" onClick={() => setPlacedView('type')}>
+              <Package className="h-3 w-3" /> Por tipo
             </Button>
           </div>
 
           {filteredObjects.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-4 text-center">No hay objetos/capas definidos aún</p>
-          ) : resourcesView === 'alpha' ? (
-            <ResizableTable
-              columns={[
-                { key: 'order', header: '#', defaultWidth: 36, minWidth: 30 },
-                { key: 'name', header: 'Objeto / Recurso', defaultWidth: 160, minWidth: 80 },
-                { key: 'face', header: 'Cara', defaultWidth: 90, minWidth: 50 },
-                { key: 'workspace', header: 'Espacio', defaultWidth: 120, minWidth: 60 },
-                { key: 'type', header: 'Tipo', defaultWidth: 90, minWidth: 50 },
-                { key: 'thickness', header: 'Espesor', defaultWidth: 70, minWidth: 45 },
-                { key: 'm2', header: 'm²', defaultWidth: 70, minWidth: 45 },
-                { key: 'm3', header: 'm³', defaultWidth: 70, minWidth: 45 },
-              ]}
-              rows={objectsAlpha.map((o: any) => ({
-                face: { workspace: o.workspace, roomId: '', faceName: o.faceName, m2: o.surface_m2, m3: o.volume_m3, sortKey: 0, wallIndex: 0 } as AutoFace,
-                cells: {
-                  order: String(o.layer_order),
-                  name: o.layer_order === 0 ? `⭐ ${o.name}` : o.name,
-                  face: o.faceName,
-                  workspace: o.workspace,
-                  type: o.object_type || '',
-                  thickness: o.thickness_mm ? `${o.thickness_mm} mm` : '',
-                  m2: o.surface_m2 != null ? o.surface_m2.toFixed(2) : '',
-                  m3: o.volume_m3 != null ? o.volume_m3.toFixed(3) : '',
-                },
-              }))}
-              onRowClick={() => {}}
-            />
-          ) : (
+            <p className="text-sm text-muted-foreground py-4 text-center">No hay objetos colocados en espacios</p>
+          ) : placedView === 'alpha' ? (
+            <ResizableTable columns={placedColumns} rows={objectsAlpha.map(placedRow)} onRowClick={() => {}} />
+          ) : placedView === 'workspace' ? (
             <div className="space-y-1.5">
               {objectsByWorkspace.map(group => {
-                const isOpen = resourceOpenGroups.has(group.name);
+                const isOpen = resourceOpenGroups.has(`ws-${group.name}`);
                 return (
-                  <Collapsible key={group.name} open={isOpen} onOpenChange={() => toggleResourceGroup(group.name)}>
+                  <Collapsible key={group.name} open={isOpen} onOpenChange={() => toggleResourceGroup(`ws-${group.name}`)}>
                     <CollapsibleTrigger className="flex items-center gap-2 w-full rounded-md px-2 py-1.5 bg-accent/30 hover:bg-accent/50 transition-colors text-left">
                       <ChevronRight className={cn('h-4 w-4 text-muted-foreground transition-transform duration-200', isOpen && 'rotate-90')} />
                       <span className="text-sm font-semibold flex-1">{group.name}</span>
@@ -582,26 +702,38 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
                     </CollapsibleTrigger>
                     <CollapsibleContent>
                       <ResizableTable
-                        columns={[
-                          { key: 'order', header: '#', defaultWidth: 36, minWidth: 30 },
-                          { key: 'name', header: 'Objeto / Recurso', defaultWidth: 160, minWidth: 80 },
-                          { key: 'face', header: 'Cara', defaultWidth: 90, minWidth: 50 },
-                          { key: 'type', header: 'Tipo', defaultWidth: 90, minWidth: 50 },
-                          { key: 'thickness', header: 'Espesor', defaultWidth: 70, minWidth: 45 },
-                          { key: 'm2', header: 'm²', defaultWidth: 70, minWidth: 45 },
-                          { key: 'm3', header: 'm³', defaultWidth: 70, minWidth: 45 },
-                        ]}
+                        columns={placedColumns.filter(c => c.key !== 'workspace')}
                         rows={group.objects.map((o: any) => ({
-                          face: { workspace: o.workspace, roomId: '', faceName: o.faceName, m2: o.surface_m2, m3: o.volume_m3, sortKey: 0, wallIndex: 0 } as AutoFace,
-                          cells: {
-                            order: String(o.layer_order),
-                            name: o.layer_order === 0 ? `⭐ ${o.name}` : o.name,
-                            face: o.faceName,
-                            type: o.object_type || '',
-                            thickness: o.thickness_mm ? `${o.thickness_mm} mm` : '',
-                            m2: o.surface_m2 != null ? o.surface_m2.toFixed(2) : '',
-                            m3: o.volume_m3 != null ? o.volume_m3.toFixed(3) : '',
-                          },
+                          ...placedRow(o),
+                          cells: { ...placedRow(o).cells },
+                        }))}
+                        onRowClick={() => {}}
+                        className="ml-6 mt-1"
+                      />
+                    </CollapsibleContent>
+                  </Collapsible>
+                );
+              })}
+            </div>
+          ) : (
+            /* By type */
+            <div className="space-y-1.5">
+              {objectsByType.map(group => {
+                const typeLabel = OBJECT_TYPES.find(t => t.value === group.name)?.label || group.name;
+                const isOpen = resourceOpenGroups.has(`tp-${group.name}`);
+                return (
+                  <Collapsible key={group.name} open={isOpen} onOpenChange={() => toggleResourceGroup(`tp-${group.name}`)}>
+                    <CollapsibleTrigger className="flex items-center gap-2 w-full rounded-md px-2 py-1.5 bg-accent/30 hover:bg-accent/50 transition-colors text-left">
+                      <ChevronRight className={cn('h-4 w-4 text-muted-foreground transition-transform duration-200', isOpen && 'rotate-90')} />
+                      <span className="text-sm font-semibold flex-1">{typeLabel}</span>
+                      <Badge variant="outline" className="text-[10px] h-5">{group.objects.length}</Badge>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <ResizableTable
+                        columns={placedColumns.filter(c => c.key !== 'type')}
+                        rows={group.objects.map((o: any) => ({
+                          ...placedRow(o),
+                          cells: { ...placedRow(o).cells },
                         }))}
                         onRowClick={() => {}}
                         className="ml-6 mt-1"

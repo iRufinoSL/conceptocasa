@@ -146,8 +146,13 @@ export function WorkspacePropertiesPanel({
 
   const getWallTypeForFace = (wallIndex: number) => {
     const faceKey = `wall-${wallIndex}`;
+    // 1. Local override (immediate feedback within this panel)
+    const localOverride = localOverrides[faceKey];
+    if (localOverride) return localOverride;
+    // 2. Parent-level face types (section polygon JSON metadata)
     const localType = localFaceTypes?.[faceKey];
     if (localType) return normalizeWallType(localType);
+    // 3. DB wall record
     const wall = walls.find(w => w.wall_index === wallIndex + 1);
     return normalizeWallType(wall?.wall_type);
   };
@@ -157,7 +162,10 @@ export function WorkspacePropertiesPanel({
     const dbWallIndex = wallIndex + 1;
     const faceKey = `wall-${wallIndex}`;
 
-    // Always persist in section polygon metadata (for synthetic X/Y/Z polygons)
+    // Immediate UI feedback — no round-trip needed
+    setLocalOverrides(prev => ({ ...prev, [faceKey]: normalized }));
+
+    // Persist in section polygon metadata (for synthetic X/Y/Z polygons)
     onLocalFaceTypeChange?.(faceKey, normalized);
 
     // If this polygon is not tied to a real room row, stop at local persistence

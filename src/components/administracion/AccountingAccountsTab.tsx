@@ -102,9 +102,13 @@ export function AccountingAccountsTab({ highlightAccountId, onHighlightHandled, 
 
   const fetchAccounts = async () => {
     try {
-      const { data: accountsData, error: accountsError } = await supabase
+      let accountsQuery = supabase
         .from('accounting_accounts')
-        .select('*')
+        .select('*');
+      if (ledgerId && ledgerId !== '__total__') {
+        accountsQuery = accountsQuery.eq('ledger_id', ledgerId);
+      }
+      const { data: accountsData, error: accountsError } = await accountsQuery
         .order('name', { ascending: true });
 
       if (accountsError) throw accountsError;

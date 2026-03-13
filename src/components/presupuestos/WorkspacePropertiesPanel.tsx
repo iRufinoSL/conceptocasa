@@ -229,6 +229,13 @@ export function WorkspacePropertiesPanel({
       updatePayload.has_roof = false;
     }
 
+    // Ensure room record exists before updating
+    const roomOk = await ensureRoomRecord();
+    if (!roomOk) {
+      toast.error('No se pudo crear el registro del espacio');
+      return;
+    }
+
     await supabase.from('budget_floor_plan_rooms').update(updatePayload).eq('id', workspaceId);
     setRoom((prev: any) => prev ? { ...prev, ...updatePayload } : prev);
 
@@ -239,6 +246,12 @@ export function WorkspacePropertiesPanel({
     if (existingWall) {
       await supabase.from('budget_floor_plan_walls').update({ wall_type: newWallType }).eq('id', existingWall.id);
       setWalls(prev => prev.map(w => w.id === existingWall.id ? { ...w, wall_type: newWallType } : w));
+    } else {
+      // Create the wall record if it doesn't exist
+      const { data } = await supabase.from('budget_floor_plan_walls')
+        .insert({ room_id: workspaceId, wall_index: wallIndex, wall_type: newWallType })
+        .select().single();
+      if (data) setWalls(prev => [...prev, data as WallRecord]);
     }
 
     toast.success('Actualizado');

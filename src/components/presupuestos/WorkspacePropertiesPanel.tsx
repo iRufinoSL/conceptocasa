@@ -313,6 +313,72 @@ export function WorkspacePropertiesPanel({
         )}
       </div>
 
+      {/* Mini polygon diagram */}
+      {(() => {
+        const diagramVerts = verticesProp || poly;
+        if (diagramVerts && diagramVerts.length >= 3) {
+          const xs = diagramVerts.map(v => v.x);
+          const ys = diagramVerts.map(v => v.y);
+          const minX = Math.min(...xs), maxX = Math.max(...xs);
+          const minY = Math.min(...ys), maxY = Math.max(...ys);
+          const rangeX = maxX - minX || 1;
+          const rangeY = maxY - minY || 1;
+          const svgW = 260;
+          const svgH = 100;
+          const pad = 28;
+          const drawW = svgW - pad * 2;
+          const drawH = svgH - pad * 2;
+          const scaleF = Math.min(drawW / rangeX, drawH / rangeY);
+          const offX = pad + (drawW - rangeX * scaleF) / 2;
+          const offY = pad + (drawH - rangeY * scaleF) / 2;
+          const toSvg = (v: { x: number; y: number }) => ({
+            sx: offX + (v.x - minX) * scaleF,
+            sy: offY + (maxY - v.y) * scaleF, // flip Y
+          });
+          const svgPts = diagramVerts.map(toSvg);
+          const pointsStr = svgPts.map(p => `${p.sx},${p.sy}`).join(' ');
+
+          return (
+            <div className="px-2 py-1.5 border-b">
+              <svg width={svgW} height={svgH} className="w-full" viewBox={`0 0 ${svgW} ${svgH}`}>
+                {/* Fill */}
+                <polygon points={pointsStr} fill="hsl(var(--primary))" fillOpacity={0.1} stroke="hsl(var(--primary))" strokeWidth={2} />
+                {/* Edge labels + midpoint markers */}
+                {diagramVerts.map((_, i) => {
+                  const j = (i + 1) % diagramVerts.length;
+                  const a = svgPts[i];
+                  const b = svgPts[j];
+                  const mx = (a.sx + b.sx) / 2;
+                  const my = (a.sy + b.sy) / 2;
+                  const dx = b.sx - a.sx;
+                  const dy = b.sy - a.sy;
+                  const len = Math.sqrt(dx * dx + dy * dy);
+                  const nx = len > 0 ? -dy / len : 0;
+                  const ny = len > 0 ? dx / len : 0;
+                  const off = 12;
+                  const isHighlighted = expandedFace === `wall-${i}`;
+                  return (
+                    <g key={i} style={{ cursor: 'pointer' }} onClick={() => setExpandedFace(expandedFace === `wall-${i}` ? null : `wall-${i}`)}>
+                      <rect x={mx + nx * off - 11} y={my + ny * off - 7} width={22} height={14} rx={3}
+                        fill={isHighlighted ? 'hsl(var(--primary))' : 'hsl(var(--muted))'} stroke="hsl(var(--border))" strokeWidth={0.5} />
+                      <text x={mx + nx * off} y={my + ny * off + 4} textAnchor="middle"
+                        fontSize={9} fontWeight={700} fill={isHighlighted ? 'hsl(var(--primary-foreground))' : 'hsl(var(--foreground))'} fontFamily="monospace">
+                        P{i + 1}
+                      </text>
+                    </g>
+                  );
+                })}
+                {/* Vertex dots */}
+                {svgPts.map((p, i) => (
+                  <circle key={`v${i}`} cx={p.sx} cy={p.sy} r={3} fill="hsl(var(--primary))" stroke="hsl(var(--background))" strokeWidth={1.5} />
+                ))}
+              </svg>
+            </div>
+          );
+        }
+        return null;
+      })()}
+
       {/* Faces */}
       {loading ? (
         <div className="px-3 py-4 text-center text-xs text-muted-foreground">Cargando...</div>

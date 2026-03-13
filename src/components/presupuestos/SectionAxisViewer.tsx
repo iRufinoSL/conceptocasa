@@ -1438,8 +1438,9 @@ export function SectionAxisViewer({
             {patternDefs}
           </defs>
 
-          <g opacity={drawMode ? 0.25 : 1}>{gridContent?.gridLines}</g>
-          {gridContent?.axisRefs}
+          <g data-pdf-layer="grid" opacity={drawMode ? 0.25 : 1}>{gridContent?.gridLines}</g>
+          <g data-pdf-layer="axes">{gridContent?.axisRefs}</g>
+          <g data-pdf-layer="dimensions">{gridContent?.dimensions}</g>
           {nodeInteractionDots}
           {polygonElements}
           {drawingOverlay}

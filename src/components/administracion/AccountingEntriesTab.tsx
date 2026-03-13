@@ -323,9 +323,7 @@ export function AccountingEntriesTab({ highlightCode, onHighlightHandled, budget
       if (codeError) throw codeError;
 
       // Create the duplicated entry
-      const { data: newEntry, error: insertError } = await supabase
-        .from('accounting_entries')
-        .insert({
+      const duplicateData: Record<string, any> = {
           code: newCode,
           description: entry.description,
           entry_date: format(today, 'yyyy-MM-dd'),
@@ -335,7 +333,14 @@ export function AccountingEntriesTab({ highlightCode, onHighlightHandled, budget
           vat_rate: (entry as any).vat_rate || null,
           supplier_id: (entry as any).supplier_id || null,
           expense_account_id: (entry as any).expense_account_id || null
-        })
+      };
+      if (ledgerId && ledgerId !== '__total__') {
+        duplicateData.ledger_id = ledgerId;
+      }
+
+      const { data: newEntry, error: insertError } = await supabase
+        .from('accounting_entries')
+        .insert(duplicateData)
         .select()
         .single();
 

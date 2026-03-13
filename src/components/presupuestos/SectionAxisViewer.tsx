@@ -970,7 +970,7 @@ export function SectionAxisViewer({
           style={{ cursor: 'pointer' }}
           onClick={(e) => {
             e.stopPropagation();
-            setFacePanel({ polyId: poly.id, polyName: poly.name, faceKey: 'floor', edgeCount: poly.vertices.length });
+            setFacePanel({ polyId: poly.id, polyName: poly.name, faceKey: 'floor', edgeCount: poly.vertices.length, vertices: poly.vertices.map(v => ({ x: v.x, y: v.y })) });
           }}>
           <text x={cx} y={cy - 4} textAnchor="middle" fontSize={11} fontWeight={800} fill={darkColor} fontFamily="sans-serif"
             stroke="white" strokeWidth={2.5} paintOrder="stroke">

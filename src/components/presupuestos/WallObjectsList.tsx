@@ -160,6 +160,18 @@ interface ObjectTemplate {
   object_type: string;
   unit_measure: string | null;
   image_url: string | null;
+  resource_id: string | null;
+}
+
+interface ExternalResourceRow {
+  id: string;
+  name: string;
+  description: string | null;
+  unit_cost: number | null;
+  unit_measure: string | null;
+  resource_type: string | null;
+  image_url: string | null;
+  vat_included_percent: number | null;
 }
 
 const UNIT_MEASURES = ['m2', 'm3', 'ml', 'ud', 'kg', 'hora', 'día', 'mes'];

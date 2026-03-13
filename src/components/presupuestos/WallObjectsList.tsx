@@ -325,6 +325,38 @@ function TemplateForm({ budgetId, template, objectTypes, onSaved, onCancel }: {
           <label className="text-xs font-medium text-muted-foreground">Ficha técnica / Descripción</label>
           <textarea className="w-full border rounded px-2 py-1 text-sm min-h-[50px] bg-background" value={techDesc} onChange={e => setTechDesc(e.target.value)} />
         </div>
+        <div className="col-span-2">
+          <label className="text-xs font-medium text-muted-foreground">Imagen</label>
+          <div className="flex items-center gap-2 mt-1">
+            {imageUrl ? (
+              <div className="relative group">
+                <img src={imageUrl} alt="Objeto" className="h-16 w-16 object-cover rounded border" />
+                <button
+                  onClick={() => setImageUrl('')}
+                  className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full h-4 w-4 flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity"
+                >×</button>
+              </div>
+            ) : null}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs gap-1"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+            >
+              <Upload className="h-3 w-3" />
+              {uploading ? 'Subiendo...' : imageUrl ? 'Cambiar' : 'Subir imagen'}
+            </Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,.pdf"
+              className="hidden"
+              onChange={handleImageUpload}
+            />
+          </div>
+        </div>
       </div>
 
       <div className="border-t pt-2">

@@ -129,6 +129,8 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     },
     enabled: !!(workspaceRooms && workspaceRooms.length > 0),
   });
+
+  const allSections = useMemo<CustomSection[]>(() => {
     if (!floorPlan?.custom_corners) return [];
     try {
       const parsed = typeof floorPlan.custom_corners === 'string'

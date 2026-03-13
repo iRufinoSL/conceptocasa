@@ -174,6 +174,16 @@ export function SectionAxisViewer({
   // Wall label display mode
   const [wallLabelMode, setWallLabelMode] = useState<WallLabelMode>('both');
 
+  // PDF export layer options
+  const [pdfLayers, setPdfLayers] = useState({
+    grid: true,
+    axes: true,
+    dimensions: true,
+    wallLabels: true,
+    rulers: true,
+    names: true,
+  });
+
   // Face properties panel state
   const [facePanel, setFacePanel] = useState<{ polyId: string; polyName: string; faceKey: string; edgeCount: number; vertices: Array<{ x: number; y: number }> } | null>(null);
 

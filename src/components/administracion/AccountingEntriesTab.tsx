@@ -163,6 +163,9 @@ export function AccountingEntriesTab({ highlightCode, onHighlightHandled, budget
       if (fixedBudgetId) {
         entriesQuery = entriesQuery.eq('budget_id', fixedBudgetId);
       }
+      if (ledgerId && ledgerId !== '__total__') {
+        entriesQuery = entriesQuery.eq('ledger_id', ledgerId);
+      }
       
       const { data: entriesData, error: entriesError } = await entriesQuery
         .order('entry_date', { ascending: false })

@@ -103,7 +103,7 @@ export function VATReportTab({ budgetId: fixedBudgetId, ledgerId }: { budgetId?:
 
   useEffect(() => {
     fetchEntries();
-  }, []);
+  }, [ledgerId]);
 
   // Initialize date range when switching to dateRange mode
   useEffect(() => {

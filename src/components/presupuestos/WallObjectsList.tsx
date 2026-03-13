@@ -278,6 +278,7 @@ function TemplateForm({ budgetId, template, objectTypes, onSaved, onCancel }: {
       sales_margin_percent: parseFloat(salesPct) || 0,
       object_type: objectType,
       unit_measure: unitMeasure,
+      image_url: imageUrl || null,
     };
     let error;
     if (template) {

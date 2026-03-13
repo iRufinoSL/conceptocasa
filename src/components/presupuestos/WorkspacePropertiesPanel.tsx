@@ -336,6 +336,7 @@ export function WorkspacePropertiesPanel({
   const handleDeleteOpening = async (id: string) => {
     await supabase.from('budget_floor_plan_openings').delete().eq('id', id);
     setOpenings(prev => prev.filter(o => o.id !== id));
+    onOpeningsChange?.();
     toast.success('Hueco eliminado');
   };
 

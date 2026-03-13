@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -9,8 +9,48 @@ import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ChevronRight, Plus, Trash2, ArrowLeft, Eye } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { CustomSection } from './CustomSectionManager';
+import type { CustomSection, SectionPolygon } from './CustomSectionManager';
 import { SectionAxisViewer } from './SectionAxisViewer';
+
+interface PolygonVertex { x: number; y: number; }
+
+interface WorkspaceRoom {
+  id: string;
+  name: string;
+  height: number | null;
+  has_floor: boolean;
+  has_ceiling: boolean;
+  has_roof: boolean;
+  vertical_section_id: string | null;
+  floor_polygon: PolygonVertex[] | null;
+}
+
+interface WallData {
+  id: string;
+  room_id: string;
+  wall_index: number;
+  height: number | null;
+}
+
+/** Find where a polygon's edges cross axis=val, returning values on the other axis */
+function findPolyIntersections(poly: PolygonVertex[], axis: 'x' | 'y', val: number): number[] {
+  const results: number[] = [];
+  const other = axis === 'y' ? 'x' : 'y';
+  for (let i = 0; i < poly.length; i++) {
+    const j = (i + 1) % poly.length;
+    const a = poly[i], b = poly[j];
+    const aV = a[axis], bV = b[axis];
+    if ((aV <= val && bV >= val) || (aV >= val && bV <= val)) {
+      if (aV === bV) {
+        results.push(a[other], b[other]);
+      } else {
+        const t = (val - aV) / (bV - aV);
+        results.push(a[other] + t * (b[other] - a[other]));
+      }
+    }
+  }
+  return results;
+}
 
 interface CartesianAxesXYZTabProps {
   budgetId: string;

@@ -161,6 +161,7 @@ export function PurchaseOrdersTab({ budgetId: fixedBudgetId, ledgerId }: { budge
             client_contact:crm_contacts!purchase_orders_client_contact_id_fkey(id, name, surname, contact_type, email, phone, address, city, postal_code, province, nif_dni)
           `);
           if (fixedBudgetId) q = q.eq('budget_id', fixedBudgetId);
+          if (ledgerId && ledgerId !== '__total__') q = q.eq('ledger_id', ledgerId);
           return q.order('order_date', { ascending: false }).order('order_number', { ascending: false });
         })()
       ]);

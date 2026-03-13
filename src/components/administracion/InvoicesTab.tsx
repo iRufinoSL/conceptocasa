@@ -206,6 +206,9 @@ export function InvoicesTab({ budgetId: fixedBudgetId, ledgerId }: { budgetId?: 
       if (fixedBudgetId) {
         invoicesQuery = invoicesQuery.eq('budget_id', fixedBudgetId);
       }
+      if (ledgerId && ledgerId !== '__total__') {
+        invoicesQuery = invoicesQuery.eq('ledger_id', ledgerId);
+      }
       
       const { data: invoicesData, error: invoicesError } = await invoicesQuery
         .order('invoice_date', { ascending: false })

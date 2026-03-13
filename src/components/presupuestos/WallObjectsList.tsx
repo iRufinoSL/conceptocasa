@@ -926,11 +926,26 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
               <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => setShowTypeManager(!showTypeManager)}>
                 <Tag className="h-3 w-3" /> Tipos
               </Button>
+              <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => setShowImportResources(!showImportResources)}>
+                <Package className="h-3 w-3" /> Importar recurso
+              </Button>
               <Button size="sm" className="h-7 text-xs gap-1" onClick={() => { setEditingTemplate(null); setShowTemplateForm(true); }}>
                 <Plus className="h-3 w-3" /> Nuevo modelo
               </Button>
             </div>
           </div>
+
+          {showImportResources && (
+            <ImportResourceSelector
+              budgetId={budgetId}
+              objectTypes={objectTypes}
+              existingResourceIds={existingResourceIds}
+              onImported={() => {
+                queryClient.invalidateQueries({ queryKey: ['budget-object-templates', budgetId] });
+              }}
+              onClose={() => setShowImportResources(false)}
+            />
+          )}
 
           {showTypeManager && (
             <ObjectTypeManager

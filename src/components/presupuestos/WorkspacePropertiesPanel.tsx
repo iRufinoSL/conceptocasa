@@ -95,6 +95,8 @@ export function WorkspacePropertiesPanel({
   const [wallObjects, setWallObjects] = useState<WallObjectRecord[]>([]);
   const [expandedFace, setExpandedFace] = useState<string | null>(focusFace || null);
   const [patternPickerFace, setPatternPickerFace] = useState<string | null>(null);
+  // Local override for immediate UI feedback (avoids round-trip through parent)
+  const [localOverrides, setLocalOverrides] = useState<Record<string, string>>({});
 
   const fetchData = useCallback(async () => {
     setLoading(true);

@@ -2278,12 +2278,17 @@ export type Database = {
         Row: {
           created_at: string
           description: string | null
+          distance_to_wall: number | null
+          height_mm: number | null
           id: string
           is_core: boolean
           layer_order: number
           length_ml: number | null
           name: string
           object_type: string
+          position_x: number | null
+          resource_id: string | null
+          sill_height: number | null
           surface_m2: number | null
           template_id: string | null
           thickness_mm: number | null
@@ -2291,16 +2296,22 @@ export type Database = {
           visual_pattern: string | null
           volume_m3: number | null
           wall_id: string
+          width_mm: number | null
         }
         Insert: {
           created_at?: string
           description?: string | null
+          distance_to_wall?: number | null
+          height_mm?: number | null
           id?: string
           is_core?: boolean
           layer_order?: number
           length_ml?: number | null
           name: string
           object_type?: string
+          position_x?: number | null
+          resource_id?: string | null
+          sill_height?: number | null
           surface_m2?: number | null
           template_id?: string | null
           thickness_mm?: number | null
@@ -2308,16 +2319,22 @@ export type Database = {
           visual_pattern?: string | null
           volume_m3?: number | null
           wall_id: string
+          width_mm?: number | null
         }
         Update: {
           created_at?: string
           description?: string | null
+          distance_to_wall?: number | null
+          height_mm?: number | null
           id?: string
           is_core?: boolean
           layer_order?: number
           length_ml?: number | null
           name?: string
           object_type?: string
+          position_x?: number | null
+          resource_id?: string | null
+          sill_height?: number | null
           surface_m2?: number | null
           template_id?: string | null
           thickness_mm?: number | null
@@ -2325,8 +2342,16 @@ export type Database = {
           visual_pattern?: string | null
           volume_m3?: number | null
           wall_id?: string
+          width_mm?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "budget_wall_objects_resource_id_fkey"
+            columns: ["resource_id"]
+            isOneToOne: false
+            referencedRelation: "external_resources"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "budget_wall_objects_template_id_fkey"
             columns: ["template_id"]

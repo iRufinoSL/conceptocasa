@@ -83,11 +83,13 @@ interface WorkspacePropertiesPanelProps {
   workspaceName: string;
   sectionType: string;
   sectionName: string;
+  floorPlanId?: string;
   onClose: () => void;
   focusFace?: string;
   edgeCount?: number;
   vertices?: Array<{ x: number; y: number }>;
   onPatternChange?: (faceKey: string, patternId: string | null) => void;
+  onOpeningsChange?: () => void;
   localFaceTypes?: Record<string, string>;
   onLocalFaceTypeChange?: (faceKey: string, wallType: string) => void;
 }
@@ -97,11 +99,13 @@ export function WorkspacePropertiesPanel({
   workspaceName,
   sectionType,
   sectionName,
+  floorPlanId,
   onClose,
   focusFace,
   edgeCount: edgeCountProp,
   vertices: verticesProp,
   onPatternChange,
+  onOpeningsChange,
   localFaceTypes,
   onLocalFaceTypeChange,
 }: WorkspacePropertiesPanelProps) {
@@ -272,14 +276,38 @@ export function WorkspacePropertiesPanel({
   };
 
   // ── Openings (huecos) ──
+  const ensureRoomRecord = async (): Promise<boolean> => {
+    // Check if room already exists
+    if (room) return true;
+    if (!floorPlanId) {
+      toast.error('No se encontró el plano asociado');
+      return false;
+    }
+    const { data, error } = await supabase.from('budget_floor_plan_rooms')
+      .insert({ id: workspaceId, floor_plan_id: floorPlanId, name: workspaceName, width: 1, length: 1 })
+      .select().single();
+    if (error) {
+      // Maybe it already exists (race condition)
+      const { data: existing } = await supabase.from('budget_floor_plan_rooms').select('*').eq('id', workspaceId).maybeSingle();
+      if (existing) { setRoom(existing); return true; }
+      toast.error('Error creando registro de espacio');
+      return false;
+    }
+    setRoom(data);
+    return true;
+  };
+
   const ensureWallRecord = async (wallIndex0: number): Promise<string | null> => {
     const dbIdx = wallIndex0 + 1;
     let wall = walls.find(w => w.wall_index === dbIdx);
     if (wall) return wall.id;
+    // Ensure room exists first
+    const roomOk = await ensureRoomRecord();
+    if (!roomOk) return null;
     const { data, error } = await supabase.from('budget_floor_plan_walls')
       .insert({ room_id: workspaceId, wall_index: dbIdx, wall_type: 'exterior' })
       .select().single();
-    if (error || !data) { toast.error('Error creando pared'); return null; }
+    if (error || !data) { toast.error(`Error creando pared: ${error?.message || 'desconocido'}`); return null; }
     setWalls(prev => [...prev, data as WallRecord]);
     return data.id;
   };
@@ -301,12 +329,14 @@ export function WorkspacePropertiesPanel({
     if (data) setOpenings(prev => [...prev, data as OpeningRecord]);
     setAddingOpeningWall(null);
     setOpeningName(''); setOpeningPreset('');
+    onOpeningsChange?.();
     toast.success('Hueco añadido');
   };
 
   const handleDeleteOpening = async (id: string) => {
     await supabase.from('budget_floor_plan_openings').delete().eq('id', id);
     setOpenings(prev => prev.filter(o => o.id !== id));
+    onOpeningsChange?.();
     toast.success('Hueco eliminado');
   };
 
@@ -316,6 +346,7 @@ export function WorkspacePropertiesPanel({
     const newPosX = Math.max(0, (opening.position_x || 0) + delta);
     await supabase.from('budget_floor_plan_openings').update({ position_x: newPosX }).eq('id', id);
     setOpenings(prev => prev.map(o => o.id === id ? { ...o, position_x: newPosX } : o));
+    onOpeningsChange?.();
   };
 
   // ── Objects (objetos generales) ──

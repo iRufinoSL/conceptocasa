@@ -1,4 +1,5 @@
 import { useMemo, useState, useRef, useEffect, useCallback } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -52,6 +53,7 @@ interface SectionAxisViewerProps {
   sectionType: 'vertical' | 'longitudinal' | 'transversal';
   axisValue: number;
   sectionName: string;
+  floorPlanId?: string;
   savedScale?: { hScale: number; vScale: number };
   onSaveScale?: (scale: { hScale: number; vScale: number }) => void;
   savedNegLimits?: { negH: number; negV: number; posH?: number; posV?: number };
@@ -119,6 +121,7 @@ export function SectionAxisViewer({
   sectionType,
   axisValue,
   sectionName,
+  floorPlanId,
   savedScale,
   onSaveScale,
   savedNegLimits,
@@ -231,6 +234,35 @@ export function SectionAxisViewer({
     onSaveRulerLines?.(snap.rulerLines);
     toast.success('Deshacer aplicado');
   }, [undoStack, onSavePolygons, onSaveRulerLines]);
+
+  // ── Openings data for visual rendering ──
+  interface OpeningData { id: string; wall_id: string; opening_type: string; width: number; height: number; sill_height: number; position_x: number | null; name: string | null; }
+  const [openingsMap, setOpeningsMap] = useState<Record<string, { wallIndex: number; openings: OpeningData[] }>>({});
+  const [openingsVersion, setOpeningsVersion] = useState(0);
+
+  const loadOpenings = useCallback(async () => {
+    if (polygons.length === 0) return;
+    const polyIds = polygons.map(p => p.id);
+    const { data: walls } = await supabase.from('budget_floor_plan_walls').select('id, room_id, wall_index').in('room_id', polyIds);
+    if (!walls || walls.length === 0) { setOpeningsMap({}); return; }
+    const wallIds = walls.map(w => w.id);
+    const { data: openings } = await supabase.from('budget_floor_plan_openings').select('*').in('wall_id', wallIds);
+    const map: Record<string, { wallIndex: number; openings: OpeningData[] }> = {};
+    for (const w of walls) {
+      const wOpenings = (openings || []).filter(o => o.wall_id === w.id) as OpeningData[];
+      if (wOpenings.length > 0) {
+        if (!map[w.room_id]) map[w.room_id] = { wallIndex: w.wall_index, openings: [] };
+        // Group by room, tag each opening with wall_index
+        for (const o of wOpenings) {
+          if (!map[`${w.room_id}__${w.wall_index}`]) map[`${w.room_id}__${w.wall_index}`] = { wallIndex: w.wall_index, openings: [] };
+          map[`${w.room_id}__${w.wall_index}`].openings.push(o);
+        }
+      }
+    }
+    setOpeningsMap(map);
+  }, [polygons]);
+
+  useEffect(() => { loadOpenings(); }, [loadOpenings, openingsVersion]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -1057,6 +1089,128 @@ export function SectionAxisViewer({
     return elements;
   }, [polygons, gridLayout, scale, wallLabelMode, facePatterns, handleEdgeClick]);
 
+  // ── Openings visual rendering on edges ──
+  const openingElements = useMemo(() => {
+    if (!gridLayout || !scale || Object.keys(openingsMap).length === 0) return null;
+    const { originX, originY, cellPx } = gridLayout;
+    const elements: JSX.Element[] = [];
+    const OPENING_COLOR = 'hsl(30, 90%, 50%)'; // orange for visibility
+    const DOOR_COLOR = 'hsl(200, 70%, 45%)';
+
+    polygons.forEach((poly) => {
+      const verts = poly.vertices;
+      if (verts.length < 3) return;
+      const pxVerts = verts.map(v => ({
+        px: originX + v.x * cellPx,
+        py: originY - v.y * cellPx,
+      }));
+
+      for (let i = 0; i < verts.length; i++) {
+        const wallIdx = i + 1; // db wall_index is 1-based
+        const key = `${poly.id}__${wallIdx}`;
+        const entry = openingsMap[key];
+        if (!entry || entry.openings.length === 0) continue;
+
+        const a = pxVerts[i];
+        const b = pxVerts[(i + 1) % verts.length];
+        const edgeDx = b.px - a.px;
+        const edgeDy = b.py - a.py;
+        const edgeLen = Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy);
+        if (edgeLen === 0) continue;
+
+        // Edge unit vector and normal
+        const ux = edgeDx / edgeLen;
+        const uy = edgeDy / edgeLen;
+        const nx = -uy;
+        const ny = ux;
+
+        // Edge length in mm
+        const dxGrid = Math.abs(verts[(i + 1) % verts.length].x - verts[i].x);
+        const dyGrid = Math.abs(verts[(i + 1) % verts.length].y - verts[i].y);
+        const edgeMm = Math.sqrt((dxGrid * scale.hScale) ** 2 + (dyGrid * scale.vScale) ** 2);
+        const pxPerMm = edgeLen / edgeMm;
+
+        if (sectionType === 'vertical') {
+          // Z sections: openings appear as rectangles ON the wall line (horizontal)
+          for (const op of entry.openings) {
+            const posXmm = op.position_x || 0;
+            const wMm = op.width;
+            const color = op.opening_type === 'puerta' ? DOOR_COLOR : OPENING_COLOR;
+            // Position along edge
+            const startPx = posXmm * pxPerMm;
+            const widthPx = wMm * pxPerMm;
+            const thickness = 8; // px thickness perpendicular to edge
+
+            const x1 = a.px + ux * startPx;
+            const y1 = a.py + uy * startPx;
+            const x2 = a.px + ux * (startPx + widthPx);
+            const y2 = a.py + uy * (startPx + widthPx);
+
+            // Rectangle perpendicular to edge
+            const p1 = `${x1 + nx * thickness / 2},${y1 + ny * thickness / 2}`;
+            const p2 = `${x2 + nx * thickness / 2},${y2 + ny * thickness / 2}`;
+            const p3 = `${x2 - nx * thickness / 2},${y2 - ny * thickness / 2}`;
+            const p4 = `${x1 - nx * thickness / 2},${y1 - ny * thickness / 2}`;
+
+            elements.push(
+              <g key={`opening-${op.id}`}>
+                <polygon points={`${p1} ${p2} ${p3} ${p4}`}
+                  fill={color} fillOpacity={0.5} stroke={color} strokeWidth={1.5} />
+                {op.name && (
+                  <text x={(x1 + x2) / 2 + nx * 14} y={(y1 + y2) / 2 + ny * 14}
+                    textAnchor="middle" fontSize={7} fontWeight={600} fill={color} fontFamily="sans-serif"
+                    stroke="white" strokeWidth={1.5} paintOrder="stroke">
+                    {op.name}
+                  </text>
+                )}
+              </g>
+            );
+          }
+        } else {
+          // X/Y sections: openings appear as vertical rectangles on the wall
+          // Wall is vertical in these sections, so height matters
+          const wallHeightMm = (poly.zTop || 2500);
+          const wallHeightPx = edgeLen; // The edge IS the wall height in vertical sections
+          const pxPerMmV = wallHeightPx / wallHeightMm;
+
+          for (const op of entry.openings) {
+            const sillPx = op.sill_height * pxPerMmV;
+            const hPx = op.height * pxPerMmV;
+            const color = op.opening_type === 'puerta' ? DOOR_COLOR : OPENING_COLOR;
+            const thickness = 6;
+
+            // Opening rectangle: from bottom (b) going up
+            const startFromBottom = sillPx;
+            const x1 = b.px - ux * startFromBottom;
+            const y1 = b.py - uy * startFromBottom;
+            const x2 = b.px - ux * (startFromBottom + hPx);
+            const y2 = b.py - uy * (startFromBottom + hPx);
+
+            const p1 = `${x1 + nx * thickness / 2},${y1 + ny * thickness / 2}`;
+            const p2 = `${x2 + nx * thickness / 2},${y2 + ny * thickness / 2}`;
+            const p3 = `${x2 - nx * thickness / 2},${y2 - ny * thickness / 2}`;
+            const p4 = `${x1 - nx * thickness / 2},${y1 - ny * thickness / 2}`;
+
+            elements.push(
+              <g key={`opening-${op.id}`}>
+                <polygon points={`${p1} ${p2} ${p3} ${p4}`}
+                  fill={color} fillOpacity={0.5} stroke={color} strokeWidth={1.5} />
+                {op.name && (
+                  <text x={(x1 + x2) / 2 + nx * 12} y={(y1 + y2) / 2 + ny * 12}
+                    textAnchor="middle" fontSize={6} fontWeight={600} fill={color} fontFamily="sans-serif"
+                    stroke="white" strokeWidth={1.5} paintOrder="stroke">
+                    {op.name}
+                  </text>
+                )}
+              </g>
+            );
+          }
+        }
+      }
+    });
+    return elements.length > 0 ? elements : null;
+  }, [polygons, gridLayout, scale, openingsMap, sectionType]);
+
   // Drawing overlay
   const drawingOverlay = useMemo(() => {
     if (!drawMode || !gridLayout || drawingVertices.length === 0) return null;
@@ -1493,6 +1647,7 @@ export function SectionAxisViewer({
           <g data-pdf-layer="dimensions">{gridContent?.dimensions}</g>
           {nodeInteractionDots}
           {polygonElements}
+          {openingElements}
           {drawingOverlay}
 
           {/* Ruler lines rendering */}
@@ -1614,11 +1769,13 @@ export function SectionAxisViewer({
           workspaceName={facePanel.polyName}
           sectionType={sectionType}
           sectionName={sectionName}
+          floorPlanId={floorPlanId}
           focusFace={facePanel.faceKey}
           edgeCount={facePanel.edgeCount}
           vertices={facePanel.vertices}
           onClose={() => setFacePanel(null)}
           onPatternChange={handlePatternChange}
+          onOpeningsChange={() => setOpeningsVersion(v => v + 1)}
           localFaceTypes={polygons.find(p => p.id === facePanel.polyId)?.faceTypes || {}}
           onLocalFaceTypeChange={handleLocalFaceTypeChange}
         />

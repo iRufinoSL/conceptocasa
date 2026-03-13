@@ -270,6 +270,18 @@ export function SectionAxisViewer({
       bgRect.setAttribute('fill', '#ffffff');
       svgClone.insertBefore(bgRect, svgClone.firstChild);
 
+      // Remove layers based on pdfLayers options
+      const layersToRemove: string[] = [];
+      if (!pdfLayers.grid) layersToRemove.push('grid');
+      if (!pdfLayers.axes) layersToRemove.push('axes');
+      if (!pdfLayers.dimensions) layersToRemove.push('dimensions');
+      if (!pdfLayers.wallLabels) layersToRemove.push('wall-labels');
+      if (!pdfLayers.rulers) layersToRemove.push('rulers');
+      if (!pdfLayers.names) layersToRemove.push('center-labels');
+      layersToRemove.forEach(layer => {
+        svgClone.querySelectorAll(`[data-pdf-layer="${layer}"]`).forEach(el => el.remove());
+      });
+
       const serializer = new XMLSerializer();
       const svgString = serializer.serializeToString(svgClone);
       const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
@@ -301,7 +313,7 @@ export function SectionAxisViewer({
     } catch (err) {
       console.error('PDF export error:', err);
     }
-  }, [sectionName]);
+  }, [sectionName, pdfLayers]);
 
   const margin = 50;
   const w = containerSize.w;

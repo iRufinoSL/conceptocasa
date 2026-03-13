@@ -226,11 +226,11 @@ export default function Administracion() {
           )}
 
           <TabsContent value="purchase_orders">
-            <PurchaseOrdersTab />
+            <PurchaseOrdersTab ledgerId={selectedLedgerId} />
           </TabsContent>
 
           <TabsContent value="invoices">
-            <InvoicesTab />
+            <InvoicesTab ledgerId={selectedLedgerId} />
           </TabsContent>
 
           <TabsContent value="entries">
@@ -239,6 +239,7 @@ export default function Administracion() {
               highlightCode={highlightEntryCode}
               onHighlightHandled={() => setHighlightEntryCode(null)}
               onNavigateToAccount={handleNavigateToAccount}
+              ledgerId={selectedLedgerId}
             />
           </TabsContent>
 
@@ -246,6 +247,7 @@ export default function Administracion() {
             <AccountingEntryLinesTab 
               onNavigateToEntry={handleNavigateToEntry}
               onNavigateToAccount={handleNavigateToAccount}
+              ledgerId={selectedLedgerId}
             />
           </TabsContent>
 
@@ -254,15 +256,16 @@ export default function Administracion() {
               highlightAccountId={highlightAccountId}
               onHighlightHandled={() => setHighlightAccountId(null)}
               onNavigateToEntry={handleNavigateToEntry}
+              ledgerId={selectedLedgerId}
             />
           </TabsContent>
 
           <TabsContent value="balance">
-            <AccountingBalanceReport />
+            <AccountingBalanceReport ledgerId={selectedLedgerId} />
           </TabsContent>
 
           <TabsContent value="vat">
-            <VATReportTab />
+            <VATReportTab ledgerId={selectedLedgerId} />
           </TabsContent>
         </Tabs>
 

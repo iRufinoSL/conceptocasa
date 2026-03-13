@@ -57,7 +57,7 @@ export function AccountingBalanceReport({ budgetId: fixedBudgetId, ledgerId }: {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [ledgerId]);
 
   const fetchData = async () => {
     try {

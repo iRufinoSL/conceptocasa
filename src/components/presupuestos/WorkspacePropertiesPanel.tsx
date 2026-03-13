@@ -333,13 +333,12 @@ export function WorkspacePropertiesPanel({
           {/* Walls */}
           {Array.from({ length: edgeCount }).map((_, i) => {
             const faceKey = `wall-${i}`;
-            const wall = walls.find(w => w.wall_index === i + 1);
             return (
               <FaceRow
                 key={i}
                 label={`🧱 P${i + 1}`}
                 faceKey={faceKey}
-                type={normalizeWallType(wall?.wall_type)}
+                type={getWallTypeForFace(i)}
                 options={WALL_TYPES}
                 onChange={(v) => ensureAndUpdateWallType(i, v)}
                 pattern={getPatternForFace(faceKey)}

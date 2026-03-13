@@ -158,14 +158,17 @@ export default function Administracion() {
               </div>
             </div>
           </div>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setVoiceAssistantOpen(true)}
-            title="Asistente de voz"
-          >
-            <Mic className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-3">
+            <LedgerSelector selectedLedgerId={selectedLedgerId} onLedgerChange={setSelectedLedgerId} />
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setVoiceAssistantOpen(true)}
+              title="Asistente de voz"
+            >
+              <Mic className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </header>
       <main className="container mx-auto px-4 py-6">

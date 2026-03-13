@@ -329,6 +329,7 @@ export function WorkspacePropertiesPanel({
     if (data) setOpenings(prev => [...prev, data as OpeningRecord]);
     setAddingOpeningWall(null);
     setOpeningName(''); setOpeningPreset('');
+    onOpeningsChange?.();
     toast.success('Hueco añadido');
   };
 

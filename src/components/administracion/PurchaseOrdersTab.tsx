@@ -241,7 +241,7 @@ export function PurchaseOrdersTab({ budgetId: fixedBudgetId, ledgerId }: { budge
     try {
       const vatRate = form.vat_rate === VAT_RATE_NO_INCLUDED ? -1 : parseFloat(form.vat_rate);
       
-      const orderData = {
+      const orderData: Record<string, any> = {
         order_number: parseInt(form.order_number),
         order_date: form.order_date,
         description: form.description.trim() || null,
@@ -252,6 +252,9 @@ export function PurchaseOrdersTab({ budgetId: fixedBudgetId, ledgerId }: { budge
         vat_rate: vatRate,
         footer_contact_source: form.footer_contact_source
       };
+      if (ledgerId && ledgerId !== '__total__') {
+        orderData.ledger_id = ledgerId;
+      }
 
       if (editingOrder) {
         const { error } = await supabase

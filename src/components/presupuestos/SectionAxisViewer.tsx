@@ -168,7 +168,10 @@ export function SectionAxisViewer({
   const [wallLabelMode, setWallLabelMode] = useState<WallLabelMode>('both');
 
   // Face properties panel state
-  const [facePanel, setFacePanel] = useState<{ polyId: string; polyName: string; faceKey: string; edgeCount: number } | null>(null);
+  const [facePanel, setFacePanel] = useState<{ polyId: string; polyName: string; faceKey: string; edgeCount: number; vertices: Array<{ x: number; y: number }> } | null>(null);
+
+  // Double-click timer for polygon fill
+  const lastPolyClickRef = useRef<{ time: number; polyId: string } | null>(null);
 
   // Local face patterns (for immediate SVG re-render)
   const [facePatterns, setFacePatterns] = useState<PolygonFacePatterns>(savedFacePatterns || {});
@@ -366,7 +369,7 @@ export function SectionAxisViewer({
       const poly = polygons.find(p => p.id === polyId);
       if (poly) {
         const faceKey = `wall-${edgeIdx}`;
-        setFacePanel({ polyId, polyName: poly.name, faceKey, edgeCount: poly.vertices.length });
+        setFacePanel({ polyId, polyName: poly.name, faceKey, edgeCount: poly.vertices.length, vertices: poly.vertices.map(v => ({ x: v.x, y: v.y })) });
       }
       lastClickRef.current = null;
     } else {
@@ -808,22 +811,39 @@ export function SectionAxisViewer({
       const fillPatternId = polyPatterns['floor'] || polyPatterns['wall-0'] || null;
       const fillPatternObj = getPatternById(fillPatternId);
 
+      // Double-click handler for polygon fill area
+      const handlePolyFillClick = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        const now = Date.now();
+        const last = lastPolyClickRef.current;
+        if (last && last.polyId === poly.id && (now - last.time) < 400) {
+          // Double click on polygon fill → open full panel with no specific face focus
+          setFacePanel({ polyId: poly.id, polyName: poly.name, faceKey: 'floor', edgeCount: poly.vertices.length, vertices: poly.vertices.map(v => ({ x: v.x, y: v.y })) });
+          lastPolyClickRef.current = null;
+        } else {
+          lastPolyClickRef.current = { time: now, polyId: poly.id };
+        }
+      };
+
       // Polygon fill — use pattern if available, else transparent color
       if (fillPatternObj) {
         elements.push(
           <polygon key={`poly-fill-${poly.id}`} points={pointsStr}
             fill={`url(#section-pat-${fillPatternId})`} fillOpacity={0.6}
-            stroke="none" pointerEvents="none" />
+            stroke="none" style={{ cursor: 'pointer', pointerEvents: 'fill' }}
+            onClick={handlePolyFillClick} />
         );
         // Border on top
         elements.push(
           <polygon key={`poly-border-${poly.id}`} points={pointsStr}
-            fill="none" stroke={color} strokeWidth={2.5} />
+            fill="none" stroke={color} strokeWidth={2.5} pointerEvents="none" />
         );
       } else {
         elements.push(
           <polygon key={`poly-${poly.id}`} points={pointsStr}
-            fill={color} fillOpacity={0.15} stroke={color} strokeWidth={2.5} />
+            fill={color} fillOpacity={0.15} stroke={color} strokeWidth={2.5}
+            style={{ cursor: 'pointer', pointerEvents: 'fill' }}
+            onClick={handlePolyFillClick} />
         );
       }
 
@@ -950,7 +970,7 @@ export function SectionAxisViewer({
           style={{ cursor: 'pointer' }}
           onClick={(e) => {
             e.stopPropagation();
-            setFacePanel({ polyId: poly.id, polyName: poly.name, faceKey: 'floor', edgeCount: poly.vertices.length });
+            setFacePanel({ polyId: poly.id, polyName: poly.name, faceKey: 'floor', edgeCount: poly.vertices.length, vertices: poly.vertices.map(v => ({ x: v.x, y: v.y })) });
           }}>
           <text x={cx} y={cy - 4} textAnchor="middle" fontSize={11} fontWeight={800} fill={darkColor} fontFamily="sans-serif"
             stroke="white" strokeWidth={2.5} paintOrder="stroke">
@@ -1485,6 +1505,7 @@ export function SectionAxisViewer({
           sectionName={sectionName}
           focusFace={facePanel.faceKey}
           edgeCount={facePanel.edgeCount}
+          vertices={facePanel.vertices}
           onClose={() => setFacePanel(null)}
           onPatternChange={handlePatternChange}
           localFaceTypes={polygons.find(p => p.id === facePanel.polyId)?.faceTypes || {}}

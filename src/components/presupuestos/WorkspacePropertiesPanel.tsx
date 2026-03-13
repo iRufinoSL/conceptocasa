@@ -99,11 +99,13 @@ export function WorkspacePropertiesPanel({
   workspaceName,
   sectionType,
   sectionName,
+  floorPlanId,
   onClose,
   focusFace,
   edgeCount: edgeCountProp,
   vertices: verticesProp,
   onPatternChange,
+  onOpeningsChange,
   localFaceTypes,
   onLocalFaceTypeChange,
 }: WorkspacePropertiesPanelProps) {

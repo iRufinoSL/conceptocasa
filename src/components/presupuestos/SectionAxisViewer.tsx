@@ -246,13 +246,28 @@ export function SectionAxisViewer({
     const { data: walls } = await supabase.from('budget_floor_plan_walls').select('id, room_id, wall_index').in('room_id', polyIds);
     if (!walls || walls.length === 0) { setOpeningsMap({}); return; }
     const wallIds = walls.map(w => w.id);
-    const { data: openings } = await supabase.from('budget_floor_plan_openings').select('*').in('wall_id', wallIds);
+    // Read from both legacy openings table AND wall_objects with type 'hueco'
+    const [legacyRes, huecoRes] = await Promise.all([
+      supabase.from('budget_floor_plan_openings').select('*').in('wall_id', wallIds),
+      supabase.from('budget_wall_objects').select('*').in('wall_id', wallIds).eq('object_type', 'hueco'),
+    ]);
+    // Normalize hueco objects to OpeningData format
+    const huecoOpenings: OpeningData[] = (huecoRes.data || []).map((h: any) => ({
+      id: h.id,
+      wall_id: h.wall_id,
+      opening_type: (h.name || '').toLowerCase().includes('puerta') ? 'puerta' : 'ventana',
+      width: h.width_mm || 1000,
+      height: h.height_mm || 1000,
+      sill_height: h.sill_height || 0,
+      position_x: h.position_x,
+      name: h.name,
+    }));
+    const allOpenings = [...(legacyRes.data || []) as OpeningData[], ...huecoOpenings];
     const map: Record<string, { wallIndex: number; openings: OpeningData[] }> = {};
     for (const w of walls) {
-      const wOpenings = (openings || []).filter(o => o.wall_id === w.id) as OpeningData[];
+      const wOpenings = allOpenings.filter(o => o.wall_id === w.id);
       if (wOpenings.length > 0) {
         if (!map[w.room_id]) map[w.room_id] = { wallIndex: w.wall_index, openings: [] };
-        // Group by room, tag each opening with wall_index
         for (const o of wOpenings) {
           if (!map[`${w.room_id}__${w.wall_index}`]) map[`${w.room_id}__${w.wall_index}`] = { wallIndex: w.wall_index, openings: [] };
           map[`${w.room_id}__${w.wall_index}`].openings.push(o);

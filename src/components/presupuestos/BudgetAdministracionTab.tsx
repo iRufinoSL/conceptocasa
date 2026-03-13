@@ -103,14 +103,17 @@ export function BudgetAdministracionTab({ budgetId, isAdmin }: Props) {
             Contabilidad y facturación asociada a este presupuesto
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={() => setVoiceAssistantOpen(true)}
-          title="Asistente de voz"
-        >
-          <Mic className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-3">
+          <LedgerSelector selectedLedgerId={selectedLedgerId} onLedgerChange={setSelectedLedgerId} />
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setVoiceAssistantOpen(true)}
+            title="Asistente de voz"
+          >
+            <Mic className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
@@ -167,11 +170,11 @@ export function BudgetAdministracionTab({ budgetId, isAdmin }: Props) {
         )}
 
         <TabsContent value="purchase-orders">
-          <PurchaseOrdersTab budgetId={budgetId} />
+          <PurchaseOrdersTab budgetId={budgetId} ledgerId={selectedLedgerId} />
         </TabsContent>
 
         <TabsContent value="invoices">
-          <InvoicesTab budgetId={budgetId} />
+          <InvoicesTab budgetId={budgetId} ledgerId={selectedLedgerId} />
         </TabsContent>
 
         <TabsContent value="entries">
@@ -181,6 +184,7 @@ export function BudgetAdministracionTab({ budgetId, isAdmin }: Props) {
             onHighlightHandled={() => setHighlightEntryCode(null)}
             budgetId={budgetId}
             onNavigateToAccount={handleNavigateToAccount}
+            ledgerId={selectedLedgerId}
           />
         </TabsContent>
 
@@ -189,6 +193,7 @@ export function BudgetAdministracionTab({ budgetId, isAdmin }: Props) {
             onNavigateToEntry={handleNavigateToEntry}
             onNavigateToAccount={handleNavigateToAccount}
             budgetId={budgetId}
+            ledgerId={selectedLedgerId}
           />
         </TabsContent>
 
@@ -197,15 +202,16 @@ export function BudgetAdministracionTab({ budgetId, isAdmin }: Props) {
             highlightAccountId={highlightAccountId}
             onHighlightHandled={() => setHighlightAccountId(null)}
             onNavigateToEntry={handleNavigateToEntry}
+            ledgerId={selectedLedgerId}
           />
         </TabsContent>
 
         <TabsContent value="balance">
-          <AccountingBalanceReport budgetId={budgetId} />
+          <AccountingBalanceReport budgetId={budgetId} ledgerId={selectedLedgerId} />
         </TabsContent>
 
         <TabsContent value="vat">
-          <VATReportTab budgetId={budgetId} />
+          <VATReportTab budgetId={budgetId} ledgerId={selectedLedgerId} />
         </TabsContent>
       </Tabs>
 

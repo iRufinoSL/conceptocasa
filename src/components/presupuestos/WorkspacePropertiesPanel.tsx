@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { X, Box, Layers, Paintbrush, Plus, DoorOpen, Move, ArrowUp, ArrowDown, ArrowLeft, ArrowRight } from 'lucide-react';
+import { X, Box, Layers, Paintbrush, Plus, Move, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Link2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { VISUAL_PATTERNS, PATTERN_CATEGORIES, getPatternById, patternPreviewDataUri, type VisualPattern } from '@/lib/visual-patterns';
@@ -24,14 +24,25 @@ const FLOOR_CEILING_TYPES = [
   { value: 'shared', label: 'Compartido' },
 ];
 
-// Predefined opening templates
-const OPENING_PRESETS = [
-  { label: 'Ventana pequeña', type: 'ventana', width: 1000, height: 800, sill: 1200 },
-  { label: 'Ventana mediana', type: 'ventana', width: 1500, height: 1250, sill: 1000 },
-  { label: 'Ventana grande', type: 'ventana', width: 2000, height: 1500, sill: 800 },
-  { label: 'Puerta estándar', type: 'puerta', width: 900, height: 2100, sill: 0 },
-  { label: 'Puerta doble', type: 'puerta', width: 1600, height: 2100, sill: 0 },
-  { label: 'Puerta balconera', type: 'puerta', width: 1800, height: 2200, sill: 0 },
+const OBJECT_TYPES = [
+  { value: 'hueco', label: '🚪 Hueco (vacío)' },
+  { value: 'material', label: '🧱 Material' },
+  { value: 'bloque', label: '📦 Bloque' },
+  { value: 'aislamiento', label: '🧊 Aislamiento' },
+  { value: 'revestimiento', label: '🎨 Revestimiento' },
+  { value: 'estructura', label: '🏗️ Estructura' },
+  { value: 'instalacion', label: '⚡ Instalación' },
+  { value: 'otro', label: '📋 Otro' },
+];
+
+// Preset templates for quick object creation
+const OBJECT_PRESETS = [
+  { label: 'Ventana pequeña', type: 'hueco', width: 1000, height: 800, sill: 1200 },
+  { label: 'Ventana mediana', type: 'hueco', width: 1500, height: 1250, sill: 1000 },
+  { label: 'Ventana grande', type: 'hueco', width: 2000, height: 1500, sill: 800 },
+  { label: 'Puerta estándar', type: 'hueco', width: 900, height: 2100, sill: 0 },
+  { label: 'Puerta doble', type: 'hueco', width: 1600, height: 2100, sill: 0 },
+  { label: 'Puerta balconera', type: 'hueco', width: 1800, height: 2200, sill: 0 },
 ];
 
 function normalizeWallType(type?: string | null): string {
@@ -61,17 +72,13 @@ interface WallObjectRecord {
   surface_m2: number | null;
   object_type: string;
   thickness_mm: number | null;
-}
-
-interface OpeningRecord {
-  id: string;
-  wall_id: string;
-  opening_type: string;
-  width: number;
-  height: number;
-  sill_height: number;
+  width_mm: number | null;
+  height_mm: number | null;
   position_x: number | null;
-  name: string | null;
+  sill_height: number | null;
+  distance_to_wall: number | null;
+  resource_id: string | null;
+  template_id: string | null;
 }
 
 export interface FacePatterns {
@@ -94,6 +101,14 @@ interface WorkspacePropertiesPanelProps {
   onLocalFaceTypeChange?: (faceKey: string, wallType: string) => void;
 }
 
+interface ExternalResourceOption {
+  id: string;
+  name: string;
+  resource_type: string | null;
+  unit_cost: number;
+  unit_measure: string | null;
+}
+
 export function WorkspacePropertiesPanel({
   workspaceId,
   workspaceName,
@@ -113,20 +128,9 @@ export function WorkspacePropertiesPanel({
   const [room, setRoom] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [wallObjects, setWallObjects] = useState<WallObjectRecord[]>([]);
-  const [openings, setOpenings] = useState<OpeningRecord[]>([]);
   const [expandedFace, setExpandedFace] = useState<string | null>(focusFace || null);
   const [patternPickerFace, setPatternPickerFace] = useState<string | null>(null);
   const [localOverrides, setLocalOverrides] = useState<Record<string, string>>({});
-
-  // Opening form state
-  const [addingOpeningWall, setAddingOpeningWall] = useState<number | null>(null);
-  const [openingPreset, setOpeningPreset] = useState('');
-  const [openingName, setOpeningName] = useState('');
-  const [openingType, setOpeningType] = useState('ventana');
-  const [openingWidth, setOpeningWidth] = useState('1500');
-  const [openingHeight, setOpeningHeight] = useState('1250');
-  const [openingSill, setOpeningSill] = useState('1000');
-  const [openingPosX, setOpeningPosX] = useState('500');
 
   // Object form state
   const [showObjectForm, setShowObjectForm] = useState(false);
@@ -134,12 +138,24 @@ export function WorkspacePropertiesPanel({
   const [objType, setObjType] = useState('material');
   const [objThickness, setObjThickness] = useState('');
   const [objDescription, setObjDescription] = useState('');
+  const [objWidthMm, setObjWidthMm] = useState('');
+  const [objHeightMm, setObjHeightMm] = useState('');
+  const [objSillHeight, setObjSillHeight] = useState('');
+  const [objPosX, setObjPosX] = useState('');
+  const [objDistWall, setObjDistWall] = useState('');
+  const [objTargetFace, setObjTargetFace] = useState('wall-0');
+  const [objPreset, setObjPreset] = useState('');
+
+  // Resource linking
+  const [showResourcePicker, setShowResourcePicker] = useState(false);
+  const [resources, setResources] = useState<ExternalResourceOption[]>([]);
+  const [resourceSearch, setResourceSearch] = useState('');
 
   // Positioning state
-  const [positioningOpeningId, setPositioningOpeningId] = useState<string | null>(null);
+  const [positioningObjId, setPositioningObjId] = useState<string | null>(null);
 
-  // Active tab: 'faces' | 'openings' | 'objects'
-  const [activeTab, setActiveTab] = useState<'faces' | 'openings' | 'objects'>('faces');
+  // Active tab: 'faces' | 'objects'
+  const [activeTab, setActiveTab] = useState<'faces' | 'objects'>('faces');
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -153,18 +169,19 @@ export function WorkspacePropertiesPanel({
 
     if (wallData.length > 0) {
       const wallIds = wallData.map(w => w.id);
-      const [objRes, openingRes] = await Promise.all([
-        supabase.from('budget_wall_objects').select('*').in('wall_id', wallIds),
-        supabase.from('budget_floor_plan_openings').select('*').in('wall_id', wallIds),
-      ]);
-      setWallObjects((objRes.data || []) as WallObjectRecord[]);
-      setOpenings((openingRes.data || []) as OpeningRecord[]);
+      const { data: objData } = await supabase.from('budget_wall_objects').select('*').in('wall_id', wallIds);
+      setWallObjects((objData || []) as WallObjectRecord[]);
     }
     setLoading(false);
   }, [workspaceId]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
   useEffect(() => { if (focusFace) setExpandedFace(focusFace); }, [focusFace]);
+
+  const fetchResources = async () => {
+    const { data } = await supabase.from('external_resources').select('id, name, resource_type, unit_cost, unit_measure').order('name').limit(200);
+    setResources((data || []) as ExternalResourceOption[]);
+  };
 
   const getFloorType = () => {
     if (!room) return 'normal';
@@ -229,7 +246,6 @@ export function WorkspacePropertiesPanel({
     toast.success(`Pared ${dbWallIndex} actualizada`);
   };
 
-  /** Ensure wall + layer 0 Superficie, then update pattern */
   const updateFacePattern = async (faceKey: string, patternId: string | null) => {
     let wallIndex: number;
     if (faceKey === 'floor') wallIndex = -1;
@@ -275,9 +291,7 @@ export function WorkspacePropertiesPanel({
     return obj?.visual_pattern || null;
   };
 
-  // ── Openings (huecos) ──
   const ensureRoomRecord = async (): Promise<boolean> => {
-    // Check if room already exists
     if (room) return true;
     if (!floorPlanId) {
       toast.error('No se encontró el plano asociado');
@@ -287,7 +301,6 @@ export function WorkspacePropertiesPanel({
       .insert({ id: workspaceId, floor_plan_id: floorPlanId, name: workspaceName, width: 1, length: 1 })
       .select().single();
     if (error) {
-      // Maybe it already exists (race condition)
       const { data: existing } = await supabase.from('budget_floor_plan_rooms').select('*').eq('id', workspaceId).maybeSingle();
       if (existing) { setRoom(existing); return true; }
       toast.error('Error creando registro de espacio');
@@ -297,98 +310,91 @@ export function WorkspacePropertiesPanel({
     return true;
   };
 
-  const ensureWallRecord = async (wallIndex0: number): Promise<string | null> => {
-    const dbIdx = wallIndex0 + 1;
-    let wall = walls.find(w => w.wall_index === dbIdx);
+  const ensureWallRecord = async (faceKey: string): Promise<string | null> => {
+    let wallIndex: number;
+    if (faceKey === 'floor') wallIndex = -1;
+    else if (faceKey === 'ceiling') wallIndex = -2;
+    else if (faceKey === 'space') wallIndex = -3;
+    else wallIndex = parseInt(faceKey.replace('wall-', '')) + 1;
+
+    let wall = walls.find(w => w.wall_index === wallIndex);
     if (wall) return wall.id;
-    // Ensure room exists first
     const roomOk = await ensureRoomRecord();
     if (!roomOk) return null;
+    const wallType = wallIndex === -1 ? 'suelo_basico' : wallIndex === -2 ? 'techo_basico' : wallIndex === -3 ? 'espacio' : 'exterior';
     const { data, error } = await supabase.from('budget_floor_plan_walls')
-      .insert({ room_id: workspaceId, wall_index: dbIdx, wall_type: 'exterior' })
+      .insert({ room_id: workspaceId, wall_index: wallIndex, wall_type: wallType })
       .select().single();
-    if (error || !data) { toast.error(`Error creando pared: ${error?.message || 'desconocido'}`); return null; }
+    if (error || !data) { toast.error(`Error creando cara: ${error?.message || 'desconocido'}`); return null; }
     setWalls(prev => [...prev, data as WallRecord]);
     return data.id;
   };
 
-  const handleAddOpening = async () => {
-    if (addingOpeningWall === null) return;
-    const wallId = await ensureWallRecord(addingOpeningWall);
-    if (!wallId) return;
-    const { data, error } = await supabase.from('budget_floor_plan_openings').insert({
-      wall_id: wallId,
-      opening_type: openingType,
-      width: parseFloat(openingWidth) || 1000,
-      height: parseFloat(openingHeight) || 1000,
-      sill_height: parseFloat(openingSill) || 0,
-      position_x: parseFloat(openingPosX) || 0,
-      name: openingName.trim() || null,
-    }).select().single();
-    if (error) { toast.error(`Error: ${error.message}`); return; }
-    if (data) setOpenings(prev => [...prev, data as OpeningRecord]);
-    setAddingOpeningWall(null);
-    setOpeningName(''); setOpeningPreset('');
-    onOpeningsChange?.();
-    toast.success('Hueco añadido');
+  const applyPreset = (idx: number) => {
+    const p = OBJECT_PRESETS[idx];
+    setObjType(p.type);
+    setObjWidthMm(String(p.width));
+    setObjHeightMm(String(p.height));
+    setObjSillHeight(String(p.sill));
+    setObjName(p.label);
   };
 
-  const handleDeleteOpening = async (id: string) => {
-    await supabase.from('budget_floor_plan_openings').delete().eq('id', id);
-    setOpenings(prev => prev.filter(o => o.id !== id));
-    onOpeningsChange?.();
-    toast.success('Hueco eliminado');
-  };
-
-  const handleMoveOpening = async (id: string, delta: number) => {
-    const opening = openings.find(o => o.id === id);
-    if (!opening) return;
-    const newPosX = Math.max(0, (opening.position_x || 0) + delta);
-    await supabase.from('budget_floor_plan_openings').update({ position_x: newPosX }).eq('id', id);
-    setOpenings(prev => prev.map(o => o.id === id ? { ...o, position_x: newPosX } : o));
-    onOpeningsChange?.();
-  };
-
-  // ── Objects (objetos generales) ──
   const handleAddObject = async () => {
     if (!objName.trim()) return;
-    // Add to the first available wall or create one
-    let wallId: string | null = null;
-    if (walls.length > 0) {
-      wallId = walls[0].id;
-    } else {
-      wallId = await ensureWallRecord(0);
-    }
+    const wallId = await ensureWallRecord(objTargetFace);
     if (!wallId) return;
     const maxOrder = wallObjects.filter(o => o.wall_id === wallId).reduce((m, o) => Math.max(m, o.layer_order), 0);
-    const { data, error } = await supabase.from('budget_wall_objects').insert({
+    const payload: any = {
       wall_id: wallId,
       layer_order: maxOrder + 1,
       name: objName.trim(),
       description: objDescription.trim() || null,
       object_type: objType,
       thickness_mm: parseFloat(objThickness) || null,
-    }).select().single();
+      width_mm: parseFloat(objWidthMm) || null,
+      height_mm: parseFloat(objHeightMm) || null,
+      position_x: parseFloat(objPosX) || null,
+      sill_height: parseFloat(objSillHeight) || null,
+      distance_to_wall: parseFloat(objDistWall) || null,
+    };
+    const { data, error } = await supabase.from('budget_wall_objects').insert(payload).select().single();
     if (error) { toast.error(`Error: ${error.message}`); return; }
     if (data) setWallObjects(prev => [...prev, data as WallObjectRecord]);
+    resetForm();
+    onOpeningsChange?.();
+    toast.success(objType === 'hueco' ? 'Hueco añadido' : 'Objeto registrado');
+  };
+
+  const resetForm = () => {
     setShowObjectForm(false);
     setObjName(''); setObjDescription(''); setObjThickness('');
-    toast.success('Objeto registrado');
+    setObjWidthMm(''); setObjHeightMm(''); setObjSillHeight('');
+    setObjPosX(''); setObjDistWall(''); setObjPreset('');
+    setObjType('material'); setObjTargetFace('wall-0');
   };
 
   const handleDeleteObject = async (id: string) => {
     await supabase.from('budget_wall_objects').delete().eq('id', id);
     setWallObjects(prev => prev.filter(o => o.id !== id));
-    toast.success('Objeto eliminado');
+    onOpeningsChange?.();
+    toast.success('Eliminado');
   };
 
-  const applyPreset = (idx: number) => {
-    const p = OPENING_PRESETS[idx];
-    setOpeningType(p.type);
-    setOpeningWidth(String(p.width));
-    setOpeningHeight(String(p.height));
-    setOpeningSill(String(p.sill));
-    setOpeningName(p.label);
+  const handleMoveObject = async (id: string, field: 'position_x' | 'sill_height', delta: number) => {
+    const obj = wallObjects.find(o => o.id === id);
+    if (!obj) return;
+    const currentVal = (obj[field] as number) || 0;
+    const newVal = Math.max(0, currentVal + delta);
+    await supabase.from('budget_wall_objects').update({ [field]: newVal }).eq('id', id);
+    setWallObjects(prev => prev.map(o => o.id === id ? { ...o, [field]: newVal } : o));
+    onOpeningsChange?.();
+  };
+
+  const handleLinkResource = async (objId: string, resourceId: string, resource: ExternalResourceOption) => {
+    await supabase.from('budget_wall_objects').update({ resource_id: resourceId }).eq('id', objId);
+    setWallObjects(prev => prev.map(o => o.id === objId ? { ...o, resource_id: resourceId } : o));
+    setShowResourcePicker(false);
+    toast.success(`Vinculado a: ${resource.name}`);
   };
 
   const poly = room?.floor_polygon as Array<{ x: number; y: number }> | null;
@@ -405,25 +411,38 @@ export function WorkspacePropertiesPanel({
 
   const sectionLabel = sectionType === 'vertical' ? 'Z' : sectionType === 'longitudinal' ? 'Y' : sectionType === 'transversal' ? 'X' : 'I';
 
-  // Get openings for a specific wall index (0-based)
-  const getOpeningsForWall = (wallIdx0: number) => {
-    const dbIdx = wallIdx0 + 1;
-    const wall = walls.find(w => w.wall_index === dbIdx);
-    if (!wall) return [];
-    return openings.filter(o => o.wall_id === wall.id);
-  };
-
   // Get non-surface objects for all walls
   const allObjects = wallObjects.filter(o => o.layer_order > 0);
+  const huecoCount = allObjects.filter(o => o.object_type === 'hueco').length;
 
-  // Find wall label for an object
+  // Get objects for a specific wall index (0-based for walls, -1 floor, -2 ceiling)
+  const getObjectsForWall = (wallIdx: number) => {
+    const wall = walls.find(w => w.wall_index === wallIdx);
+    if (!wall) return [];
+    return allObjects.filter(o => o.wall_id === wall.id);
+  };
+
   const getWallLabelForObject = (wallId: string) => {
     const wall = walls.find(w => w.id === wallId);
     if (!wall) return '—';
     if (wall.wall_index === -1) return 'Suelo';
     if (wall.wall_index === -2) return 'Techo';
+    if (wall.wall_index === -3) return 'Espacio';
     return `P${wall.wall_index}`;
   };
+
+  // Face options for object target
+  const faceOptions = [
+    ...Array.from({ length: edgeCount }).map((_, i) => ({ value: `wall-${i}`, label: `P${i + 1}` })),
+    { value: 'floor', label: 'Suelo' },
+    { value: 'ceiling', label: 'Techo' },
+    { value: 'space', label: 'Espacio' },
+  ];
+
+  // Filtered resources for picker
+  const filteredResources = resources.filter(r =>
+    !resourceSearch || r.name.toLowerCase().includes(resourceSearch.toLowerCase())
+  );
 
   return (
     <div className="absolute right-2 top-2 z-50 w-80 bg-card border rounded-lg shadow-lg overflow-hidden"
@@ -456,9 +475,9 @@ export function WorkspacePropertiesPanel({
         )}
       </div>
 
-      {/* Tab bar */}
+      {/* Tab bar - only 2 tabs now */}
       <div className="flex border-b">
-        {(['faces', 'openings', 'objects'] as const).map(tab => (
+        {(['faces', 'objects'] as const).map(tab => (
           <button
             key={tab}
             className={`flex-1 text-[10px] py-1.5 font-medium border-b-2 transition-colors ${
@@ -468,7 +487,10 @@ export function WorkspacePropertiesPanel({
             }`}
             onClick={() => setActiveTab(tab)}
           >
-            {tab === 'faces' ? '🧱 Caras' : tab === 'openings' ? `🚪 Huecos (${openings.length})` : `📦 Objetos (${allObjects.length})`}
+            {tab === 'faces'
+              ? '🧱 Caras'
+              : `📦 Objetos (${allObjects.length})${huecoCount > 0 ? ` · 🚪${huecoCount}` : ''}`
+            }
           </button>
         ))}
       </div>
@@ -516,7 +538,8 @@ export function WorkspacePropertiesPanel({
                   const ny = len > 0 ? dx / len : 0;
                   const off = 16;
                   const isHighlighted = expandedFace === `wall-${i}`;
-                  const wallOpenings = getOpeningsForWall(i);
+                  const wallObjs = getObjectsForWall(i + 1);
+                  const wallHuecos = wallObjs.filter(o => o.object_type === 'hueco');
                   return (
                     <g key={i} style={{ cursor: 'pointer' }} onClick={() => setExpandedFace(expandedFace === `wall-${i}` ? null : `wall-${i}`)}>
                       <rect x={mx + nx * off - 14} y={my + ny * off - 9} width={28} height={18} rx={4}
@@ -525,14 +548,14 @@ export function WorkspacePropertiesPanel({
                         fontSize={11} fontWeight={700} fill={isHighlighted ? 'hsl(var(--primary-foreground))' : 'hsl(var(--foreground))'} fontFamily="monospace">
                         P{i + 1}
                       </text>
-                      {wallOpenings.length > 0 && (
+                      {wallHuecos.length > 0 && (
                         <circle cx={mx + nx * off + 12} cy={my + ny * off - 6} r={5}
                           fill="hsl(var(--destructive))" />
                       )}
-                      {wallOpenings.length > 0 && (
+                      {wallHuecos.length > 0 && (
                         <text x={mx + nx * off + 12} y={my + ny * off - 3}
                           textAnchor="middle" fontSize={7} fill="white" fontWeight={700}>
-                          {wallOpenings.length}
+                          {wallHuecos.length}
                         </text>
                       )}
                     </g>
@@ -556,19 +579,24 @@ export function WorkspacePropertiesPanel({
           <FaceRow label="🟫 Suelo" faceKey="floor" type={getFloorType()} options={FLOOR_CEILING_TYPES}
             onChange={(v) => updateFloorCeiling('has_floor', v)} pattern={getPatternForFace('floor')}
             isExpanded={expandedFace === 'floor'} onToggle={() => setExpandedFace(expandedFace === 'floor' ? null : 'floor')}
-            onOpenPatternPicker={() => setPatternPickerFace('floor')} />
+            onOpenPatternPicker={() => setPatternPickerFace('floor')}
+            objectCount={getObjectsForWall(-1).length}
+            onAddObject={() => { setObjTargetFace('floor'); setShowObjectForm(true); setActiveTab('objects'); }}
+          />
 
           {Array.from({ length: edgeCount }).map((_, i) => {
             const faceKey = `wall-${i}`;
-            const wallOpenings = getOpeningsForWall(i);
+            const wallObjs = getObjectsForWall(i + 1);
+            const wallHuecos = wallObjs.filter(o => o.object_type === 'hueco');
             return (
               <div key={i}>
                 <FaceRow label={`🧱 P${i + 1}`} faceKey={faceKey} type={getWallTypeForFace(i)} options={WALL_TYPES}
                   onChange={(v) => ensureAndUpdateWallType(i, v)} pattern={getPatternForFace(faceKey)}
                   isExpanded={expandedFace === faceKey} onToggle={() => setExpandedFace(expandedFace === faceKey ? null : faceKey)}
                   onOpenPatternPicker={() => setPatternPickerFace(faceKey)}
-                  openingCount={wallOpenings.length}
-                  onAddOpening={() => { setAddingOpeningWall(i); setActiveTab('openings'); }}
+                  objectCount={wallObjs.length}
+                  huecoCount={wallHuecos.length}
+                  onAddObject={() => { setObjTargetFace(faceKey); setShowObjectForm(true); setActiveTab('objects'); }}
                 />
               </div>
             );
@@ -577,7 +605,10 @@ export function WorkspacePropertiesPanel({
           <FaceRow label={room?.has_roof ? '🏠 Techo (cubierta)' : '⬜ Techo'} faceKey="ceiling" type={getCeilingType()} options={FLOOR_CEILING_TYPES}
             onChange={(v) => updateFloorCeiling('has_ceiling', v)} pattern={getPatternForFace('ceiling')}
             isExpanded={expandedFace === 'ceiling'} onToggle={() => setExpandedFace(expandedFace === 'ceiling' ? null : 'ceiling')}
-            onOpenPatternPicker={() => setPatternPickerFace('ceiling')} />
+            onOpenPatternPicker={() => setPatternPickerFace('ceiling')}
+            objectCount={getObjectsForWall(-2).length}
+            onAddObject={() => { setObjTargetFace('ceiling'); setShowObjectForm(true); setActiveTab('objects'); }}
+          />
 
           <div className="flex items-center justify-between gap-2 py-0.5 px-1 rounded">
             <span className="text-xs">🔷 Espacio</span>
@@ -586,139 +617,12 @@ export function WorkspacePropertiesPanel({
         </div>
       )}
 
-      {/* ══ OPENINGS TAB ══ */}
-      {activeTab === 'openings' && !loading && (
-        <div className="px-2 py-2 max-h-[50vh] overflow-y-auto space-y-2">
-          <div className="flex items-center justify-between">
-            <p className="text-[9px] text-muted-foreground font-medium uppercase tracking-wider px-1">Huecos (ventanas y puertas)</p>
-            <Select value={addingOpeningWall !== null ? String(addingOpeningWall) : ''} onValueChange={v => setAddingOpeningWall(parseInt(v))}>
-              <SelectTrigger className="h-6 w-28 text-[10px]">
-                <SelectValue placeholder="+ Añadir en..." />
-              </SelectTrigger>
-              <SelectContent>
-                {Array.from({ length: edgeCount }).map((_, i) => (
-                  <SelectItem key={i} value={String(i)}>P{i + 1}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Add opening form */}
-          {addingOpeningWall !== null && (
-            <div className="border rounded p-2 bg-muted/20 space-y-1.5">
-              <p className="text-[10px] font-semibold">Nuevo hueco en P{addingOpeningWall + 1}</p>
-              <div>
-                <label className="text-[9px] text-muted-foreground">Predefinido</label>
-                <Select value={openingPreset} onValueChange={v => { setOpeningPreset(v); applyPreset(parseInt(v)); }}>
-                  <SelectTrigger className="h-6 text-[10px]"><SelectValue placeholder="Elegir plantilla..." /></SelectTrigger>
-                  <SelectContent>
-                    {OPENING_PRESETS.map((p, i) => (
-                      <SelectItem key={i} value={String(i)}>{p.label} ({p.width}×{p.height}mm)</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-2 gap-1">
-                <div>
-                  <label className="text-[9px] text-muted-foreground">Nombre</label>
-                  <Input className="h-6 text-[10px]" value={openingName} onChange={e => setOpeningName(e.target.value)} placeholder="Ej: V1" />
-                </div>
-                <div>
-                  <label className="text-[9px] text-muted-foreground">Tipo</label>
-                  <Select value={openingType} onValueChange={setOpeningType}>
-                    <SelectTrigger className="h-6 text-[10px]"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ventana">Ventana</SelectItem>
-                      <SelectItem value="puerta">Puerta</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-[9px] text-muted-foreground">Ancho (mm)</label>
-                  <Input className="h-6 text-[10px] font-mono" type="number" value={openingWidth} onChange={e => setOpeningWidth(e.target.value)} />
-                </div>
-                <div>
-                  <label className="text-[9px] text-muted-foreground">Alto (mm)</label>
-                  <Input className="h-6 text-[10px] font-mono" type="number" value={openingHeight} onChange={e => setOpeningHeight(e.target.value)} />
-                </div>
-                <div>
-                  <label className="text-[9px] text-muted-foreground">Dist. suelo (mm)</label>
-                  <Input className="h-6 text-[10px] font-mono" type="number" value={openingSill} onChange={e => setOpeningSill(e.target.value)} />
-                </div>
-                <div>
-                  <label className="text-[9px] text-muted-foreground">Pos. X (mm)</label>
-                  <Input className="h-6 text-[10px] font-mono" type="number" value={openingPosX} onChange={e => setOpeningPosX(e.target.value)} />
-                </div>
-              </div>
-              <div className="flex gap-1">
-                <Button size="sm" className="h-6 text-[10px] gap-1 flex-1" onClick={handleAddOpening}>
-                  <Plus className="h-3 w-3" /> Añadir
-                </Button>
-                <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => setAddingOpeningWall(null)}>
-                  <X className="h-3 w-3" />
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {/* List openings per wall */}
-          {Array.from({ length: edgeCount }).map((_, i) => {
-            const wallOpenings = getOpeningsForWall(i);
-            if (wallOpenings.length === 0) return null;
-            return (
-              <div key={i} className="space-y-1">
-                <p className="text-[10px] font-semibold text-muted-foreground px-1">P{i + 1}</p>
-                {wallOpenings.map(op => (
-                  <div key={op.id} className="flex items-center gap-1 text-[10px] px-1.5 py-1 rounded border bg-background">
-                    <DoorOpen className="h-3 w-3 text-muted-foreground shrink-0" />
-                    <span className="font-medium truncate">{op.name || (op.opening_type === 'ventana' ? 'Ventana' : 'Puerta')}</span>
-                    <span className="text-muted-foreground">{op.width}×{op.height}</span>
-                    <span className="text-muted-foreground">↑{op.sill_height}</span>
-                    {op.position_x != null && <span className="text-muted-foreground">→{op.position_x}</span>}
-                    <div className="ml-auto flex items-center gap-0.5">
-                      {positioningOpeningId === op.id ? (
-                        <>
-                          <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => handleMoveOpening(op.id, -50)}>
-                            <ArrowLeft className="h-3 w-3" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => handleMoveOpening(op.id, 50)}>
-                            <ArrowRight className="h-3 w-3" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => setPositioningOpeningId(null)}>
-                            <X className="h-3 w-3" />
-                          </Button>
-                        </>
-                      ) : (
-                        <>
-                          <Button variant="ghost" size="icon" className="h-5 w-5" title="Mover" onClick={() => setPositioningOpeningId(op.id)}>
-                            <Move className="h-3 w-3" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-5 w-5 text-destructive" onClick={() => handleDeleteOpening(op.id)}>
-                            <X className="h-3 w-3" />
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            );
-          })}
-
-          {openings.length === 0 && addingOpeningWall === null && (
-            <p className="text-[10px] text-muted-foreground text-center py-4">
-              Sin huecos. Selecciona una pared para añadir ventanas o puertas.
-            </p>
-          )}
-        </div>
-      )}
-
-      {/* ══ OBJECTS TAB ══ */}
+      {/* ══ OBJECTS TAB (unified: objects + huecos) ══ */}
       {activeTab === 'objects' && !loading && (
         <div className="px-2 py-2 max-h-[50vh] overflow-y-auto space-y-2">
           <div className="flex items-center justify-between">
-            <p className="text-[9px] text-muted-foreground font-medium uppercase tracking-wider px-1">Objetos del espacio</p>
-            <Button size="sm" variant="outline" className="h-6 text-[10px] gap-1" onClick={() => setShowObjectForm(!showObjectForm)}>
+            <p className="text-[9px] text-muted-foreground font-medium uppercase tracking-wider px-1">Objetos y huecos</p>
+            <Button size="sm" variant="outline" className="h-6 text-[10px] gap-1" onClick={() => { setShowObjectForm(!showObjectForm); if (!showObjectForm) setObjTargetFace('wall-0'); }}>
               <Plus className="h-3 w-3" /> Nuevo
             </Button>
           </div>
@@ -726,30 +630,71 @@ export function WorkspacePropertiesPanel({
           {/* Add object form */}
           {showObjectForm && (
             <div className="border rounded p-2 bg-muted/20 space-y-1.5">
-              <p className="text-[10px] font-semibold">Nuevo objeto</p>
+              <p className="text-[10px] font-semibold">Nuevo objeto / hueco</p>
+
+              {/* Presets for huecos */}
+              <div>
+                <label className="text-[9px] text-muted-foreground">Predefinido (huecos)</label>
+                <Select value={objPreset} onValueChange={v => { setObjPreset(v); applyPreset(parseInt(v)); }}>
+                  <SelectTrigger className="h-6 text-[10px]"><SelectValue placeholder="Elegir plantilla..." /></SelectTrigger>
+                  <SelectContent>
+                    {OBJECT_PRESETS.map((p, i) => (
+                      <SelectItem key={i} value={String(i)}>{p.label} ({p.width}×{p.height}mm)</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               <div className="grid grid-cols-2 gap-1">
                 <div className="col-span-2">
                   <label className="text-[9px] text-muted-foreground">Nombre</label>
-                  <Input className="h-6 text-[10px]" value={objName} onChange={e => setObjName(e.target.value)} placeholder="Ej: Aislamiento XPS" />
+                  <Input className="h-6 text-[10px]" value={objName} onChange={e => setObjName(e.target.value)} placeholder="Ej: Ventana V1, Aislamiento XPS..." />
                 </div>
                 <div>
                   <label className="text-[9px] text-muted-foreground">Tipo</label>
                   <Select value={objType} onValueChange={setObjType}>
                     <SelectTrigger className="h-6 text-[10px]"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="material">Material</SelectItem>
-                      <SelectItem value="bloque">Bloque</SelectItem>
-                      <SelectItem value="aislamiento">Aislamiento</SelectItem>
-                      <SelectItem value="revestimiento">Revestimiento</SelectItem>
-                      <SelectItem value="estructura">Estructura</SelectItem>
-                      <SelectItem value="instalacion">Instalación</SelectItem>
-                      <SelectItem value="otro">Otro</SelectItem>
+                      {OBJECT_TYPES.map(t => (
+                        <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
+                  <label className="text-[9px] text-muted-foreground">Ubicación</label>
+                  <Select value={objTargetFace} onValueChange={setObjTargetFace}>
+                    <SelectTrigger className="h-6 text-[10px]"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {faceOptions.map(f => (
+                        <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-[9px] text-muted-foreground">Ancho (mm)</label>
+                  <Input className="h-6 text-[10px] font-mono" type="number" value={objWidthMm} onChange={e => setObjWidthMm(e.target.value)} />
+                </div>
+                <div>
+                  <label className="text-[9px] text-muted-foreground">Alto (mm)</label>
+                  <Input className="h-6 text-[10px] font-mono" type="number" value={objHeightMm} onChange={e => setObjHeightMm(e.target.value)} />
+                </div>
+                <div>
                   <label className="text-[9px] text-muted-foreground">Espesor (mm)</label>
                   <Input className="h-6 text-[10px] font-mono" type="number" value={objThickness} onChange={e => setObjThickness(e.target.value)} />
+                </div>
+                <div>
+                  <label className="text-[9px] text-muted-foreground">Dist. suelo (mm)</label>
+                  <Input className="h-6 text-[10px] font-mono" type="number" value={objSillHeight} onChange={e => setObjSillHeight(e.target.value)} />
+                </div>
+                <div>
+                  <label className="text-[9px] text-muted-foreground">Pos. X (mm)</label>
+                  <Input className="h-6 text-[10px] font-mono" type="number" value={objPosX} onChange={e => setObjPosX(e.target.value)} />
+                </div>
+                <div>
+                  <label className="text-[9px] text-muted-foreground">Dist. pared (mm)</label>
+                  <Input className="h-6 text-[10px] font-mono" type="number" value={objDistWall} onChange={e => setObjDistWall(e.target.value)} />
                 </div>
                 <div className="col-span-2">
                   <label className="text-[9px] text-muted-foreground">Descripción</label>
@@ -758,33 +703,74 @@ export function WorkspacePropertiesPanel({
               </div>
               <div className="flex gap-1">
                 <Button size="sm" className="h-6 text-[10px] gap-1 flex-1" onClick={handleAddObject} disabled={!objName.trim()}>
-                  <Plus className="h-3 w-3" /> Registrar
+                  <Plus className="h-3 w-3" /> {objType === 'hueco' ? 'Añadir hueco' : 'Registrar'}
                 </Button>
-                <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => setShowObjectForm(false)}>
+                <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={resetForm}>
                   <X className="h-3 w-3" />
                 </Button>
               </div>
             </div>
           )}
 
-          {/* List objects */}
+          {/* Resource picker overlay */}
+          {showResourcePicker && (
+            <div className="border rounded p-2 bg-muted/20 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-semibold">Vincular recurso</p>
+                <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => setShowResourcePicker(false)}>
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+              <Input className="h-6 text-[10px]" value={resourceSearch} onChange={e => setResourceSearch(e.target.value)} placeholder="Buscar recurso..." />
+              <div className="max-h-32 overflow-y-auto space-y-0.5">
+                {filteredResources.map(r => (
+                  <button key={r.id} className="w-full text-left text-[10px] px-1.5 py-1 rounded hover:bg-accent/40 flex items-center gap-1"
+                    onClick={() => {
+                      const targetObjId = (showResourcePicker as any);
+                      if (typeof targetObjId === 'string') handleLinkResource(targetObjId, r.id, r);
+                    }}>
+                    <span className="truncate flex-1">{r.name}</span>
+                    <Badge variant="outline" className="text-[8px] h-3.5 px-1 shrink-0">{r.resource_type || '—'}</Badge>
+                  </button>
+                ))}
+                {filteredResources.length === 0 && <p className="text-[9px] text-muted-foreground text-center py-2">Sin resultados</p>}
+              </div>
+            </div>
+          )}
+
+          {/* List objects grouped by face */}
           {allObjects.length > 0 ? (
-            <div className="space-y-1">
-              {allObjects.map(obj => (
-                <div key={obj.id} className="flex items-center gap-1.5 text-[10px] px-1.5 py-1 rounded border bg-background">
-                  <span className="font-medium truncate flex-1">{obj.name}</span>
-                  <Badge variant="outline" className="text-[8px] h-4 px-1 shrink-0">{obj.object_type}</Badge>
-                  {obj.thickness_mm && <span className="text-muted-foreground shrink-0">{obj.thickness_mm}mm</span>}
-                  <Badge variant="secondary" className="text-[8px] h-4 px-1 shrink-0">{getWallLabelForObject(obj.wall_id)}</Badge>
-                  <Button variant="ghost" size="icon" className="h-5 w-5 text-destructive shrink-0" onClick={() => handleDeleteObject(obj.id)}>
-                    <X className="h-3 w-3" />
-                  </Button>
-                </div>
-              ))}
+            <div className="space-y-2">
+              {/* Group by wall */}
+              {walls.map(wall => {
+                const objs = allObjects.filter(o => o.wall_id === wall.id);
+                if (objs.length === 0) return null;
+                const label = getWallLabelForObject(wall.id);
+                return (
+                  <div key={wall.id} className="space-y-0.5">
+                    <p className="text-[10px] font-semibold text-muted-foreground px-1">{label}</p>
+                    {objs.map(obj => (
+                      <ObjectRow
+                        key={obj.id}
+                        obj={obj}
+                        isPositioning={positioningObjId === obj.id}
+                        onTogglePosition={() => setPositioningObjId(positioningObjId === obj.id ? null : obj.id)}
+                        onMove={(field, delta) => handleMoveObject(obj.id, field, delta)}
+                        onDelete={() => handleDeleteObject(obj.id)}
+                        onLinkResource={() => {
+                          fetchResources();
+                          setShowResourcePicker(obj.id as any);
+                          setResourceSearch('');
+                        }}
+                      />
+                    ))}
+                  </div>
+                );
+              })}
             </div>
           ) : !showObjectForm && (
             <p className="text-[10px] text-muted-foreground text-center py-4">
-              Sin objetos. Pulsa "Nuevo" para registrar materiales, capas, etc.
+              Sin objetos ni huecos. Pulsa "Nuevo" para registrar.
             </p>
           )}
         </div>
@@ -836,7 +822,77 @@ export function WorkspacePropertiesPanel({
   );
 }
 
-function FaceRow({ label, faceKey, type, options, onChange, pattern, isExpanded, onToggle, onOpenPatternPicker, openingCount, onAddOpening }: {
+// ── Object row with positioning controls ──
+function ObjectRow({ obj, isPositioning, onTogglePosition, onMove, onDelete, onLinkResource }: {
+  obj: WallObjectRecord;
+  isPositioning: boolean;
+  onTogglePosition: () => void;
+  onMove: (field: 'position_x' | 'sill_height', delta: number) => void;
+  onDelete: () => void;
+  onLinkResource: () => void;
+}) {
+  const isHueco = obj.object_type === 'hueco';
+  const icon = isHueco ? '🚪' : '📦';
+  const dims = [
+    obj.width_mm ? `${obj.width_mm}` : null,
+    obj.height_mm ? `×${obj.height_mm}` : null,
+  ].filter(Boolean).join('');
+
+  return (
+    <div className="text-[10px] px-1.5 py-1 rounded border bg-background space-y-1">
+      <div className="flex items-center gap-1">
+        <span className="shrink-0">{icon}</span>
+        <span className="font-medium truncate flex-1">{obj.name}</span>
+        <Badge variant="outline" className="text-[8px] h-4 px-1 shrink-0">{obj.object_type}</Badge>
+        {obj.resource_id && <Link2 className="h-3 w-3 text-primary shrink-0" />}
+      </div>
+      <div className="flex items-center gap-1 flex-wrap text-muted-foreground">
+        {dims && <span className="font-mono">{dims}mm</span>}
+        {obj.thickness_mm && <span className="font-mono">e:{obj.thickness_mm}mm</span>}
+        {obj.sill_height != null && <span>↑{obj.sill_height}</span>}
+        {obj.position_x != null && <span>→{obj.position_x}</span>}
+        {obj.distance_to_wall != null && <span>↔{obj.distance_to_wall}</span>}
+      </div>
+      {/* Action buttons */}
+      <div className="flex items-center gap-0.5">
+        {isPositioning ? (
+          <>
+            <Button variant="ghost" size="icon" className="h-5 w-5" title="Izquierda" onClick={() => onMove('position_x', -50)}>
+              <ArrowLeft className="h-3 w-3" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-5 w-5" title="Derecha" onClick={() => onMove('position_x', 50)}>
+              <ArrowRight className="h-3 w-3" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-5 w-5" title="Subir" onClick={() => onMove('sill_height', 50)}>
+              <ArrowUp className="h-3 w-3" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-5 w-5" title="Bajar" onClick={() => onMove('sill_height', -50)}>
+              <ArrowDown className="h-3 w-3" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-5 w-5" onClick={onTogglePosition}>
+              <X className="h-3 w-3" />
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button variant="ghost" size="icon" className="h-5 w-5" title="Mover" onClick={onTogglePosition}>
+              <Move className="h-3 w-3" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-5 w-5" title="Vincular recurso" onClick={onLinkResource}>
+              <Link2 className="h-3 w-3" />
+            </Button>
+            <div className="flex-1" />
+            <Button variant="ghost" size="icon" className="h-5 w-5 text-destructive" onClick={onDelete}>
+              <X className="h-3 w-3" />
+            </Button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function FaceRow({ label, faceKey, type, options, onChange, pattern, isExpanded, onToggle, onOpenPatternPicker, objectCount, huecoCount, onAddObject }: {
   label: string;
   faceKey: string;
   type: string;
@@ -846,8 +902,9 @@ function FaceRow({ label, faceKey, type, options, onChange, pattern, isExpanded,
   isExpanded: boolean;
   onToggle: () => void;
   onOpenPatternPicker: () => void;
-  openingCount?: number;
-  onAddOpening?: () => void;
+  objectCount?: number;
+  huecoCount?: number;
+  onAddObject?: () => void;
 }) {
   const patternObj = getPatternById(pattern);
   return (
@@ -859,8 +916,11 @@ function FaceRow({ label, faceKey, type, options, onChange, pattern, isExpanded,
             <span className="w-4 h-4 border rounded overflow-hidden inline-block flex-shrink-0"
               style={{ backgroundImage: `url("${patternPreviewDataUri(patternObj, 16)}")`, backgroundSize: 'cover' }} />
           )}
-          {(openingCount ?? 0) > 0 && (
-            <Badge variant="destructive" className="text-[8px] h-3.5 px-1">{openingCount} hueco{openingCount! > 1 ? 's' : ''}</Badge>
+          {(huecoCount ?? 0) > 0 && (
+            <Badge variant="destructive" className="text-[8px] h-3.5 px-1">🚪{huecoCount}</Badge>
+          )}
+          {(objectCount ?? 0) > 0 && (
+            <Badge variant="secondary" className="text-[8px] h-3.5 px-1">📦{objectCount}</Badge>
           )}
         </div>
         <Badge variant="outline" className="text-[9px] h-4 px-1.5 shrink-0">
@@ -881,9 +941,9 @@ function FaceRow({ label, faceKey, type, options, onChange, pattern, isExpanded,
             <Button variant="ghost" size="icon" className="h-6 w-6" title="Patrón visual" onClick={(e) => { e.stopPropagation(); onOpenPatternPicker(); }}>
               <Paintbrush className="h-3 w-3" />
             </Button>
-            {onAddOpening && (
-              <Button variant="ghost" size="icon" className="h-6 w-6" title="Añadir hueco" onClick={(e) => { e.stopPropagation(); onAddOpening(); }}>
-                <DoorOpen className="h-3 w-3" />
+            {onAddObject && (
+              <Button variant="ghost" size="icon" className="h-6 w-6" title="Añadir objeto" onClick={(e) => { e.stopPropagation(); onAddObject(); }}>
+                <Plus className="h-3 w-3" />
               </Button>
             )}
           </div>

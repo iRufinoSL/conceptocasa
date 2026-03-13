@@ -811,22 +811,39 @@ export function SectionAxisViewer({
       const fillPatternId = polyPatterns['floor'] || polyPatterns['wall-0'] || null;
       const fillPatternObj = getPatternById(fillPatternId);
 
+      // Double-click handler for polygon fill area
+      const handlePolyFillClick = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        const now = Date.now();
+        const last = lastPolyClickRef.current;
+        if (last && last.polyId === poly.id && (now - last.time) < 400) {
+          // Double click on polygon fill → open full panel with no specific face focus
+          setFacePanel({ polyId: poly.id, polyName: poly.name, faceKey: 'floor', edgeCount: poly.vertices.length, vertices: poly.vertices.map(v => ({ x: v.x, y: v.y })) });
+          lastPolyClickRef.current = null;
+        } else {
+          lastPolyClickRef.current = { time: now, polyId: poly.id };
+        }
+      };
+
       // Polygon fill — use pattern if available, else transparent color
       if (fillPatternObj) {
         elements.push(
           <polygon key={`poly-fill-${poly.id}`} points={pointsStr}
             fill={`url(#section-pat-${fillPatternId})`} fillOpacity={0.6}
-            stroke="none" pointerEvents="none" />
+            stroke="none" style={{ cursor: 'pointer', pointerEvents: 'fill' }}
+            onClick={handlePolyFillClick} />
         );
         // Border on top
         elements.push(
           <polygon key={`poly-border-${poly.id}`} points={pointsStr}
-            fill="none" stroke={color} strokeWidth={2.5} />
+            fill="none" stroke={color} strokeWidth={2.5} pointerEvents="none" />
         );
       } else {
         elements.push(
           <polygon key={`poly-${poly.id}`} points={pointsStr}
-            fill={color} fillOpacity={0.15} stroke={color} strokeWidth={2.5} />
+            fill={color} fillOpacity={0.15} stroke={color} strokeWidth={2.5}
+            style={{ cursor: 'pointer', pointerEvents: 'fill' }}
+            onClick={handlePolyFillClick} />
         );
       }
 

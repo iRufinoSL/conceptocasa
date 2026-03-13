@@ -335,9 +335,10 @@ export function WorkspacePropertiesPanel({
           const minY = Math.min(...ys), maxY = Math.max(...ys);
           const rangeX = maxX - minX || 1;
           const rangeY = maxY - minY || 1;
-          const svgW = 260;
-          const svgH = 100;
-          const pad = 28;
+          const edgeN = diagramVerts.length;
+          const svgW = 320;
+          const svgH = edgeN > 4 ? 220 : 180;
+          const pad = 36;
           const drawW = svgW - pad * 2;
           const drawH = svgH - pad * 2;
           const scaleF = Math.min(drawW / rangeX, drawH / rangeY);
@@ -367,23 +368,23 @@ export function WorkspacePropertiesPanel({
                   const len = Math.sqrt(dx * dx + dy * dy);
                   const nx = len > 0 ? -dy / len : 0;
                   const ny = len > 0 ? dx / len : 0;
-                  const off = 12;
-                  const isHighlighted = expandedFace === `wall-${i}`;
-                  return (
-                    <g key={i} style={{ cursor: 'pointer' }} onClick={() => setExpandedFace(expandedFace === `wall-${i}` ? null : `wall-${i}`)}>
-                      <rect x={mx + nx * off - 11} y={my + ny * off - 7} width={22} height={14} rx={3}
-                        fill={isHighlighted ? 'hsl(var(--primary))' : 'hsl(var(--muted))'} stroke="hsl(var(--border))" strokeWidth={0.5} />
-                      <text x={mx + nx * off} y={my + ny * off + 4} textAnchor="middle"
-                        fontSize={9} fontWeight={700} fill={isHighlighted ? 'hsl(var(--primary-foreground))' : 'hsl(var(--foreground))'} fontFamily="monospace">
-                        P{i + 1}
-                      </text>
-                    </g>
-                  );
-                })}
-                {/* Vertex dots */}
-                {svgPts.map((p, i) => (
-                  <circle key={`v${i}`} cx={p.sx} cy={p.sy} r={3} fill="hsl(var(--primary))" stroke="hsl(var(--background))" strokeWidth={1.5} />
-                ))}
+                   const off = 16;
+                   const isHighlighted = expandedFace === `wall-${i}`;
+                   return (
+                     <g key={i} style={{ cursor: 'pointer' }} onClick={() => setExpandedFace(expandedFace === `wall-${i}` ? null : `wall-${i}`)}>
+                       <rect x={mx + nx * off - 14} y={my + ny * off - 9} width={28} height={18} rx={4}
+                         fill={isHighlighted ? 'hsl(var(--primary))' : 'hsl(var(--muted))'} stroke="hsl(var(--border))" strokeWidth={0.5} />
+                       <text x={mx + nx * off} y={my + ny * off + 5} textAnchor="middle"
+                         fontSize={11} fontWeight={700} fill={isHighlighted ? 'hsl(var(--primary-foreground))' : 'hsl(var(--foreground))'} fontFamily="monospace">
+                         P{i + 1}
+                       </text>
+                     </g>
+                   );
+                 })}
+                 {/* Vertex dots */}
+                 {svgPts.map((p, i) => (
+                   <circle key={`v${i}`} cx={p.sx} cy={p.sy} r={4} fill="hsl(var(--primary))" stroke="hsl(var(--background))" strokeWidth={2} />
+                 ))}
               </svg>
             </div>
           );

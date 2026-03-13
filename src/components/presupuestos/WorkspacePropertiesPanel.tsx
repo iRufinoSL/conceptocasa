@@ -276,14 +276,38 @@ export function WorkspacePropertiesPanel({
   };
 
   // ── Openings (huecos) ──
+  const ensureRoomRecord = async (): Promise<boolean> => {
+    // Check if room already exists
+    if (room) return true;
+    if (!floorPlanId) {
+      toast.error('No se encontró el plano asociado');
+      return false;
+    }
+    const { data, error } = await supabase.from('budget_floor_plan_rooms')
+      .insert({ id: workspaceId, floor_plan_id: floorPlanId, name: workspaceName, width: 1, length: 1 })
+      .select().single();
+    if (error) {
+      // Maybe it already exists (race condition)
+      const { data: existing } = await supabase.from('budget_floor_plan_rooms').select('*').eq('id', workspaceId).maybeSingle();
+      if (existing) { setRoom(existing); return true; }
+      toast.error('Error creando registro de espacio');
+      return false;
+    }
+    setRoom(data);
+    return true;
+  };
+
   const ensureWallRecord = async (wallIndex0: number): Promise<string | null> => {
     const dbIdx = wallIndex0 + 1;
     let wall = walls.find(w => w.wall_index === dbIdx);
     if (wall) return wall.id;
+    // Ensure room exists first
+    const roomOk = await ensureRoomRecord();
+    if (!roomOk) return null;
     const { data, error } = await supabase.from('budget_floor_plan_walls')
       .insert({ room_id: workspaceId, wall_index: dbIdx, wall_type: 'exterior' })
       .select().single();
-    if (error || !data) { toast.error('Error creando pared'); return null; }
+    if (error || !data) { toast.error(`Error creando pared: ${error?.message || 'desconocido'}`); return null; }
     setWalls(prev => [...prev, data as WallRecord]);
     return data.id;
   };

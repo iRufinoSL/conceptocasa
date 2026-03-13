@@ -3,12 +3,19 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Save, PenTool, X, Check, Printer, Ruler } from 'lucide-react';
 import type { SectionPolygon } from './CustomSectionManager';
 import { WorkspacePropertiesPanel } from './WorkspacePropertiesPanel';
 import { VISUAL_PATTERNS, getPatternById } from '@/lib/visual-patterns';
 import jsPDF from 'jspdf';
 import { toast } from 'sonner';
+
+// Ruler distinctive color — vivid magenta (not used by axes/dimensions/workspaces)
+const RULER_STROKE = 'hsl(280, 85%, 50%)';
+const RULER_TEXT = 'hsl(280, 65%, 30%)';
+const RULER_BTN = 'hsl(280 85% 50%)';
 
 type WallLabelMode = 'both' | 'name-only' | 'measure-only' | 'none';
 

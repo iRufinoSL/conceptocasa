@@ -1657,6 +1657,7 @@ export type Database = {
           sales_margin_percent: number | null
           technical_description: string | null
           thickness_mm: number | null
+          unit_measure: string | null
           updated_at: string
           vat_included_percent: number | null
           width_mm: number | null
@@ -1674,6 +1675,7 @@ export type Database = {
           sales_margin_percent?: number | null
           technical_description?: string | null
           thickness_mm?: number | null
+          unit_measure?: string | null
           updated_at?: string
           vat_included_percent?: number | null
           width_mm?: number | null
@@ -1691,6 +1693,7 @@ export type Database = {
           sales_margin_percent?: number | null
           technical_description?: string | null
           thickness_mm?: number | null
+          unit_measure?: string | null
           updated_at?: string
           vat_included_percent?: number | null
           width_mm?: number | null
@@ -1698,6 +1701,35 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "budget_object_templates_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "presupuestos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budget_object_type_catalog: {
+        Row: {
+          budget_id: string
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          budget_id: string
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          budget_id?: string
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_object_type_catalog_budget_id_fkey"
             columns: ["budget_id"]
             isOneToOne: false
             referencedRelation: "presupuestos"

@@ -1647,6 +1647,7 @@ export function SectionAxisViewer({
           <g data-pdf-layer="dimensions">{gridContent?.dimensions}</g>
           {nodeInteractionDots}
           {polygonElements}
+          {openingElements}
           {drawingOverlay}
 
           {/* Ruler lines rendering */}

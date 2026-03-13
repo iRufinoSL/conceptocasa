@@ -996,7 +996,7 @@ export function SectionAxisViewer({
       const darkColor = color.replace(/(\d+)%\)$/, (_, l) => `${Math.max(parseInt(l) - 20, 15)}%)`);
 
       elements.push(
-        <g key={`center-${poly.id}`}
+        <g key={`center-${poly.id}`} data-pdf-layer="center-labels"
           style={{ cursor: 'pointer' }}
           onClick={(e) => {
             e.stopPropagation();

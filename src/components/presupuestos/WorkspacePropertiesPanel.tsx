@@ -292,7 +292,9 @@ export function WorkspacePropertiesPanel({
   const sectionLabel = sectionType === 'vertical' ? 'Z' : sectionType === 'longitudinal' ? 'Y' : sectionType === 'transversal' ? 'X' : 'I';
 
   return (
-    <div className="absolute right-2 top-2 z-50 w-72 bg-card border rounded-lg shadow-lg overflow-hidden">
+    <div className="absolute right-2 top-2 z-50 w-72 bg-card border rounded-lg shadow-lg overflow-hidden"
+      onPointerDown={e => e.stopPropagation()}
+      onClick={e => e.stopPropagation()}>
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 bg-muted/50 border-b">
         <div className="flex items-center gap-1.5 min-w-0">

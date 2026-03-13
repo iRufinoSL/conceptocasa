@@ -576,6 +576,7 @@ export function SectionAxisViewer({
 
   const saveEditPolygon = () => {
     if (!editingPolyId) return;
+    pushUndo();
     const updated = polygons.map(p => {
       if (p.id !== editingPolyId) return p;
       return {

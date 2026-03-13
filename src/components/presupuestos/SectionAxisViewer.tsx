@@ -515,6 +515,7 @@ export function SectionAxisViewer({
   }, [rulerLines, onSaveRulerLines]);
 
   const handleClearRulers = useCallback(() => {
+    pushUndo();
     setRulerLines([]);
     setRulerStart(null);
     onSaveRulerLines?.([]);

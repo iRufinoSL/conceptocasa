@@ -161,7 +161,7 @@ export function InvoicesTab({ budgetId: fixedBudgetId, ledgerId }: { budgetId?: 
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [ledgerId]);
 
   const fetchData = async () => {
     try {

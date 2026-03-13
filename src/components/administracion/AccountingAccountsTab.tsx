@@ -83,7 +83,7 @@ export function AccountingAccountsTab({ highlightAccountId, onHighlightHandled, 
 
   useEffect(() => {
     fetchAccounts();
-  }, []);
+  }, [ledgerId]);
 
   // Handle highlight from navigation
   useEffect(() => {

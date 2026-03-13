@@ -1487,6 +1487,8 @@ export function SectionAxisViewer({
           edgeCount={facePanel.edgeCount}
           onClose={() => setFacePanel(null)}
           onPatternChange={handlePatternChange}
+          localFaceTypes={polygons.find(p => p.id === facePanel.polyId)?.faceTypes || {}}
+          onLocalFaceTypeChange={handleLocalFaceTypeChange}
         />
       )}
     </div>

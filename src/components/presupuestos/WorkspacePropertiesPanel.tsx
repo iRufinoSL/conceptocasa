@@ -66,6 +66,8 @@ interface WorkspacePropertiesPanelProps {
   focusFace?: string;
   /** Override edge count from the actual polygon in the section viewer */
   edgeCount?: number;
+  /** Polygon vertices for rendering the mini diagram */
+  vertices?: Array<{ x: number; y: number }>;
   /** Callback when a pattern changes so parent can re-render */
   onPatternChange?: (faceKey: string, patternId: string | null) => void;
   /** Local overrides for section-only polygons (not linked to a room row) */

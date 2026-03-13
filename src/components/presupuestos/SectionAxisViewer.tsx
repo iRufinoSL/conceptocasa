@@ -52,6 +52,7 @@ interface SectionAxisViewerProps {
   sectionType: 'vertical' | 'longitudinal' | 'transversal';
   axisValue: number;
   sectionName: string;
+  floorPlanId?: string;
   savedScale?: { hScale: number; vScale: number };
   onSaveScale?: (scale: { hScale: number; vScale: number }) => void;
   savedNegLimits?: { negH: number; negV: number; posH?: number; posV?: number };

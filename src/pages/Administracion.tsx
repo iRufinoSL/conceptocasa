@@ -23,6 +23,7 @@ export default function Administracion() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('invoices');
   const [selectedLedgerId, setSelectedLedgerId] = useState('');
+  const [highlightEntryCode, setHighlightEntryCode] = useState<string | null>(null);
   const [highlightAccountId, setHighlightAccountId] = useState<string | null>(null);
   const [voiceAssistantOpen, setVoiceAssistantOpen] = useState(false);
   const [entriesKey, setEntriesKey] = useState(0);

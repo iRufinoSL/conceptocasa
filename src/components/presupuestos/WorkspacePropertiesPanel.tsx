@@ -346,6 +346,7 @@ export function WorkspacePropertiesPanel({
     const newPosX = Math.max(0, (opening.position_x || 0) + delta);
     await supabase.from('budget_floor_plan_openings').update({ position_x: newPosX }).eq('id', id);
     setOpenings(prev => prev.map(o => o.id === id ? { ...o, position_x: newPosX } : o));
+    onOpeningsChange?.();
   };
 
   // ── Objects (objetos generales) ──

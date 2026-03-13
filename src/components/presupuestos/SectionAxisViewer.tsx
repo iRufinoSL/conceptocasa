@@ -1505,6 +1505,7 @@ export function SectionAxisViewer({
           sectionName={sectionName}
           focusFace={facePanel.faceKey}
           edgeCount={facePanel.edgeCount}
+          vertices={facePanel.vertices}
           onClose={() => setFacePanel(null)}
           onPatternChange={handlePatternChange}
           localFaceTypes={polygons.find(p => p.id === facePanel.polyId)?.faceTypes || {}}

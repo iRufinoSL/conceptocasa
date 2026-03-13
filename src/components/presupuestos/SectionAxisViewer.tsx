@@ -1164,7 +1164,17 @@ export function SectionAxisViewer({
           style={{ backgroundColor: fixedColor, color: 'white' }}>
           {fixedAxis}={axisValue}
         </span>
-        <div className="ml-auto flex items-center gap-3 text-[11px]">
+        <div className="ml-auto flex items-center gap-2 text-[11px]">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 w-7 p-0"
+            disabled={undoStack.length === 0}
+            onClick={handleUndo}
+            title={`Deshacer (${undoStack.length}/${MAX_UNDO})`}
+          >
+            <Undo2 className="h-3.5 w-3.5" />
+          </Button>
           <span className="flex items-center gap-1">
             <span className="inline-block w-3 h-0.5 rounded" style={{ backgroundColor: hColor }} />
             <span className="font-mono font-bold" style={{ color: hColor }}>{hAxis}</span>

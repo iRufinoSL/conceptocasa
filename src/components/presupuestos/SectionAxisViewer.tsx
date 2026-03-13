@@ -654,7 +654,7 @@ export function SectionAxisViewer({
       const isOrigin = c === originCol;
       gridLines.push(
         <line key={`gv${c}`} x1={x} y1={oy} x2={x} y2={oy + gridH}
-          stroke={isOrigin ? hColor : 'hsl(220, 10%, 60%)'} strokeWidth={isOrigin ? 2.5 : 0.5} opacity={isOrigin ? 1 : 0.35} />
+          stroke={isOrigin ? hColor : 'hsl(220, 10%, 50%)'} strokeWidth={isOrigin ? 2.5 : 0.7} opacity={isOrigin ? 1 : 0.5} />
       );
     }
     for (let r = 0; r <= totalRows; r++) {

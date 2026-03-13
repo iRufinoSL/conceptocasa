@@ -207,7 +207,7 @@ export function AccountingAccountsTab({ highlightAccountId, onHighlightHandled, 
 
     setSaving(true);
     try {
-      const accountData = {
+      const accountData: Record<string, any> = {
         name: form.name.trim(),
         account_type: form.account_type,
         address: form.address.trim() || null,
@@ -216,6 +216,9 @@ export function AccountingAccountsTab({ highlightAccountId, onHighlightHandled, 
         province: form.province.trim() || null,
         nif_cif: form.nif_cif.trim() || null
       };
+      if (ledgerId && ledgerId !== '__total__') {
+        accountData.ledger_id = ledgerId;
+      }
 
       if (editingAccount) {
         const { error } = await supabase

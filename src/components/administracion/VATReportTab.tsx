@@ -135,6 +135,9 @@ export function VATReportTab({ budgetId: fixedBudgetId, ledgerId }: { budgetId?:
       if (fixedBudgetId) {
         query = query.eq('budget_id', fixedBudgetId);
       }
+      if (ledgerId && ledgerId !== '__total__') {
+        query = query.eq('ledger_id', ledgerId);
+      }
       
       const { data, error } = await query.order('entry_date', { ascending: true });
 

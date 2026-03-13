@@ -67,7 +67,7 @@ export function AccountingEntryLinesTab({ onNavigateToEntry, onNavigateToAccount
         .select(`
           *,
           account:accounting_accounts(id, name, account_type),
-          entry:accounting_entries(code, description, budget_id)
+          entry:accounting_entries(code, description, budget_id, ledger_id)
         `);
       
       const { data: rawLinesData, error: linesError } = await linesQuery.order('code', { ascending: false });
@@ -75,10 +75,16 @@ export function AccountingEntryLinesTab({ onNavigateToEntry, onNavigateToAccount
       if (linesError) throw linesError;
       
       // Filter by budget if fixedBudgetId is set
-      const linesData = fixedBudgetId 
+      let filteredData = fixedBudgetId 
         ? (rawLinesData || []).filter((line: any) => line.entry?.budget_id === fixedBudgetId)
         : (rawLinesData || []);
-      setLines(linesData);
+      
+      // Filter by ledger
+      if (ledgerId && ledgerId !== '__total__') {
+        filteredData = filteredData.filter((line: any) => line.entry?.ledger_id === ledgerId);
+      }
+      
+      setLines(filteredData);
 
       const { data: accountsData, error: accountsError } = await supabase
         .from('accounting_accounts')

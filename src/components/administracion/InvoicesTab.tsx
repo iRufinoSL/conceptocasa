@@ -304,7 +304,7 @@ export function InvoicesTab({ budgetId: fixedBudgetId, ledgerId }: { budgetId?: 
     try {
       const vatRate = form.vat_rate === VAT_RATE_NO_INCLUDED ? -1 : parseFloat(form.vat_rate);
       
-      const invoiceData = {
+      const invoiceData: Record<string, any> = {
         invoice_number: parseInt(form.invoice_number),
         invoice_date: form.invoice_date,
         description: form.description.trim() || null,
@@ -316,6 +316,9 @@ export function InvoicesTab({ budgetId: fixedBudgetId, ledgerId }: { budgetId?: 
         document_type: form.document_type,
         footer_contact_source: form.footer_contact_source
       };
+      if (ledgerId && ledgerId !== '__total__') {
+        invoiceData.ledger_id = ledgerId;
+      }
 
       if (editingInvoice) {
         const { error } = await supabase

@@ -662,7 +662,7 @@ export function SectionAxisViewer({
       const isOrigin = r === originRow;
       gridLines.push(
         <line key={`gh${r}`} x1={ox} y1={y} x2={ox + gridW} y2={y}
-          stroke={isOrigin ? vColor : 'hsl(220, 10%, 60%)'} strokeWidth={isOrigin ? 2.5 : 0.5} opacity={isOrigin ? 1 : 0.35} />
+          stroke={isOrigin ? vColor : 'hsl(220, 10%, 50%)'} strokeWidth={isOrigin ? 2.5 : 0.7} opacity={isOrigin ? 1 : 0.5} />
       );
     }
 

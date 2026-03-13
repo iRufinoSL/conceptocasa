@@ -1654,6 +1654,7 @@ export type Database = {
           name: string
           object_type: string
           purchase_price_vat_included: number | null
+          resource_id: string | null
           safety_margin_percent: number | null
           sales_margin_percent: number | null
           technical_description: string | null
@@ -1673,6 +1674,7 @@ export type Database = {
           name: string
           object_type?: string
           purchase_price_vat_included?: number | null
+          resource_id?: string | null
           safety_margin_percent?: number | null
           sales_margin_percent?: number | null
           technical_description?: string | null
@@ -1692,6 +1694,7 @@ export type Database = {
           name?: string
           object_type?: string
           purchase_price_vat_included?: number | null
+          resource_id?: string | null
           safety_margin_percent?: number | null
           sales_margin_percent?: number | null
           technical_description?: string | null
@@ -1707,6 +1710,13 @@ export type Database = {
             columns: ["budget_id"]
             isOneToOne: false
             referencedRelation: "presupuestos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_object_templates_resource_id_fkey"
+            columns: ["resource_id"]
+            isOneToOne: false
+            referencedRelation: "external_resources"
             referencedColumns: ["id"]
           },
         ]

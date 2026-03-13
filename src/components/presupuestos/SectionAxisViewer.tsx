@@ -1769,11 +1769,13 @@ export function SectionAxisViewer({
           workspaceName={facePanel.polyName}
           sectionType={sectionType}
           sectionName={sectionName}
+          floorPlanId={floorPlanId}
           focusFace={facePanel.faceKey}
           edgeCount={facePanel.edgeCount}
           vertices={facePanel.vertices}
           onClose={() => setFacePanel(null)}
           onPatternChange={handlePatternChange}
+          onOpeningsChange={() => setOpeningsVersion(v => v + 1)}
           localFaceTypes={polygons.find(p => p.id === facePanel.polyId)?.faceTypes || {}}
           onLocalFaceTypeChange={handleLocalFaceTypeChange}
         />

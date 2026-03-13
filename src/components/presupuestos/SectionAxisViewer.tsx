@@ -235,6 +235,35 @@ export function SectionAxisViewer({
     toast.success('Deshacer aplicado');
   }, [undoStack, onSavePolygons, onSaveRulerLines]);
 
+  // ── Openings data for visual rendering ──
+  interface OpeningData { id: string; wall_id: string; opening_type: string; width: number; height: number; sill_height: number; position_x: number | null; name: string | null; }
+  const [openingsMap, setOpeningsMap] = useState<Record<string, { wallIndex: number; openings: OpeningData[] }>>({});
+  const [openingsVersion, setOpeningsVersion] = useState(0);
+
+  const loadOpenings = useCallback(async () => {
+    if (polygons.length === 0) return;
+    const polyIds = polygons.map(p => p.id);
+    const { data: walls } = await supabase.from('budget_floor_plan_walls').select('id, room_id, wall_index').in('room_id', polyIds);
+    if (!walls || walls.length === 0) { setOpeningsMap({}); return; }
+    const wallIds = walls.map(w => w.id);
+    const { data: openings } = await supabase.from('budget_floor_plan_openings').select('*').in('wall_id', wallIds);
+    const map: Record<string, { wallIndex: number; openings: OpeningData[] }> = {};
+    for (const w of walls) {
+      const wOpenings = (openings || []).filter(o => o.wall_id === w.id) as OpeningData[];
+      if (wOpenings.length > 0) {
+        if (!map[w.room_id]) map[w.room_id] = { wallIndex: w.wall_index, openings: [] };
+        // Group by room, tag each opening with wall_index
+        for (const o of wOpenings) {
+          if (!map[`${w.room_id}__${w.wall_index}`]) map[`${w.room_id}__${w.wall_index}`] = { wallIndex: w.wall_index, openings: [] };
+          map[`${w.room_id}__${w.wall_index}`].openings.push(o);
+        }
+      }
+    }
+    setOpeningsMap(map);
+  }, [polygons]);
+
+  useEffect(() => { loadOpenings(); }, [loadOpenings, openingsVersion]);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const [containerSize, setContainerSize] = useState({ w: 800, h: 500 });

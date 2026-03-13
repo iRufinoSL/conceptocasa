@@ -1398,7 +1398,7 @@ export function SectionAxisViewer({
             return (
               <span key={rl.id}
                 className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border cursor-pointer hover:opacity-80 transition-opacity"
-                style={{ borderColor: 'hsl(30 90% 50%)', color: 'hsl(30 70% 40%)' }}
+                style={{ borderColor: RULER_BTN, color: RULER_TEXT }}
                 onClick={() => { setEditingRulerId(rl.id); setEditRulerLabel(rl.label || ''); }}>
                 📏 {rl.label || `${Math.round(lengthMm)} mm`}
                 {isEditing && (

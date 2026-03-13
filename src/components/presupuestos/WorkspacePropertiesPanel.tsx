@@ -84,6 +84,7 @@ export function WorkspacePropertiesPanel({
   onClose,
   focusFace,
   edgeCount: edgeCountProp,
+  vertices: verticesProp,
   onPatternChange,
   localFaceTypes,
   onLocalFaceTypeChange,

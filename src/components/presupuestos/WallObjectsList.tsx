@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef, useCallback } from 'react';
+import { useMemo, useState, useRef, useCallback, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Badge } from '@/components/ui/badge';
@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Layers, List, Search, Box, ChevronRight, Package, Plus, Trash2, Edit2, Save, X, Archive } from 'lucide-react';
+import { Layers, List, Search, Box, ChevronRight, Package, Plus, Trash2, Edit2, Save, X, Archive, Tag } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WallObjectsPanel } from './WallObjectsPanel';
 import { toast } from 'sonner';
@@ -158,22 +158,74 @@ interface ObjectTemplate {
   safety_margin_percent: number | null;
   sales_margin_percent: number | null;
   object_type: string;
+  unit_measure: string | null;
 }
 
-const OBJECT_TYPES = [
-  { value: 'material', label: 'Material' },
-  { value: 'aislamiento', label: 'Aislamiento' },
-  { value: 'revestimiento', label: 'Revestimiento' },
-  { value: 'estructura', label: 'Estructura' },
-  { value: 'instalacion', label: 'Instalación' },
-  { value: 'acabado', label: 'Acabado' },
-  { value: 'otro', label: 'Otro' },
-];
+const UNIT_MEASURES = ['m2', 'm3', 'ml', 'ud', 'kg', 'hora', 'día', 'mes'];
+
+/* ── Object Type Manager (inline) ── */
+function ObjectTypeManager({ budgetId, types, onRefresh }: {
+  budgetId: string;
+  types: { id: string; name: string }[];
+  onRefresh: () => void;
+}) {
+  const [newType, setNewType] = useState('');
+  const [adding, setAdding] = useState(false);
+
+  const handleAdd = async () => {
+    const trimmed = newType.trim();
+    if (!trimmed) return;
+    if (types.some(t => t.name.toLowerCase() === trimmed.toLowerCase())) {
+      toast.error('Ese tipo ya existe');
+      return;
+    }
+    setAdding(true);
+    const { error } = await supabase.from('budget_object_type_catalog').insert({ budget_id: budgetId, name: trimmed });
+    setAdding(false);
+    if (error) { toast.error('Error al crear tipo'); return; }
+    setNewType('');
+    toast.success('Tipo creado');
+    onRefresh();
+  };
+
+  const handleDelete = async (id: string, name: string) => {
+    if (!confirm(`¿Eliminar el tipo "${name}"?`)) return;
+    const { error } = await supabase.from('budget_object_type_catalog').delete().eq('id', id);
+    if (error) { toast.error('Error al eliminar tipo'); return; }
+    toast.success('Tipo eliminado');
+    onRefresh();
+  };
+
+  return (
+    <div className="border rounded-lg p-2 space-y-2 bg-muted/20">
+      <p className="text-xs font-semibold text-muted-foreground">Gestionar tipos de objeto</p>
+      <div className="flex gap-1">
+        <Input className="h-7 text-sm flex-1" placeholder="Nuevo tipo..." value={newType} onChange={e => setNewType(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleAdd()} />
+        <Button size="sm" className="h-7 text-xs px-2" onClick={handleAdd} disabled={adding || !newType.trim()}>
+          <Plus className="h-3 w-3" />
+        </Button>
+      </div>
+      <div className="flex flex-wrap gap-1">
+        {types.map(t => (
+          <Badge key={t.id} variant="secondary" className="text-xs h-6 gap-1 pr-1">
+            {t.name}
+            <button onClick={(e) => { e.stopPropagation(); handleDelete(t.id, t.name); }}
+              className="ml-0.5 hover:text-destructive transition-colors">
+              <X className="h-3 w-3" />
+            </button>
+          </Badge>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 /* ── Template form ── */
-function TemplateForm({ budgetId, template, onSaved, onCancel }: {
+function TemplateForm({ budgetId, template, objectTypes, onSaved, onCancel }: {
   budgetId: string;
   template?: ObjectTemplate | null;
+  objectTypes: { id: string; name: string }[];
   onSaved: () => void;
   onCancel: () => void;
 }) {
@@ -187,7 +239,8 @@ function TemplateForm({ budgetId, template, onSaved, onCancel }: {
   const [vatPct, setVatPct] = useState(template?.vat_included_percent?.toString() || '21');
   const [safetyPct, setSafetyPct] = useState(template?.safety_margin_percent?.toString() || '0');
   const [salesPct, setSalesPct] = useState(template?.sales_margin_percent?.toString() || '0');
-  const [objectType, setObjectType] = useState(template?.object_type || 'material');
+  const [objectType, setObjectType] = useState(template?.object_type || (objectTypes[0]?.name || 'Material'));
+  const [unitMeasure, setUnitMeasure] = useState(template?.unit_measure || 'ud');
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
@@ -206,6 +259,7 @@ function TemplateForm({ budgetId, template, onSaved, onCancel }: {
       safety_margin_percent: parseFloat(safetyPct) || 0,
       sales_margin_percent: parseFloat(salesPct) || 0,
       object_type: objectType,
+      unit_measure: unitMeasure,
     };
     let error;
     if (template) {
@@ -231,13 +285,22 @@ function TemplateForm({ budgetId, template, onSaved, onCancel }: {
           <Select value={objectType} onValueChange={setObjectType}>
             <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
             <SelectContent>
-              {OBJECT_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+              {objectTypes.map(t => <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
         <div>
           <label className="text-xs font-medium text-muted-foreground">Tipo de material</label>
           <Input className="h-8 text-sm" value={materialType} onChange={e => setMaterialType(e.target.value)} placeholder="Ej: Cerámica, Madera..." />
+        </div>
+        <div>
+          <label className="text-xs font-medium text-muted-foreground">Tipo de unidad</label>
+          <Select value={unitMeasure} onValueChange={setUnitMeasure}>
+            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {UNIT_MEASURES.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+            </SelectContent>
+          </Select>
         </div>
         <div className="col-span-2">
           <label className="text-xs font-medium text-muted-foreground">Ficha técnica / Descripción</label>
@@ -311,6 +374,29 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
   // Template state
   const [showTemplateForm, setShowTemplateForm] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<ObjectTemplate | null>(null);
+  const [showTypeManager, setShowTypeManager] = useState(false);
+  const [modelView, setModelView] = useState<'alpha' | 'type'>('alpha');
+
+  /* ── Object type catalog query ── */
+  const { data: objectTypes = [], refetch: refetchTypes } = useQuery({
+    queryKey: ['budget-object-type-catalog', budgetId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('budget_object_type_catalog')
+        .select('id, name')
+        .eq('budget_id', budgetId)
+        .order('name', { ascending: true });
+      if (!data || data.length === 0) {
+        // Seed defaults if none exist
+        const defaults = ['Material', 'Aislamiento', 'Revestimiento', 'Estructura', 'Instalación', 'Acabado', 'Otro'];
+        const inserts = defaults.map(name => ({ budget_id: budgetId, name }));
+        await supabase.from('budget_object_type_catalog').insert(inserts);
+        const { data: seeded } = await supabase.from('budget_object_type_catalog').select('id, name').eq('budget_id', budgetId).order('name');
+        return (seeded || []) as { id: string; name: string }[];
+      }
+      return data as { id: string; name: string }[];
+    },
+  });
 
   /* ── Objetos modelo query ── */
   const { data: templates = [], isLoading: templatesLoading } = useQuery({
@@ -494,6 +580,22 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
       .map(([name, objs]) => ({ name, objects: objs.sort((a: any, b: any) => a.name.localeCompare(b.name, 'es')) }));
   }, [filteredObjects]);
 
+  /* ── Templates by type ── */
+  const templatesByType = useMemo(() => {
+    const groups = new Map<string, ObjectTemplate[]>();
+    const src = search.trim()
+      ? templates.filter(t => t.name.toLowerCase().includes(search.toLowerCase()) || (t.material_type || '').toLowerCase().includes(search.toLowerCase()))
+      : templates;
+    for (const t of src) {
+      const type = t.object_type || 'Sin tipo';
+      if (!groups.has(type)) groups.set(type, []);
+      groups.get(type)!.push(t);
+    }
+    return Array.from(groups.entries())
+      .sort(([a], [b]) => a.localeCompare(b, 'es'))
+      .map(([name, items]) => ({ name, items: items.sort((a, b) => a.name.localeCompare(b.name, 'es')) }));
+  }, [templates, search]);
+
   const ensureSuperficieObject = async (wallId: string, face: AutoFace) => {
     const { data: existing } = await supabase
       .from('budget_wall_objects')
@@ -570,6 +672,27 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
     { key: 'm3', header: 'm³', defaultWidth: 65, minWidth: 45 },
   ];
 
+  const modelColumns: ColDef[] = [
+    { key: 'name', header: 'Nombre', defaultWidth: 140, minWidth: 80 },
+    { key: 'type', header: 'Tipo', defaultWidth: 90, minWidth: 50 },
+    { key: 'unit', header: 'Ud', defaultWidth: 50, minWidth: 35 },
+    { key: 'material', header: 'Material', defaultWidth: 100, minWidth: 50 },
+    { key: 'dims', header: 'Dimensiones (mm)', defaultWidth: 130, minWidth: 70 },
+    { key: 'price', header: 'Precio', defaultWidth: 80, minWidth: 50 },
+  ];
+
+  const templateToRow = (t: ObjectTemplate) => ({
+    face: t as any,
+    cells: {
+      name: t.name,
+      type: t.object_type || '',
+      unit: t.unit_measure || 'ud',
+      material: t.material_type || '',
+      dims: [t.width_mm && `A:${t.width_mm}`, t.height_mm && `H:${t.height_mm}`, t.thickness_mm && `E:${t.thickness_mm}`].filter(Boolean).join(' '),
+      price: t.purchase_price_vat_included ? `${t.purchase_price_vat_included}€` : '',
+    },
+  });
+
   const placedRow = (o: any) => ({
     face: { workspace: o.workspace, roomId: '', faceName: o.faceName, m2: o.surface_m2, m3: o.volume_m3, sortKey: 0, wallIndex: 0 } as AutoFace,
     cells: {
@@ -611,19 +734,36 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
 
         {/* ── Objetos modelo ── */}
         <TabsContent value="modelos" className="mt-2 space-y-2">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <Badge variant="secondary" className="text-xs h-6 gap-1">
               <Package className="h-3.5 w-3.5" /> {filteredTemplates.length} modelos
             </Badge>
-            <Button size="sm" className="h-7 text-xs gap-1" onClick={() => { setEditingTemplate(null); setShowTemplateForm(true); }}>
-              <Plus className="h-3 w-3" /> Nuevo modelo
-            </Button>
+            <div className="flex gap-1">
+              <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => setShowTypeManager(!showTypeManager)}>
+                <Tag className="h-3 w-3" /> Tipos
+              </Button>
+              <Button size="sm" className="h-7 text-xs gap-1" onClick={() => { setEditingTemplate(null); setShowTemplateForm(true); }}>
+                <Plus className="h-3 w-3" /> Nuevo modelo
+              </Button>
+            </div>
           </div>
+
+          {showTypeManager && (
+            <ObjectTypeManager
+              budgetId={budgetId}
+              types={objectTypes}
+              onRefresh={() => {
+                refetchTypes();
+                queryClient.invalidateQueries({ queryKey: ['budget-object-type-catalog', budgetId] });
+              }}
+            />
+          )}
 
           {showTemplateForm && (
             <TemplateForm
               budgetId={budgetId}
               template={editingTemplate}
+              objectTypes={objectTypes}
               onSaved={() => {
                 setShowTemplateForm(false);
                 setEditingTemplate(null);
@@ -633,35 +773,55 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
             />
           )}
 
+          {/* View toggle for models */}
+          <div className="flex gap-1">
+            <Button variant={modelView === 'alpha' ? 'default' : 'outline'} size="sm" className="h-7 text-xs gap-1" onClick={() => setModelView('alpha')}>
+              <List className="h-3 w-3" /> Alfabético
+            </Button>
+            <Button variant={modelView === 'type' ? 'default' : 'outline'} size="sm" className="h-7 text-xs gap-1" onClick={() => setModelView('type')}>
+              <Package className="h-3 w-3" /> Por tipo
+            </Button>
+          </div>
+
           {filteredTemplates.length === 0 && !showTemplateForm ? (
             <p className="text-sm text-muted-foreground py-4 text-center">No hay objetos modelo definidos</p>
-          ) : (
+          ) : modelView === 'alpha' ? (
             <ResizableTable
-              columns={[
-                { key: 'name', header: 'Nombre', defaultWidth: 140, minWidth: 80 },
-                { key: 'type', header: 'Tipo', defaultWidth: 90, minWidth: 50 },
-                { key: 'material', header: 'Material', defaultWidth: 100, minWidth: 50 },
-                { key: 'dims', header: 'Dimensiones (mm)', defaultWidth: 130, minWidth: 70 },
-                { key: 'price', header: 'Precio', defaultWidth: 80, minWidth: 50 },
-                { key: 'actions', header: '', defaultWidth: 60, minWidth: 50 },
-              ]}
-              rows={filteredTemplates.map(t => ({
-                face: t as any,
-                cells: {
-                  name: t.name,
-                  type: OBJECT_TYPES.find(ot => ot.value === t.object_type)?.label || t.object_type,
-                  material: t.material_type || '',
-                  dims: [t.width_mm && `A:${t.width_mm}`, t.height_mm && `H:${t.height_mm}`, t.thickness_mm && `E:${t.thickness_mm}`].filter(Boolean).join(' '),
-                  price: t.purchase_price_vat_included ? `${t.purchase_price_vat_included}€` : '',
-                  actions: '✎ 🗑',
-                },
-              }))}
+              columns={modelColumns}
+              rows={filteredTemplates.map(templateToRow)}
               onRowClick={(row) => {
                 const t = row.face as unknown as ObjectTemplate;
                 setEditingTemplate(t);
                 setShowTemplateForm(true);
               }}
             />
+          ) : (
+            <div className="space-y-1.5">
+              {templatesByType.map(group => {
+                const isOpen = resourceOpenGroups.has(`mt-${group.name}`);
+                return (
+                  <Collapsible key={group.name} open={isOpen} onOpenChange={() => toggleResourceGroup(`mt-${group.name}`)}>
+                    <CollapsibleTrigger className="flex items-center gap-2 w-full rounded-md px-2 py-1.5 bg-accent/30 hover:bg-accent/50 transition-colors text-left">
+                      <ChevronRight className={cn('h-4 w-4 text-muted-foreground transition-transform duration-200', isOpen && 'rotate-90')} />
+                      <span className="text-sm font-semibold flex-1">{group.name}</span>
+                      <Badge variant="outline" className="text-[10px] h-5">{group.items.length}</Badge>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <ResizableTable
+                        columns={modelColumns.filter(c => c.key !== 'type')}
+                        rows={group.items.map(templateToRow)}
+                        onRowClick={(row) => {
+                          const t = row.face as unknown as ObjectTemplate;
+                          setEditingTemplate(t);
+                          setShowTemplateForm(true);
+                        }}
+                        className="ml-6 mt-1"
+                      />
+                    </CollapsibleContent>
+                  </Collapsible>
+                );
+              })}
+            </div>
           )}
         </TabsContent>
 
@@ -719,13 +879,12 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
             /* By type */
             <div className="space-y-1.5">
               {objectsByType.map(group => {
-                const typeLabel = OBJECT_TYPES.find(t => t.value === group.name)?.label || group.name;
                 const isOpen = resourceOpenGroups.has(`tp-${group.name}`);
                 return (
                   <Collapsible key={group.name} open={isOpen} onOpenChange={() => toggleResourceGroup(`tp-${group.name}`)}>
                     <CollapsibleTrigger className="flex items-center gap-2 w-full rounded-md px-2 py-1.5 bg-accent/30 hover:bg-accent/50 transition-colors text-left">
                       <ChevronRight className={cn('h-4 w-4 text-muted-foreground transition-transform duration-200', isOpen && 'rotate-90')} />
-                      <span className="text-sm font-semibold flex-1">{typeLabel}</span>
+                      <span className="text-sm font-semibold flex-1">{group.name}</span>
                       <Badge variant="outline" className="text-[10px] h-5">{group.objects.length}</Badge>
                     </CollapsibleTrigger>
                     <CollapsibleContent>

@@ -950,7 +950,7 @@ export function SectionAxisViewer({
           const boxW = labelText.length * 5.5 + 10;
 
           elements.push(
-            <g key={`edge-label-${poly.id}-${i}`}
+            <g key={`edge-label-${poly.id}-${i}`} data-pdf-layer="wall-labels"
               style={{ cursor: 'pointer' }}
               onClick={(e) => { e.stopPropagation(); handleEdgeClick(poly.id, i); }}>
               <rect

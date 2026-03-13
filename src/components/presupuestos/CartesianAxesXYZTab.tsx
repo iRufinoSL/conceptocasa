@@ -413,11 +413,104 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces', budgetId] });
   };
 
+  /** Compute auto-projected polygons for Y/X sections from workspace rooms */
+  const computeProjectedPolygons = useCallback((section: CustomSection): SectionPolygon[] => {
+    if (section.sectionType === 'vertical') return [];
+    if (!workspaceRooms || workspaceRooms.length === 0) return [];
+
+    const verticalSections = allSections.filter(s => s.sectionType === 'vertical');
+    const defaultHeight = 2.5; // fallback metres
+
+    const projected: SectionPolygon[] = [];
+
+    for (const room of workspaceRooms) {
+      if (!room.floor_polygon || room.floor_polygon.length < 3) continue;
+      const poly = room.floor_polygon;
+      const cutAxis = section.sectionType === 'longitudinal' ? 'y' : 'x';
+      const axisVal = section.axisValue;
+
+      const intersections = findPolyIntersections(poly, cutAxis, axisVal);
+      if (intersections.length < 2) continue;
+
+      const hMin = Math.min(...intersections);
+      const hMax = Math.max(...intersections);
+      if (Math.abs(hMax - hMin) < 0.01) continue;
+
+      // Determine Z base from vertical section
+      const vSection = verticalSections.find(s => s.id === room.vertical_section_id);
+      const zBase = vSection ? vSection.axisValue : 0;
+      const heightM = room.height || defaultHeight;
+      const defaultZTop = zBase + Math.round((heightM * 1000) / 250);
+
+      // Check wall heights for non-uniform tops
+      const getWallZTop = (wallIndex: number): number => {
+        const wall = (allWalls || []).find(w => w.room_id === room.id && w.wall_index === wallIndex);
+        if (wall?.height != null && wall.height > 0) {
+          return zBase + Math.round((wall.height * 1000) / 250);
+        }
+        return defaultZTop;
+      };
+
+      const getTopAtIntersection = (hVal: number): number => {
+        const otherAxis = cutAxis === 'y' ? 'x' : 'y';
+        for (let i = 0; i < poly.length; i++) {
+          const j = (i + 1) % poly.length;
+          const a = poly[i], b = poly[j];
+          const aV = a[cutAxis], bV = b[cutAxis];
+          if ((aV <= axisVal && bV >= axisVal) || (aV >= axisVal && bV <= axisVal)) {
+            if (Math.abs(aV - bV) < 0.001 && Math.abs(aV - axisVal) < 0.001) {
+              if (Math.min(a[otherAxis], b[otherAxis]) <= hVal && Math.max(a[otherAxis], b[otherAxis]) >= hVal) {
+                return getWallZTop(i + 1);
+              }
+            } else {
+              const t = (axisVal - aV) / (bV - aV);
+              const intH = a[otherAxis] + t * (b[otherAxis] - a[otherAxis]);
+              if (Math.abs(intH - hVal) < 0.5) {
+                const zI = getWallZTop(i + 1);
+                const zJ = getWallZTop(((i + 1) % poly.length) + 1);
+                return Math.round(zI + t * (zJ - zI));
+              }
+            }
+          }
+        }
+        return defaultZTop;
+      };
+
+      const zTopLeft = getTopAtIntersection(hMin);
+      const zTopRight = getTopAtIntersection(hMax);
+
+      projected.push({
+        id: room.id,
+        name: room.name,
+        vertices: [
+          { x: hMin, y: zBase, z: 0 },
+          { x: hMax, y: zBase, z: 0 },
+          { x: hMax, y: zTopRight, z: 0 },
+          { x: hMin, y: zTopLeft, z: 0 },
+        ],
+        zBase,
+        zTop: Math.max(zTopLeft, zTopRight),
+        hasFloor: room.has_floor,
+        hasCeiling: room.has_ceiling,
+      });
+    }
+    return projected;
+  }, [workspaceRooms, allWalls, allSections]);
+
   // If viewing a section, show the viewer
   if (activeSection) {
     const liveSection = allSections.find(s => s.id === activeSection.id) || activeSection;
     const savedScale = (liveSection as any).scale as { hScale: number; vScale: number } | undefined;
     const savedNegLimits = (liveSection as any).negLimits as { negH: number; negV: number } | undefined;
+
+    // Merge: auto-projected polygons + manually saved ones (saved override auto by id)
+    const savedPolys = liveSection.polygons || [];
+    const autoPolys = computeProjectedPolygons(liveSection);
+    const savedIds = new Set(savedPolys.map(p => p.id));
+    const mergedPolygons = [
+      ...savedPolys,
+      ...autoPolys.filter(ap => !savedIds.has(ap.id)),
+    ];
 
     return (
       <div className="space-y-3">
@@ -441,7 +534,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
           savedNegLimits={savedNegLimits}
           onSaveNegLimits={(limits) => handleSaveNegLimits(liveSection.id, limits)}
           ridgeLine={ridgeLine}
-          polygons={liveSection.polygons || []}
+          polygons={mergedPolygons}
           onSavePolygons={(polys) => handleSavePolygons(liveSection.id, polys)}
           savedRulerLines={(liveSection as any).rulerLines || []}
           onSaveRulerLines={(lines) => handleSaveRulerLines(liveSection.id, lines)}

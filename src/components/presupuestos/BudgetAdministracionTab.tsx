@@ -26,6 +26,7 @@ export function BudgetAdministracionTab({ budgetId, isAdmin }: Props) {
   const [activeTab, setActiveTab] = useState('purchase-orders');
   const [highlightEntryCode, setHighlightEntryCode] = useState<string | null>(null);
   const [highlightAccountId, setHighlightAccountId] = useState<string | null>(null);
+  const [selectedLedgerId, setSelectedLedgerId] = useState('');
   const [voiceAssistantOpen, setVoiceAssistantOpen] = useState(false);
   const [entriesKey, setEntriesKey] = useState(0);
   const [provisionalCount, setProvisionalCount] = useState(0);

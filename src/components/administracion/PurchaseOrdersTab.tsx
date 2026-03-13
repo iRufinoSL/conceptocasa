@@ -145,7 +145,7 @@ export function PurchaseOrdersTab({ budgetId: fixedBudgetId, ledgerId }: { budge
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [ledgerId]);
 
   const fetchData = async () => {
     try {

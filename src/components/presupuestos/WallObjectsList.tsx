@@ -724,6 +724,7 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
   ];
 
   const modelColumns: ColDef[] = [
+    { key: 'img', header: '📷', defaultWidth: 36, minWidth: 30 },
     { key: 'name', header: 'Nombre', defaultWidth: 140, minWidth: 80 },
     { key: 'type', header: 'Tipo', defaultWidth: 90, minWidth: 50 },
     { key: 'unit', header: 'Ud', defaultWidth: 50, minWidth: 35 },
@@ -735,6 +736,7 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
   const templateToRow = (t: ObjectTemplate) => ({
     face: t as any,
     cells: {
+      img: t.image_url ? '🖼️' : '',
       name: t.name,
       type: t.object_type || '',
       unit: t.unit_measure || 'ud',

@@ -58,7 +58,7 @@ export function AccountingEntryLinesTab({ onNavigateToEntry, onNavigateToAccount
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [ledgerId]);
 
   const fetchData = async () => {
     try {

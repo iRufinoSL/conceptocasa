@@ -68,9 +68,24 @@ interface WorkspacePropertiesPanelProps {
   edgeCount?: number;
   /** Callback when a pattern changes so parent can re-render */
   onPatternChange?: (faceKey: string, patternId: string | null) => void;
+  /** Local overrides for section-only polygons (not linked to a room row) */
+  localFaceTypes?: Record<string, string>;
+  /** Persist local wall type overrides in section polygon JSON */
+  onLocalFaceTypeChange?: (faceKey: string, wallType: string) => void;
 }
 
-export function WorkspacePropertiesPanel({ workspaceId, workspaceName, sectionType, sectionName, onClose, focusFace, edgeCount: edgeCountProp, onPatternChange }: WorkspacePropertiesPanelProps) {
+export function WorkspacePropertiesPanel({
+  workspaceId,
+  workspaceName,
+  sectionType,
+  sectionName,
+  onClose,
+  focusFace,
+  edgeCount: edgeCountProp,
+  onPatternChange,
+  localFaceTypes,
+  onLocalFaceTypeChange,
+}: WorkspacePropertiesPanelProps) {
   const [walls, setWalls] = useState<WallRecord[]>([]);
   const [room, setRoom] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -124,21 +139,61 @@ export function WorkspacePropertiesPanel({ workspaceId, workspaceName, sectionTy
     toast.success('Actualizado');
   };
 
+  const getWallTypeForFace = (wallIndex: number) => {
+    const faceKey = `wall-${wallIndex}`;
+    const localType = localFaceTypes?.[faceKey];
+    if (localType) return normalizeWallType(localType);
+    const wall = walls.find(w => w.wall_index === wallIndex + 1);
+    return normalizeWallType(wall?.wall_type);
+  };
+
   const ensureAndUpdateWallType = async (wallIndex: number, newType: string) => {
     const normalized = normalizeWallType(newType);
     const dbWallIndex = wallIndex + 1;
+    const faceKey = `wall-${wallIndex}`;
+
+    // Always persist in section polygon metadata (for synthetic X/Y/Z polygons)
+    onLocalFaceTypeChange?.(faceKey, normalized);
+
+    // If this polygon is not tied to a real room row, stop at local persistence
+    if (!room) {
+      toast.success(`Pared ${dbWallIndex} actualizada`);
+      return;
+    }
+
     const existingWall = walls.find(w => w.wall_index === dbWallIndex);
     if (existingWall) {
-      await supabase.from('budget_floor_plan_walls').update({ wall_type: normalized }).eq('id', existingWall.id);
+      const { error } = await supabase
+        .from('budget_floor_plan_walls')
+        .update({ wall_type: normalized })
+        .eq('id', existingWall.id);
+
+      if (error) {
+        toast.error(`Error al actualizar pared ${dbWallIndex}: ${error.message}`);
+        return;
+      }
+
       setWalls(prev => prev.map(w => w.id === existingWall.id ? { ...w, wall_type: normalized } : w));
-    } else {
-      const { data } = await supabase.from('budget_floor_plan_walls').insert({
+      toast.success(`Pared ${dbWallIndex} actualizada`);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('budget_floor_plan_walls')
+      .insert({
         room_id: workspaceId,
         wall_index: dbWallIndex,
         wall_type: normalized,
-      }).select().single();
-      if (data) setWalls(prev => [...prev, data as WallRecord]);
+      })
+      .select()
+      .single();
+
+    if (error) {
+      toast.error(`Error al crear pared ${dbWallIndex}: ${error.message}`);
+      return;
     }
+
+    if (data) setWalls(prev => [...prev, data as WallRecord]);
     toast.success(`Pared ${dbWallIndex} actualizada`);
   };
 
@@ -278,13 +333,12 @@ export function WorkspacePropertiesPanel({ workspaceId, workspaceName, sectionTy
           {/* Walls */}
           {Array.from({ length: edgeCount }).map((_, i) => {
             const faceKey = `wall-${i}`;
-            const wall = walls.find(w => w.wall_index === i + 1);
             return (
               <FaceRow
                 key={i}
                 label={`🧱 P${i + 1}`}
                 faceKey={faceKey}
-                type={normalizeWallType(wall?.wall_type)}
+                type={getWallTypeForFace(i)}
                 options={WALL_TYPES}
                 onChange={(v) => ensureAndUpdateWallType(i, v)}
                 pattern={getPatternForFace(faceKey)}

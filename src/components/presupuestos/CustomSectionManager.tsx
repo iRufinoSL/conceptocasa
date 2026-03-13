@@ -19,6 +19,8 @@ export interface SectionPolygon {
   zTop?: number;
   hasFloor?: boolean;
   hasCeiling?: boolean;
+  /** Overrides de tipo por cara: floor | ceiling | wall-0..N */
+  faceTypes?: Record<string, string>;
 }
 
 export interface CustomSection {

@@ -159,6 +159,7 @@ interface ObjectTemplate {
   sales_margin_percent: number | null;
   object_type: string;
   unit_measure: string | null;
+  image_url: string | null;
 }
 
 const UNIT_MEASURES = ['m2', 'm3', 'ml', 'ud', 'kg', 'hora', 'día', 'mes'];

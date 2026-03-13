@@ -96,7 +96,39 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     },
   });
 
-  const allSections = useMemo<CustomSection[]>(() => {
+  // ── Load workspace rooms for auto-projection ──
+  const { data: workspaceRooms } = useQuery({
+    queryKey: ['workspace-rooms-for-projection', budgetId],
+    queryFn: async () => {
+      if (!floorPlan?.id) return [];
+      const { data, error } = await supabase
+        .from('budget_floor_plan_rooms')
+        .select('id, name, height, has_floor, has_ceiling, has_roof, vertical_section_id, floor_polygon')
+        .eq('floor_plan_id', floorPlan.id);
+      if (error) throw error;
+      return (data || []).map((r: any) => ({
+        ...r,
+        floor_polygon: r.floor_polygon ? (typeof r.floor_polygon === 'string' ? JSON.parse(r.floor_polygon) : r.floor_polygon) : null,
+      })) as WorkspaceRoom[];
+    },
+    enabled: !!floorPlan?.id,
+  });
+
+  const { data: allWalls } = useQuery({
+    queryKey: ['workspace-walls-for-projection', budgetId],
+    queryFn: async () => {
+      if (!floorPlan?.id) return [];
+      const roomIds = (workspaceRooms || []).map(r => r.id);
+      if (roomIds.length === 0) return [];
+      const { data, error } = await supabase
+        .from('budget_floor_plan_walls')
+        .select('id, room_id, wall_index, height')
+        .in('room_id', roomIds);
+      if (error) throw error;
+      return (data || []) as WallData[];
+    },
+    enabled: !!(workspaceRooms && workspaceRooms.length > 0),
+  });
     if (!floorPlan?.custom_corners) return [];
     try {
       const parsed = typeof floorPlan.custom_corners === 'string'

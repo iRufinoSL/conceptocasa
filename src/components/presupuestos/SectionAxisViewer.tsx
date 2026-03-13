@@ -3,12 +3,19 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Save, PenTool, X, Check, Printer, Ruler } from 'lucide-react';
 import type { SectionPolygon } from './CustomSectionManager';
 import { WorkspacePropertiesPanel } from './WorkspacePropertiesPanel';
 import { VISUAL_PATTERNS, getPatternById } from '@/lib/visual-patterns';
 import jsPDF from 'jspdf';
 import { toast } from 'sonner';
+
+// Ruler distinctive color — vivid magenta (not used by axes/dimensions/workspaces)
+const RULER_STROKE = 'hsl(310, 100%, 42%)';
+const RULER_TEXT = 'hsl(310, 80%, 28%)';
+const RULER_BTN = 'hsl(310 100% 42%)';
 
 type WallLabelMode = 'both' | 'name-only' | 'measure-only' | 'none';
 
@@ -167,6 +174,16 @@ export function SectionAxisViewer({
   // Wall label display mode
   const [wallLabelMode, setWallLabelMode] = useState<WallLabelMode>('both');
 
+  // PDF export layer options
+  const [pdfLayers, setPdfLayers] = useState({
+    grid: true,
+    axes: true,
+    dimensions: true,
+    wallLabels: true,
+    rulers: true,
+    names: true,
+  });
+
   // Face properties panel state
   const [facePanel, setFacePanel] = useState<{ polyId: string; polyName: string; faceKey: string; edgeCount: number; vertices: Array<{ x: number; y: number }> } | null>(null);
 
@@ -253,6 +270,18 @@ export function SectionAxisViewer({
       bgRect.setAttribute('fill', '#ffffff');
       svgClone.insertBefore(bgRect, svgClone.firstChild);
 
+      // Remove layers based on pdfLayers options
+      const layersToRemove: string[] = [];
+      if (!pdfLayers.grid) layersToRemove.push('grid');
+      if (!pdfLayers.axes) layersToRemove.push('axes');
+      if (!pdfLayers.dimensions) layersToRemove.push('dimensions');
+      if (!pdfLayers.wallLabels) layersToRemove.push('wall-labels');
+      if (!pdfLayers.rulers) layersToRemove.push('rulers');
+      if (!pdfLayers.names) layersToRemove.push('center-labels');
+      layersToRemove.forEach(layer => {
+        svgClone.querySelectorAll(`[data-pdf-layer="${layer}"]`).forEach(el => el.remove());
+      });
+
       const serializer = new XMLSerializer();
       const svgString = serializer.serializeToString(svgClone);
       const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
@@ -284,7 +313,7 @@ export function SectionAxisViewer({
     } catch (err) {
       console.error('PDF export error:', err);
     }
-  }, [sectionName]);
+  }, [sectionName, pdfLayers]);
 
   const margin = 50;
   const w = containerSize.w;
@@ -589,7 +618,7 @@ export function SectionAxisViewer({
       const isOrigin = c === originCol;
       gridLines.push(
         <line key={`gv${c}`} x1={x} y1={oy} x2={x} y2={oy + gridH}
-          stroke={isOrigin ? hColor : 'hsl(var(--muted-foreground))'} strokeWidth={isOrigin ? 2.5 : 1} opacity={isOrigin ? 1 : 0.7} />
+          stroke={isOrigin ? hColor : 'hsl(var(--muted-foreground))'} strokeWidth={isOrigin ? 2.5 : 0.5} opacity={isOrigin ? 1 : 0.18} />
       );
     }
     for (let r = 0; r <= totalRows; r++) {
@@ -597,7 +626,7 @@ export function SectionAxisViewer({
       const isOrigin = r === originRow;
       gridLines.push(
         <line key={`gh${r}`} x1={ox} y1={y} x2={ox + gridW} y2={y}
-          stroke={isOrigin ? vColor : 'hsl(var(--muted-foreground))'} strokeWidth={isOrigin ? 2.5 : 1} opacity={isOrigin ? 1 : 0.7} />
+          stroke={isOrigin ? vColor : 'hsl(var(--muted-foreground))'} strokeWidth={isOrigin ? 2.5 : 0.5} opacity={isOrigin ? 1 : 0.18} />
       );
     }
 
@@ -695,7 +724,8 @@ export function SectionAxisViewer({
       );
     }
 
-    // Dimension lines
+    // Dimension lines — separated for PDF layer control
+    const dimensions: JSX.Element[] = [];
     const dimOffset = cellPx;
     const dimColor = 'hsl(0, 70%, 50%)';
     const dimFontSize = 9;
@@ -703,13 +733,13 @@ export function SectionAxisViewer({
 
     const bottomY = oy + gridH + dimOffset;
     const totalWidthMm = totalCols * scale.hScale;
-    axisRefs.push(
+    dimensions.push(
       <line key="dim-bottom" x1={ox} y1={bottomY} x2={ox + gridW} y2={bottomY}
         stroke={dimColor} strokeWidth={1} />
     );
-    axisRefs.push(<line key="dim-bottom-t1" x1={ox} y1={bottomY - tickLen} x2={ox} y2={bottomY + tickLen} stroke={dimColor} strokeWidth={1} />);
-    axisRefs.push(<line key="dim-bottom-t2" x1={ox + gridW} y1={bottomY - tickLen} x2={ox + gridW} y2={bottomY + tickLen} stroke={dimColor} strokeWidth={1} />);
-    axisRefs.push(
+    dimensions.push(<line key="dim-bottom-t1" x1={ox} y1={bottomY - tickLen} x2={ox} y2={bottomY + tickLen} stroke={dimColor} strokeWidth={1} />);
+    dimensions.push(<line key="dim-bottom-t2" x1={ox + gridW} y1={bottomY - tickLen} x2={ox + gridW} y2={bottomY + tickLen} stroke={dimColor} strokeWidth={1} />);
+    dimensions.push(
       <text key="dim-bottom-label" x={ox + gridW / 2} y={bottomY + 14}
         textAnchor="middle" fontSize={dimFontSize} fontWeight={700} fill={dimColor} fontFamily="monospace">
         {totalWidthMm >= 1000 ? `${(totalWidthMm / 1000).toFixed(2)} m` : `${totalWidthMm} mm`}
@@ -718,13 +748,13 @@ export function SectionAxisViewer({
 
     const rightX = ox + gridW + dimOffset;
     const totalHeightMm = totalRows * scale.vScale;
-    axisRefs.push(
+    dimensions.push(
       <line key="dim-right" x1={rightX} y1={oy} x2={rightX} y2={oy + gridH}
         stroke={dimColor} strokeWidth={1} />
     );
-    axisRefs.push(<line key="dim-right-t1" x1={rightX - tickLen} y1={oy} x2={rightX + tickLen} y2={oy} stroke={dimColor} strokeWidth={1} />);
-    axisRefs.push(<line key="dim-right-t2" x1={rightX - tickLen} y1={oy + gridH} x2={rightX + tickLen} y2={oy + gridH} stroke={dimColor} strokeWidth={1} />);
-    axisRefs.push(
+    dimensions.push(<line key="dim-right-t1" x1={rightX - tickLen} y1={oy} x2={rightX + tickLen} y2={oy} stroke={dimColor} strokeWidth={1} />);
+    dimensions.push(<line key="dim-right-t2" x1={rightX - tickLen} y1={oy + gridH} x2={rightX + tickLen} y2={oy + gridH} stroke={dimColor} strokeWidth={1} />);
+    dimensions.push(
       <text key="dim-right-label" x={rightX + 6} y={oy + gridH / 2}
         textAnchor="start" fontSize={dimFontSize} fontWeight={700} fill={dimColor} fontFamily="monospace"
         transform={`rotate(90, ${rightX + 6}, ${oy + gridH / 2})`}>
@@ -737,14 +767,14 @@ export function SectionAxisViewer({
       const x2 = ox + (c + 1) * cellPx;
       const midX = (x1 + x2) / 2;
       if (totalCols <= 20) {
-        axisRefs.push(
+        dimensions.push(
           <text key={`dim-bc-${c}`} x={midX} y={bottomY - 3}
             textAnchor="middle" fontSize={7} fill={dimColor} fontFamily="monospace" opacity={0.7}>
             {scale.hScale}
           </text>
         );
       }
-      axisRefs.push(
+      dimensions.push(
         <line key={`dim-bt-${c}`} x1={x2} y1={bottomY - 2} x2={x2} y2={bottomY + 2}
           stroke={dimColor} strokeWidth={0.5} opacity={0.5} />
       );
@@ -755,20 +785,20 @@ export function SectionAxisViewer({
       const y2 = oy + (r + 1) * cellPx;
       const midY = (y1 + y2) / 2;
       if (totalRows <= 20) {
-        axisRefs.push(
+        dimensions.push(
           <text key={`dim-rc-${r}`} x={rightX - 3} y={midY + 3}
             textAnchor="end" fontSize={7} fill={dimColor} fontFamily="monospace" opacity={0.7}>
             {scale.vScale}
           </text>
         );
       }
-      axisRefs.push(
+      dimensions.push(
         <line key={`dim-rt-${r}`} x1={rightX - 2} y1={y2} x2={rightX + 2} y2={y2}
           stroke={dimColor} strokeWidth={0.5} opacity={0.5} />
       );
     }
 
-    return { gridLines, axisRefs };
+    return { gridLines, axisRefs, dimensions };
   }, [scale, gridLayout, hAxis, vAxis, hColor, vColor, fixedColor, sectionType, ridgeLine]);
 
   // SVG pattern definitions
@@ -920,7 +950,7 @@ export function SectionAxisViewer({
           const boxW = labelText.length * 5.5 + 10;
 
           elements.push(
-            <g key={`edge-label-${poly.id}-${i}`}
+            <g key={`edge-label-${poly.id}-${i}`} data-pdf-layer="wall-labels"
               style={{ cursor: 'pointer' }}
               onClick={(e) => { e.stopPropagation(); handleEdgeClick(poly.id, i); }}>
               <rect
@@ -966,7 +996,7 @@ export function SectionAxisViewer({
       const darkColor = color.replace(/(\d+)%\)$/, (_, l) => `${Math.max(parseInt(l) - 20, 15)}%)`);
 
       elements.push(
-        <g key={`center-${poly.id}`}
+        <g key={`center-${poly.id}`} data-pdf-layer="center-labels"
           style={{ cursor: 'pointer' }}
           onClick={(e) => {
             e.stopPropagation();
@@ -1135,7 +1165,7 @@ export function SectionAxisViewer({
               size="sm"
               variant={rulerMode ? 'default' : 'outline'}
               className="h-7 text-xs gap-1"
-              style={rulerMode ? { backgroundColor: 'hsl(30 90% 50%)', borderColor: 'hsl(30 90% 50%)' } : {}}
+              style={rulerMode ? { backgroundColor: RULER_BTN, borderColor: RULER_BTN } : {}}
               onClick={() => { setRulerMode(!rulerMode); setRulerStart(null); if (!rulerMode) { setDrawMode(false); } }}
             >
               <Ruler className="h-3 w-3" /> {rulerMode ? 'Regla ON' : 'Regla'}
@@ -1162,9 +1192,37 @@ export function SectionAxisViewer({
                   <SelectItem value="none">Sin etiquetas</SelectItem>
                 </SelectContent>
               </Select>
-              <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={handleExportPDF}>
-                <Printer className="h-3 w-3" /> PDF
-              </Button>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1">
+                    <Printer className="h-3 w-3" /> PDF ▾
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-56 p-3" align="end">
+                  <p className="text-xs font-semibold mb-2">Capas a imprimir</p>
+                  <div className="space-y-2">
+                    {([
+                      ['grid', 'Cuadrícula'],
+                      ['axes', 'Ejes y escala'],
+                      ['dimensions', 'Cotas perimetrales'],
+                      ['wallLabels', 'Etiquetas de pared'],
+                      ['rulers', 'Medidas de regla'],
+                      ['names', 'Nombres y m²'],
+                    ] as const).map(([key, label]) => (
+                      <label key={key} className="flex items-center gap-2 text-xs cursor-pointer">
+                        <Checkbox
+                          checked={pdfLayers[key]}
+                          onCheckedChange={(v) => setPdfLayers(prev => ({ ...prev, [key]: !!v }))}
+                        />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
+                  <Button size="sm" className="w-full mt-3 h-7 text-xs gap-1" onClick={handleExportPDF}>
+                    <Printer className="h-3 w-3" /> Exportar PDF
+                  </Button>
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
         )}
@@ -1340,7 +1398,7 @@ export function SectionAxisViewer({
             return (
               <span key={rl.id}
                 className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border cursor-pointer hover:opacity-80 transition-opacity"
-                style={{ borderColor: 'hsl(30 90% 50%)', color: 'hsl(30 70% 40%)' }}
+                style={{ borderColor: RULER_BTN, color: RULER_TEXT }}
                 onClick={() => { setEditingRulerId(rl.id); setEditRulerLabel(rl.label || ''); }}>
                 📏 {rl.label || `${Math.round(lengthMm)} mm`}
                 {isEditing && (
@@ -1380,13 +1438,15 @@ export function SectionAxisViewer({
             {patternDefs}
           </defs>
 
-          <g opacity={drawMode ? 0.25 : 1}>{gridContent?.gridLines}</g>
-          {gridContent?.axisRefs}
+          <g data-pdf-layer="grid" opacity={drawMode ? 0.25 : 1}>{gridContent?.gridLines}</g>
+          <g data-pdf-layer="axes">{gridContent?.axisRefs}</g>
+          <g data-pdf-layer="dimensions">{gridContent?.dimensions}</g>
           {nodeInteractionDots}
           {polygonElements}
           {drawingOverlay}
 
           {/* Ruler lines rendering */}
+          <g data-pdf-layer="rulers">
           {gridLayout && scale && rulerLines.map((rl) => {
             const { ox, oy, cellPx, originCol, originRow } = gridLayout;
             const x1 = ox + rl.start.col * cellPx;
@@ -1412,22 +1472,22 @@ export function SectionAxisViewer({
             return (
               <g key={`ruler-${rl.id}`}>
                 <line x1={x1} y1={y1} x2={x2} y2={y2}
-                  stroke="hsl(30, 90%, 50%)" strokeWidth={2} strokeDasharray="6 3" />
+                  stroke={RULER_STROKE} strokeWidth={2.5} strokeDasharray="8 4" />
                 <line x1={x1 - ny * 6} y1={y1 + nx * 6} x2={x1 + ny * 6} y2={y1 - nx * 6}
-                  stroke="hsl(30, 90%, 50%)" strokeWidth={1.5} />
+                  stroke={RULER_STROKE} strokeWidth={2} />
                 <line x1={x2 - ny * 6} y1={y2 + nx * 6} x2={x2 + ny * 6} y2={y2 - nx * 6}
-                  stroke="hsl(30, 90%, 50%)" strokeWidth={1.5} />
-                <circle cx={x1} cy={y1} r={5} fill="hsl(30, 90%, 50%)" stroke="white" strokeWidth={1.5}
+                  stroke={RULER_STROKE} strokeWidth={2} />
+                <circle cx={x1} cy={y1} r={5} fill={RULER_STROKE} stroke="white" strokeWidth={1.5}
                   style={{ cursor: 'grab' }}
                   onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); setDraggingRulerId(rl.id); setDraggingRulerEnd('start'); setRulerMode(true); }} />
-                <circle cx={x2} cy={y2} r={5} fill="hsl(30, 90%, 50%)" stroke="white" strokeWidth={1.5}
+                <circle cx={x2} cy={y2} r={5} fill={RULER_STROKE} stroke="white" strokeWidth={1.5}
                   style={{ cursor: 'grab' }}
                   onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); setDraggingRulerId(rl.id); setDraggingRulerEnd('end'); setRulerMode(true); }} />
                 <rect x={mx + nx * labelOffset - 30} y={my + ny * labelOffset - 8}
                   width={60} height={16} rx={3}
-                  fill="white" fillOpacity={0.92} stroke="hsl(30, 90%, 50%)" strokeWidth={0.5} />
+                  fill="white" fillOpacity={0.95} stroke={RULER_STROKE} strokeWidth={1} />
                 <text x={mx + nx * labelOffset} y={my + ny * labelOffset + 4}
-                  textAnchor="middle" fontSize={9} fontWeight={700} fill="hsl(30, 70%, 35%)" fontFamily="monospace">
+                  textAnchor="middle" fontSize={10} fontWeight={800} fill={RULER_TEXT} fontFamily="monospace">
                   {displayText}
                 </text>
                 <g style={{ cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); handleDeleteRuler(rl.id); }}>
@@ -1439,6 +1499,7 @@ export function SectionAxisViewer({
               </g>
             );
           })}
+          </g>
 
           {/* Ruler drawing preview */}
           {rulerMode && rulerStart && rulerHoverNode && gridLayout && (
@@ -1458,11 +1519,11 @@ export function SectionAxisViewer({
               return (
                 <g>
                   <line x1={x1} y1={y1} x2={x2} y2={y2}
-                    stroke="hsl(30, 90%, 50%)" strokeWidth={1.5} strokeDasharray="4 4" opacity={0.7} />
-                  <circle cx={x1} cy={y1} r={4} fill="hsl(30, 90%, 50%)" opacity={0.8} />
-                  <circle cx={x2} cy={y2} r={4} fill="hsl(30, 90%, 50%)" opacity={0.6} />
-                  <text x={mx} y={my - 8} textAnchor="middle" fontSize={9} fontWeight={700}
-                    fill="hsl(30, 70%, 35%)" fontFamily="monospace"
+                    stroke={RULER_STROKE} strokeWidth={1.5} strokeDasharray="4 4" opacity={0.7} />
+                  <circle cx={x1} cy={y1} r={4} fill={RULER_STROKE} opacity={0.8} />
+                  <circle cx={x2} cy={y2} r={4} fill={RULER_STROKE} opacity={0.6} />
+                  <text x={mx} y={my - 8} textAnchor="middle" fontSize={10} fontWeight={800}
+                    fill={RULER_TEXT} fontFamily="monospace"
                     stroke="white" strokeWidth={2} paintOrder="stroke">
                     {Math.round(lengthMm)} mm
                   </text>
@@ -1479,10 +1540,10 @@ export function SectionAxisViewer({
               const hy = oy + rulerHoverNode.row * cellPx;
               return (
                 <g>
-                  <circle cx={hx} cy={hy} r={8} fill="hsl(30, 90%, 50%)" fillOpacity={0.2} />
-                  <circle cx={hx} cy={hy} r={4} fill="hsl(30, 90%, 50%)" opacity={0.8} />
-                  <line x1={hx - 12} y1={hy} x2={hx + 12} y2={hy} stroke="hsl(30, 90%, 50%)" strokeWidth={1} opacity={0.5} />
-                  <line x1={hx} y1={hy - 12} x2={hx} y2={hy + 12} stroke="hsl(30, 90%, 50%)" strokeWidth={1} opacity={0.5} />
+                  <circle cx={hx} cy={hy} r={8} fill={RULER_STROKE} fillOpacity={0.2} />
+                  <circle cx={hx} cy={hy} r={4} fill={RULER_STROKE} opacity={0.8} />
+                  <line x1={hx - 12} y1={hy} x2={hx + 12} y2={hy} stroke={RULER_STROKE} strokeWidth={1} opacity={0.5} />
+                  <line x1={hx} y1={hy - 12} x2={hx} y2={hy + 12} stroke={RULER_STROKE} strokeWidth={1} opacity={0.5} />
                 </g>
               );
             })()

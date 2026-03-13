@@ -13,6 +13,7 @@ import { InvoicesTab } from '@/components/administracion/InvoicesTab';
 import { VATReportTab } from '@/components/administracion/VATReportTab';
 import { ProvisionalAccountsAlerts } from '@/components/administracion/ProvisionalAccountsAlerts';
 import { PurchaseOrdersTab } from '@/components/administracion/PurchaseOrdersTab';
+import { LedgerSelector } from '@/components/administracion/LedgerSelector';
 import { VoiceAssistantDialog, VoiceAction } from '@/components/voice/VoiceAssistantDialog';
 import { useVoiceAccountingEntry } from '@/hooks/useVoiceAccountingEntry';
 import { Badge } from '@/components/ui/badge';

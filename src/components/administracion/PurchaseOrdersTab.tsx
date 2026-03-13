@@ -123,7 +123,7 @@ const getContactDisplayName = (contact: CrmContact | null | undefined): string =
   return parts.length > 0 ? parts.join(' ') : 'Sin nombre';
 };
 
-export function PurchaseOrdersTab({ budgetId: fixedBudgetId }: { budgetId?: string } = {}) {
+export function PurchaseOrdersTab({ budgetId: fixedBudgetId, ledgerId }: { budgetId?: string; ledgerId?: string } = {}) {
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
   const [presupuestos, setPresupuestos] = useState<Presupuesto[]>([]);
   const [allPresupuestos, setAllPresupuestos] = useState<Presupuesto[]>([]);

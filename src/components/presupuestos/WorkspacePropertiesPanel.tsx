@@ -68,6 +68,10 @@ interface WorkspacePropertiesPanelProps {
   edgeCount?: number;
   /** Callback when a pattern changes so parent can re-render */
   onPatternChange?: (faceKey: string, patternId: string | null) => void;
+  /** Local overrides for section-only polygons (not linked to a room row) */
+  localFaceTypes?: Record<string, string>;
+  /** Persist local wall type overrides in section polygon JSON */
+  onLocalFaceTypeChange?: (faceKey: string, wallType: string) => void;
 }
 
 export function WorkspacePropertiesPanel({ workspaceId, workspaceName, sectionType, sectionName, onClose, focusFace, edgeCount: edgeCountProp, onPatternChange }: WorkspacePropertiesPanelProps) {

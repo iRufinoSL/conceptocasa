@@ -5,12 +5,20 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Save, PenTool, X, Check, Printer, Ruler } from 'lucide-react';
+import { Save, PenTool, X, Check, Printer, Ruler, Undo2 } from 'lucide-react';
 import type { SectionPolygon } from './CustomSectionManager';
 import { WorkspacePropertiesPanel } from './WorkspacePropertiesPanel';
 import { VISUAL_PATTERNS, getPatternById } from '@/lib/visual-patterns';
 import jsPDF from 'jspdf';
 import { toast } from 'sonner';
+
+// ── Undo history stack (max 5) ──
+interface UndoSnapshot {
+  polygons: SectionPolygon[];
+  rulerLines: RulerLine[];
+  facePatterns: PolygonFacePatterns;
+}
+const MAX_UNDO = 5;
 
 // Ruler distinctive color — vivid magenta (not used by axes/dimensions/workspaces)
 const RULER_STROKE = 'hsl(310, 100%, 42%)';
@@ -195,6 +203,34 @@ export function SectionAxisViewer({
 
   // Double-click timer for edge detection
   const lastClickRef = useRef<{ time: number; polyId: string; edgeIdx: number } | null>(null);
+
+  // ── Undo history ──
+  const [undoStack, setUndoStack] = useState<UndoSnapshot[]>([]);
+
+  const pushUndo = useCallback(() => {
+    setUndoStack(prev => {
+      const snap: UndoSnapshot = {
+        polygons: JSON.parse(JSON.stringify(polygons)),
+        rulerLines: JSON.parse(JSON.stringify(rulerLines)),
+        facePatterns: JSON.parse(JSON.stringify(facePatterns)),
+      };
+      const next = [...prev, snap];
+      if (next.length > MAX_UNDO) next.shift();
+      return next;
+    });
+  }, [polygons, rulerLines, facePatterns]);
+
+  const handleUndo = useCallback(() => {
+    if (undoStack.length === 0) return;
+    const snap = undoStack[undoStack.length - 1];
+    setUndoStack(prev => prev.slice(0, -1));
+    setPolygons(snap.polygons);
+    setRulerLines(snap.rulerLines);
+    setFacePatterns(snap.facePatterns);
+    onSavePolygons?.(snap.polygons);
+    onSaveRulerLines?.(snap.rulerLines);
+    toast.success('Deshacer aplicado');
+  }, [undoStack, onSavePolygons, onSaveRulerLines]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -479,6 +515,7 @@ export function SectionAxisViewer({
   }, [rulerLines, onSaveRulerLines]);
 
   const handleClearRulers = useCallback(() => {
+    pushUndo();
     setRulerLines([]);
     setRulerStart(null);
     onSaveRulerLines?.([]);
@@ -487,6 +524,7 @@ export function SectionAxisViewer({
 
   const finishDrawing = useCallback(() => {
     if (drawingVertices.length < 3 || !scale || !gridLayout) return;
+    pushUndo();
     const name = drawingName.trim() || `Espacio ${polygons.length + 1}`;
     const heightMm = parseInt(drawingHeight) || 0;
 
@@ -522,6 +560,7 @@ export function SectionAxisViewer({
   };
 
   const handleDeletePolygon = (polyId: string) => {
+    pushUndo();
     const updated = polygons.filter(p => p.id !== polyId);
     setPolygons(updated);
     onSavePolygons?.(updated);
@@ -538,6 +577,7 @@ export function SectionAxisViewer({
 
   const saveEditPolygon = () => {
     if (!editingPolyId) return;
+    pushUndo();
     const updated = polygons.map(p => {
       if (p.id !== editingPolyId) return p;
       return {
@@ -618,7 +658,7 @@ export function SectionAxisViewer({
       const isOrigin = c === originCol;
       gridLines.push(
         <line key={`gv${c}`} x1={x} y1={oy} x2={x} y2={oy + gridH}
-          stroke={isOrigin ? hColor : 'hsl(220, 10%, 60%)'} strokeWidth={isOrigin ? 2.5 : 0.5} opacity={isOrigin ? 1 : 0.35} />
+          stroke={isOrigin ? hColor : 'hsl(220, 10%, 50%)'} strokeWidth={isOrigin ? 2.5 : 0.7} opacity={isOrigin ? 1 : 0.5} />
       );
     }
     for (let r = 0; r <= totalRows; r++) {
@@ -626,7 +666,7 @@ export function SectionAxisViewer({
       const isOrigin = r === originRow;
       gridLines.push(
         <line key={`gh${r}`} x1={ox} y1={y} x2={ox + gridW} y2={y}
-          stroke={isOrigin ? vColor : 'hsl(220, 10%, 60%)'} strokeWidth={isOrigin ? 2.5 : 0.5} opacity={isOrigin ? 1 : 0.35} />
+          stroke={isOrigin ? vColor : 'hsl(220, 10%, 50%)'} strokeWidth={isOrigin ? 2.5 : 0.7} opacity={isOrigin ? 1 : 0.5} />
       );
     }
 
@@ -1124,7 +1164,17 @@ export function SectionAxisViewer({
           style={{ backgroundColor: fixedColor, color: 'white' }}>
           {fixedAxis}={axisValue}
         </span>
-        <div className="ml-auto flex items-center gap-3 text-[11px]">
+        <div className="ml-auto flex items-center gap-2 text-[11px]">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 w-7 p-0"
+            disabled={undoStack.length === 0}
+            onClick={handleUndo}
+            title={`Deshacer (${undoStack.length}/${MAX_UNDO})`}
+          >
+            <Undo2 className="h-3.5 w-3.5" />
+          </Button>
           <span className="flex items-center gap-1">
             <span className="inline-block w-3 h-0.5 rounded" style={{ backgroundColor: hColor }} />
             <span className="font-mono font-bold" style={{ color: hColor }}>{hAxis}</span>

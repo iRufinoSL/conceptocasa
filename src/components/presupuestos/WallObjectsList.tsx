@@ -591,7 +591,9 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
     },
   });
 
-  /* ── Auto faces query ── */
+  const existingResourceIds = useMemo(() => new Set(templates.filter(t => t.resource_id).map(t => t.resource_id!)), [templates]);
+
+
   const { data: autoFaces = [], isLoading } = useQuery({
     queryKey: ['budget-auto-faces', budgetId],
     queryFn: async () => {

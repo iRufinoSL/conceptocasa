@@ -618,7 +618,7 @@ export function SectionAxisViewer({
       const isOrigin = c === originCol;
       gridLines.push(
         <line key={`gv${c}`} x1={x} y1={oy} x2={x} y2={oy + gridH}
-          stroke={isOrigin ? hColor : 'hsl(var(--muted-foreground))'} strokeWidth={isOrigin ? 2.5 : 0.5} opacity={isOrigin ? 1 : 0.18} />
+          stroke={isOrigin ? hColor : 'hsl(220, 10%, 60%)'} strokeWidth={isOrigin ? 2.5 : 0.5} opacity={isOrigin ? 1 : 0.35} />
       );
     }
     for (let r = 0; r <= totalRows; r++) {
@@ -626,7 +626,7 @@ export function SectionAxisViewer({
       const isOrigin = r === originRow;
       gridLines.push(
         <line key={`gh${r}`} x1={ox} y1={y} x2={ox + gridW} y2={y}
-          stroke={isOrigin ? vColor : 'hsl(var(--muted-foreground))'} strokeWidth={isOrigin ? 2.5 : 0.5} opacity={isOrigin ? 1 : 0.18} />
+          stroke={isOrigin ? vColor : 'hsl(220, 10%, 60%)'} strokeWidth={isOrigin ? 2.5 : 0.5} opacity={isOrigin ? 1 : 0.35} />
       );
     }
 

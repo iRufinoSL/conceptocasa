@@ -421,6 +421,38 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     const verticalSections = allSections.filter(s => s.sectionType === 'vertical');
     const defaultHeight = 2.5; // fallback metres
 
+    // For transversal sections (X cut), compute maxY to invert Y axis
+    // In 2D plan Y increases downward, but in section view Y should increase upward/left-to-right
+    let globalMaxY = 0;
+    if (section.sectionType === 'transversal') {
+      for (const r of workspaceRooms) {
+        if (!r.floor_polygon) continue;
+        for (const v of r.floor_polygon) {
+          if (v.y > globalMaxY) globalMaxY = v.y;
+        }
+      }
+    }
+
+    /** Resolve zBase for a room: try vertical_section_id match, then search saved polygons */
+    const resolveZBase = (room: WorkspaceRoom): number => {
+      // 1) Direct match by vertical_section_id
+      const direct = verticalSections.find(s => s.id === room.vertical_section_id);
+      if (direct) return direct.axisValue;
+      // 2) Search vertical sections for a saved polygon whose id matches the room id
+      for (const vs of verticalSections) {
+        const polys = (vs as any).polygons as SectionPolygon[] | undefined;
+        if (polys?.some(p => p.id === room.id)) return vs.axisValue;
+      }
+      // 3) Search ALL sections for a saved polygon matching room id (in case it was drawn on Y/X section with Z info)
+      // Fallback: try to infer from room name patterns (e.g. "Techo", "Atico" → higher Z)
+      // For robustness, check if any vertical section's axisValue > 0 has the room
+      for (const vs of verticalSections) {
+        const polys = (vs as any).polygons as SectionPolygon[] | undefined;
+        if (polys?.some(p => p.name === room.name)) return vs.axisValue;
+      }
+      return 0;
+    };
+
     const projected: SectionPolygon[] = [];
 
     for (const room of workspaceRooms) {
@@ -432,13 +464,17 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       const intersections = findPolyIntersections(poly, cutAxis, axisVal);
       if (intersections.length < 2) continue;
 
-      const hMin = Math.min(...intersections);
-      const hMax = Math.max(...intersections);
+      // For transversal sections, invert Y: section_h = maxY - polygon_y
+      const mappedIntersections = section.sectionType === 'transversal'
+        ? intersections.map(v => globalMaxY - v)
+        : intersections;
+
+      const hMin = Math.min(...mappedIntersections);
+      const hMax = Math.max(...mappedIntersections);
       if (Math.abs(hMax - hMin) < 0.01) continue;
 
-      // Determine Z base from vertical section
-      const vSection = verticalSections.find(s => s.id === room.vertical_section_id);
-      const zBase = vSection ? vSection.axisValue : 0;
+      // Determine Z base from vertical section with fallback resolution
+      const zBase = resolveZBase(room);
       const heightM = room.height || defaultHeight;
       const defaultZTop = zBase + Math.round((heightM * 1000) / 250);
 

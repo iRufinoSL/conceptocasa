@@ -361,6 +361,26 @@ function TemplateForm({ budgetId, template, objectTypes, onSaved, onCancel }: {
     toast.success('Imagen subida');
   };
 
+  const syncToExternalResource = async (templatePayload: any, resourceId: string | null): Promise<string | null> => {
+    const resourcePayload = {
+      name: templatePayload.name,
+      description: templatePayload.technical_description || null,
+      unit_cost: templatePayload.purchase_price_vat_included || 0,
+      unit_measure: templatePayload.unit_measure || 'ud',
+      resource_type: templatePayload.object_type || 'Material',
+      image_url: templatePayload.image_url || null,
+      vat_included_percent: templatePayload.vat_included_percent || 0,
+    };
+    if (resourceId) {
+      await supabase.from('external_resources').update(resourcePayload).eq('id', resourceId);
+      return resourceId;
+    } else {
+      const { data, error } = await supabase.from('external_resources').insert(resourcePayload).select('id').single();
+      if (error || !data) return null;
+      return data.id;
+    }
+  };
+
   const handleSave = async () => {
     if (!name.trim()) { toast.error('El nombre es obligatorio'); return; }
     setSaving(true);
@@ -380,20 +400,28 @@ function TemplateForm({ budgetId, template, objectTypes, onSaved, onCancel }: {
       unit_measure: unitMeasure,
       image_url: imageUrl || null,
     };
+
+    // Sync to external_resources
+    const currentResourceId = template?.resource_id || null;
+    const newResourceId = await syncToExternalResource(payload, currentResourceId);
+
     let error;
     if (template) {
-      ({ error } = await supabase.from('budget_object_templates').update(payload).eq('id', template.id));
+      ({ error } = await supabase.from('budget_object_templates').update({ ...payload, resource_id: newResourceId }).eq('id', template.id));
     } else {
-      ({ error } = await supabase.from('budget_object_templates').insert(payload));
+      ({ error } = await supabase.from('budget_object_templates').insert({ ...payload, resource_id: newResourceId }));
     }
     setSaving(false);
     if (error) { toast.error('Error guardando objeto modelo'); return; }
-    toast.success(template ? 'Objeto modelo actualizado' : 'Objeto modelo creado');
+    toast.success(template ? 'Objeto modelo actualizado (y recurso sincronizado)' : 'Objeto modelo creado (y recurso registrado)');
     onSaved();
   };
 
   return (
     <div className="border rounded-lg p-3 space-y-3 bg-muted/20">
+      {template?.resource_id && (
+        <Badge variant="outline" className="text-[10px] h-5 gap-1">🔗 Vinculado a Recursos</Badge>
+      )}
       <div className="grid grid-cols-2 gap-2">
         <div className="col-span-2">
           <label className="text-xs font-medium text-muted-foreground">Nombre *</label>

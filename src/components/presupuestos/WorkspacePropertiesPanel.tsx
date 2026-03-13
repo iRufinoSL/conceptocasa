@@ -185,21 +185,37 @@ export function WorkspacePropertiesPanel({
 
   const getFloorType = () => {
     if (!room) return 'normal';
-    if (!room.has_floor) return 'invisible';
+    if (room.has_floor === false) return 'invisible';
     return 'normal';
   };
 
   const getCeilingType = () => {
     if (!room) return 'normal';
-    if (room.has_roof) return 'normal';
-    if (!room.has_ceiling) return 'invisible';
+    if (room.has_ceiling === false) return 'invisible';
     return 'normal';
   };
 
   const updateFloorCeiling = async (field: 'has_floor' | 'has_ceiling', value: string) => {
     const boolVal = value !== 'invisible';
-    await supabase.from('budget_floor_plan_rooms').update({ [field]: boolVal }).eq('id', workspaceId);
-    setRoom((prev: any) => prev ? { ...prev, [field]: boolVal } : prev);
+    const updatePayload: Record<string, boolean> = { [field]: boolVal };
+
+    // Sync has_roof when ceiling changes
+    if (field === 'has_ceiling' && !boolVal) {
+      updatePayload.has_roof = false;
+    }
+
+    await supabase.from('budget_floor_plan_rooms').update(updatePayload).eq('id', workspaceId);
+    setRoom((prev: any) => prev ? { ...prev, ...updatePayload } : prev);
+
+    // Also sync the wall record type for this face
+    const wallIndex = field === 'has_floor' ? -1 : -2;
+    const newWallType = boolVal ? (field === 'has_floor' ? 'suelo_basico' : 'techo_basico') : 'invisible';
+    const existingWall = walls.find(w => w.wall_index === wallIndex);
+    if (existingWall) {
+      await supabase.from('budget_floor_plan_walls').update({ wall_type: newWallType }).eq('id', existingWall.id);
+      setWalls(prev => prev.map(w => w.id === existingWall.id ? { ...w, wall_type: newWallType } : w));
+    }
+
     toast.success('Actualizado');
   };
 

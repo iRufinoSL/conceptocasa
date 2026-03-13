@@ -5,12 +5,20 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Save, PenTool, X, Check, Printer, Ruler } from 'lucide-react';
+import { Save, PenTool, X, Check, Printer, Ruler, Undo2 } from 'lucide-react';
 import type { SectionPolygon } from './CustomSectionManager';
 import { WorkspacePropertiesPanel } from './WorkspacePropertiesPanel';
 import { VISUAL_PATTERNS, getPatternById } from '@/lib/visual-patterns';
 import jsPDF from 'jspdf';
 import { toast } from 'sonner';
+
+// ── Undo history stack (max 5) ──
+interface UndoSnapshot {
+  polygons: SectionPolygon[];
+  rulerLines: RulerLine[];
+  facePatterns: PolygonFacePatterns;
+}
+const MAX_UNDO = 5;
 
 // Ruler distinctive color — vivid magenta (not used by axes/dimensions/workspaces)
 const RULER_STROKE = 'hsl(310, 100%, 42%)';

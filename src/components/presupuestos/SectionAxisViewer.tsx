@@ -538,8 +538,11 @@ export function SectionAxisViewer({
   }, [draggingRulerId]);
 
   const handleDeleteRuler = useCallback((id: string) => {
-    setRulerLines(prev => prev.filter(rl => rl.id !== id));
-  }, []);
+    pushUndo();
+    const updated = rulerLines.filter(rl => rl.id !== id);
+    setRulerLines(updated);
+    onSaveRulerLines?.(updated);
+  }, [pushUndo, rulerLines, onSaveRulerLines]);
 
   const handleSaveRulers = useCallback(() => {
     onSaveRulerLines?.(rulerLines);

@@ -120,6 +120,7 @@ export function SectionAxisViewer({
   sectionType,
   axisValue,
   sectionName,
+  floorPlanId,
   savedScale,
   onSaveScale,
   savedNegLimits,

@@ -243,6 +243,23 @@ function TemplateForm({ budgetId, template, objectTypes, onSaved, onCancel }: {
   const [objectType, setObjectType] = useState(template?.object_type || (objectTypes[0]?.name || 'Material'));
   const [unitMeasure, setUnitMeasure] = useState(template?.unit_measure || 'ud');
   const [saving, setSaving] = useState(false);
+  const [imageUrl, setImageUrl] = useState(template?.image_url || '');
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    const ext = file.name.split('.').pop();
+    const path = `object-templates/${budgetId}/${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from('resource-images').upload(path, file);
+    if (error) { toast.error('Error subiendo imagen'); setUploading(false); return; }
+    const { data: urlData } = supabase.storage.from('resource-images').getPublicUrl(path);
+    setImageUrl(urlData.publicUrl);
+    setUploading(false);
+    toast.success('Imagen subida');
+  };
 
   const handleSave = async () => {
     if (!name.trim()) { toast.error('El nombre es obligatorio'); return; }

@@ -169,7 +169,7 @@ const emptyForm: ActivityForm = {
   start_date: '',
   duration_days: '',
   tolerance_days: '',
-  work_area_ids: [],
+  workspace_ids: [],
   actual_start_date: '',
   actual_end_date: '',
   activity_type: 'normal',

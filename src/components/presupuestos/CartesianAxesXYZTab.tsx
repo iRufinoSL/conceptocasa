@@ -998,6 +998,12 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
   // If viewing a section, show the viewer
   if (activeSection) {
     const liveSection = allSections.find(s => s.id === activeSection.id) || activeSection;
+    console.log('[SectionDebug] activeSection:', liveSection.name, liveSection.sectionType, 'axisValue:', liveSection.axisValue);
+    console.log('[SectionDebug] savedScale:', (liveSection as any).scale);
+    console.log('[SectionDebug] savedPolygons:', liveSection.polygons?.length || 0);
+    console.log('[SectionDebug] workspaceRooms:', workspaceRooms?.length || 0);
+    const autoPolysDebug = computeProjectedPolygons(liveSection);
+    console.log('[SectionDebug] autoProjectedPolygons:', autoPolysDebug.length, autoPolysDebug);
     const savedScale = (liveSection as any).scale as { hScale: number; vScale: number } | undefined;
     const savedNegLimits = (liveSection as any).negLimits as { negH: number; negV: number; posH?: number; posV?: number } | undefined;
 

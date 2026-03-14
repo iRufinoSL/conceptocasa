@@ -982,7 +982,19 @@ export function WorkspacePropertiesPanel({
         <div className="px-2 py-2 max-h-[50vh] overflow-y-auto space-y-2">
           <div className="flex items-center justify-between">
             <p className="text-[9px] text-muted-foreground font-medium uppercase tracking-wider px-1">Objetos y huecos</p>
-            <Button size="sm" variant="outline" className="h-6 text-[10px] gap-1" onClick={() => { setShowObjectForm(!showObjectForm); if (!showObjectForm) setObjTargetFace('wall-0'); }}>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-6 text-[10px] gap-1"
+              onClick={() => {
+                setShowObjectForm(!showObjectForm);
+                if (!showObjectForm) {
+                  setObjTargetFace('wall-0');
+                  setObjLayerOrder(String(getNextLayerOrder('wall-0')));
+                  setObjResourceId('_none');
+                }
+              }}
+            >
               <Plus className="h-3 w-3" /> Nuevo
             </Button>
           </div>

@@ -1406,12 +1406,14 @@ export function SectionAxisViewer({
           <div>
             <Label className="text-[10px] text-muted-foreground">Escala {hAxis} (mm)</Label>
             <Input className="h-7 w-24 text-xs font-mono" type="number" min={1}
-              value={hScaleInput} onChange={e => setHScaleInput(e.target.value)} placeholder="625" />
+              value={hScaleInput} onChange={e => setHScaleInput(e.target.value)}
+              placeholder={sectionType === 'vertical' ? '625' : '625'} />
           </div>
           <div>
             <Label className="text-[10px] text-muted-foreground">Escala {vAxis} (mm)</Label>
             <Input className="h-7 w-24 text-xs font-mono" type="number" min={1}
-              value={vScaleInput} onChange={e => setVScaleInput(e.target.value)} placeholder="625" />
+              value={vScaleInput} onChange={e => setVScaleInput(e.target.value)}
+              placeholder={sectionType === 'vertical' ? '625' : '250'} />
           </div>
           <Button size="sm" className="h-7 text-xs gap-1" onClick={handleSaveScale}
             disabled={!parseFloat(hScaleInput) || !parseFloat(vScaleInput)}>

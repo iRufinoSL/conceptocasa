@@ -348,15 +348,31 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
     }
   };
 
-  // Open workspace properties from standalone polygon (name-based lookup)
-  const openWorkspacePropsFromPoly = (poly: { name: string }) => {
+  // Open workspace properties from standalone polygon (prefer ID lookup, fallback to name)
+  const openWorkspacePropsFromPoly = (poly: { id: string; name: string }) => {
     if (!onOpenWorkspaceProperties) return;
-    const wsName = poly.name.replace(/\s*\((?:Suelo|Techo|Pared\s*\d*)\)\s*$/, '').replace(/\s+P\d+$/, '').trim();
-    const room = rooms?.find(r => r.name === wsName);
-    if (room) {
+
+    const directRoomId = poly.id.includes('_wall') ? poly.id.split('_wall')[0] : poly.id;
+    const roomById = rooms?.find(r => r.id === directRoomId);
+
+    if (roomById) {
       onOpenWorkspaceProperties({
-        workspaceId: room.id,
-        workspaceName: room.name,
+        workspaceId: roomById.id,
+        workspaceName: roomById.name,
+        sectionType: section.sectionType,
+        sectionName: section.name,
+      });
+      return;
+    }
+
+    const wsName = poly.name.replace(/\s*\((?:Suelo|Techo|Pared\s*\d*)\)\s*$/, '').replace(/\s+P\d+$/, '').trim();
+    const sameNameRooms = (rooms || []).filter(r => r.name === wsName);
+    const roomByName = sameNameRooms.find(r => Array.isArray(r.floorPolygon) && r.floorPolygon.length >= 3) || sameNameRooms[0];
+
+    if (roomByName) {
+      onOpenWorkspaceProperties({
+        workspaceId: roomByName.id,
+        workspaceName: roomByName.name,
         sectionType: section.sectionType,
         sectionName: section.name,
       });

@@ -735,8 +735,12 @@ export function SectionAxisViewer({
     const trimmedName = editName.trim();
     // Validate unique name (skip current polygon's own name)
     if (trimmedName) {
+      const currentPoly = polygons.find(p => p.id === editingPolyId);
+      const currentOriginalName = currentPoly?.name?.toLowerCase() || '';
+      // Filter out the polygon's own current name from allPolygonNames
+      const externalNames = (allPolygonNames || []).filter(n => n.toLowerCase() !== currentOriginalName);
       const existingNames = [
-        ...(allPolygonNames || []),
+        ...externalNames,
         ...polygons
           .filter(p => p.id !== editingPolyId && Array.isArray(p.vertices) && p.vertices.length >= 3)
           .map(p => p.name),

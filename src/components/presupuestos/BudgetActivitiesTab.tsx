@@ -458,10 +458,10 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
       );
       setUnassignedResourcesSubtotal(resourcesWithoutActivitySubtotal);
 
-      // Filter work area relations to only those for activities in this budget
+      // Filter workspace relations to only those for activities in this budget
       const activityIds = (activitiesRes.data || []).map(a => a.id);
-      const filteredWorkAreaRelations = (workAreaRelationsRes.data || [])
-        .map((r: any) => ({ activity_id: r.activity_id, work_area_id: r.work_area_id }))
+      const filteredWorkspaceRelations = (workspaceRelationsRes.data || [])
+        .map((r: any) => ({ activity_id: r.activity_id, workspace_id: r.workspace_id }))
         .filter((r: any) => activityIds.includes(r.activity_id));
 
       // Get file counts and resource subtotals for each activity

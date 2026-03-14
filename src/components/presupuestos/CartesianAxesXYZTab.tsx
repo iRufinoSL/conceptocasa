@@ -22,7 +22,15 @@ interface WorkspaceRoom {
   has_ceiling: boolean;
   has_roof: boolean;
   vertical_section_id: string | null;
+  floor_id: string | null;
   floor_polygon: PolygonVertex[] | null;
+}
+
+interface FloorData {
+  id: string;
+  name: string;
+  order_index: number;
+  floor_plan_id: string;
 }
 
 interface WallData {

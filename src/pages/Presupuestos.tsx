@@ -1146,6 +1146,73 @@ export default function Presupuestos() {
           navigate(`/presupuestos/${newBudgetId}`);
         }}
       />
+
+      {/* Create Model Budget Dialog */}
+      <Dialog open={modelSourceDialog} onOpenChange={setModelSourceDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Crown className="h-5 w-5 text-violet-600" />
+              Crear Presupuesto Modelo
+            </DialogTitle>
+            <DialogDescription>
+              Selecciona un presupuesto en ejecución como base para crear el Modelo global. 
+              Todos los presupuestos futuros se sincronizarán con este modelo.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Presupuesto origen *</Label>
+              <Select value={modelSourceId} onValueChange={setModelSourceId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar presupuesto base" />
+                </SelectTrigger>
+                <SelectContent>
+                  {enEjecucionForModel.length > 0 ? (
+                    enEjecucionForModel.map(p => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.nombre} ({p.poblacion})
+                      </SelectItem>
+                    ))
+                  ) : (
+                    presupuestos.filter(p => !p.is_model && p.status !== 'archivado').map(p => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.nombre} ({p.poblacion})
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="p-3 rounded-lg bg-violet-50 border border-violet-200 text-sm text-violet-700">
+              <p className="font-medium mb-1">ℹ️ Información</p>
+              <p>Se clonará toda la estructura (fases, actividades, recursos, mediciones, espacios) del presupuesto seleccionado. Los cambios futuros en cualquier presupuesto de trabajo se sincronizarán automáticamente al Modelo.</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setModelSourceDialog(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleCreateModel} 
+              disabled={creatingModel || !modelSourceId}
+              className="bg-violet-600 hover:bg-violet-700 text-white gap-2"
+            >
+              {creatingModel ? (
+                <>
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                  Creando...
+                </>
+              ) : (
+                <>
+                  <Crown className="h-4 w-4" />
+                  Crear Modelo
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

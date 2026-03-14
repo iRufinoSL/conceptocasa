@@ -159,10 +159,7 @@ export function SectionAxisViewer({
   const fixedColor = AXIS_COLORS[fixedAxis];
 
   // Default scale: vertical sections use 625/625, X/Y sections use 625/250
-  const defaultScale: SectionScale = sectionType === 'vertical'
-    ? { hScale: 625, vScale: 625 }
-    : { hScale: 625, vScale: 250 };
-  const initialScale = savedScale || defaultScale;
+  const initialScale = getSafeScale(sectionType, savedScale);
 
   // Scale inputs
   const [hScaleInput, setHScaleInput] = useState(String(initialScale.hScale));

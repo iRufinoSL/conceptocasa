@@ -1948,9 +1948,9 @@ export function SectionAxisViewer({
           {/* Ruler mode: start point indicator */}
           {rulerMode && rulerHoverNode && !rulerStart && gridLayout && (
             (() => {
-              const { ox, oy, cellPx } = gridLayout;
-              const hx = ox + rulerHoverNode.col * cellPx;
-              const hy = oy + rulerHoverNode.row * cellPx;
+              const { ox, oy, cellPxW, cellPxH } = gridLayout;
+              const hx = ox + rulerHoverNode.col * cellPxW;
+              const hy = oy + rulerHoverNode.row * cellPxH;
               return (
                 <g>
                   <circle cx={hx} cy={hy} r={8} fill={RULER_STROKE} fillOpacity={0.2} />

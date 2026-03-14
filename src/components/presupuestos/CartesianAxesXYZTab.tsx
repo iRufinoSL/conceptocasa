@@ -69,9 +69,20 @@ function normalizeWorkspaceName(value: string | null | undefined): string {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[._-]+/g, ' ')
-    .replace(/\b(techo|cubierta|suelo|piso|planta)\b/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function normalizeWorkspaceNameLoose(value: string | null | undefined): string {
+  return normalizeWorkspaceName(value)
+    .replace(/\b(techo|cubierta|suelo|piso|planta|roof|ceiling|floor)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function isRoofLikeName(value: string | null | undefined): boolean {
+  const normalized = normalizeWorkspaceName(value);
+  return /\b(techo|cubierta|roof|ceiling)\b/.test(normalized);
 }
 
 function getPolygonBounds(vertices: Array<{ x: number; y: number }>) {
@@ -601,7 +612,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     return map;
   }, [verticalSections]);
 
-  // Build normalized-name → axis set mapping for legacy projects where IDs changed
+  // Build strict normalized-name → axis set mapping
   const verticalNameAxisMap = useMemo(() => {
     const map = new Map<string, Set<number>>();
     for (const vs of verticalSections) {
@@ -618,9 +629,31 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     return map;
   }, [verticalSections]);
 
+  // Legacy loose mapping (strips descriptors like "techo") as last-resort fallback only
+  const verticalLooseNameAxisMap = useMemo(() => {
+    const map = new Map<string, Set<number>>();
+    for (const vs of verticalSections) {
+      const polys = vs.polygons;
+      if (!polys) continue;
+      for (const p of polys) {
+        const normalized = normalizeWorkspaceNameLoose(p.name);
+        if (!normalized) continue;
+        const axes = map.get(normalized) || new Set<number>();
+        axes.add(vs.axisValue);
+        map.set(normalized, axes);
+      }
+    }
+    return map;
+  }, [verticalSections]);
+
   const verticalNameAxisEntries = useMemo(
     () => Array.from(verticalNameAxisMap.entries()),
     [verticalNameAxisMap],
+  );
+
+  const verticalLooseNameAxisEntries = useMemo(
+    () => Array.from(verticalLooseNameAxisMap.entries()),
+    [verticalLooseNameAxisMap],
   );
 
   // Build floor_id → Z base mapping from vertical sections sorted by axisValue
@@ -715,7 +748,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       if (byLegacySection !== undefined) return byLegacySection;
     }
 
-    // 6) Legacy fallback: normalized name matching (e.g. "Atico1" -> "Atico")
+    // 6) Strict normalized name fallback (does not merge "Techo" with base room)
     const normalizedRoomName = normalizeWorkspaceName(room.name);
     if (normalizedRoomName) {
       const directAxes = verticalNameAxisMap.get(normalizedRoomName);
@@ -734,8 +767,27 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       }
     }
 
+    // 7) Loose fallback only as last resort for legacy naming mismatches
+    const looseRoomName = normalizeWorkspaceNameLoose(room.name);
+    if (looseRoomName) {
+      const directAxes = verticalLooseNameAxisMap.get(looseRoomName);
+      if (directAxes && directAxes.size === 1) {
+        return Array.from(directAxes)[0];
+      }
+
+      const partialAxes = new Set<number>();
+      for (const [nameKey, axes] of verticalLooseNameAxisEntries) {
+        if (nameKey.includes(looseRoomName) || looseRoomName.includes(nameKey)) {
+          for (const axis of axes) partialAxes.add(axis);
+        }
+      }
+      if (partialAxes.size === 1) {
+        return Array.from(partialAxes)[0];
+      }
+    }
+
     return 0;
-  }, [floorZBaseMap, verticalZBaseMap, verticalSections, legacyVerticalSectionZBaseMap, verticalNameAxisMap, verticalNameAxisEntries]);
+  }, [floorZBaseMap, verticalZBaseMap, verticalSections, legacyVerticalSectionZBaseMap, verticalNameAxisMap, verticalNameAxisEntries, verticalLooseNameAxisMap, verticalLooseNameAxisEntries]);
 
   const rebaseSavedPolygonToRoomLevel = useCallback((polygon: SectionPolygon): SectionPolygon => {
     const room = workspaceRoomMap.get(polygon.id);
@@ -807,6 +859,18 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     const map = new Map<string, WorkspaceRoom[]>();
     for (const room of (workspaceRooms || [])) {
       const key = normalizeWorkspaceName(room.name);
+      if (!key) continue;
+      const list = map.get(key) || [];
+      list.push(room);
+      map.set(key, list);
+    }
+    return map;
+  }, [workspaceRooms]);
+
+  const workspaceRoomsByLooseName = useMemo(() => {
+    const map = new Map<string, WorkspaceRoom[]>();
+    for (const room of (workspaceRooms || [])) {
+      const key = normalizeWorkspaceNameLoose(room.name);
       if (!key) continue;
       const list = map.get(key) || [];
       list.push(room);
@@ -982,26 +1046,44 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     // 2) Fallback source: polygons drawn in vertical sections
     for (const src of verticalPolygonSources) {
       const normalized = normalizeWorkspaceName(src.polygon.name);
+      const looseNormalized = normalizeWorkspaceNameLoose(src.polygon.name);
+      const sourceIsRoofLike = isRoofLikeName(src.polygon.name);
       const directMatch = workspaceRoomMap.get(src.polygon.id) || null;
       const exactCandidates = normalized ? (workspaceRoomsByNormalizedName.get(normalized) || []) : [];
 
       let matchedRoom = directMatch;
       if (!matchedRoom && exactCandidates.length > 0) {
-        matchedRoom = pickMostRecentlyUpdatedRoom(exactCandidates);
+        const compatible = exactCandidates.filter(room => isRoofLikeName(room.name) === sourceIsRoofLike);
+        matchedRoom = pickMostRecentlyUpdatedRoom(compatible.length > 0 ? compatible : exactCandidates);
+      }
+
+      if (!matchedRoom && looseNormalized) {
+        const looseCandidates = workspaceRoomsByLooseName.get(looseNormalized) || [];
+        if (looseCandidates.length > 0) {
+          const compatible = looseCandidates.filter(room => isRoofLikeName(room.name) === sourceIsRoofLike);
+          matchedRoom = pickMostRecentlyUpdatedRoom(compatible.length > 0 ? compatible : looseCandidates);
+        }
       }
 
       if (!matchedRoom && normalized) {
         const partialCandidates = (workspaceRooms || []).filter(room => {
           const roomName = normalizeWorkspaceName(room.name);
-          return !!roomName && (roomName.includes(normalized) || normalized.includes(roomName));
+          if (!roomName) return false;
+          return roomName.includes(normalized) || normalized.includes(roomName);
         });
-        matchedRoom = pickMostRecentlyUpdatedRoom(partialCandidates);
+        if (partialCandidates.length > 0) {
+          const compatible = partialCandidates.filter(room => isRoofLikeName(room.name) === sourceIsRoofLike);
+          matchedRoom = pickMostRecentlyUpdatedRoom(compatible.length > 0 ? compatible : partialCandidates);
+        }
       }
 
       const fallbackId = matchedRoom?.id || src.polygon.id;
       if (projectedKeys.has(fallbackId)) continue;
 
-      const footprint: PolygonVertex[] = src.polygon.vertices.map(v => ({ x: v.x, y: v.y }));
+      const roomFootprint = matchedRoom?.floor_polygon && matchedRoom.floor_polygon.length >= 3
+        ? matchedRoom.floor_polygon
+        : null;
+      const footprint: PolygonVertex[] = (roomFootprint || src.polygon.vertices).map(v => ({ x: v.x, y: v.y }));
       let inferredHeightM: number | null = null;
       if (typeof src.polygon.zTop === 'number' && typeof src.polygon.zBase === 'number') {
         const rawDelta = src.polygon.zTop - src.polygon.zBase;
@@ -1012,11 +1094,13 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
         }
       }
 
+      const resolvedZBase = matchedRoom ? resolveRoomZBase(matchedRoom) : src.axisValue;
+
       pushProjectedRoom(
         fallbackId,
         matchedRoom?.name || src.polygon.name || `Espacio ${src.axisValue}`,
         footprint,
-        src.axisValue,
+        resolvedZBase,
         matchedRoom?.height ?? inferredHeightM ?? defaultHeight,
         matchedRoom?.has_floor ?? src.polygon.hasFloor,
         matchedRoom?.has_ceiling ?? src.polygon.hasCeiling,
@@ -1025,7 +1109,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     }
 
     return projected;
-  }, [workspaceRooms, allWalls, resolveRoomZBase, validRoomIds, verticalRoomNameSet, verticalPolygonSources, workspaceRoomsByNormalizedName, workspaceRoomMap, pickMostRecentlyUpdatedRoom]);
+  }, [workspaceRooms, allWalls, resolveRoomZBase, validRoomIds, verticalRoomNameSet, verticalPolygonSources, workspaceRoomsByNormalizedName, workspaceRoomsByLooseName, workspaceRoomMap, pickMostRecentlyUpdatedRoom]);
 
   // If viewing a section, show the viewer
   if (activeSection) {
@@ -1054,11 +1138,14 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
           if (!poly.vertices || poly.vertices.length === 0) return true;
           if (autoPolysById.has(poly.id)) return true;
 
+          // Keep explicit face-assignment polygons (wall / ceiling) created from workspace bindings
+          if (/_wall\d+$/.test(poly.id) || /_ceiling$/.test(poly.id)) return true;
+
           const key = normalizeWorkspaceName(poly.name);
-          if (!key) return true;
+          if (!key) return false;
 
           const canonicalId = autoNameToId.get(key);
-          if (!canonicalId) return true;
+          if (!canonicalId) return false;
 
           // Remove stale duplicates with same normalized name but obsolete IDs
           return canonicalId === poly.id;

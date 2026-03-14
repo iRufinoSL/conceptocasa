@@ -2205,6 +2205,10 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
   const [wallPanelRoomName, setWallPanelRoomName] = useState('');
   const [wallPanelRoomId, setWallPanelRoomId] = useState<string | null>(null);
 
+  // Background sync guards for mandatory Superficie (layer 0)
+  const superficieSyncInFlightRef = useRef(false);
+  const superficieSyncSignatureRef = useRef('');
+
   // Auto-show 3D list when navigated from Plano > Vista 3D
   useEffect(() => {
     if (autoShow3D) {

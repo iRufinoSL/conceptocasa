@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 import type { CustomSection, SectionPolygon } from './CustomSectionManager';
 import { SectionAxisViewer } from './SectionAxisViewer';
 import type { PolygonFacePatterns } from './SectionAxisViewer';
+import { SnapshotRestoreButton } from './SnapshotRestoreButton';
 
 interface PolygonVertex { x: number; y: number; }
 

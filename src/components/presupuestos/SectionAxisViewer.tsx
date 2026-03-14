@@ -1376,12 +1376,12 @@ export function SectionAxisViewer({
   // Drawing overlay
   const drawingOverlay = useMemo(() => {
     if (!drawMode || !gridLayout || drawingVertices.length === 0) return null;
-    const { ox, oy, cellPx } = gridLayout;
+    const { ox, oy, cellPxW, cellPxH } = gridLayout;
     const elements: JSX.Element[] = [];
 
     const pxVerts = drawingVertices.map(v => ({
-      px: ox + v.col * cellPx,
-      py: oy + v.row * cellPx,
+      px: ox + v.col * cellPxW,
+      py: oy + v.row * cellPxH,
     }));
 
     for (let i = 0; i < pxVerts.length - 1; i++) {
@@ -1395,8 +1395,8 @@ export function SectionAxisViewer({
 
     if (hoverNode && pxVerts.length > 0) {
       const lastPx = pxVerts[pxVerts.length - 1];
-      const hPx = ox + hoverNode.col * cellPx;
-      const hPy = oy + hoverNode.row * cellPx;
+      const hPx = ox + hoverNode.col * cellPxW;
+      const hPy = oy + hoverNode.row * cellPxH;
       elements.push(
         <line key="dhover"
           x1={lastPx.px} y1={lastPx.py} x2={hPx} y2={hPy}

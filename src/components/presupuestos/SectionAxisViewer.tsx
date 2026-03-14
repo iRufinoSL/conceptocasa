@@ -641,12 +641,24 @@ export function SectionAxisViewer({
 
   const saveEditPolygon = () => {
     if (!editingPolyId) return;
+    const trimmedName = editName.trim();
+    // Validate unique name (skip current polygon's own name)
+    if (trimmedName) {
+      const existingNames = [
+        ...(allPolygonNames || []),
+        ...polygons.filter(p => p.id !== editingPolyId).map(p => p.name),
+      ];
+      if (existingNames.some(n => n.toLowerCase() === trimmedName.toLowerCase())) {
+        toast.error(`Ya existe un espacio llamado "${trimmedName}". Los nombres deben ser únicos.`);
+        return;
+      }
+    }
     pushUndo();
     const updated = polygons.map(p => {
       if (p.id !== editingPolyId) return p;
       return {
         ...p,
-        name: editName.trim() || p.name,
+        name: trimmedName || p.name,
         zTop: parseInt(editHeight) || p.zTop,
         vertices: editVertices,
         hasFloor: editHasFloor,

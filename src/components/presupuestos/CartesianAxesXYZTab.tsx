@@ -1374,16 +1374,26 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
             Crea y gestiona secciones por eje. Total: {totalSections}
           </p>
         </div>
-        {totalSections > 0 && isAdmin && (
-          <Button
-            variant="destructive"
-            size="sm"
-            className="h-7 text-xs gap-1"
-            onClick={handleDeleteAllSections}
-          >
-            <Trash2 className="h-3 w-3" /> Eliminar todas
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          <SnapshotRestoreButton
+            budgetId={budgetId}
+            module="plano"
+            onRestored={() => {
+              setActiveSection(null);
+              invalidateSectionQueries();
+            }}
+          />
+          {totalSections > 0 && isAdmin && (
+            <Button
+              variant="destructive"
+              size="sm"
+              className="h-7 text-xs gap-1"
+              onClick={handleDeleteAllSections}
+            >
+              <Trash2 className="h-3 w-3" /> Eliminar todas
+            </Button>
+          )}
+        </div>
       </div>
 
       {creators.map((type) => {

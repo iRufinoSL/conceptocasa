@@ -1422,49 +1422,40 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
     }
   };
 
-  // Update activity workspaces
+  // Update activity workspace (single workspace per activity)
   const handleUpdateActivityWorkspaces = async (activityId: string, workspaceIds: string[]) => {
     return enqueueWorkAreaUpdate(activityId, async () => {
-      const normalizedIds = normalizeIds(workspaceIds);
+      // Single workspace: take the first one or empty
+      const newWorkspaceId = workspaceIds.length > 0 ? workspaceIds[0] : null;
 
       try {
-        const { data: currentRows, error: currentError } = await supabase
+        // Remove all existing workspace relations for this activity
+        const { error: deleteError } = await supabase
           .from('budget_activity_workspaces')
-          .select('workspace_id')
+          .delete()
           .eq('activity_id', activityId);
+        if (deleteError) throw deleteError;
 
-        if (currentError) throw currentError;
-
-        const currentIds = new Set((currentRows || []).map((r: any) => r.workspace_id));
-        const newIds = new Set(normalizedIds);
-        const toAdd = normalizedIds.filter((id) => !currentIds.has(id));
-        const toRemove = [...currentIds].filter((id) => !newIds.has(id));
-
-        if (toRemove.length > 0) {
-          const { error: removeError } = await supabase
-            .from('budget_activity_workspaces')
-            .delete()
-            .eq('activity_id', activityId)
-            .in('workspace_id', toRemove);
-          if (removeError) throw removeError;
-        }
-
-        if (toAdd.length > 0) {
+        // Add the new single workspace relation
+        if (newWorkspaceId) {
           const { error: addError } = await supabase
             .from('budget_activity_workspaces')
-            .upsert(toAdd.map((wid) => ({ workspace_id: wid, activity_id: activityId })), {
+            .upsert([{ workspace_id: newWorkspaceId, activity_id: activityId }], {
               onConflict: 'activity_id,workspace_id',
               ignoreDuplicates: true,
             });
           if (addError) throw addError;
+
+          // Auto-create face children based on workspace polygon
+          await autoCreateFaceChildren(activityId, newWorkspaceId);
         }
 
         setWorkspaceRelations((prev) => {
           const filtered = prev.filter((r) => r.activity_id !== activityId);
-          return [
-            ...filtered,
-            ...normalizedIds.map((wid) => ({ activity_id: activityId, workspace_id: wid })),
-          ];
+          if (newWorkspaceId) {
+            return [...filtered, { activity_id: activityId, workspace_id: newWorkspaceId }];
+          }
+          return filtered;
         });
       } catch (err: any) {
         console.error('Error updating workspaces:', err);
@@ -1472,6 +1463,83 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
         fetchData();
       }
     });
+  };
+
+  // Auto-create face children (Suelo, P1..Pn, Techo, Espacio) when workspace is assigned
+  const autoCreateFaceChildren = async (parentActivityId: string, workspaceId: string) => {
+    try {
+      // Get the workspace room to determine number of walls from polygon
+      const room = workspaceRooms.find(r => r.id === workspaceId);
+      if (!room) return;
+
+      const numWalls = (room as any).floor_polygon?.length || 4;
+
+      // Get the parent activity data
+      const parentActivity = activities.find(a => a.id === parentActivityId);
+      if (!parentActivity) return;
+
+      // Check which face children already exist to avoid duplicates
+      const existingChildren = activities.filter(a => a.parent_activity_id === parentActivityId);
+      const existingFaceNames = new Set(existingChildren.map(c => c.name.toLowerCase()));
+
+      // Build face names: Suelo, P1..Pn, Techo, Espacio
+      const faceNames: string[] = ['Suelo'];
+      for (let i = 1; i <= numWalls; i++) {
+        faceNames.push(`Pared ${i}`);
+      }
+      faceNames.push('Techo', 'Espacio');
+
+      // Filter out faces that already exist as children
+      const newFaces = faceNames.filter(name => !existingFaceNames.has(name.toLowerCase()));
+
+      if (newFaces.length === 0) return;
+
+      // Get next available code
+      const allCodes = activities.map(a => a.code).filter(Boolean);
+      let maxCodeNum = 0;
+      allCodes.forEach(c => {
+        const match = c.match(/(\d+)/);
+        if (match) maxCodeNum = Math.max(maxCodeNum, parseInt(match[1]));
+      });
+
+      // Create face children
+      const childrenToInsert = newFaces.map((faceName, idx) => ({
+        budget_id: budgetId,
+        name: faceName,
+        code: `${parentActivity.code}.${(idx + 1 + existingChildren.length).toString().padStart(2, '0')}`,
+        description: `${faceName} — ${room.name}`,
+        measurement_unit: parentActivity.measurement_unit || 'm²',
+        phase_id: parentActivity.phase_id,
+        uses_measurement: parentActivity.uses_measurement,
+        opciones: parentActivity.opciones || ['A', 'B', 'C'],
+        activity_type: 'normal',
+        parent_activity_id: parentActivityId,
+      }));
+
+      const { data: insertedChildren, error: insertError } = await supabase
+        .from('budget_activities')
+        .insert(childrenToInsert)
+        .select('id');
+
+      if (insertError) throw insertError;
+
+      // Assign the same workspace to all children
+      if (insertedChildren && insertedChildren.length > 0) {
+        const childWsRelations = insertedChildren.map((child: any) => ({
+          activity_id: child.id,
+          workspace_id: workspaceId,
+        }));
+        await supabase
+          .from('budget_activity_workspaces')
+          .upsert(childWsRelations, { onConflict: 'activity_id,workspace_id', ignoreDuplicates: true });
+      }
+
+      toast.success(`Creadas ${newFaces.length} sub-actividades por caras de "${room.name}"`);
+      await fetchData();
+    } catch (err: any) {
+      console.error('Error creating face children:', err);
+      // Non-blocking: don't fail the main workspace assignment
+    }
   };
 
   // Navigate to previous/next activity in form

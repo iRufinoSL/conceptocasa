@@ -907,7 +907,13 @@ export function WorkspacePropertiesPanel({
             isExpanded={expandedFace === 'floor'} onToggle={() => setExpandedFace(expandedFace === 'floor' ? null : 'floor')}
             onOpenPatternPicker={() => setPatternPickerFace('floor')}
             objectCount={getObjectsForWall(-1).length}
-            onAddObject={() => { setObjTargetFace('floor'); setShowObjectForm(true); setActiveTab('objects'); }}
+            onAddObject={() => {
+              setObjTargetFace('floor');
+              setObjLayerOrder(String(getNextLayerOrder('floor')));
+              setObjResourceId('_none');
+              setShowObjectForm(true);
+              setActiveTab('objects');
+            }}
           />
 
           {Array.from({ length: edgeCount }).map((_, i) => {

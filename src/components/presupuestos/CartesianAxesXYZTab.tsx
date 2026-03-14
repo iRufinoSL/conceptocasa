@@ -653,19 +653,53 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     return ids;
   }, [verticalSections]);
 
+  // Flatten all vertical polygons as fallback projection source (for legacy/manual Z drawings)
+  const verticalPolygonSources = useMemo(() => {
+    const sources: Array<{ sectionId: string; axisValue: number; polygon: SectionPolygon }> = [];
+    for (const vs of verticalSections) {
+      for (const polygon of (vs.polygons || [])) {
+        if (!polygon.vertices || polygon.vertices.length < 3) continue;
+        sources.push({ sectionId: vs.id, axisValue: vs.axisValue, polygon });
+      }
+    }
+    return sources;
+  }, [verticalSections]);
+
+  const verticalRoomNameSet = useMemo(() => {
+    const names = new Set<string>();
+    for (const src of verticalPolygonSources) {
+      const normalized = normalizeWorkspaceName(src.polygon.name);
+      if (normalized) names.add(normalized);
+    }
+    return names;
+  }, [verticalPolygonSources]);
+
+  const workspaceRoomsByNormalizedName = useMemo(() => {
+    const map = new Map<string, WorkspaceRoom[]>();
+    for (const room of (workspaceRooms || [])) {
+      const key = normalizeWorkspaceName(room.name);
+      if (!key) continue;
+      const list = map.get(key) || [];
+      list.push(room);
+      map.set(key, list);
+    }
+    return map;
+  }, [workspaceRooms]);
+
   /** Compute auto-projected polygons for Y/X sections from workspace rooms */
   const computeProjectedPolygons = useCallback((section: CustomSection): SectionPolygon[] => {
     if (section.sectionType === 'vertical') return [];
-    if (!workspaceRooms || workspaceRooms.length === 0) return [];
 
     const defaultHeight = 2.5; // fallback metres
     // Z unit = 250mm (block_height_mm)
     const zUnitMm = 250;
 
-    // Filter: only project rooms that exist in a Z section
-    const eligibleRooms = validRoomIds.size > 0
-      ? workspaceRooms.filter(r => validRoomIds.has(r.id))
-      : workspaceRooms;
+    // Filter: only project rooms that exist in a Z section (by id or by normalized name)
+    const eligibleRooms = (workspaceRooms || []).filter(room => {
+      if (validRoomIds.size === 0 && verticalRoomNameSet.size === 0) return true;
+      const normalized = normalizeWorkspaceName(room.name);
+      return validRoomIds.has(room.id) || (normalized ? verticalRoomNameSet.has(normalized) : false);
+    });
 
     // For transversal sections (X cut), compute maxY to invert Y axis
     let globalMaxY = 0;
@@ -676,18 +710,33 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
           if (v.y > globalMaxY) globalMaxY = v.y;
         }
       }
+      // Fallback maxY from vertical polygons when rooms are missing/stale
+      for (const src of verticalPolygonSources) {
+        for (const v of src.polygon.vertices) {
+          if (v.y > globalMaxY) globalMaxY = v.y;
+        }
+      }
     }
 
     const projected: SectionPolygon[] = [];
+    const projectedKeys = new Set<string>();
 
-    for (const room of eligibleRooms) {
-      if (!room.floor_polygon || room.floor_polygon.length < 3) continue;
-      const poly = room.floor_polygon;
+    const pushProjectedRoom = (
+      key: string,
+      roomName: string,
+      poly: PolygonVertex[],
+      zBase: number,
+      roomHeightM: number | null | undefined,
+      hasFloor: boolean | undefined,
+      hasCeiling: boolean | undefined,
+      wallRoomId?: string,
+    ) => {
+      if (!poly || poly.length < 3) return;
       const cutAxis = section.sectionType === 'longitudinal' ? 'y' : 'x';
       const axisVal = section.axisValue;
 
       const intersections = findPolyIntersections(poly, cutAxis, axisVal);
-      if (intersections.length < 2) continue;
+      if (intersections.length < 2) return;
 
       // For transversal sections, invert Y: section_h = maxY - polygon_y
       const mappedIntersections = section.sectionType === 'transversal'
@@ -696,16 +745,15 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
 
       const hMin = Math.min(...mappedIntersections);
       const hMax = Math.max(...mappedIntersections);
-      if (Math.abs(hMax - hMin) < 0.01) continue;
+      if (Math.abs(hMax - hMin) < 0.01) return;
 
-      // Determine Z base from vertical section with fallback resolution
-      const zBase = resolveRoomZBase(room);
-      const heightM = room.height || defaultHeight;
+      const heightM = roomHeightM || defaultHeight;
       const defaultZTop = zBase + Math.round((heightM * 1000) / zUnitMm);
 
       // Check wall heights for non-uniform tops (inclined roofs)
       const getWallZTop = (wallIndex: number): number => {
-        const wall = (allWalls || []).find(w => w.room_id === room.id && w.wall_index === wallIndex);
+        if (!wallRoomId) return defaultZTop;
+        const wall = (allWalls || []).find(w => w.room_id === wallRoomId && w.wall_index === wallIndex);
         if (wall?.height != null && wall.height > 0) {
           return zBase + Math.round((wall.height * 1000) / zUnitMm);
         }
@@ -741,8 +789,8 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       const zTopRight = getTopAtIntersection(hMax);
 
       projected.push({
-        id: room.id,
-        name: room.name,
+        id: key,
+        name: roomName,
         vertices: [
           { x: hMin, y: zBase, z: 0 },
           { x: hMax, y: zBase, z: 0 },
@@ -751,12 +799,57 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
         ],
         zBase,
         zTop: Math.max(zTopLeft, zTopRight),
-        hasFloor: room.has_floor,
-        hasCeiling: room.has_ceiling,
+        hasFloor,
+        hasCeiling,
       });
+      projectedKeys.add(key);
+    };
+
+    // 1) Main source: workspace rooms linked to plan
+    for (const room of eligibleRooms) {
+      if (!room.floor_polygon || room.floor_polygon.length < 3) continue;
+      const zBase = resolveRoomZBase(room);
+      pushProjectedRoom(
+        room.id,
+        room.name,
+        room.floor_polygon,
+        zBase,
+        room.height,
+        room.has_floor,
+        room.has_ceiling,
+        room.id,
+      );
     }
+
+    // 2) Fallback source: polygons drawn in vertical sections (ensures new X/Y sections are never empty)
+    for (const src of verticalPolygonSources) {
+      const normalized = normalizeWorkspaceName(src.polygon.name);
+      const matchedRoom = workspaceRoomMap.get(src.polygon.id)
+        || (normalized ? (workspaceRoomsByNormalizedName.get(normalized)?.[0] || null) : null);
+
+      const fallbackId = matchedRoom?.id || src.polygon.id;
+      if (projectedKeys.has(fallbackId)) continue;
+
+      const footprint: PolygonVertex[] = src.polygon.vertices.map(v => ({ x: v.x, y: v.y }));
+      const inferredHeightM =
+        typeof src.polygon.zTop === 'number' && typeof src.polygon.zBase === 'number'
+          ? Math.max(0.25, ((src.polygon.zTop - src.polygon.zBase) * zUnitMm) / 1000)
+          : null;
+
+      pushProjectedRoom(
+        fallbackId,
+        matchedRoom?.name || src.polygon.name,
+        footprint,
+        src.axisValue,
+        matchedRoom?.height ?? inferredHeightM ?? defaultHeight,
+        matchedRoom?.has_floor ?? src.polygon.hasFloor,
+        matchedRoom?.has_ceiling ?? src.polygon.hasCeiling,
+        matchedRoom?.id,
+      );
+    }
+
     return projected;
-  }, [workspaceRooms, allWalls, resolveRoomZBase, validRoomIds]);
+  }, [workspaceRooms, allWalls, resolveRoomZBase, validRoomIds, verticalRoomNameSet, verticalPolygonSources, workspaceRoomsByNormalizedName, workspaceRoomMap]);
 
   // If viewing a section, show the viewer
   if (activeSection) {

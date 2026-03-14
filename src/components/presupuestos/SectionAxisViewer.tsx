@@ -794,7 +794,7 @@ export function SectionAxisViewer({
   // Grid rendering
   const gridContent = useMemo(() => {
     if (!scale || !gridLayout) return null;
-    const { totalCols, totalRows, gridW, gridH, ox, oy, originCol, originRow, originX, originY, cellPx } = gridLayout;
+    const { totalCols, totalRows, gridW, gridH, ox, oy, originCol, originRow, originX, originY, cellPxW, cellPxH } = gridLayout;
 
     const gridLines: JSX.Element[] = [];
     const axisRefs: JSX.Element[] = [];

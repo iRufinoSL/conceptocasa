@@ -115,28 +115,46 @@ export function WallObjectsPanel({
   const faceVolumeM3 = superficieObj?.volume_m3 ?? null;
 
   // Auto-create Superficie (layer_order=0) when panel opens and it doesn't exist
+  // Use a ref to avoid duplicate inserts from re-renders
+  const creatingSuperficieRef = useState<Record<string, boolean>>(() => ({}))[0];
+
   useEffect(() => {
     if (!open || !wallId || isLoading) return;
-    const hasSuperficie = objects.some(o => o.layer_order === 0);
-    if (hasSuperficie) return;
+    if (objects.some(o => o.layer_order === 0)) return;
+    if (creatingSuperficieRef[wallId]) return;
+    creatingSuperficieRef[wallId] = true;
 
     const faceLabel = wallLabel || (wallIndex === 0 ? 'Espacio' : wallIndex === -1 ? 'Suelo' : wallIndex === -2 ? 'Techo' : `Pared ${wallIndex}`);
     const desc = `${roomName} / ${faceLabel}`;
 
     (async () => {
-      await supabase.from('budget_wall_objects').insert({
-        wall_id: wallId,
-        layer_order: 0,
-        name: 'Superficie',
-        description: desc,
-        object_type: 'material',
-        is_core: false,
-        surface_m2: null,
-        volume_m3: null,
-      });
+      // Double-check in DB to prevent duplicates
+      const { data: existing } = await supabase
+        .from('budget_wall_objects')
+        .select('id')
+        .eq('wall_id', wallId)
+        .eq('layer_order', 0)
+        .maybeSingle();
+
+      if (!existing) {
+        const { error } = await supabase.from('budget_wall_objects').insert({
+          wall_id: wallId,
+          layer_order: 0,
+          name: 'Superficie',
+          description: desc,
+          object_type: 'material',
+          is_core: false,
+          surface_m2: null,
+          volume_m3: null,
+        });
+        if (error) {
+          console.error('Error creating Superficie:', error);
+        }
+      }
+      creatingSuperficieRef[wallId] = false;
       queryClient.invalidateQueries({ queryKey: ['wall-objects', wallId] });
     })();
-  }, [open, wallId, isLoading, objects, wallLabel, wallIndex, roomName, queryClient]);
+  }, [open, wallId, isLoading, objects, wallLabel, wallIndex, roomName, queryClient, creatingSuperficieRef]);
 
   const resetForm = () => {
     setFormName('');

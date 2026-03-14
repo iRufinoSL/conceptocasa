@@ -414,9 +414,14 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
 
   const parseCustomCorners = useCallback((): Record<string, unknown> => {
     try {
-      return typeof floorPlan?.custom_corners === 'string'
+      const raw = typeof floorPlan?.custom_corners === 'string'
         ? JSON.parse(floorPlan.custom_corners)
-        : (floorPlan?.custom_corners || {});
+        : floorPlan?.custom_corners;
+
+      if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+        return raw as Record<string, unknown>;
+      }
+      return {};
     } catch {
       return {};
     }

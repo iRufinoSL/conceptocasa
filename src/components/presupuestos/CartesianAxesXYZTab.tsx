@@ -612,7 +612,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     return map;
   }, [verticalSections]);
 
-  // Build normalized-name → axis set mapping for legacy projects where IDs changed
+  // Build strict normalized-name → axis set mapping
   const verticalNameAxisMap = useMemo(() => {
     const map = new Map<string, Set<number>>();
     for (const vs of verticalSections) {
@@ -629,9 +629,31 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     return map;
   }, [verticalSections]);
 
+  // Legacy loose mapping (strips descriptors like "techo") as last-resort fallback only
+  const verticalLooseNameAxisMap = useMemo(() => {
+    const map = new Map<string, Set<number>>();
+    for (const vs of verticalSections) {
+      const polys = vs.polygons;
+      if (!polys) continue;
+      for (const p of polys) {
+        const normalized = normalizeWorkspaceNameLoose(p.name);
+        if (!normalized) continue;
+        const axes = map.get(normalized) || new Set<number>();
+        axes.add(vs.axisValue);
+        map.set(normalized, axes);
+      }
+    }
+    return map;
+  }, [verticalSections]);
+
   const verticalNameAxisEntries = useMemo(
     () => Array.from(verticalNameAxisMap.entries()),
     [verticalNameAxisMap],
+  );
+
+  const verticalLooseNameAxisEntries = useMemo(
+    () => Array.from(verticalLooseNameAxisMap.entries()),
+    [verticalLooseNameAxisMap],
   );
 
   // Build floor_id → Z base mapping from vertical sections sorted by axisValue

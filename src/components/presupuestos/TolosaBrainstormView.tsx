@@ -2002,7 +2002,13 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
             ) : (
               <>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <Badge variant="outline" className={`font-mono text-xs shrink-0 ${isEst ? 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-700' : ''}`}>{isEst ? 'Est.' : ''}{item.code}</Badge>
+                  <Badge
+                    variant="outline"
+                    className={`font-mono text-xs shrink-0 cursor-grab active:cursor-grabbing ${isEst ? 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-700' : ''}`}
+                    draggable
+                    onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; setDragItemId(item.id); }}
+                    onDragEnd={() => { setDragItemId(null); setDropTargetId(null); }}
+                  >{isEst ? 'Est.' : ''}{item.code}</Badge>
                   <button
                     onClick={() => {
                       toggleDetail(item.id);

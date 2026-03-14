@@ -645,7 +645,8 @@ export function WorkspacePropertiesPanel({
 
   const sectionLabel = sectionType === 'vertical' ? 'Z' : sectionType === 'longitudinal' ? 'Y' : sectionType === 'transversal' ? 'X' : 'I';
 
-  // Get non-surface objects for all walls
+  // Split automatic surfaces from manual objects
+  const superficieObjects = wallObjects.filter(o => o.layer_order === 0);
   const allObjects = wallObjects.filter(o => o.layer_order > 0);
   const huecoCount = allObjects.filter(o => o.object_type === 'hueco').length;
 

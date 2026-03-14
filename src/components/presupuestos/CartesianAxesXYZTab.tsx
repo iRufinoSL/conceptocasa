@@ -773,6 +773,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     const ids = new Set<string>();
     for (const vs of verticalSections) {
       for (const p of (vs.polygons || [])) {
+        if (!p.vertices || p.vertices.length < 3) continue;
         ids.add(p.id);
       }
     }

@@ -1108,8 +1108,13 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
           floorPlanId={floorPlan?.id}
           savedScale={savedScale}
           onSaveScale={(scale) => handleSaveScale(liveSection.id, scale)}
-          savedNegLimits={savedNegLimits}
-          onSaveNegLimits={(limits) => handleSaveNegLimits(liveSection.id, limits)}
+          savedNegLimits={effectiveNegLimits}
+          onSaveNegLimits={(limits) => {
+            const normalizedLimits = liveSection.sectionType === 'vertical'
+              ? limits
+              : { ...limits, negH: 0, negV: 0 };
+            handleSaveNegLimits(liveSection.id, normalizedLimits);
+          }}
           ridgeLine={ridgeLine}
           polygons={mergedPolygons}
           onSavePolygons={(polys) => handleSavePolygons(liveSection.id, polys)}

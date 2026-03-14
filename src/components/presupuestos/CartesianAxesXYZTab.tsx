@@ -412,23 +412,130 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     }
   };
 
-  const handleDeleteSection = async (sectionId: string) => {
+  const parseCustomCorners = useCallback((): Record<string, unknown> => {
+    try {
+      return typeof floorPlan?.custom_corners === 'string'
+        ? JSON.parse(floorPlan.custom_corners)
+        : (floorPlan?.custom_corners || {});
+    } catch {
+      return {};
+    }
+  }, [floorPlan?.custom_corners]);
+
+  const invalidateSectionQueries = useCallback(() => {
+    return Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces', budgetId] }),
+      queryClient.invalidateQueries({ queryKey: ['workspace-rooms'] }),
+      queryClient.invalidateQueries({ queryKey: ['workspace-rooms-for-projection', budgetId] }),
+      queryClient.invalidateQueries({ queryKey: ['workspace-walls-for-projection', budgetId] }),
+      queryClient.invalidateQueries({ queryKey: ['wall-object-surfaces-for-projection', budgetId] }),
+    ]);
+  }, [budgetId, queryClient]);
+
+  const resetAllSectionsAndWorkspaces = useCallback(async () => {
+    if (!floorPlan?.id) return;
+
+    const { data: roomRows, error: roomError } = await supabase
+      .from('budget_floor_plan_rooms')
+      .select('id')
+      .eq('floor_plan_id', floorPlan.id);
+    if (roomError) throw roomError;
+
+    const roomIds = (roomRows || []).map(r => r.id);
+
+    let wallIds: string[] = [];
+    if (roomIds.length > 0) {
+      const { data: wallRows, error: wallError } = await supabase
+        .from('budget_floor_plan_walls')
+        .select('id')
+        .in('room_id', roomIds);
+      if (wallError) throw wallError;
+      wallIds = (wallRows || []).map(w => w.id);
+    }
+
+    const childCleanupOps: Promise<any>[] = [];
+
+    if (wallIds.length > 0) {
+      childCleanupOps.push(
+        supabase.from('budget_floor_plan_openings').delete().in('wall_id', wallIds),
+        supabase.from('budget_floor_plan_block_groups').delete().in('wall_id', wallIds),
+        supabase.from('budget_floor_plan_wall_layers').delete().in('wall_id', wallIds),
+        supabase.from('budget_wall_objects').delete().in('wall_id', wallIds),
+      );
+    }
+
+    if (roomIds.length > 0) {
+      childCleanupOps.push(
+        supabase.from('budget_activity_workspaces').delete().in('workspace_id', roomIds),
+        supabase.from('budget_items').update({ workspace_id: null }).in('workspace_id', roomIds),
+        supabase.from('budget_concepts').update({ workspace_id: null }).in('workspace_id', roomIds),
+      );
+    }
+
+    if (childCleanupOps.length > 0) {
+      const childResults = await Promise.all(childCleanupOps);
+      const failedChildOp = childResults.find((result: any) => result?.error);
+      if (failedChildOp?.error) throw failedChildOp.error;
+    }
+
+    if (roomIds.length > 0) {
+      const { error: deleteWallsError } = await supabase
+        .from('budget_floor_plan_walls')
+        .delete()
+        .in('room_id', roomIds);
+      if (deleteWallsError) throw deleteWallsError;
+
+      const { error: deleteRoomsError } = await supabase
+        .from('budget_floor_plan_rooms')
+        .delete()
+        .in('id', roomIds);
+      if (deleteRoomsError) throw deleteRoomsError;
+    }
+
+    const currentCorners = parseCustomCorners();
+    const cleanCorners = {
+      ...currentCorners,
+      corners: [],
+      manualElevations: [],
+      customSections: [],
+      rulerData: {},
+      ridgeLine: null,
+    };
+
+    const { error: floorPlanError } = await supabase
+      .from('budget_floor_plans')
+      .update({ custom_corners: cleanCorners as any })
+      .eq('id', floorPlan.id);
+    if (floorPlanError) throw floorPlanError;
+
+    setActiveSection(null);
+    await invalidateSectionQueries();
+  }, [floorPlan?.id, invalidateSectionQueries, parseCustomCorners]);
+
+  const handleDeleteSection = async (section: CustomSection) => {
     if (!isAdmin || !floorPlan?.id) return;
 
-    let parsedCorners: Record<string, unknown> = {};
-    try {
-      parsedCorners = typeof floorPlan.custom_corners === 'string'
-        ? JSON.parse(floorPlan.custom_corners)
-        : (floorPlan.custom_corners || {});
-    } catch { parsedCorners = {}; }
+    if (section.sectionType === 'vertical') {
+      const confirmed = window.confirm('Eliminar una Sección Z hará limpieza total: se borrarán todas las secciones y todos los espacios. ¿Continuar?');
+      if (!confirmed) return;
 
+      try {
+        await resetAllSectionsAndWorkspaces();
+        toast.success('Limpieza total aplicada: todo quedó vacío para reiniciar.');
+      } catch (error: any) {
+        toast.error(`Error en limpieza total: ${error?.message || 'inténtalo de nuevo'}`);
+      }
+      return;
+    }
+
+    const parsedCorners = parseCustomCorners();
     const existingSections = Array.isArray(parsedCorners.customSections)
       ? parsedCorners.customSections as CustomSection[]
       : [];
 
     const nextCustomCorners = {
       ...parsedCorners,
-      customSections: existingSections.filter(s => s.id !== sectionId),
+      customSections: existingSections.filter(s => s.id !== section.id),
     };
 
     const { error } = await supabase
@@ -439,32 +546,21 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     if (error) { toast.error('Error al eliminar sección'); return; }
 
     toast.success('Sección eliminada');
-    queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces', budgetId] });
-    queryClient.invalidateQueries({ queryKey: ['workspace-rooms'] });
+    await invalidateSectionQueries();
   };
 
   const handleDeleteAllSections = async () => {
     if (!isAdmin || !floorPlan?.id) return;
 
-    let parsedCorners: Record<string, unknown> = {};
+    const confirmed = window.confirm('Se eliminarán todas las secciones y todos los espacios para dejar el sistema en blanco. ¿Continuar?');
+    if (!confirmed) return;
+
     try {
-      parsedCorners = typeof floorPlan.custom_corners === 'string'
-        ? JSON.parse(floorPlan.custom_corners)
-        : (floorPlan.custom_corners || {});
-    } catch { parsedCorners = {}; }
-
-    const nextCustomCorners = { ...parsedCorners, customSections: [] };
-
-    const { error } = await supabase
-      .from('budget_floor_plans')
-      .update({ custom_corners: nextCustomCorners as any })
-      .eq('id', floorPlan.id);
-
-    if (error) { toast.error('Error al eliminar secciones'); return; }
-
-    toast.success('Todas las secciones eliminadas');
-    queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces', budgetId] });
-    queryClient.invalidateQueries({ queryKey: ['workspace-rooms'] });
+      await resetAllSectionsAndWorkspaces();
+      toast.success('Limpieza total aplicada: sistema vacío y listo para empezar de nuevo.');
+    } catch (error: any) {
+      toast.error(`Error al limpiar todo: ${error?.message || 'inténtalo de nuevo'}`);
+    }
   };
 
   const creators: SectionType[] = ['vertical', 'transversal', 'longitudinal'];

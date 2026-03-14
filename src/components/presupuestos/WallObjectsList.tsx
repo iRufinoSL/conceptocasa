@@ -795,7 +795,7 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
       wall_id: wallId,
       layer_order: 0,
       name: 'Superficie',
-      description: `${faceLabel}/${face.workspace}`,
+      description: `${face.workspace} / ${faceLabel}${surfaceM2 ? ` — ${surfaceM2} m²` : ''}`,
       object_type: 'material',
       is_core: false,
       surface_m2: surfaceM2,

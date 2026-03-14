@@ -149,6 +149,15 @@ export const VISUAL_PATTERNS: VisualPattern[] = [
     fgColor: '#706858',
     svgContent: `<rect width="12" height="12" fill="#c8c0b0"/><circle cx="3" cy="3" r="1.5" fill="none" stroke="#706858" stroke-width="0.4"/><circle cx="9" cy="4" r="1.8" fill="none" stroke="#706858" stroke-width="0.4"/><circle cx="5" cy="9" r="1.3" fill="none" stroke="#706858" stroke-width="0.4"/><circle cx="10" cy="10" r="1" fill="none" stroke="#706858" stroke-width="0.3"/>`,
   },
+  {
+    id: 'parquet',
+    label: 'Parquet',
+    category: 'suelo',
+    width: 16, height: 16,
+    bgColor: '#c8a265',
+    fgColor: '#8b6914',
+    svgContent: `<rect width="16" height="16" fill="#c8a265"/><rect x="0" y="0" width="7.5" height="3.5" fill="none" stroke="#8b6914" stroke-width="0.3"/><rect x="8.5" y="0" width="7.5" height="3.5" fill="none" stroke="#8b6914" stroke-width="0.3"/><rect x="0" y="4" width="3.5" height="7.5" fill="none" stroke="#8b6914" stroke-width="0.3"/><rect x="4" y="4" width="3.5" height="7.5" fill="none" stroke="#8b6914" stroke-width="0.3"/><rect x="8.5" y="4" width="7.5" height="3.5" fill="none" stroke="#8b6914" stroke-width="0.3"/><rect x="0" y="12.5" width="7.5" height="3.5" fill="none" stroke="#8b6914" stroke-width="0.3"/><rect x="8.5" y="12.5" width="7.5" height="3.5" fill="none" stroke="#8b6914" stroke-width="0.3"/>`,
+  },
   // ── Cubierta ──
   {
     id: 'membrana',
@@ -235,6 +244,12 @@ export const PATTERN_CATEGORIES = [
   { id: 'varios', label: 'Varios' },
   { id: 'color', label: 'Color' },
 ] as const;
+
+/** Simplified pattern IDs for the Superficie (layer 0) selector */
+export const SUPERFICIE_PATTERN_IDS = ['vacio', 'bloques', 'ladrillo', 'parquet', 'teja'] as const;
+
+/** Filtered patterns for Superficie selector */
+export const SUPERFICIE_PATTERNS = VISUAL_PATTERNS.filter(p => (SUPERFICIE_PATTERN_IDS as readonly string[]).includes(p.id));
 
 export function getPatternById(id: string | null | undefined): VisualPattern | undefined {
   if (!id) return undefined;

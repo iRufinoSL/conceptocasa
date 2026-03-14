@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Trash2, Save, GripVertical, Star, Paintbrush } from 'lucide-react';
-import { VISUAL_PATTERNS, PATTERN_CATEGORIES, getPatternById, patternPreviewDataUri } from '@/lib/visual-patterns';
+import { VISUAL_PATTERNS, PATTERN_CATEGORIES, SUPERFICIE_PATTERNS, getPatternById, patternPreviewDataUri } from '@/lib/visual-patterns';
 import { toast } from 'sonner';
 
 interface WallObjectsPanelProps {
@@ -300,6 +300,11 @@ export function WallObjectsPanel({
                             Auto
                           </Badge>
                         )}
+                        {isAutoSuperficie && obj.surface_m2 != null && (
+                          <Badge variant="secondary" className="text-[8px] h-3.5 px-1">
+                            📐 {obj.surface_m2} m²
+                          </Badge>
+                        )}
                         {obj.is_core && (
                           <Badge variant="default" className="text-[8px] h-3.5 px-1 gap-0.5">
                             <Star className="h-2 w-2" /> Núcleo
@@ -360,19 +365,16 @@ export function WallObjectsPanel({
                               </div>
                             </SelectTrigger>
                             <SelectContent className="max-h-64">
-                              <SelectItem value="_none" className="text-xs">Sin patrón</SelectItem>
-                              {PATTERN_CATEGORIES.map(cat => (
-                                <div key={cat.id}>
-                                  <div className="px-2 py-1 text-[9px] font-bold uppercase text-muted-foreground tracking-wider">{cat.label}</div>
-                                  {VISUAL_PATTERNS.filter(p => p.category === cat.id).map(p => (
-                                    <SelectItem key={p.id} value={p.id} className="text-xs">
-                                      <div className="flex items-center gap-2">
-                                        <img src={patternPreviewDataUri(p)} className="w-4 h-4 rounded border" alt="" />
-                                        <span>{p.label}</span>
-                                      </div>
-                                    </SelectItem>
-                                  ))}
-                                </div>
+                              <SelectItem value="_none" className="text-xs">
+                                <span className="text-muted-foreground">Vacío — sin patrón</span>
+                              </SelectItem>
+                              {SUPERFICIE_PATTERNS.filter(p => p.id !== 'vacio').map(p => (
+                                <SelectItem key={p.id} value={p.id} className="text-xs">
+                                  <div className="flex items-center gap-2">
+                                    <img src={patternPreviewDataUri(p)} className="w-4 h-4 rounded border" alt="" />
+                                    <span>{p.label}</span>
+                                  </div>
+                                </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>

@@ -674,7 +674,7 @@ export function SectionAxisViewer({
     setEditingPolyId(null);
   };
 
-  const updateEditVertex = (idx: number, axis: 'x' | 'y', value: number) => {
+  const updateEditVertex = (idx: number, axis: 'x' | 'y' | 'z', value: number) => {
     setEditVertices(prev => prev.map((v, i) => i === idx ? { ...v, [axis]: value } : v));
   };
 

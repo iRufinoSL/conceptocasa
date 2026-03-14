@@ -437,31 +437,36 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces', budgetId] });
   };
 
+  const verticalSections = useMemo(
+    () => allSections.filter(s => s.sectionType === 'vertical').sort((a, b) => a.axisValue - b.axisValue),
+    [allSections],
+  );
+
+  const workspaceRoomMap = useMemo(
+    () => new Map((workspaceRooms || []).map(room => [room.id, room])),
+    [workspaceRooms],
+  );
+
   // Build a name/id → zBase mapping from ALL vertical section polygons
   const verticalZBaseMap = useMemo(() => {
     const map = new Map<string, number>();
-    for (const vs of allSections.filter(s => s.sectionType === 'vertical')) {
+    for (const vs of verticalSections) {
       const polys = vs.polygons;
-      if (polys) {
-        for (const p of polys) {
-          map.set(p.id, vs.axisValue);
-          if (p.name) map.set(`name:${p.name}`, vs.axisValue);
-        }
+      if (!polys) continue;
+      for (const p of polys) {
+        map.set(p.id, vs.axisValue);
+        if (p.name) map.set(`name:${p.name}`, vs.axisValue);
       }
     }
     return map;
-  }, [allSections]);
+  }, [verticalSections]);
 
   // Build floor_id → Z base mapping from vertical sections sorted by axisValue
   // Each floor's Z base = the vertical section axisValue at that floor's order_index
   const floorZBaseMap = useMemo(() => {
     const map = new Map<string, number>();
-    if (!allFloors || allFloors.length === 0) return map;
-    const verticalSections = allSections
-      .filter(s => s.sectionType === 'vertical')
-      .sort((a, b) => a.axisValue - b.axisValue);
-    
-    // Map each floor (by order_index) to the corresponding vertical section's axisValue
+    if (!allFloors || allFloors.length === 0 || verticalSections.length === 0) return map;
+
     const sortedFloors = [...allFloors].sort((a, b) => a.order_index - b.order_index);
     for (let i = 0; i < sortedFloors.length; i++) {
       const floor = sortedFloors[i];
@@ -470,7 +475,49 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       }
     }
     return map;
-  }, [allFloors, allSections]);
+  }, [allFloors, verticalSections]);
+
+  const resolveRoomZBase = useCallback((room: WorkspaceRoom): number => {
+    // 1) HIGHEST PRIORITY: Use floor_id → floorZBaseMap (most reliable)
+    if (room.floor_id) {
+      const byFloor = floorZBaseMap.get(room.floor_id);
+      if (byFloor !== undefined) return byFloor;
+    }
+
+    // 2) Check by room ID in vertical section polygons
+    const byId = verticalZBaseMap.get(room.id);
+    if (byId !== undefined) return byId;
+
+    // 3) Check by room name in vertical section polygons
+    const byName = verticalZBaseMap.get(`name:${room.name}`);
+    if (byName !== undefined) return byName;
+
+    // 4) Direct match by vertical_section_id
+    const direct = verticalSections.find(s => s.id === room.vertical_section_id);
+    if (direct) return direct.axisValue;
+
+    return 0;
+  }, [floorZBaseMap, verticalZBaseMap, verticalSections]);
+
+  const rebaseSavedPolygonToRoomLevel = useCallback((polygon: SectionPolygon): SectionPolygon => {
+    const room = workspaceRoomMap.get(polygon.id);
+    if (!room || !polygon.vertices || polygon.vertices.length === 0) return polygon;
+
+    const expectedZBase = resolveRoomZBase(room);
+    const currentZBase = typeof polygon.zBase === 'number'
+      ? polygon.zBase
+      : Math.min(...polygon.vertices.map(v => v.y));
+
+    const delta = expectedZBase - currentZBase;
+    if (!Number.isFinite(delta) || Math.abs(delta) < 0.001) return polygon;
+
+    return {
+      ...polygon,
+      zBase: typeof polygon.zBase === 'number' ? polygon.zBase + delta : expectedZBase,
+      zTop: typeof polygon.zTop === 'number' ? polygon.zTop + delta : polygon.zTop,
+      vertices: polygon.vertices.map(v => ({ ...v, y: v.y + delta })),
+    };
+  }, [workspaceRoomMap, resolveRoomZBase]);
 
   // Collect ALL polygon names across ALL sections for uniqueness check
   const allPolygonNames = useMemo(() => {
@@ -488,7 +535,6 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     if (section.sectionType === 'vertical') return [];
     if (!workspaceRooms || workspaceRooms.length === 0) return [];
 
-    const verticalSections = allSections.filter(s => s.sectionType === 'vertical');
     const defaultHeight = 2.5; // fallback metres
 
     // For transversal sections (X cut), compute maxY to invert Y axis
@@ -501,30 +547,6 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
         }
       }
     }
-
-    /** Resolve zBase for a room using floor assignment + polygon map + fallbacks */
-    const resolveZBase = (room: WorkspaceRoom): number => {
-      // 1) HIGHEST PRIORITY: Use floor_id → floorZBaseMap (most reliable)
-      if (room.floor_id) {
-        const byFloor = floorZBaseMap.get(room.floor_id);
-        if (byFloor !== undefined) return byFloor;
-      }
-      // 2) Check by room ID in vertical section polygons
-      const byId = verticalZBaseMap.get(room.id);
-      if (byId !== undefined) return byId;
-      // 3) Check by room name in vertical section polygons
-      const byName = verticalZBaseMap.get(`name:${room.name}`);
-      if (byName !== undefined) return byName;
-      // 4) Direct match by vertical_section_id
-      const direct = verticalSections.find(s => s.id === room.vertical_section_id);
-      if (direct) return direct.axisValue;
-      // 5) Search vertical sections for a saved polygon whose id or name matches
-      for (const vs of verticalSections) {
-        const polys = vs.polygons;
-        if (polys?.some(p => p.id === room.id || p.name === room.name)) return vs.axisValue;
-      }
-      return 0;
-    };
 
     const projected: SectionPolygon[] = [];
 
@@ -547,7 +569,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       if (Math.abs(hMax - hMin) < 0.01) continue;
 
       // Determine Z base from vertical section with fallback resolution
-      const zBase = resolveZBase(room);
+      const zBase = resolveRoomZBase(room);
       const heightM = room.height || defaultHeight;
       const defaultZTop = zBase + Math.round((heightM * 1000) / 250);
 
@@ -604,7 +626,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       });
     }
     return projected;
-  }, [workspaceRooms, allWalls, allSections, verticalZBaseMap, floorZBaseMap]);
+  }, [workspaceRooms, allWalls, resolveRoomZBase]);
 
   // If viewing a section, show the viewer
   if (activeSection) {
@@ -612,12 +634,18 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     const savedScale = (liveSection as any).scale as { hScale: number; vScale: number } | undefined;
     const savedNegLimits = (liveSection as any).negLimits as { negH: number; negV: number } | undefined;
 
-    // Merge: auto-projected polygons + manually saved ones (saved override auto by id)
+    // Merge: auto-projected polygons + manually saved ones.
+    // For X/Y sections, rebase saved room polygons to their resolved floor Z before merge
+    // so stale historical saves (e.g. old Z0 overlap) no longer collapse upper floors.
     const savedPolys = liveSection.polygons || [];
+    const normalizedSavedPolys = liveSection.sectionType === 'vertical'
+      ? savedPolys
+      : savedPolys.map(rebaseSavedPolygonToRoomLevel);
+
     const autoPolys = computeProjectedPolygons(liveSection);
-    const savedIds = new Set(savedPolys.map(p => p.id));
+    const savedIds = new Set(normalizedSavedPolys.map(p => p.id));
     const mergedPolygons = [
-      ...savedPolys,
+      ...normalizedSavedPolys,
       ...autoPolys.filter(ap => !savedIds.has(ap.id)),
     ];
 

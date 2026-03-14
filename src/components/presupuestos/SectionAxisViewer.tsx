@@ -733,18 +733,12 @@ export function SectionAxisViewer({
     const trimmedName = editName.trim();
     // Validate unique name (skip current polygon's own name)
     if (trimmedName) {
-      const currentPoly = polygons.find(p => p.id === editingPolyId);
-      const currentOriginalName = currentPoly?.name?.toLowerCase() || '';
-      // Filter out the polygon's own current name from allPolygonNames
-      const externalNames = (allPolygonNames || []).filter(n => n.toLowerCase() !== currentOriginalName);
-      const existingNames = [
-        ...externalNames,
-        ...polygons
-          .filter(p => p.id !== editingPolyId && Array.isArray(p.vertices) && p.vertices.length >= 3)
-          .map(p => p.name),
-      ];
-      if (existingNames.some(n => n.toLowerCase() === trimmedName.toLowerCase())) {
-        toast.error(`Ya existe un espacio llamado "${trimmedName}". Los nombres deben ser únicos.`);
+      // Only block if the name already exists in THIS section (excluding the polygon being edited)
+      const existsInCurrentSection = polygons
+        .filter(p => p.id !== editingPolyId && Array.isArray(p.vertices) && p.vertices.length >= 3)
+        .some(p => p.name.toLowerCase() === trimmedName.toLowerCase());
+      if (existsInCurrentSection) {
+        toast.error(`"${trimmedName}" ya existe en esta sección. Edítalo desde la lista de caras.`);
         return;
       }
     }

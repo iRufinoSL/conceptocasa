@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Trash2, Save, GripVertical, Star, Paintbrush, Layers } from 'lucide-react';
+import { Plus, Trash2, Save, GripVertical, Star, Paintbrush, Layers, Link2 } from 'lucide-react';
 import { VISUAL_PATTERNS, PATTERN_CATEGORIES, SUPERFICIE_PATTERNS, getPatternById, patternPreviewDataUri } from '@/lib/visual-patterns';
 import { toast } from 'sonner';
 
@@ -46,6 +46,7 @@ const CEILING_TYPES = [
 ];
 
 const OBJECT_TYPES = [
+  { value: 'hueco', label: 'Hueco (ventana/puerta)' },
   { value: 'material', label: 'Material' },
   { value: 'bloque', label: 'Bloque' },
   { value: 'aislamiento', label: 'Aislamiento' },
@@ -54,6 +55,11 @@ const OBJECT_TYPES = [
   { value: 'instalacion', label: 'Instalación' },
   { value: 'otro', label: 'Otro' },
 ];
+
+interface ExternalResourceOption {
+  id: string;
+  name: string;
+}
 
 interface WallObject {
   id: string;
@@ -67,6 +73,13 @@ interface WallObject {
   volume_m3: number | null;
   length_ml: number | null;
   visual_pattern: string | null;
+  thickness_mm: number | null;
+  width_mm: number | null;
+  height_mm: number | null;
+  position_x: number | null;
+  sill_height: number | null;
+  distance_to_wall: number | null;
+  resource_id: string | null;
 }
 
 export function WallObjectsPanel({

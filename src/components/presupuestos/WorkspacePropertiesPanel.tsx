@@ -137,6 +137,7 @@ export function WorkspacePropertiesPanel({
   const [showObjectForm, setShowObjectForm] = useState(false);
   const [objName, setObjName] = useState('');
   const [objType, setObjType] = useState('material');
+  const [objLayerOrder, setObjLayerOrder] = useState('1');
   const [objThickness, setObjThickness] = useState('');
   const [objDescription, setObjDescription] = useState('');
   const [objWidthMm, setObjWidthMm] = useState('');
@@ -146,6 +147,7 @@ export function WorkspacePropertiesPanel({
   const [objDistWall, setObjDistWall] = useState('');
   const [objTargetFace, setObjTargetFace] = useState('wall-0');
   const [objPreset, setObjPreset] = useState('');
+  const [objResourceId, setObjResourceId] = useState('_none');
 
   // Resource linking
   const [showResourcePicker, setShowResourcePicker] = useState(false);
@@ -385,9 +387,35 @@ export function WorkspacePropertiesPanel({
   useEffect(() => { if (focusFace) setExpandedFace(focusFace); }, [focusFace]);
 
   const fetchResources = async () => {
-    const { data } = await supabase.from('external_resources').select('id, name, resource_type, unit_cost, unit_measure').order('name').limit(200);
+    const { data } = await supabase
+      .from('external_resources')
+      .select('id, name, resource_type, unit_cost, unit_measure')
+      .order('name')
+      .limit(200);
     setResources((data || []) as ExternalResourceOption[]);
   };
+
+  const getNextLayerOrder = useCallback((faceKey: string) => {
+    let wallIndex: number;
+    if (faceKey === 'floor') wallIndex = -1;
+    else if (faceKey === 'ceiling') wallIndex = -2;
+    else if (faceKey === 'space') wallIndex = 0;
+    else wallIndex = parseInt(faceKey.replace('wall-', ''), 10) + 1;
+
+    const wall = walls.find(w => w.wall_index === wallIndex);
+    if (!wall) return 1;
+
+    const maxOrder = wallObjects
+      .filter(o => o.wall_id === wall.id)
+      .reduce((max, o) => Math.max(max, o.layer_order), 0);
+
+    return Math.max(1, maxOrder + 1);
+  }, [wallObjects, walls]);
+
+  useEffect(() => {
+    if (!showObjectForm) return;
+    if (resources.length === 0) fetchResources();
+  }, [resources.length, showObjectForm]);
 
   const getFloorType = () => {
     if (!room) return 'normal';
@@ -576,25 +604,61 @@ export function WorkspacePropertiesPanel({
 
   const handleAddObject = async () => {
     if (!objName.trim()) return;
+
+    const parsedLayerOrder = Number.parseInt(objLayerOrder, 10);
+    if (Number.isNaN(parsedLayerOrder)) {
+      toast.error('Indica un orden de capa válido');
+      return;
+    }
+    if (parsedLayerOrder === 0) {
+      toast.error('La capa 0 está reservada para Superficie automática');
+      return;
+    }
+
+    if (objType === 'hueco' && !objTargetFace.startsWith('wall-')) {
+      toast.error('Los huecos solo se pueden colocar en paredes (P1, P2, ...)');
+      return;
+    }
+
     const wallId = await ensureWallRecord(objTargetFace);
     if (!wallId) return;
-    const maxOrder = wallObjects.filter(o => o.wall_id === wallId).reduce((m, o) => Math.max(m, o.layer_order), 0);
+
+    const parseNumeric = (value: string) => {
+      if (!value.trim()) return null;
+      const parsed = Number.parseFloat(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+
+    const widthMmInput = parseNumeric(objWidthMm);
+    const heightMmInput = parseNumeric(objHeightMm);
+    const sillHeightInput = parseNumeric(objSillHeight);
+    const positionXInput = parseNumeric(objPosX);
+
     const payload: any = {
       wall_id: wallId,
-      layer_order: maxOrder + 1,
+      layer_order: parsedLayerOrder,
       name: objName.trim(),
       description: objDescription.trim() || null,
       object_type: objType,
-      thickness_mm: parseFloat(objThickness) || null,
-      width_mm: parseFloat(objWidthMm) || null,
-      height_mm: parseFloat(objHeightMm) || null,
-      position_x: parseFloat(objPosX) || null,
-      sill_height: parseFloat(objSillHeight) || null,
-      distance_to_wall: parseFloat(objDistWall) || null,
+      thickness_mm: parseNumeric(objThickness),
+      width_mm: objType === 'hueco' ? (widthMmInput ?? 1200) : widthMmInput,
+      height_mm: objType === 'hueco' ? (heightMmInput ?? 1000) : heightMmInput,
+      position_x: objType === 'hueco' ? (positionXInput ?? 300) : positionXInput,
+      sill_height: objType === 'hueco' ? (sillHeightInput ?? 900) : sillHeightInput,
+      distance_to_wall: parseNumeric(objDistWall),
+      resource_id: objResourceId === '_none' ? null : objResourceId,
     };
+
     const { data, error } = await supabase.from('budget_wall_objects').insert(payload).select().single();
-    if (error) { toast.error(`Error: ${error.message}`); return; }
-    if (data) setWallObjects(prev => [...prev, data as WallObjectRecord]);
+    if (error) {
+      toast.error(`Error: ${error.message}`);
+      return;
+    }
+
+    if (data) {
+      setWallObjects(prev => [...prev, data as WallObjectRecord]);
+    }
+
     resetForm();
     onOpeningsChange?.();
     toast.success(objType === 'hueco' ? 'Hueco añadido' : 'Objeto registrado');
@@ -602,10 +666,19 @@ export function WorkspacePropertiesPanel({
 
   const resetForm = () => {
     setShowObjectForm(false);
-    setObjName(''); setObjDescription(''); setObjThickness('');
-    setObjWidthMm(''); setObjHeightMm(''); setObjSillHeight('');
-    setObjPosX(''); setObjDistWall(''); setObjPreset('');
-    setObjType('material'); setObjTargetFace('wall-0');
+    setObjName('');
+    setObjDescription('');
+    setObjThickness('');
+    setObjWidthMm('');
+    setObjHeightMm('');
+    setObjSillHeight('');
+    setObjPosX('');
+    setObjDistWall('');
+    setObjPreset('');
+    setObjType('material');
+    setObjTargetFace('wall-0');
+    setObjLayerOrder('1');
+    setObjResourceId('_none');
   };
 
   const handleDeleteObject = async (id: string) => {
@@ -834,7 +907,13 @@ export function WorkspacePropertiesPanel({
             isExpanded={expandedFace === 'floor'} onToggle={() => setExpandedFace(expandedFace === 'floor' ? null : 'floor')}
             onOpenPatternPicker={() => setPatternPickerFace('floor')}
             objectCount={getObjectsForWall(-1).length}
-            onAddObject={() => { setObjTargetFace('floor'); setShowObjectForm(true); setActiveTab('objects'); }}
+            onAddObject={() => {
+              setObjTargetFace('floor');
+              setObjLayerOrder(String(getNextLayerOrder('floor')));
+              setObjResourceId('_none');
+              setShowObjectForm(true);
+              setActiveTab('objects');
+            }}
           />
 
           {Array.from({ length: edgeCount }).map((_, i) => {
@@ -865,7 +944,13 @@ export function WorkspacePropertiesPanel({
                   onOpenPatternPicker={() => setPatternPickerFace(faceKey)}
                   objectCount={wallObjs.length}
                   huecoCount={wallHuecos.length}
-                  onAddObject={() => { setObjTargetFace(faceKey); setShowObjectForm(true); setActiveTab('objects'); }}
+                  onAddObject={() => {
+                    setObjTargetFace(faceKey);
+                    setObjLayerOrder(String(getNextLayerOrder(faceKey)));
+                    setObjResourceId('_none');
+                    setShowObjectForm(true);
+                    setActiveTab('objects');
+                  }}
                 />
               </div>
             );
@@ -876,7 +961,13 @@ export function WorkspacePropertiesPanel({
             isExpanded={expandedFace === 'ceiling'} onToggle={() => setExpandedFace(expandedFace === 'ceiling' ? null : 'ceiling')}
             onOpenPatternPicker={() => setPatternPickerFace('ceiling')}
             objectCount={getObjectsForWall(-2).length}
-            onAddObject={() => { setObjTargetFace('ceiling'); setShowObjectForm(true); setActiveTab('objects'); }}
+            onAddObject={() => {
+              setObjTargetFace('ceiling');
+              setObjLayerOrder(String(getNextLayerOrder('ceiling')));
+              setObjResourceId('_none');
+              setShowObjectForm(true);
+              setActiveTab('objects');
+            }}
           />
 
           <div className="flex items-center justify-between gap-2 py-0.5 px-1 rounded">
@@ -891,7 +982,19 @@ export function WorkspacePropertiesPanel({
         <div className="px-2 py-2 max-h-[50vh] overflow-y-auto space-y-2">
           <div className="flex items-center justify-between">
             <p className="text-[9px] text-muted-foreground font-medium uppercase tracking-wider px-1">Objetos y huecos</p>
-            <Button size="sm" variant="outline" className="h-6 text-[10px] gap-1" onClick={() => { setShowObjectForm(!showObjectForm); if (!showObjectForm) setObjTargetFace('wall-0'); }}>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-6 text-[10px] gap-1"
+              onClick={() => {
+                setShowObjectForm(!showObjectForm);
+                if (!showObjectForm) {
+                  setObjTargetFace('wall-0');
+                  setObjLayerOrder(String(getNextLayerOrder('wall-0')));
+                  setObjResourceId('_none');
+                }
+              }}
+            >
               <Plus className="h-3 w-3" /> Nuevo
             </Button>
           </div>
@@ -932,11 +1035,33 @@ export function WorkspacePropertiesPanel({
                 </div>
                 <div>
                   <label className="text-[9px] text-muted-foreground">Ubicación</label>
-                  <Select value={objTargetFace} onValueChange={setObjTargetFace}>
+                  <Select
+                    value={objTargetFace}
+                    onValueChange={(value) => {
+                      setObjTargetFace(value);
+                      setObjLayerOrder(String(getNextLayerOrder(value)));
+                    }}
+                  >
                     <SelectTrigger className="h-6 text-[10px]"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {faceOptions.map(f => (
                         <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-[9px] text-muted-foreground">Orden capa (≠ 0)</label>
+                  <Input className="h-6 text-[10px] font-mono" type="number" value={objLayerOrder} onChange={e => setObjLayerOrder(e.target.value)} />
+                </div>
+                <div>
+                  <label className="text-[9px] text-muted-foreground">Recurso enlazado</label>
+                  <Select value={objResourceId} onValueChange={setObjResourceId}>
+                    <SelectTrigger className="h-6 text-[10px]"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_none">Sin recurso</SelectItem>
+                      {resources.map(r => (
+                        <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -1141,6 +1266,7 @@ function ObjectRow({ obj, isPositioning, onTogglePosition, onMove, onDelete, onL
       <div className="flex items-center gap-1">
         <span className="shrink-0">{icon}</span>
         <span className="font-medium truncate flex-1">{obj.name}</span>
+        <Badge variant="outline" className="text-[8px] h-4 px-1 shrink-0">Capa {obj.layer_order}</Badge>
         <Badge variant="outline" className="text-[8px] h-4 px-1 shrink-0">{obj.object_type}</Badge>
         {obj.resource_id && <Link2 className="h-3 w-3 text-primary shrink-0" />}
       </div>

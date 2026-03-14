@@ -2205,6 +2205,10 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
   const [wallPanelRoomName, setWallPanelRoomName] = useState('');
   const [wallPanelRoomId, setWallPanelRoomId] = useState<string | null>(null);
 
+  // Background sync guards for mandatory Superficie (layer 0)
+  const superficieSyncInFlightRef = useRef(false);
+  const superficieSyncSignatureRef = useRef('');
+
   // Auto-show 3D list when navigated from Plano > Vista 3D
   useEffect(() => {
     if (autoShow3D) {
@@ -2783,6 +2787,100 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
       toast.error('No se pudo crear la capa automática Superficie');
     }
   }, [getFaceLabel, getFaceMetrics]);
+
+  useEffect(() => {
+    if (!floorPlan?.id || rooms.length === 0 || superficieSyncInFlightRef.current) return;
+
+    const roomSignature = [...rooms]
+      .sort((a, b) => a.id.localeCompare(b.id))
+      .map(r => `${r.id}:${r.floor_polygon?.length || 0}:${r.length}:${r.width}:${r.height ?? ''}:${r.has_floor ? 1 : 0}:${r.has_ceiling ? 1 : 0}`)
+      .join('|');
+    const wallSignature = [...allWalls]
+      .sort((a, b) => `${a.room_id}:${a.wall_index}`.localeCompare(`${b.room_id}:${b.wall_index}`))
+      .map(w => `${w.room_id}:${w.wall_index}`)
+      .join('|');
+    const signature = `${floorPlan.id}::${roomSignature}::${wallSignature}`;
+
+    if (superficieSyncSignatureRef.current === signature) return;
+
+    superficieSyncInFlightRef.current = true;
+
+    (async () => {
+      let syncOk = false;
+      try {
+        const wallsByRoom = new Map<string, WallData[]>();
+        for (const wall of allWalls) {
+          const bucket = wallsByRoom.get(wall.room_id) || [];
+          bucket.push(wall);
+          wallsByRoom.set(wall.room_id, bucket);
+        }
+
+        const missingWallsPayload: Array<{ room_id: string; wall_index: number; wall_type: string }> = [];
+
+        for (const room of rooms) {
+          const roomWalls = wallsByRoom.get(room.id) || [];
+          const maxPositiveIndex = roomWalls.reduce((max, w) => (w.wall_index > max ? w.wall_index : max), 0);
+          const expectedStructuralCount = Array.isArray(room.floor_polygon) && room.floor_polygon.length >= 3
+            ? room.floor_polygon.length
+            : maxPositiveIndex > 0
+              ? maxPositiveIndex
+              : 4;
+
+          for (let i = 1; i <= expectedStructuralCount; i++) {
+            if (!roomWalls.some(w => w.wall_index === i)) {
+              missingWallsPayload.push({ room_id: room.id, wall_index: i, wall_type: 'exterior' });
+            }
+          }
+
+          const baseFaces = [
+            { wall_index: -1, wall_type: room.has_floor === false ? 'invisible' : 'suelo_basico' },
+            { wall_index: -2, wall_type: room.has_ceiling === false ? 'invisible' : 'techo_basico' },
+            { wall_index: 0, wall_type: 'espacio' },
+          ];
+
+          for (const face of baseFaces) {
+            if (!roomWalls.some(w => w.wall_index === face.wall_index)) {
+              missingWallsPayload.push({ room_id: room.id, wall_index: face.wall_index, wall_type: face.wall_type });
+            }
+          }
+        }
+
+        if (missingWallsPayload.length > 0) {
+          const { data: insertedWalls, error: insertedWallsError } = await supabase
+            .from('budget_floor_plan_walls')
+            .insert(missingWallsPayload)
+            .select('id, room_id, wall_index, wall_type, height');
+
+          if (insertedWallsError) {
+            console.error('Error creando caras faltantes (sync global):', insertedWallsError);
+          } else if (insertedWalls?.length) {
+            for (const wall of insertedWalls as WallData[]) {
+              const bucket = wallsByRoom.get(wall.room_id) || [];
+              bucket.push(wall);
+              wallsByRoom.set(wall.room_id, bucket);
+            }
+            queryClient.invalidateQueries({ queryKey: ['workspace-walls'] });
+          }
+        }
+
+        const syncJobs: Promise<void>[] = [];
+        for (const room of rooms) {
+          const roomWalls = wallsByRoom.get(room.id) || [];
+          for (const wall of roomWalls) {
+            syncJobs.push(ensureSuperficieLayer(wall.id, room, wall.wall_index));
+          }
+        }
+
+        await Promise.all(syncJobs);
+        syncOk = true;
+      } finally {
+        if (syncOk) {
+          superficieSyncSignatureRef.current = signature;
+        }
+        superficieSyncInFlightRef.current = false;
+      }
+    })();
+  }, [allWalls, ensureSuperficieLayer, floorPlan?.id, queryClient, rooms]);
 
   /** Open the wall objects panel for a specific wall */
   const openWallPanel = async (roomId: string, wallDbIndex: number, _sectionType: 'z' | 'xy' = 'z') => {

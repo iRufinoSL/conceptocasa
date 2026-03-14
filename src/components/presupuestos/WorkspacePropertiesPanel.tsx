@@ -132,6 +132,7 @@ export function WorkspacePropertiesPanel({
   const [expandedFace, setExpandedFace] = useState<string | null>(focusFace || null);
   const [patternPickerFace, setPatternPickerFace] = useState<string | null>(null);
   const [localOverrides, setLocalOverrides] = useState<Record<string, string>>({});
+  const [cellSizeM, setCellSizeM] = useState(1);
 
   // Object form state
   const [showObjectForm, setShowObjectForm] = useState(false);
@@ -167,10 +168,20 @@ export function WorkspacePropertiesPanel({
     return `Pared ${wallIndex}`;
   }, []);
 
-  const getFaceMetrics = useCallback((roomData: any, wallIndex: number) => {
-    const polygon = Array.isArray(roomData?.floor_polygon) && roomData.floor_polygon.length >= 3
-      ? roomData.floor_polygon as Array<{ x: number; y: number }>
-      : null;
+  const getEffectivePolygon = useCallback((roomData: any): Array<{ x: number; y: number }> | null => {
+    if (Array.isArray(verticesProp) && verticesProp.length >= 3) {
+      return verticesProp;
+    }
+
+    if (Array.isArray(roomData?.floor_polygon) && roomData.floor_polygon.length >= 3) {
+      return roomData.floor_polygon as Array<{ x: number; y: number }>;
+    }
+
+    return null;
+  }, [verticesProp]);
+
+  const getFaceMetrics = useCallback((roomData: any, wallIndex: number, cellSize: number) => {
+    const polygon = getEffectivePolygon(roomData);
 
     const floorAreaRaw = (() => {
       if (!polygon) return (roomData?.length || 0) * (roomData?.width || 0);
@@ -179,7 +190,7 @@ export function WorkspacePropertiesPanel({
         const j = (i + 1) % polygon.length;
         area += polygon[i].x * polygon[j].y - polygon[j].x * polygon[i].y;
       }
-      return Math.abs(area) / 2;
+      return Math.abs(area) / 2 * cellSize * cellSize;
     })();
 
     const floorArea = Math.round(floorAreaRaw * 100) / 100;
@@ -205,7 +216,7 @@ export function WorkspacePropertiesPanel({
       const edgeIndex = ((wallIndex - 1) % edgeCount + edgeCount) % edgeCount;
       const a = polygon[edgeIndex];
       const b = polygon[(edgeIndex + 1) % edgeCount];
-      wallLengthM = Math.hypot(b.x - a.x, b.y - a.y);
+      wallLengthM = Math.hypot(b.x - a.x, b.y - a.y) * cellSize;
     } else {
       wallLengthM = wallIndex % 2 === 1 ? (roomData?.length || 0) : (roomData?.width || 0);
     }
@@ -214,7 +225,7 @@ export function WorkspacePropertiesPanel({
       surface_m2: Math.round(wallLengthM * heightM * 100) / 100,
       volume_m3: null as number | null,
     };
-  }, []);
+  }, [getEffectivePolygon]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -260,11 +271,34 @@ export function WorkspacePropertiesPanel({
         }
       }
 
+      let nextCellSizeM = 1;
+      if (roomData.floor_plan_id) {
+        const { data: floorPlanScale } = await supabase
+          .from('budget_floor_plans')
+          .select('scale_mode, block_length_mm')
+          .eq('id', roomData.floor_plan_id)
+          .maybeSingle();
+
+        if (floorPlanScale?.scale_mode === 'bloque') {
+          nextCellSizeM = (floorPlanScale.block_length_mm || 625) / 1000;
+        }
+      }
+      setCellSizeM(nextCellSizeM);
+
       // Ensure all face records exist (walls + suelo + techo + espacio)
-      // Fallback chain: prop → polygon vertices → existing wall records → default 4
-      const polyCount = Array.isArray(roomData.floor_polygon) ? roomData.floor_polygon.length : 0;
-      const existingWallMax = nextWalls.reduce((max, w) => w.wall_index > max ? w.wall_index : max, 0);
-      const expectedStructuralCount = edgeCountProp ?? (polyCount > 0 ? polyCount : existingWallMax > 0 ? existingWallMax : 4);
+      // Fallback chain: prop → provided vertices → DB polygon → existing wall records → default 4
+      const effectivePolygon = getEffectivePolygon(roomData);
+      const polyCountFromSource = effectivePolygon?.length || 0;
+      const polyCountFromDb = Array.isArray(roomData.floor_polygon) ? roomData.floor_polygon.length : 0;
+      const existingWallMax = nextWalls.reduce((max, w) => (w.wall_index > max ? w.wall_index : max), 0);
+      const expectedStructuralCount = edgeCountProp ?? (polyCountFromSource > 0
+        ? polyCountFromSource
+        : polyCountFromDb > 0
+          ? polyCountFromDb
+          : existingWallMax > 0
+            ? existingWallMax
+            : 4);
+
       const missingWallPayloads: Array<{ room_id: string; wall_index: number; wall_type: string }> = [];
 
       for (let i = 1; i <= expectedStructuralCount; i++) {
@@ -324,7 +358,7 @@ export function WorkspacePropertiesPanel({
         const updates = nextWalls
           .filter(w => existingByWall.has(w.id))
           .map(w => {
-            const { surface_m2, volume_m3 } = getFaceMetrics(roomData, w.wall_index);
+            const { surface_m2, volume_m3 } = getFaceMetrics(roomData, w.wall_index, nextCellSizeM);
             const metricLabel = surface_m2 != null ? `${surface_m2} m²` : volume_m3 != null ? `${volume_m3} m³` : null;
             return {
               id: existingByWall.get(w.id)!,
@@ -343,7 +377,7 @@ export function WorkspacePropertiesPanel({
         const inserts = nextWalls
           .filter(w => !existingByWall.has(w.id))
           .map(w => {
-            const { surface_m2, volume_m3 } = getFaceMetrics(roomData, w.wall_index);
+            const { surface_m2, volume_m3 } = getFaceMetrics(roomData, w.wall_index, nextCellSizeM);
             const metricLabel = surface_m2 != null ? `${surface_m2} m²` : volume_m3 != null ? `${volume_m3} m³` : null;
             return {
               wall_id: w.id,
@@ -538,9 +572,20 @@ export function WorkspacePropertiesPanel({
       setWallObjects(prev => prev.map(o => o.id === surfObj!.id ? { ...o, visual_pattern: patternId } : o));
     } else {
       const faceLabel = faceKey === 'floor' ? 'Suelo' : faceKey === 'ceiling' ? 'Techo' : `Pared ${wallIndex}`;
+      const { surface_m2, volume_m3 } = room
+        ? getFaceMetrics(room, wallIndex, cellSizeM)
+        : { surface_m2: null as number | null, volume_m3: null as number | null };
+      const metricLabel = surface_m2 != null ? `${surface_m2} m²` : volume_m3 != null ? `${volume_m3} m³` : null;
       const { data } = await supabase.from('budget_wall_objects').insert({
-        wall_id: wallId, layer_order: 0, name: 'Superficie',
-        description: `${faceLabel}/${workspaceName}`, object_type: 'superficie', visual_pattern: patternId,
+        wall_id: wallId,
+        layer_order: 0,
+        name: 'Superficie',
+        description: `${workspaceName} / ${faceLabel}${metricLabel ? ` — ${metricLabel}` : ''}`,
+        object_type: 'material',
+        is_core: false,
+        surface_m2,
+        volume_m3,
+        visual_pattern: patternId,
       }).select().single();
       if (data) setWallObjects(prev => [...prev, data as WallObjectRecord]);
     }
@@ -711,8 +756,9 @@ export function WorkspacePropertiesPanel({
     toast.success(`Vinculado a: ${resource.name}`);
   };
 
-  const poly = room?.floor_polygon as Array<{ x: number; y: number }> | null;
-  const edgeCount = edgeCountProp ?? (poly ? poly.length : (room ? 4 : 0));
+  const poly = getEffectivePolygon(room);
+  const roomPolyCount = Array.isArray(room?.floor_polygon) ? room.floor_polygon.length : 0;
+  const edgeCount = edgeCountProp ?? (poly ? poly.length : roomPolyCount > 0 ? roomPolyCount : (room ? 4 : 0));
 
   let area = 0;
   if (poly && poly.length >= 3) {
@@ -720,7 +766,7 @@ export function WorkspacePropertiesPanel({
       const j = (i + 1) % poly.length;
       area += poly[i].x * poly[j].y - poly[j].x * poly[i].y;
     }
-    area = Math.abs(area) / 2;
+    area = (Math.abs(area) / 2) * cellSizeM * cellSizeM;
   }
 
   const sectionLabel = sectionType === 'vertical' ? 'Z' : sectionType === 'longitudinal' ? 'Y' : sectionType === 'transversal' ? 'X' : 'I';

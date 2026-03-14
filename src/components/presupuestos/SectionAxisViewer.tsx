@@ -164,6 +164,10 @@ export function SectionAxisViewer({
   const [drawingVertices, setDrawingVertices] = useState<Array<{ col: number; row: number }>>([]);
   const [hoverNode, setHoverNode] = useState<{ col: number; row: number } | null>(null);
 
+  // Vertex editing mode (drag vertices, add new ones)
+  const [vertexEditMode, setVertexEditMode] = useState(false);
+  const [draggingVertexInfo, setDraggingVertexInfo] = useState<{ polyId: string; vertexIdx: number } | null>(null);
+
   // Polygons
   const [polygons, setPolygons] = useState<SectionPolygon[]>(savedPolygons || []);
 

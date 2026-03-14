@@ -1035,11 +1035,33 @@ export function WorkspacePropertiesPanel({
                 </div>
                 <div>
                   <label className="text-[9px] text-muted-foreground">Ubicación</label>
-                  <Select value={objTargetFace} onValueChange={setObjTargetFace}>
+                  <Select
+                    value={objTargetFace}
+                    onValueChange={(value) => {
+                      setObjTargetFace(value);
+                      setObjLayerOrder(String(getNextLayerOrder(value)));
+                    }}
+                  >
                     <SelectTrigger className="h-6 text-[10px]"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {faceOptions.map(f => (
                         <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-[9px] text-muted-foreground">Orden capa (≠ 0)</label>
+                  <Input className="h-6 text-[10px] font-mono" type="number" value={objLayerOrder} onChange={e => setObjLayerOrder(e.target.value)} />
+                </div>
+                <div>
+                  <label className="text-[9px] text-muted-foreground">Recurso enlazado</label>
+                  <Select value={objResourceId} onValueChange={setObjResourceId}>
+                    <SelectTrigger className="h-6 text-[10px]"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_none">Sin recurso</SelectItem>
+                      {resources.map(r => (
+                        <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>

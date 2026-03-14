@@ -416,26 +416,29 @@ export function SectionAxisViewer({
     if (totalCols < 1 || totalRows < 1) return null;
     const drawW = w - margin * 2;
     const drawH = h - margin * 2;
-    const cellW = drawW / totalCols;
-    const cellH = drawH / totalRows;
-    const cellPx = Math.floor(Math.min(cellW, cellH));
-    if (cellPx < 8) return null;
-    const gridW = totalCols * cellPx;
-    const gridH = totalRows * cellPx;
+    // Compute proportional cell sizes based on real-world mm scales
+    const totalRealW = totalCols * scale.hScale;
+    const totalRealH = totalRows * scale.vScale;
+    const pxPerMm = Math.min(drawW / totalRealW, drawH / totalRealH);
+    const cellPxW = Math.floor(pxPerMm * scale.hScale);
+    const cellPxH = Math.floor(pxPerMm * scale.vScale);
+    if (cellPxW < 4 || cellPxH < 4) return null;
+    const gridW = totalCols * cellPxW;
+    const gridH = totalRows * cellPxH;
     const ox = margin + Math.floor((drawW - gridW) / 2);
     const oy = margin + Math.floor((drawH - gridH) / 2);
     const originCol = gridLimits.negH;
     const originRow = gridLimits.posV;
-    const originX = ox + originCol * cellPx;
-    const originY = oy + originRow * cellPx;
-    return { totalCols, totalRows, gridW, gridH, ox, oy, originCol, originRow, originX, originY, cellPx };
+    const originX = ox + originCol * cellPxW;
+    const originY = oy + originRow * cellPxH;
+    return { totalCols, totalRows, gridW, gridH, ox, oy, originCol, originRow, originX, originY, cellPxW, cellPxH };
   }, [scale, w, h, gridLimits]);
 
   const colRowToPx = useCallback((col: number, row: number) => {
     if (!gridLayout) return { px: 0, py: 0 };
     return {
-      px: gridLayout.ox + col * gridLayout.cellPx,
-      py: gridLayout.oy + row * gridLayout.cellPx,
+      px: gridLayout.ox + col * gridLayout.cellPxW,
+      py: gridLayout.oy + row * gridLayout.cellPxH,
     };
   }, [gridLayout]);
 
@@ -455,8 +458,8 @@ export function SectionAxisViewer({
     pt.y = e.clientY;
     const ctm = svg.getScreenCTM();
     if (ctm) pt = pt.matrixTransform(ctm.inverse());
-    const rawCol = (pt.x - gridLayout.ox) / gridLayout.cellPx;
-    const rawRow = (pt.y - gridLayout.oy) / gridLayout.cellPx;
+    const rawCol = (pt.x - gridLayout.ox) / gridLayout.cellPxW;
+    const rawRow = (pt.y - gridLayout.oy) / gridLayout.cellPxH;
     const col = Math.round(rawCol * 2) / 2;
     const row = Math.round(rawRow * 2) / 2;
     if (col < 0 || col > gridLayout.totalCols || row < 0 || row > gridLayout.totalRows) return null;
@@ -471,8 +474,8 @@ export function SectionAxisViewer({
     pt.y = e.clientY;
     const ctm = svg.getScreenCTM();
     if (ctm) pt = pt.matrixTransform(ctm.inverse());
-    const rawCol = (pt.x - gridLayout.ox) / gridLayout.cellPx;
-    const rawRow = (pt.y - gridLayout.oy) / gridLayout.cellPx;
+    const rawCol = (pt.x - gridLayout.ox) / gridLayout.cellPxW;
+    const rawRow = (pt.y - gridLayout.oy) / gridLayout.cellPxH;
     const col = Math.round(rawCol * 2) / 2;
     const row = Math.round(rawRow * 2) / 2;
     if (col < 0 || col > gridLayout.totalCols || row < 0 || row > gridLayout.totalRows) return null;
@@ -789,13 +792,13 @@ export function SectionAxisViewer({
   // Grid rendering
   const gridContent = useMemo(() => {
     if (!scale || !gridLayout) return null;
-    const { totalCols, totalRows, gridW, gridH, ox, oy, originCol, originRow, originX, originY, cellPx } = gridLayout;
+    const { totalCols, totalRows, gridW, gridH, ox, oy, originCol, originRow, originX, originY, cellPxW, cellPxH } = gridLayout;
 
     const gridLines: JSX.Element[] = [];
     const axisRefs: JSX.Element[] = [];
 
     for (let c = 0; c <= totalCols; c++) {
-      const x = ox + c * cellPx;
+      const x = ox + c * cellPxW;
       const isOrigin = c === originCol;
       gridLines.push(
         <line key={`gv${c}`} x1={x} y1={oy} x2={x} y2={oy + gridH}
@@ -803,7 +806,7 @@ export function SectionAxisViewer({
       );
     }
     for (let r = 0; r <= totalRows; r++) {
-      const y = oy + r * cellPx;
+      const y = oy + r * cellPxH;
       const isOrigin = r === originRow;
       gridLines.push(
         <line key={`gh${r}`} x1={ox} y1={y} x2={ox + gridW} y2={y}
@@ -812,7 +815,7 @@ export function SectionAxisViewer({
     }
 
     for (let c = 0; c <= totalCols; c++) {
-      const x = ox + c * cellPx;
+      const x = ox + c * cellPxW;
       const idx = c - originCol;
       axisRefs.push(
         <text key={`ht${c}`} x={x} y={oy + gridH + 16}
@@ -822,7 +825,7 @@ export function SectionAxisViewer({
       );
     }
     for (let r = 0; r <= totalRows; r++) {
-      const y = oy + r * cellPx;
+      const y = oy + r * cellPxH;
       const idx = originRow - r;
       axisRefs.push(
         <text key={`vt${r}`} x={ox - 6} y={y + 4}
@@ -871,20 +874,20 @@ export function SectionAxisViewer({
     // Ridge line
     if (sectionType === 'vertical' && ridgeLine) {
       const RIDGE_COLOR = 'hsl(0, 0%, 45%)';
-      const rx1 = originX + ridgeLine.x1 * cellPx;
-      const ry1 = originY - ridgeLine.y1 * cellPx;
-      const rx2 = originX + ridgeLine.x2 * cellPx;
-      const ry2 = originY - ridgeLine.y2 * cellPx;
+      const rx1 = originX + ridgeLine.x1 * cellPxW;
+      const ry1 = originY - ridgeLine.y1 * cellPxH;
+      const rx2 = originX + ridgeLine.x2 * cellPxW;
+      const ry2 = originY - ridgeLine.y2 * cellPxH;
       const dx = ridgeLine.x2 - ridgeLine.x1;
       const dy = ridgeLine.y2 - ridgeLine.y1;
       const len = Math.sqrt(dx * dx + dy * dy);
       const ext = len > 0 ? 3 : 0;
       const ux = len > 0 ? dx / len : 0;
       const uy = len > 0 ? dy / len : 0;
-      const ex1 = originX + (ridgeLine.x1 - ux * ext) * cellPx;
-      const ey1 = originY - (ridgeLine.y1 - uy * ext) * cellPx;
-      const ex2 = originX + (ridgeLine.x2 + ux * ext) * cellPx;
-      const ey2 = originY - (ridgeLine.y2 + uy * ext) * cellPx;
+      const ex1 = originX + (ridgeLine.x1 - ux * ext) * cellPxW;
+      const ey1 = originY - (ridgeLine.y1 - uy * ext) * cellPxH;
+      const ex2 = originX + (ridgeLine.x2 + ux * ext) * cellPxW;
+      const ey2 = originY - (ridgeLine.y2 + uy * ext) * cellPxH;
       axisRefs.push(
         <line key="ridgeExt" x1={ex1} y1={ey1} x2={ex2} y2={ey2}
           stroke={RIDGE_COLOR} strokeWidth={2} strokeDasharray="8 4" opacity={0.7} />
@@ -907,12 +910,12 @@ export function SectionAxisViewer({
 
     // Dimension lines — separated for PDF layer control
     const dimensions: JSX.Element[] = [];
-    const dimOffset = cellPx;
+    const dimOffsetH = cellPxW;
     const dimColor = 'hsl(0, 70%, 50%)';
     const dimFontSize = 9;
     const tickLen = 5;
 
-    const bottomY = oy + gridH + dimOffset;
+    const bottomY = oy + gridH + dimOffsetH;
     const totalWidthMm = totalCols * scale.hScale;
     dimensions.push(
       <line key="dim-bottom" x1={ox} y1={bottomY} x2={ox + gridW} y2={bottomY}
@@ -927,7 +930,8 @@ export function SectionAxisViewer({
       </text>
     );
 
-    const rightX = ox + gridW + dimOffset;
+    const dimOffsetV = cellPxH;
+    const rightX = ox + gridW + dimOffsetV;
     const totalHeightMm = totalRows * scale.vScale;
     dimensions.push(
       <line key="dim-right" x1={rightX} y1={oy} x2={rightX} y2={oy + gridH}
@@ -944,8 +948,8 @@ export function SectionAxisViewer({
     );
 
     for (let c = 0; c < totalCols; c++) {
-      const x1 = ox + c * cellPx;
-      const x2 = ox + (c + 1) * cellPx;
+      const x1 = ox + c * cellPxW;
+      const x2 = ox + (c + 1) * cellPxW;
       const midX = (x1 + x2) / 2;
       if (totalCols <= 20) {
         dimensions.push(
@@ -962,8 +966,8 @@ export function SectionAxisViewer({
     }
 
     for (let r = 0; r < totalRows; r++) {
-      const y1 = oy + r * cellPx;
-      const y2 = oy + (r + 1) * cellPx;
+      const y1 = oy + r * cellPxH;
+      const y2 = oy + (r + 1) * cellPxH;
       const midY = (y1 + y2) / 2;
       if (totalRows <= 20) {
         dimensions.push(
@@ -1001,7 +1005,7 @@ export function SectionAxisViewer({
   // Render saved polygons with pattern fills
   const polygonElements = useMemo(() => {
     if (!gridLayout || !scale) return null;
-    const { originX, originY, cellPx } = gridLayout;
+    const { originX, originY, cellPxW, cellPxH } = gridLayout;
     const elements: JSX.Element[] = [];
 
     polygons.forEach((poly, polyIdx) => {
@@ -1010,8 +1014,8 @@ export function SectionAxisViewer({
       if (verts.length < 3) return;
 
       const pxVerts = verts.map(v => ({
-        px: originX + v.x * cellPx,
-        py: originY - v.y * cellPx,
+        px: originX + v.x * cellPxW,
+        py: originY - v.y * cellPxH,
       }));
 
       const pointsStr = pxVerts.map(p => `${p.px},${p.py}`).join(' ');
@@ -1218,8 +1222,8 @@ export function SectionAxisViewer({
       const areaGrid = polygonAreaGrid(verts.map(v => ({ x: v.x, y: v.y })));
       const areaM2 = areaGrid * (scale.hScale / 1000) * (scale.vScale / 1000);
       const centroid = polygonCentroid(verts.map(v => ({ x: v.x, y: v.y })));
-      const cx = originX + centroid.x * cellPx;
-      const cy = originY - centroid.y * cellPx;
+      const cx = originX + centroid.x * cellPxW;
+      const cy = originY - centroid.y * cellPxH;
       const heightMm = poly.zTop ? poly.zTop : null;
       const darkColor = color.replace(/(\d+)%\)$/, (_, l) => `${Math.max(parseInt(l) - 20, 15)}%)`);
 
@@ -1248,7 +1252,7 @@ export function SectionAxisViewer({
   // ── Openings visual rendering on edges ──
   const openingElements = useMemo(() => {
     if (!gridLayout || !scale || Object.keys(openingsMap).length === 0) return null;
-    const { originX, originY, cellPx } = gridLayout;
+    const { originX, originY, cellPxW, cellPxH } = gridLayout;
     const elements: JSX.Element[] = [];
     const OPENING_COLOR = 'hsl(30, 90%, 50%)'; // orange for visibility
     const DOOR_COLOR = 'hsl(200, 70%, 45%)';
@@ -1257,8 +1261,8 @@ export function SectionAxisViewer({
       const verts = poly.vertices;
       if (verts.length < 3) return;
       const pxVerts = verts.map(v => ({
-        px: originX + v.x * cellPx,
-        py: originY - v.y * cellPx,
+        px: originX + v.x * cellPxW,
+        py: originY - v.y * cellPxH,
       }));
 
       for (let i = 0; i < verts.length; i++) {
@@ -1370,12 +1374,12 @@ export function SectionAxisViewer({
   // Drawing overlay
   const drawingOverlay = useMemo(() => {
     if (!drawMode || !gridLayout || drawingVertices.length === 0) return null;
-    const { ox, oy, cellPx } = gridLayout;
+    const { ox, oy, cellPxW, cellPxH } = gridLayout;
     const elements: JSX.Element[] = [];
 
     const pxVerts = drawingVertices.map(v => ({
-      px: ox + v.col * cellPx,
-      py: oy + v.row * cellPx,
+      px: ox + v.col * cellPxW,
+      py: oy + v.row * cellPxH,
     }));
 
     for (let i = 0; i < pxVerts.length - 1; i++) {
@@ -1389,8 +1393,8 @@ export function SectionAxisViewer({
 
     if (hoverNode && pxVerts.length > 0) {
       const lastPx = pxVerts[pxVerts.length - 1];
-      const hPx = ox + hoverNode.col * cellPx;
-      const hPy = oy + hoverNode.row * cellPx;
+      const hPx = ox + hoverNode.col * cellPxW;
+      const hPy = oy + hoverNode.row * cellPxH;
       elements.push(
         <line key="dhover"
           x1={lastPx.px} y1={lastPx.py} x2={hPx} y2={hPy}
@@ -1413,8 +1417,8 @@ export function SectionAxisViewer({
     });
 
     if (hoverNode) {
-      const hPx = ox + hoverNode.col * cellPx;
-      const hPy = oy + hoverNode.row * cellPx;
+      const hPx = ox + hoverNode.col * cellPxW;
+      const hPy = oy + hoverNode.row * cellPxH;
       const isCloseNode = drawingVertices.length >= 3 &&
         hoverNode.col === drawingVertices[0].col && hoverNode.row === drawingVertices[0].row;
       elements.push(
@@ -1445,14 +1449,14 @@ export function SectionAxisViewer({
   // Node interaction dots
   const nodeInteractionDots = useMemo(() => {
     if (!drawMode || !gridLayout) return null;
-    const { totalCols, totalRows, ox, oy, cellPx } = gridLayout;
+    const { totalCols, totalRows, ox, oy, cellPxW, cellPxH } = gridLayout;
     const elements: JSX.Element[] = [];
     for (let c = 0; c <= totalCols * 2; c++) {
       for (let r = 0; r <= totalRows * 2; r++) {
         const col = c / 2;
         const row = r / 2;
-        const x = ox + col * cellPx;
-        const y = oy + row * cellPx;
+        const x = ox + col * cellPxW;
+        const y = oy + row * cellPxH;
         const isHalf = (c % 2 !== 0) || (r % 2 !== 0);
         const isHovered = hoverNode && hoverNode.col === col && hoverNode.row === row;
         elements.push(
@@ -1620,7 +1624,7 @@ export function SectionAxisViewer({
           </div>
           <span className="text-[10px] text-muted-foreground ml-2">
             {hAxis}: -{gridLimits.negH} a +{gridLimits.posH} · {vAxis}: -{gridLimits.negV} a +{gridLimits.posV}
-            {gridLayout ? ` · celda=${gridLayout.cellPx}px` : ''}
+            {gridLayout ? ` · ${gridLayout.cellPxW}×${gridLayout.cellPxH}px` : ''}
           </span>
         </div>
       )}
@@ -1855,11 +1859,11 @@ export function SectionAxisViewer({
           {/* Ruler lines rendering */}
           <g data-pdf-layer="rulers">
           {gridLayout && scale && rulerLines.map((rl) => {
-            const { ox, oy, cellPx, originCol, originRow } = gridLayout;
-            const x1 = ox + rl.start.col * cellPx;
-            const y1 = oy + rl.start.row * cellPx;
-            const x2 = ox + rl.end.col * cellPx;
-            const y2 = oy + rl.end.row * cellPx;
+            const { ox, oy, cellPxW, cellPxH, originCol, originRow } = gridLayout;
+            const x1 = ox + rl.start.col * cellPxW;
+            const y1 = oy + rl.start.row * cellPxH;
+            const x2 = ox + rl.end.col * cellPxW;
+            const y2 = oy + rl.end.row * cellPxH;
             const startCoord = { h: rl.start.col - originCol, v: originRow - rl.start.row };
             const endCoord = { h: rl.end.col - originCol, v: originRow - rl.end.row };
             const dh = Math.abs(endCoord.h - startCoord.h) * scale.hScale;
@@ -1911,11 +1915,11 @@ export function SectionAxisViewer({
           {/* Ruler drawing preview */}
           {rulerMode && rulerStart && rulerHoverNode && gridLayout && (
             (() => {
-              const { ox, oy, cellPx, originCol, originRow } = gridLayout;
-              const x1 = ox + rulerStart.col * cellPx;
-              const y1 = oy + rulerStart.row * cellPx;
-              const x2 = ox + rulerHoverNode.col * cellPx;
-              const y2 = oy + rulerHoverNode.row * cellPx;
+              const { ox, oy, cellPxW, cellPxH, originCol, originRow } = gridLayout;
+              const x1 = ox + rulerStart.col * cellPxW;
+              const y1 = oy + rulerStart.row * cellPxH;
+              const x2 = ox + rulerHoverNode.col * cellPxW;
+              const y2 = oy + rulerHoverNode.row * cellPxH;
               const startCoord = { h: rulerStart.col - originCol, v: originRow - rulerStart.row };
               const endCoord = { h: rulerHoverNode.col - originCol, v: originRow - rulerHoverNode.row };
               const dh = Math.abs(endCoord.h - startCoord.h) * (scale?.hScale || 1);
@@ -1942,9 +1946,9 @@ export function SectionAxisViewer({
           {/* Ruler mode: start point indicator */}
           {rulerMode && rulerHoverNode && !rulerStart && gridLayout && (
             (() => {
-              const { ox, oy, cellPx } = gridLayout;
-              const hx = ox + rulerHoverNode.col * cellPx;
-              const hy = oy + rulerHoverNode.row * cellPx;
+              const { ox, oy, cellPxW, cellPxH } = gridLayout;
+              const hx = ox + rulerHoverNode.col * cellPxW;
+              const hy = oy + rulerHoverNode.row * cellPxH;
               return (
                 <g>
                   <circle cx={hx} cy={hy} r={8} fill={RULER_STROKE} fillOpacity={0.2} />

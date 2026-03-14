@@ -11,6 +11,7 @@ import { ChevronRight, Plus, Trash2, ArrowLeft, Eye } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { CustomSection, SectionPolygon } from './CustomSectionManager';
 import { SectionAxisViewer } from './SectionAxisViewer';
+import type { PolygonFacePatterns } from './SectionAxisViewer';
 
 interface PolygonVertex { x: number; y: number; }
 

@@ -1001,8 +1001,8 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
       if (savedActivityId) {
         await syncActivityResourcesRelatedUnits(savedActivityId);
         
-        // Update workspace relations
-        const normalizedWsIds = normalizeIds(form.workspace_ids);
+        // Update workspace relations (single workspace)
+        const newWorkspaceId = form.workspace_ids.length > 0 ? form.workspace_ids[0] : null;
 
         const { error: deleteRelError } = await supabase
           .from('budget_activity_workspaces')
@@ -1011,26 +1011,23 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
 
         if (deleteRelError) throw deleteRelError;
 
-        if (normalizedWsIds.length > 0) {
-          const relationsToInsert = normalizedWsIds.map((wsId) => ({
-            workspace_id: wsId,
-            activity_id: savedActivityId,
-          }));
-
+        if (newWorkspaceId) {
           const { error: relError } = await supabase
             .from('budget_activity_workspaces')
-            .upsert(relationsToInsert, {
+            .upsert([{ workspace_id: newWorkspaceId, activity_id: savedActivityId }], {
               onConflict: 'activity_id,workspace_id',
               ignoreDuplicates: true,
             });
-
           if (relError) throw relError;
+
+          // Auto-create face children for the assigned workspace
+          await autoCreateFaceChildren(savedActivityId, newWorkspaceId);
         }
 
-        // Propagate workspaces to child activities
+        // Propagate workspace to existing child activities
         const children = activities.filter(a => a.parent_activity_id === savedActivityId);
         for (const child of children) {
-          await handleUpdateActivityWorkspaces(child.id, normalizedWsIds);
+          await handleUpdateActivityWorkspaces(child.id, newWorkspaceId ? [newWorkspaceId] : []);
         }
       }
 

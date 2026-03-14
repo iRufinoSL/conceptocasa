@@ -577,8 +577,19 @@ export function SectionAxisViewer({
 
   const finishDrawing = useCallback(() => {
     if (drawingVertices.length < 3 || !scale || !gridLayout) return;
-    pushUndo();
     const name = drawingName.trim() || `Espacio ${polygons.length + 1}`;
+
+    // Validate unique name across all sections
+    const existingNames = [
+      ...(allPolygonNames || []),
+      ...polygons.map(p => p.name),
+    ];
+    if (existingNames.some(n => n.toLowerCase() === name.toLowerCase())) {
+      toast.error(`Ya existe un espacio llamado "${name}". Los nombres deben ser únicos.`);
+      return;
+    }
+
+    pushUndo();
     const heightMm = parseInt(drawingHeight) || 0;
 
     const vertices = drawingVertices.map(v => {
@@ -602,7 +613,7 @@ export function SectionAxisViewer({
     setDrawingName('');
     setDrawingHeight('');
     setHoverNode(null);
-  }, [drawingVertices, drawingName, drawingHeight, polygons, scale, gridLayout, colRowToCoord, onSavePolygons]);
+  }, [drawingVertices, drawingName, drawingHeight, polygons, scale, gridLayout, colRowToCoord, onSavePolygons, allPolygonNames]);
 
   const cancelDrawing = () => {
     setDrawMode(false);

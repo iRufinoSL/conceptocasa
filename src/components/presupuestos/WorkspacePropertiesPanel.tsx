@@ -427,6 +427,20 @@ export function WorkspacePropertiesPanel({
   useEffect(() => { fetchData(); }, [fetchData]);
   useEffect(() => { if (focusFace) setExpandedFace(focusFace); }, [focusFace]);
 
+  const handleRegenerateSuperficies = async () => {
+    if (isRegeneratingSuperficies) return;
+    setIsRegeneratingSuperficies(true);
+    try {
+      await fetchData();
+      toast.success('Superficies regeneradas y sincronizadas');
+    } catch (error) {
+      console.error('Error regenerando superficies:', error);
+      toast.error('No se pudieron regenerar las superficies');
+    } finally {
+      setIsRegeneratingSuperficies(false);
+    }
+  };
+
   const fetchResources = async () => {
     const { data } = await supabase
       .from('external_resources')

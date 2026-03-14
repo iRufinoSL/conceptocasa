@@ -527,34 +527,31 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
   fetchDataRef.current = fetchData;
   useEffect(() => {
     const channel = supabase
-      .channel('budget-work-area-activities-changes')
+      .channel('budget-activity-workspaces-changes')
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
-          table: 'budget_work_area_activities'
+          table: 'budget_activity_workspaces'
         },
         (payload) => {
-          console.log('Work area relation change:', payload);
-          // Refetch work area relations when changes occur
-          const fetchWorkAreaRelations = async () => {
-            // IMPORTANT: Filter by budget at query level to avoid hitting default limits.
-            const { data: workAreaRelationsRes } = await supabase
-              .from('budget_work_area_activities')
-              .select('activity_id, work_area_id, budget_activities!inner(budget_id)')
+          console.log('Workspace relation change:', payload);
+          const fetchWorkspaceRelations = async () => {
+            const { data: wsRelRes } = await supabase
+              .from('budget_activity_workspaces')
+              .select('activity_id, workspace_id, budget_activities!inner(budget_id)')
               .eq('budget_activities.budget_id', budgetId);
             
-            if (workAreaRelationsRes) {
-              // Filter to only activities in this budget
+            if (wsRelRes) {
               const activityIds = activities.map(a => a.id);
-              const filteredRelations = workAreaRelationsRes
-                .map((r: any) => ({ activity_id: r.activity_id, work_area_id: r.work_area_id }))
+              const filteredRelations = wsRelRes
+                .map((r: any) => ({ activity_id: r.activity_id, workspace_id: r.workspace_id }))
                 .filter((r: any) => activityIds.includes(r.activity_id));
-              setWorkAreaRelations(filteredRelations);
+              setWorkspaceRelations(filteredRelations);
             }
           };
-          fetchWorkAreaRelations();
+          fetchWorkspaceRelations();
         }
       )
       .subscribe();

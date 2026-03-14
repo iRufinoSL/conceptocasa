@@ -804,7 +804,7 @@ export function WorkspacePropertiesPanel({
           >
             {tab === 'faces'
               ? '🧱 Caras'
-              : `📦 Objetos (${allObjects.length})${huecoCount > 0 ? ` · 🚪${huecoCount}` : ''}`
+              : `📦 Objetos (${wallObjects.length})${huecoCount > 0 ? ` · 🚪${huecoCount}` : ''}`
             }
           </button>
         ))}

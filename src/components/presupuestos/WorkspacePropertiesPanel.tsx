@@ -659,9 +659,25 @@ export function WorkspacePropertiesPanel({
             const faceKey = `wall-${i}`;
             const wallObjs = getObjectsForWall(i + 1);
             const wallHuecos = wallObjs.filter(o => o.object_type === 'hueco');
+            // Determine wall label: T/S for cross-sections
+            const isCross = sectionType === 'transversal' || sectionType === 'longitudinal';
+            let wallLabel = `P${i + 1}`;
+            const diagramVerts = verticesProp || poly;
+            if (isCross && diagramVerts && diagramVerts.length >= 3) {
+              const j = (i + 1) % diagramVerts.length;
+              const ys = diagramVerts.map(v => v.y);
+              const minY = Math.min(...ys), maxY = Math.max(...ys);
+              const rangeY = maxY - minY;
+              const eMinY = Math.min(diagramVerts[i].y, diagramVerts[j].y);
+              const eMaxY = Math.max(diagramVerts[i].y, diagramVerts[j].y);
+              if (rangeY > 0.01) {
+                if (Math.abs(eMinY - minY) < rangeY * 0.15 && Math.abs(eMaxY - minY) < rangeY * 0.15) wallLabel = 'S (Suelo)';
+                else if (Math.abs(eMinY - maxY) < rangeY * 0.15 && Math.abs(eMaxY - maxY) < rangeY * 0.15) wallLabel = 'T (Techo)';
+              }
+            }
             return (
               <div key={i}>
-                <FaceRow label={`🧱 P${i + 1}`} faceKey={faceKey} type={getWallTypeForFace(i)} options={WALL_TYPES}
+                <FaceRow label={`🧱 ${wallLabel}`} faceKey={faceKey} type={getWallTypeForFace(i)} options={WALL_TYPES}
                   onChange={(v) => ensureAndUpdateWallType(i, v)} pattern={getPatternForFace(faceKey)}
                   isExpanded={expandedFace === faceKey} onToggle={() => setExpandedFace(expandedFace === faceKey ? null : faceKey)}
                   onOpenPatternPicker={() => setPatternPickerFace(faceKey)}

@@ -429,7 +429,7 @@ const Landing = () => {
       {/* Pillars Section */}
       <section id="pilares" className="relative py-24 overflow-hidden">
         <div className="absolute inset-0">
-          <img src={hokusaiHero} alt="" className="w-full h-full object-cover opacity-[0.06]" />
+          <div className="absolute inset-0 opacity-[0.12]" style={{ backgroundImage: `url(${hokusaiHero})`, backgroundSize: '600px auto', backgroundRepeat: 'repeat' }} />
           <div className="absolute inset-0 gradient-warm" />
         </div>
         <div className="container mx-auto px-4">

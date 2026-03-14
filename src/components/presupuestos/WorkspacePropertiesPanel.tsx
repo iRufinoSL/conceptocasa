@@ -661,7 +661,7 @@ export function WorkspacePropertiesPanel({
     if (!wall) return '—';
     if (wall.wall_index === -1) return 'Suelo';
     if (wall.wall_index === -2) return 'Techo';
-    if (wall.wall_index === -3) return 'Espacio';
+    if (wall.wall_index === 0) return 'Espacio';
     return `P${wall.wall_index}`;
   };
 

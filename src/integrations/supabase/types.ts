@@ -819,6 +819,42 @@ export type Database = {
           },
         ]
       }
+      budget_activity_workspaces: {
+        Row: {
+          activity_id: string
+          created_at: string
+          id: string
+          workspace_id: string
+        }
+        Insert: {
+          activity_id: string
+          created_at?: string
+          id?: string
+          workspace_id: string
+        }
+        Update: {
+          activity_id?: string
+          created_at?: string
+          id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_activity_workspaces_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "budget_activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_activity_workspaces_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "budget_floor_plan_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       budget_concepts: {
         Row: {
           budget_id: string

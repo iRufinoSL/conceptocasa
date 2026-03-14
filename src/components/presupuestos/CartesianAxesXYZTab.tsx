@@ -1040,9 +1040,31 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
 
     const autoPolys = computeProjectedPolygons(liveSection);
     const autoPolysById = new Map(autoPolys.map(p => [p.id, p]));
-    const healedSavedPolys = liveSection.sectionType === 'vertical'
+    const autoNameToId = new Map<string, string>();
+    for (const poly of autoPolys) {
+      const key = normalizeWorkspaceName(poly.name);
+      if (key && !autoNameToId.has(key)) autoNameToId.set(key, poly.id);
+    }
+
+    const filteredSavedPolys = liveSection.sectionType === 'vertical'
       ? normalizedSavedPolys
-      : normalizedSavedPolys.map(p => maybeHealLegacySavedPolygon(
+      : normalizedSavedPolys.filter(poly => {
+          if (!poly.vertices || poly.vertices.length === 0) return true;
+          if (autoPolysById.has(poly.id)) return true;
+
+          const key = normalizeWorkspaceName(poly.name);
+          if (!key) return true;
+
+          const canonicalId = autoNameToId.get(key);
+          if (!canonicalId) return true;
+
+          // Remove stale duplicates with same normalized name but obsolete IDs
+          return canonicalId === poly.id;
+        });
+
+    const healedSavedPolys = liveSection.sectionType === 'vertical'
+      ? filteredSavedPolys
+      : filteredSavedPolys.map(p => maybeHealLegacySavedPolygon(
           p,
           autoPolysById.get(p.id),
           liveSection.sectionType as 'vertical' | 'longitudinal' | 'transversal',

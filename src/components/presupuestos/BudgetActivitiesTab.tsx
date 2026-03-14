@@ -2391,15 +2391,16 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                     </TableCell>
                     <TableCell className="max-w-[180px]">
                       {canEditActivity(activity.id) ? (
-                        <WorkAreaInlineSelect
+                        <WorkspaceInlineSelect
                           activityId={activity.id}
-                          workAreas={workAreas}
-                          workAreaRelations={workAreaRelations}
-                          onSave={(ids) => handleUpdateActivityWorkAreas(activity.id, ids)}
+                          workspaces={workspaceRooms}
+                          workspaceRelations={workspaceRelations}
+                          inheritedWorkspaceIds={activity.parent_activity_id ? workspaceRelations.filter(r => r.activity_id === activity.parent_activity_id).map(r => r.workspace_id) : undefined}
+                          onSave={(ids) => handleUpdateActivityWorkspaces(activity.id, ids)}
                         />
                       ) : (
                         <span className="text-muted-foreground text-xs">
-                          {workAreaRelations.filter(r => r.activity_id === activity.id).length} áreas
+                          {workspaceRelations.filter(r => r.activity_id === activity.id).length} espacios
                         </span>
                       )}
                     </TableCell>

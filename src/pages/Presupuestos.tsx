@@ -38,6 +38,8 @@ interface Presupuesto {
   project_id: string | null;
   archived: boolean;
   status: PresupuestoStatus;
+  is_model?: boolean;
+  model_budget_id?: string | null;
 }
 
 interface PresupuestoForm {

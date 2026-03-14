@@ -300,6 +300,11 @@ export function WallObjectsPanel({
                             Auto
                           </Badge>
                         )}
+                        {isAutoSuperficie && obj.surface_m2 != null && (
+                          <Badge variant="secondary" className="text-[8px] h-3.5 px-1">
+                            📐 {obj.surface_m2} m²
+                          </Badge>
+                        )}
                         {obj.is_core && (
                           <Badge variant="default" className="text-[8px] h-3.5 px-1 gap-0.5">
                             <Star className="h-2 w-2" /> Núcleo

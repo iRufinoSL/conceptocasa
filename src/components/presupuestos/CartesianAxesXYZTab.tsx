@@ -812,6 +812,15 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     return map;
   }, [workspaceRooms]);
 
+  const pickMostRecentlyUpdatedRoom = useCallback((rooms: WorkspaceRoom[]): WorkspaceRoom | null => {
+    if (!rooms || rooms.length === 0) return null;
+    return [...rooms].sort((a, b) => {
+      const aTime = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+      const bTime = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+      return bTime - aTime;
+    })[0] || null;
+  }, []);
+
   /** Compute auto-projected polygons for Y/X sections from workspace rooms */
   const computeProjectedPolygons = useCallback((section: CustomSection): SectionPolygon[] => {
     if (section.sectionType === 'vertical') return [];

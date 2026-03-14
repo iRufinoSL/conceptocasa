@@ -630,15 +630,13 @@ export function SectionAxisViewer({
     if (drawingVertices.length < 3 || !scale || !gridLayout) return;
     const name = drawingName.trim() || `Espacio ${polygons.length + 1}`;
 
-    // Validate unique name across all sections
-    const existingNames = [
-      ...(allPolygonNames || []),
-      ...polygons
-        .filter(p => Array.isArray(p.vertices) && p.vertices.length >= 3)
-        .map(p => p.name),
-    ];
-    if (existingNames.some(n => n.toLowerCase() === name.toLowerCase())) {
-      toast.error(`Ya existe un espacio llamado "${name}". Los nombres deben ser únicos.`);
+    // Validate unique name — allow if it exists in OTHER sections (same workspace, different face)
+    // Only block if it already exists in THIS section's polygons
+    const existsInCurrentSection = polygons
+      .filter(p => Array.isArray(p.vertices) && p.vertices.length >= 3)
+      .some(p => p.name.toLowerCase() === name.toLowerCase());
+    if (existsInCurrentSection) {
+      toast.error(`"${name}" ya existe en esta sección. Edítalo desde la lista de caras.`);
       return;
     }
 

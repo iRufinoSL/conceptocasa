@@ -261,7 +261,10 @@ export function WorkspacePropertiesPanel({
       }
 
       // Ensure all face records exist (walls + suelo + techo + espacio)
-      const expectedStructuralCount = edgeCountProp ?? (Array.isArray(roomData.floor_polygon) ? roomData.floor_polygon.length : 0);
+      // Fallback chain: prop → polygon vertices → existing wall records → default 4
+      const polyCount = Array.isArray(roomData.floor_polygon) ? roomData.floor_polygon.length : 0;
+      const existingWallMax = nextWalls.reduce((max, w) => w.wall_index > max ? w.wall_index : max, 0);
+      const expectedStructuralCount = edgeCountProp ?? (polyCount > 0 ? polyCount : existingWallMax > 0 ? existingWallMax : 4);
       const missingWallPayloads: Array<{ room_id: string; wall_index: number; wall_type: string }> = [];
 
       for (let i = 1; i <= expectedStructuralCount; i++) {
@@ -307,7 +310,8 @@ export function WorkspacePropertiesPanel({
           .from('budget_wall_objects')
           .select('id, wall_id')
           .in('wall_id', wallIds)
-          .eq('layer_order', 0);
+          .eq('layer_order', 0)
+          .eq('name', 'Superficie');
 
         if (existingSuperficiesError) {
           console.error('Error consultando capas Superficie:', existingSuperficiesError);
@@ -354,14 +358,16 @@ export function WorkspacePropertiesPanel({
             };
           });
 
+        console.log(`[Superficie Auto] walls=${nextWalls.length}, existing=${existingByWall.size}, toInsert=${inserts.length}, toUpdate=${updates.length}`);
+
         const mutationResults = await Promise.all([
           ...updates.map(u => supabase.from('budget_wall_objects').update(u.payload).eq('id', u.id)),
           ...(inserts.length > 0 ? [supabase.from('budget_wall_objects').insert(inserts)] : []),
         ]);
 
-        mutationResults.forEach((res) => {
+        mutationResults.forEach((res, idx) => {
           if (res.error) {
-            console.error('Error sincronizando Superficie automática:', res.error);
+            console.error(`Error sincronizando Superficie automática [${idx}]:`, res.error);
           }
         });
 
@@ -798,7 +804,7 @@ export function WorkspacePropertiesPanel({
           >
             {tab === 'faces'
               ? '🧱 Caras'
-              : `📦 Objetos (${allObjects.length})${huecoCount > 0 ? ` · 🚪${huecoCount}` : ''}`
+              : `📦 Objetos (${wallObjects.length})${huecoCount > 0 ? ` · 🚪${huecoCount}` : ''}`
             }
           </button>
         ))}

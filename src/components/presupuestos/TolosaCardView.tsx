@@ -89,6 +89,7 @@ export function TolosaCardView({
   onAddChild,
   onDeleteItem,
   onDuplicate,
+  onReparentItem,
   initialFocusId,
 }: TolosaCardViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);

@@ -261,7 +261,10 @@ export function WorkspacePropertiesPanel({
       }
 
       // Ensure all face records exist (walls + suelo + techo + espacio)
-      const expectedStructuralCount = edgeCountProp ?? (Array.isArray(roomData.floor_polygon) ? roomData.floor_polygon.length : 0);
+      // Fallback chain: prop → polygon vertices → existing wall records → default 4
+      const polyCount = Array.isArray(roomData.floor_polygon) ? roomData.floor_polygon.length : 0;
+      const existingWallMax = nextWalls.reduce((max, w) => w.wall_index > max ? w.wall_index : max, 0);
+      const expectedStructuralCount = edgeCountProp ?? (polyCount > 0 ? polyCount : existingWallMax > 0 ? existingWallMax : 4);
       const missingWallPayloads: Array<{ room_id: string; wall_index: number; wall_type: string }> = [];
 
       for (let i = 1; i <= expectedStructuralCount; i++) {

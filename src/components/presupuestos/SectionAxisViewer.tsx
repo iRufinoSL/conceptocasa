@@ -1050,11 +1050,27 @@ export function SectionAxisViewer({
           );
         }
 
-        // Label text
+        // Label text - use T (techo) / S (suelo) for top/bottom edges in cross-sections
         if (wallLabelMode !== 'none') {
+          let wallLabel = `P${wallNum}`;
+          const isCrossSection = sectionType === 'transversal' || sectionType === 'longitudinal';
+          if (isCrossSection && verts.length >= 3) {
+            const minY = Math.min(...verts.map(v => v.y));
+            const maxY = Math.max(...verts.map(v => v.y));
+            const rangeY = maxY - minY;
+            const edgeMinY = Math.min(verts[i].y, verts[j].y);
+            const edgeMaxY = Math.max(verts[i].y, verts[j].y);
+            if (rangeY > 0.01) {
+              const isBottom = Math.abs(edgeMinY - minY) < rangeY * 0.15 && Math.abs(edgeMaxY - minY) < rangeY * 0.15;
+              const isTop = Math.abs(edgeMinY - maxY) < rangeY * 0.15 && Math.abs(edgeMaxY - maxY) < rangeY * 0.15;
+              if (isBottom) wallLabel = 'S';
+              else if (isTop) wallLabel = 'T';
+            }
+          }
+
           let labelText = '';
-          if (wallLabelMode === 'both') labelText = `P${wallNum} ${Math.round(lengthMm)}mm`;
-          else if (wallLabelMode === 'name-only') labelText = `P${wallNum}`;
+          if (wallLabelMode === 'both') labelText = `${wallLabel} ${Math.round(lengthMm)}mm`;
+          else if (wallLabelMode === 'name-only') labelText = wallLabel;
           else if (wallLabelMode === 'measure-only') labelText = `${Math.round(lengthMm)}mm`;
 
           const edgeDx = b.px - a.px;

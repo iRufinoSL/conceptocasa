@@ -1052,6 +1052,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
     toast.success(`"${item.name}" movido dentro de "${targetName}"`);
   }, [items, getAllDescendants, getChildren, rootItems, recalculateAllCodes]);
 
+  const getDepthColor = (depth: number) => {
     const colors = [
       'border-l-primary',
       'border-l-blue-500',

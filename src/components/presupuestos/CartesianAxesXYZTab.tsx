@@ -71,8 +71,6 @@ function normalizeWorkspaceName(value: string | null | undefined): string {
     .replace(/[._-]+/g, ' ')
     .replace(/\b(techo|cubierta|suelo|piso|planta)\b/g, ' ')
     .replace(/\s+/g, ' ')
-    .trim()
-    .replace(/\d+$/g, '')
     .trim();
 }
 

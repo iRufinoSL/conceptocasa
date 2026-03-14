@@ -977,16 +977,26 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       );
     }
 
-    // 2) Fallback source: polygons drawn in vertical sections — ONLY if they match a real workspace room
+    // 2) Fallback source: polygons drawn in vertical sections
     for (const src of verticalPolygonSources) {
       const normalized = normalizeWorkspaceName(src.polygon.name);
-      const matchedRoom = workspaceRoomMap.get(src.polygon.id)
-        || (normalized ? (workspaceRoomsByNormalizedName.get(normalized)?.[0] || null) : null);
+      const directMatch = workspaceRoomMap.get(src.polygon.id) || null;
+      const exactCandidates = normalized ? (workspaceRoomsByNormalizedName.get(normalized) || []) : [];
 
-      // Skip ghost polygons that don't correspond to any real workspace room in the DB
-      if (!matchedRoom) continue;
+      let matchedRoom = directMatch;
+      if (!matchedRoom && exactCandidates.length > 0) {
+        matchedRoom = pickMostRecentlyUpdatedRoom(exactCandidates);
+      }
 
-      const fallbackId = matchedRoom.id;
+      if (!matchedRoom && normalized) {
+        const partialCandidates = (workspaceRooms || []).filter(room => {
+          const roomName = normalizeWorkspaceName(room.name);
+          return !!roomName && (roomName.includes(normalized) || normalized.includes(roomName));
+        });
+        matchedRoom = pickMostRecentlyUpdatedRoom(partialCandidates);
+      }
+
+      const fallbackId = matchedRoom?.id || src.polygon.id;
       if (projectedKeys.has(fallbackId)) continue;
 
       const footprint: PolygonVertex[] = src.polygon.vertices.map(v => ({ x: v.x, y: v.y }));
@@ -1002,13 +1012,13 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
 
       pushProjectedRoom(
         fallbackId,
-        matchedRoom.name,
+        matchedRoom?.name || src.polygon.name || `Espacio ${src.axisValue}`,
         footprint,
         src.axisValue,
-        matchedRoom.height ?? inferredHeightM ?? defaultHeight,
-        matchedRoom.has_floor ?? src.polygon.hasFloor,
-        matchedRoom.has_ceiling ?? src.polygon.hasCeiling,
-        matchedRoom.id,
+        matchedRoom?.height ?? inferredHeightM ?? defaultHeight,
+        matchedRoom?.has_floor ?? src.polygon.hasFloor,
+        matchedRoom?.has_ceiling ?? src.polygon.hasCeiling,
+        matchedRoom?.id,
       );
     }
 

@@ -1006,39 +1006,68 @@ export function WorkspacePropertiesPanel({
             </div>
           )}
 
-          {/* List objects grouped by face */}
-          {allObjects.length > 0 ? (
+          {/* Listado: Superficies automáticas + objetos manuales */}
+          {(superficieObjects.length > 0 || allObjects.length > 0) ? (
             <div className="space-y-2">
-              {/* Group by wall */}
-              {walls.map(wall => {
-                const objs = allObjects.filter(o => o.wall_id === wall.id);
-                if (objs.length === 0) return null;
-                const label = getWallLabelForObject(wall.id);
-                return (
-                  <div key={wall.id} className="space-y-0.5">
-                    <p className="text-[10px] font-semibold text-muted-foreground px-1">{label}</p>
-                    {objs.map(obj => (
-                      <ObjectRow
-                        key={obj.id}
-                        obj={obj}
-                        isPositioning={positioningObjId === obj.id}
-                        onTogglePosition={() => setPositioningObjId(positioningObjId === obj.id ? null : obj.id)}
-                        onMove={(field, delta) => handleMoveObject(obj.id, field, delta)}
-                        onDelete={() => handleDeleteObject(obj.id)}
-                        onLinkResource={() => {
-                          fetchResources();
-                          setShowResourcePicker(obj.id as any);
-                          setResourceSearch('');
-                        }}
-                      />
-                    ))}
-                  </div>
-                );
-              })}
+              {superficieObjects.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-[10px] font-semibold text-muted-foreground px-1">Superficies automáticas (capa 0)</p>
+                  {walls.map(wall => {
+                    const sup = superficieObjects.find(o => o.wall_id === wall.id);
+                    if (!sup) return null;
+                    const label = getWallLabelForObject(wall.id);
+                    return (
+                      <div key={`sup-${wall.id}`} className="text-[10px] px-1.5 py-1 rounded border bg-muted/20">
+                        <div className="flex items-center gap-1">
+                          <span className="font-medium">{label}</span>
+                          <Badge variant="secondary" className="text-[8px] h-4 px-1">Auto</Badge>
+                          <div className="flex-1" />
+                          {sup.surface_m2 != null && <span className="font-mono">{sup.surface_m2} m²</span>}
+                          {sup.volume_m3 != null && <span className="font-mono">{sup.volume_m3} m³</span>}
+                        </div>
+                        {sup.description && (
+                          <p className="text-[9px] text-muted-foreground mt-0.5 truncate">{sup.description}</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {allObjects.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-[10px] font-semibold text-muted-foreground px-1">Objetos y huecos manuales</p>
+                  {walls.map(wall => {
+                    const objs = allObjects.filter(o => o.wall_id === wall.id);
+                    if (objs.length === 0) return null;
+                    const label = getWallLabelForObject(wall.id);
+                    return (
+                      <div key={wall.id} className="space-y-0.5">
+                        <p className="text-[10px] font-semibold text-muted-foreground px-1">{label}</p>
+                        {objs.map(obj => (
+                          <ObjectRow
+                            key={obj.id}
+                            obj={obj}
+                            isPositioning={positioningObjId === obj.id}
+                            onTogglePosition={() => setPositioningObjId(positioningObjId === obj.id ? null : obj.id)}
+                            onMove={(field, delta) => handleMoveObject(obj.id, field, delta)}
+                            onDelete={() => handleDeleteObject(obj.id)}
+                            onLinkResource={() => {
+                              fetchResources();
+                              setShowResourcePicker(obj.id as any);
+                              setResourceSearch('');
+                            }}
+                          />
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           ) : !showObjectForm && (
             <p className="text-[10px] text-muted-foreground text-center py-4">
-              Sin objetos ni huecos. Pulsa "Nuevo" para registrar.
+              Sin objetos ni superficies aún. Pulsa "Nuevo" para registrar.
             </p>
           )}
         </div>

@@ -83,8 +83,13 @@ export function WallObjectsPanel({
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingObj, setEditingObj] = useState<string | null>(null);
   const [editingSuperficiePattern, setEditingSuperficiePattern] = useState<string | null>(null);
+  // Quick "Superficie" layer form
+  const [showSuperficieForm, setShowSuperficieForm] = useState(false);
+  const [supName, setSupName] = useState('');
+  const [supLayerOrder, setSupLayerOrder] = useState(1);
+  const [supVisualPattern, setSupVisualPattern] = useState('');
 
-  // Form state
+  // Full form state
   const [formName, setFormName] = useState('');
   const [formDescription, setFormDescription] = useState('');
   const [formObjectType, setFormObjectType] = useState('material');

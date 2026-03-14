@@ -513,6 +513,57 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     return map;
   }, [allFloors, verticalSections]);
 
+  // Map legacy vertical_section_id values (from older saved data) to a current Z base
+  const legacyVerticalSectionZBaseMap = useMemo(() => {
+    const votes = new Map<string, Map<number, number>>();
+    for (const room of (workspaceRooms || [])) {
+      if (!room.vertical_section_id) continue;
+
+      let resolved: number | undefined;
+
+      if (room.floor_id) {
+        const byFloor = floorZBaseMap.get(room.floor_id);
+        if (byFloor !== undefined) resolved = byFloor;
+      }
+
+      if (resolved === undefined) {
+        const byId = verticalZBaseMap.get(room.id);
+        if (byId !== undefined) resolved = byId;
+      }
+
+      if (resolved === undefined) {
+        const byName = verticalZBaseMap.get(`name:${room.name}`);
+        if (byName !== undefined) resolved = byName;
+      }
+
+      if (resolved === undefined) {
+        const normalized = normalizeWorkspaceName(room.name);
+        if (normalized) {
+          const axes = verticalNameAxisMap.get(normalized);
+          if (axes && axes.size === 1) {
+            resolved = Array.from(axes)[0];
+          }
+        }
+      }
+
+      if (resolved === undefined) continue;
+
+      const sectionVotes = votes.get(room.vertical_section_id) || new Map<number, number>();
+      sectionVotes.set(resolved, (sectionVotes.get(resolved) || 0) + 1);
+      votes.set(room.vertical_section_id, sectionVotes);
+    }
+
+    const mapped = new Map<string, number>();
+    for (const [legacySectionId, sectionVotes] of votes) {
+      const sorted = Array.from(sectionVotes.entries()).sort((a, b) => b[1] - a[1]);
+      if (sorted.length === 0) continue;
+      if (sorted.length > 1 && sorted[0][1] === sorted[1][1]) continue;
+      mapped.set(legacySectionId, sorted[0][0]);
+    }
+
+    return mapped;
+  }, [workspaceRooms, floorZBaseMap, verticalZBaseMap, verticalNameAxisMap]);
+
   const resolveRoomZBase = useCallback((room: WorkspaceRoom): number => {
     // 1) HIGHEST PRIORITY: Use floor_id → floorZBaseMap (most reliable)
     if (room.floor_id) {

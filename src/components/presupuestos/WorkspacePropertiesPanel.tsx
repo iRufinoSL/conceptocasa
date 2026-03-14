@@ -137,6 +137,7 @@ export function WorkspacePropertiesPanel({
   const [showObjectForm, setShowObjectForm] = useState(false);
   const [objName, setObjName] = useState('');
   const [objType, setObjType] = useState('material');
+  const [objLayerOrder, setObjLayerOrder] = useState('1');
   const [objThickness, setObjThickness] = useState('');
   const [objDescription, setObjDescription] = useState('');
   const [objWidthMm, setObjWidthMm] = useState('');
@@ -146,6 +147,7 @@ export function WorkspacePropertiesPanel({
   const [objDistWall, setObjDistWall] = useState('');
   const [objTargetFace, setObjTargetFace] = useState('wall-0');
   const [objPreset, setObjPreset] = useState('');
+  const [objResourceId, setObjResourceId] = useState('_none');
 
   // Resource linking
   const [showResourcePicker, setShowResourcePicker] = useState(false);

@@ -2457,10 +2457,30 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                           onClick={() => handleEdit(activity)}
                           className="text-left hover:text-primary hover:underline transition-colors cursor-pointer"
                         >
-                          {activity.name}
+                          <span>{activity.name}</span>
+                          {(() => {
+                            const wsRel = workspaceRelations.find(r => r.activity_id === activity.id);
+                            const wsRoom = wsRel ? workspaceRooms.find(w => w.id === wsRel.workspace_id) : null;
+                            return wsRoom ? (
+                              <span className="block text-[10px] text-muted-foreground font-normal mt-0.5">
+                                <MapPin className="h-2.5 w-2.5 inline mr-0.5" />{wsRoom.name}
+                              </span>
+                            ) : null;
+                          })()}
                         </button>
                       ) : (
-                        activity.name
+                        <div>
+                          <span>{activity.name}</span>
+                          {(() => {
+                            const wsRel = workspaceRelations.find(r => r.activity_id === activity.id);
+                            const wsRoom = wsRel ? workspaceRooms.find(w => w.id === wsRel.workspace_id) : null;
+                            return wsRoom ? (
+                              <span className="block text-[10px] text-muted-foreground font-normal mt-0.5">
+                                <MapPin className="h-2.5 w-2.5 inline mr-0.5" />{wsRoom.name}
+                              </span>
+                            ) : null;
+                          })()}
+                        </div>
                       )}
                     </TableCell>
                     <TableCell className="max-w-[180px]">

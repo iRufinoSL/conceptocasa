@@ -533,6 +533,22 @@ export function SectionAxisViewer({
   }, [drawMode, rulerMode, gridLayout, drawingVertices, snapToNode, snapToNodePrecise, rulerStart]);
 
   const handleSvgMouseMove = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
+    // Vertex drag
+    if (vertexEditMode && draggingVertexInfo && gridLayout) {
+      const node = snapToNode(e);
+      if (!node) return;
+      const coord = colRowToCoord(node.col, node.row);
+      setPolygons(prev => prev.map(p => {
+        if (p.id !== draggingVertexInfo.polyId) return p;
+        const newVerts = p.vertices.map((v, i) =>
+          i === draggingVertexInfo.vertexIdx ? { ...v, x: coord.hIdx, y: coord.vIdx } : v
+        );
+        return { ...p, vertices: newVerts };
+      }));
+      setHoverNode(node);
+      return;
+    }
+
     if (rulerMode && gridLayout) {
       const node = snapToNodePrecise(e);
       setRulerHoverNode(node);
@@ -550,14 +566,21 @@ export function SectionAxisViewer({
     if (!drawMode || !gridLayout) { setHoverNode(null); setRulerHoverNode(null); return; }
     const node = snapToNode(e);
     setHoverNode(node);
-  }, [drawMode, rulerMode, gridLayout, snapToNode, snapToNodePrecise, draggingRulerId, draggingRulerEnd]);
+    if (vertexEditMode) setHoverNode(node);
+  }, [drawMode, rulerMode, vertexEditMode, draggingVertexInfo, gridLayout, snapToNode, snapToNodePrecise, draggingRulerId, draggingRulerEnd, colRowToCoord]);
 
   const handleSvgMouseUp = useCallback(() => {
+    if (draggingVertexInfo) {
+      // Save after vertex drag
+      onSavePolygons?.(polygons);
+      setDraggingVertexInfo(null);
+      return;
+    }
     if (draggingRulerId) {
       setDraggingRulerId(null);
       setDraggingRulerEnd(null);
     }
-  }, [draggingRulerId]);
+  }, [draggingRulerId, draggingVertexInfo, polygons, onSavePolygons]);
 
   const handleDeleteRuler = useCallback((id: string) => {
     pushUndo();

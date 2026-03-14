@@ -25,6 +25,7 @@ interface WorkspaceRoom {
   vertical_section_id: string | null;
   floor_id: string | null;
   floor_polygon: PolygonVertex[] | null;
+  updated_at: string | null;
 }
 
 interface FloorData {

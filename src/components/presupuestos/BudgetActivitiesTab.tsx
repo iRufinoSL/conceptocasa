@@ -1001,29 +1001,26 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
       if (savedActivityId) {
         await syncActivityResourcesRelatedUnits(savedActivityId);
         
-        // Update work area relations
-        const normalizedWorkAreaIds = normalizeIds(form.work_area_ids);
+        // Update workspace relations
+        const normalizedWsIds = normalizeIds(form.workspace_ids);
 
-        // First, delete existing relations for this activity
         const { error: deleteRelError } = await supabase
-          .from('budget_work_area_activities')
+          .from('budget_activity_workspaces')
           .delete()
           .eq('activity_id', savedActivityId);
 
         if (deleteRelError) throw deleteRelError;
 
-        // Insert new relations (idempotent; avoid unique violations)
-        if (normalizedWorkAreaIds.length > 0) {
-          // CRITICAL: Use the correct column order matching the unique constraint (work_area_id, activity_id)
-          const relationsToInsert = normalizedWorkAreaIds.map((workAreaId) => ({
-            work_area_id: workAreaId,
+        if (normalizedWsIds.length > 0) {
+          const relationsToInsert = normalizedWsIds.map((wsId) => ({
+            workspace_id: wsId,
             activity_id: savedActivityId,
           }));
 
           const { error: relError } = await supabase
-            .from('budget_work_area_activities')
+            .from('budget_activity_workspaces')
             .upsert(relationsToInsert, {
-              onConflict: 'work_area_id,activity_id',
+              onConflict: 'activity_id,workspace_id',
               ignoreDuplicates: true,
             });
 

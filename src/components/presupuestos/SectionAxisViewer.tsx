@@ -650,6 +650,44 @@ export function SectionAxisViewer({
     setHoverNode(null);
   };
 
+  // ── Vertex editing helpers ──
+  const handleInsertVertexOnEdge = useCallback((polyId: string, edgeIdx: number) => {
+    if (!vertexEditMode) return;
+    pushUndo();
+    setPolygons(prev => {
+      const updated = prev.map(p => {
+        if (p.id !== polyId) return p;
+        const verts = [...p.vertices];
+        const a = verts[edgeIdx];
+        const b = verts[(edgeIdx + 1) % verts.length];
+        const midpoint = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, z: (a.z + b.z) / 2 };
+        verts.splice(edgeIdx + 1, 0, midpoint);
+        return { ...p, vertices: verts };
+      });
+      onSavePolygons?.(updated);
+      return updated;
+    });
+    toast.success('Vértice insertado en arista');
+  }, [vertexEditMode, pushUndo, onSavePolygons]);
+
+  const handleDeleteVertex = useCallback((polyId: string, vertexIdx: number) => {
+    const poly = polygons.find(p => p.id === polyId);
+    if (!poly || poly.vertices.length <= 3) {
+      toast.error('Un polígono necesita al menos 3 vértices');
+      return;
+    }
+    pushUndo();
+    setPolygons(prev => {
+      const updated = prev.map(p => {
+        if (p.id !== polyId) return p;
+        return { ...p, vertices: p.vertices.filter((_, i) => i !== vertexIdx) };
+      });
+      onSavePolygons?.(updated);
+      return updated;
+    });
+    toast.success('Vértice eliminado');
+  }, [polygons, pushUndo, onSavePolygons]);
+
   const handleDeletePolygon = (polyId: string) => {
     pushUndo();
     const updated = polygons.filter(p => p.id !== polyId);

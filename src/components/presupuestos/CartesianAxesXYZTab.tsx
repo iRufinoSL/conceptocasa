@@ -452,6 +452,26 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     return map;
   }, [allSections]);
 
+  // Build floor_id → Z base mapping from vertical sections sorted by axisValue
+  // Each floor's Z base = the vertical section axisValue at that floor's order_index
+  const floorZBaseMap = useMemo(() => {
+    const map = new Map<string, number>();
+    if (!allFloors || allFloors.length === 0) return map;
+    const verticalSections = allSections
+      .filter(s => s.sectionType === 'vertical')
+      .sort((a, b) => a.axisValue - b.axisValue);
+    
+    // Map each floor (by order_index) to the corresponding vertical section's axisValue
+    const sortedFloors = [...allFloors].sort((a, b) => a.order_index - b.order_index);
+    for (let i = 0; i < sortedFloors.length; i++) {
+      const floor = sortedFloors[i];
+      if (i < verticalSections.length) {
+        map.set(floor.id, verticalSections[i].axisValue);
+      }
+    }
+    return map;
+  }, [allFloors, allSections]);
+
   // Collect ALL polygon names across ALL sections for uniqueness check
   const allPolygonNames = useMemo(() => {
     const names: string[] = [];

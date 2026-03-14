@@ -7,6 +7,8 @@ import { ArrowLeft, ArrowRight, Layers, Shield, Zap, Clock, Leaf, Hammer, Thermo
 import sistemaMasSeccion from "@/assets/sistema-mas-seccion.jpg";
 import casaSip from "@/assets/casa-sip.jpg";
 import casaLsf from "@/assets/casa-lsf.jpg";
+import hokusaiHero from "@/assets/hokusai-houses-hero.jpg";
+import hokusaiSection from "@/assets/hokusai-houses-section.jpg";
 
 import casaSystem3e from "@/assets/casa-system3e.jpg";
 import casaHormigonCelular from "@/assets/casa-hormigon-celular.jpg";
@@ -131,7 +133,10 @@ const SistemaConstructivo = () => {
 
       {/* Hero */}
       <section className="relative py-20 lg:py-28 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-background to-orange/5" />
+        <div className="absolute inset-0">
+          <img src={hokusaiHero} alt="" className="w-full h-full object-cover opacity-[0.07]" />
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-background/80 to-orange/5" />
+        </div>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <motion.div initial="hidden" animate="visible" variants={fadeUp} className="text-center max-w-4xl mx-auto">
             <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold text-foreground leading-tight mb-6">
@@ -148,8 +153,12 @@ const SistemaConstructivo = () => {
       </section>
 
       {/* MA'S System - Featured */}
-      <section className="py-16 bg-primary/5">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section className="relative py-16 overflow-hidden">
+        <div className="absolute inset-0">
+          <img src={hokusaiSection} alt="" className="w-full h-full object-cover opacity-[0.06]" />
+          <div className="absolute inset-0 bg-primary/5" />
+        </div>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp}>
             <div className="text-center mb-12">
               <div className="inline-flex items-center gap-2 bg-orange/10 text-orange px-4 py-2 rounded-full text-sm font-semibold mb-4">

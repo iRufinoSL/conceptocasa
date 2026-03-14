@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import heroPassivhaus from "@/assets/hero-passivhaus.jpg";
 import healthyInterior from "@/assets/healthy-home-interior.jpg";
+import hokusaiHero from "@/assets/hokusai-houses-hero.jpg";
 import HousesCarousel from "@/components/landing/HousesCarousel";
 
 
@@ -426,7 +427,11 @@ const Landing = () => {
       </section>
 
       {/* Pillars Section */}
-      <section id="pilares" className="py-24 gradient-warm">
+      <section id="pilares" className="relative py-24 overflow-hidden">
+        <div className="absolute inset-0">
+          <img src={hokusaiHero} alt="" className="w-full h-full object-cover opacity-[0.06]" />
+          <div className="absolute inset-0 gradient-warm" />
+        </div>
         <div className="container mx-auto px-4">
           <motion.div
             initial="hidden"

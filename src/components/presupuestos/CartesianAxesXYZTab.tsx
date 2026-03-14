@@ -975,10 +975,17 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       if (projectedKeys.has(fallbackId)) continue;
 
       const footprint: PolygonVertex[] = src.polygon.vertices.map(v => ({ x: v.x, y: v.y }));
-      const inferredHeightM =
-        typeof src.polygon.zTop === 'number' && typeof src.polygon.zBase === 'number'
-          ? Math.max(0.25, ((src.polygon.zTop - src.polygon.zBase) * zUnitMm) / 1000)
-          : null;
+      let inferredHeightM: number | null = null;
+      if (typeof src.polygon.zTop === 'number' && typeof src.polygon.zBase === 'number') {
+        const rawDelta = src.polygon.zTop - src.polygon.zBase;
+        // Sanitize: if zTop looks like mm (>50 grid units is unreasonable), treat as mm directly
+        if (rawDelta > 50) {
+          // zTop was stored in mm, convert to metres
+          inferredHeightM = Math.max(0.25, rawDelta / 1000);
+        } else {
+          inferredHeightM = Math.max(0.25, (rawDelta * zUnitMm) / 1000);
+        }
+      }
 
       pushProjectedRoom(
         fallbackId,

@@ -3754,29 +3754,28 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                 <div className="space-y-0.5">
                   <Label className="text-sm font-medium flex items-center gap-2">
                     <MapPin className="h-4 w-4" />
-                    Áreas de Trabajo
+                    Espacios de Trabajo
                   </Label>
-                  <p className="text-xs text-muted-foreground">Selecciona las áreas donde aplica esta actividad</p>
+                  <p className="text-xs text-muted-foreground">Selecciona los espacios donde aplica esta actividad</p>
                 </div>
               </div>
               
               <div className="space-y-3 mt-2">
-                {/* Selected work areas - always shown */}
-                {form.work_area_ids.length > 0 && (
+                {form.workspace_ids.length > 0 && (
                   <div className="space-y-2">
-                    <p className="text-xs text-muted-foreground font-medium">Áreas seleccionadas:</p>
+                    <p className="text-xs text-muted-foreground font-medium">Espacios seleccionados:</p>
                     <div className="flex flex-wrap gap-2">
-                      {form.work_area_ids.map(waId => {
-                        const wa = workAreas.find(w => w.id === waId);
-                        if (!wa) return null;
+                      {form.workspace_ids.map(wsId => {
+                        const ws = workspaceRooms.find(w => w.id === wsId);
+                        if (!ws) return null;
                         return (
                           <Badge
-                            key={wa.id}
+                            key={ws.id}
                             variant="default"
                             className="cursor-pointer"
-                            onClick={() => setForm({ ...form, work_area_ids: form.work_area_ids.filter(id => id !== wa.id) })}
+                            onClick={() => setForm({ ...form, workspace_ids: form.workspace_ids.filter(id => id !== ws.id) })}
                           >
-                            {wa.name} <code className="text-xs ml-1 opacity-70">({wa.level}/{wa.work_area})</code>
+                            {ws.name}
                             <X className="h-3 w-3 ml-1" />
                           </Badge>
                         );
@@ -3785,12 +3784,11 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                   </div>
                 )}
                 
-                {/* Search and add work areas */}
                 <div className="space-y-2">
                   <div className="relative">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
-                      placeholder="Buscar áreas por nombre..."
+                      placeholder="Buscar espacios por nombre..."
                       value={workAreaSearchQuery}
                       onChange={(e) => {
                         setWorkAreaSearchQuery(e.target.value);
@@ -3800,11 +3798,11 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                     />
                   </div>
                   
-                  {workAreas.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No hay áreas de trabajo definidas</p>
+                  {workspaceRooms.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No hay espacios de trabajo definidos</p>
                   ) : (
                     <>
-                      {!showAllWorkAreas && form.work_area_ids.length === 0 && (
+                      {!showAllWorkAreas && form.workspace_ids.length === 0 && (
                         <Button
                           type="button"
                           variant="ghost"
@@ -3812,42 +3810,38 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                           onClick={() => setShowAllWorkAreas(true)}
                           className="text-xs"
                         >
-                          Mostrar todas las áreas disponibles
+                          Mostrar todos los espacios disponibles
                         </Button>
                       )}
                       
                       {(showAllWorkAreas || workAreaSearchQuery) && (
                         <div className="max-h-40 overflow-y-auto space-y-1 border rounded-md p-2 bg-background">
-                          {workAreas
-                            .filter(wa => !form.work_area_ids.includes(wa.id))
-                            .filter(wa => {
+                          {workspaceRooms
+                            .filter(ws => !form.workspace_ids.includes(ws.id))
+                            .filter(ws => {
                               if (!workAreaSearchQuery) return true;
-                              const searchLower = workAreaSearchQuery.toLowerCase();
-                              const fullText = `${wa.name} ${wa.level} ${wa.work_area}`.toLowerCase();
-                              return fullText.includes(searchLower);
+                              return ws.name.toLowerCase().includes(workAreaSearchQuery.toLowerCase());
                             })
-                            .map(wa => (
+                            .map(ws => (
                               <div
-                                key={wa.id}
+                                key={ws.id}
                                 className="flex items-center gap-2 p-1.5 rounded hover:bg-muted cursor-pointer transition-colors"
-                                onClick={() => setForm({ ...form, work_area_ids: [...form.work_area_ids, wa.id] })}
+                                onClick={() => setForm({ ...form, workspace_ids: [...form.workspace_ids, ws.id] })}
                               >
                                 <Badge variant="outline" className="cursor-pointer">
-                                  {wa.name} <code className="text-xs ml-1 opacity-70">({wa.level}/{wa.work_area})</code>
+                                  {ws.name}
                                 </Badge>
                               </div>
                             ))
                           }
-                          {workAreas
-                            .filter(wa => !form.work_area_ids.includes(wa.id))
-                            .filter(wa => {
+                          {workspaceRooms
+                            .filter(ws => !form.workspace_ids.includes(ws.id))
+                            .filter(ws => {
                               if (!workAreaSearchQuery) return true;
-                              const searchLower = workAreaSearchQuery.toLowerCase();
-                              const fullText = `${wa.name} ${wa.level} ${wa.work_area}`.toLowerCase();
-                              return fullText.includes(searchLower);
+                              return ws.name.toLowerCase().includes(workAreaSearchQuery.toLowerCase());
                             }).length === 0 && (
                             <p className="text-xs text-muted-foreground text-center py-2">
-                              {workAreaSearchQuery ? 'No se encontraron áreas' : 'No hay más áreas disponibles'}
+                              {workAreaSearchQuery ? 'No se encontraron espacios' : 'No hay más espacios disponibles'}
                             </p>
                           )}
                         </div>

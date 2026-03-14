@@ -2118,7 +2118,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
               className="rounded-none border-l"
             >
               <MapPin className="h-4 w-4 mr-1" />
-              Por Área
+              Por Espacio
             </Button>
             <Button 
               variant={viewMode === 'time' ? 'default' : 'ghost'} 

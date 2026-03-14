@@ -548,14 +548,14 @@ export function WorkspacePropertiesPanel({
     let wallIndex: number;
     if (faceKey === 'floor') wallIndex = -1;
     else if (faceKey === 'ceiling') wallIndex = -2;
-    else if (faceKey === 'space') wallIndex = -3;
+    else if (faceKey === 'space') wallIndex = 0;
     else wallIndex = parseInt(faceKey.replace('wall-', '')) + 1;
 
     let wall = walls.find(w => w.wall_index === wallIndex);
     if (wall) return wall.id;
     const roomOk = await ensureRoomRecord();
     if (!roomOk) return null;
-    const wallType = wallIndex === -1 ? 'suelo_basico' : wallIndex === -2 ? 'techo_basico' : wallIndex === -3 ? 'espacio' : 'exterior';
+    const wallType = wallIndex === -1 ? 'suelo_basico' : wallIndex === -2 ? 'techo_basico' : wallIndex === 0 ? 'espacio' : 'exterior';
     const { data, error } = await supabase.from('budget_floor_plan_walls')
       .insert({ room_id: workspaceId, wall_index: wallIndex, wall_type: wallType })
       .select().single();

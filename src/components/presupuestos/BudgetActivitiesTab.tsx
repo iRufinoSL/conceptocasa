@@ -436,8 +436,8 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
       if (resourcesRes.error) throw resourcesRes.error;
       if (measurementsRes.error) throw measurementsRes.error;
       if (measurementRelationsRes.error) throw measurementRelationsRes.error;
-      if (workAreasRes.error) throw workAreasRes.error;
-      if (workAreaRelationsRes.error) throw workAreaRelationsRes.error;
+      if (workspaceRoomsRes.error) throw workspaceRoomsRes.error;
+      if (workspaceRelationsRes.error) throw workspaceRelationsRes.error;
 
       const allResources = resourcesRes.data || [];
 

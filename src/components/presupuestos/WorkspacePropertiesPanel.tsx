@@ -271,11 +271,34 @@ export function WorkspacePropertiesPanel({
         }
       }
 
+      let nextCellSizeM = 1;
+      if (roomData.floor_plan_id) {
+        const { data: floorPlanScale } = await supabase
+          .from('budget_floor_plans')
+          .select('scale_mode, block_length_mm')
+          .eq('id', roomData.floor_plan_id)
+          .maybeSingle();
+
+        if (floorPlanScale?.scale_mode === 'bloque') {
+          nextCellSizeM = (floorPlanScale.block_length_mm || 625) / 1000;
+        }
+      }
+      setCellSizeM(nextCellSizeM);
+
       // Ensure all face records exist (walls + suelo + techo + espacio)
-      // Fallback chain: prop → polygon vertices → existing wall records → default 4
-      const polyCount = Array.isArray(roomData.floor_polygon) ? roomData.floor_polygon.length : 0;
-      const existingWallMax = nextWalls.reduce((max, w) => w.wall_index > max ? w.wall_index : max, 0);
-      const expectedStructuralCount = edgeCountProp ?? (polyCount > 0 ? polyCount : existingWallMax > 0 ? existingWallMax : 4);
+      // Fallback chain: prop → provided vertices → DB polygon → existing wall records → default 4
+      const effectivePolygon = getEffectivePolygon(roomData);
+      const polyCountFromSource = effectivePolygon?.length || 0;
+      const polyCountFromDb = Array.isArray(roomData.floor_polygon) ? roomData.floor_polygon.length : 0;
+      const existingWallMax = nextWalls.reduce((max, w) => (w.wall_index > max ? w.wall_index : max), 0);
+      const expectedStructuralCount = edgeCountProp ?? (polyCountFromSource > 0
+        ? polyCountFromSource
+        : polyCountFromDb > 0
+          ? polyCountFromDb
+          : existingWallMax > 0
+            ? existingWallMax
+            : 4);
+
       const missingWallPayloads: Array<{ room_id: string; wall_index: number; wall_type: string }> = [];
 
       for (let i = 1; i <= expectedStructuralCount; i++) {
@@ -335,7 +358,7 @@ export function WorkspacePropertiesPanel({
         const updates = nextWalls
           .filter(w => existingByWall.has(w.id))
           .map(w => {
-            const { surface_m2, volume_m3 } = getFaceMetrics(roomData, w.wall_index);
+            const { surface_m2, volume_m3 } = getFaceMetrics(roomData, w.wall_index, nextCellSizeM);
             const metricLabel = surface_m2 != null ? `${surface_m2} m²` : volume_m3 != null ? `${volume_m3} m³` : null;
             return {
               id: existingByWall.get(w.id)!,
@@ -354,7 +377,7 @@ export function WorkspacePropertiesPanel({
         const inserts = nextWalls
           .filter(w => !existingByWall.has(w.id))
           .map(w => {
-            const { surface_m2, volume_m3 } = getFaceMetrics(roomData, w.wall_index);
+            const { surface_m2, volume_m3 } = getFaceMetrics(roomData, w.wall_index, nextCellSizeM);
             const metricLabel = surface_m2 != null ? `${surface_m2} m²` : volume_m3 != null ? `${volume_m3} m³` : null;
             return {
               wall_id: w.id,

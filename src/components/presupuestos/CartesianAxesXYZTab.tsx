@@ -60,6 +60,20 @@ function findPolyIntersections(poly: PolygonVertex[], axis: 'x' | 'y', val: numb
   return results;
 }
 
+function normalizeWorkspaceName(value: string | null | undefined): string {
+  if (!value) return '';
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[._-]+/g, ' ')
+    .replace(/\b(techo|cubierta|suelo|piso|planta)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\d+$/g, '')
+    .trim();
+}
+
 interface CartesianAxesXYZTabProps {
   budgetId: string;
   isAdmin: boolean;
@@ -461,6 +475,28 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     return map;
   }, [verticalSections]);
 
+  // Build normalized-name → axis set mapping for legacy projects where IDs changed
+  const verticalNameAxisMap = useMemo(() => {
+    const map = new Map<string, Set<number>>();
+    for (const vs of verticalSections) {
+      const polys = vs.polygons;
+      if (!polys) continue;
+      for (const p of polys) {
+        const normalized = normalizeWorkspaceName(p.name);
+        if (!normalized) continue;
+        const axes = map.get(normalized) || new Set<number>();
+        axes.add(vs.axisValue);
+        map.set(normalized, axes);
+      }
+    }
+    return map;
+  }, [verticalSections]);
+
+  const verticalNameAxisEntries = useMemo(
+    () => Array.from(verticalNameAxisMap.entries()),
+    [verticalNameAxisMap],
+  );
+
   // Build floor_id → Z base mapping from vertical sections sorted by axisValue
   // Each floor's Z base = the vertical section axisValue at that floor's order_index
   const floorZBaseMap = useMemo(() => {
@@ -477,6 +513,57 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     return map;
   }, [allFloors, verticalSections]);
 
+  // Map legacy vertical_section_id values (from older saved data) to a current Z base
+  const legacyVerticalSectionZBaseMap = useMemo(() => {
+    const votes = new Map<string, Map<number, number>>();
+    for (const room of (workspaceRooms || [])) {
+      if (!room.vertical_section_id) continue;
+
+      let resolved: number | undefined;
+
+      if (room.floor_id) {
+        const byFloor = floorZBaseMap.get(room.floor_id);
+        if (byFloor !== undefined) resolved = byFloor;
+      }
+
+      if (resolved === undefined) {
+        const byId = verticalZBaseMap.get(room.id);
+        if (byId !== undefined) resolved = byId;
+      }
+
+      if (resolved === undefined) {
+        const byName = verticalZBaseMap.get(`name:${room.name}`);
+        if (byName !== undefined) resolved = byName;
+      }
+
+      if (resolved === undefined) {
+        const normalized = normalizeWorkspaceName(room.name);
+        if (normalized) {
+          const axes = verticalNameAxisMap.get(normalized);
+          if (axes && axes.size === 1) {
+            resolved = Array.from(axes)[0];
+          }
+        }
+      }
+
+      if (resolved === undefined) continue;
+
+      const sectionVotes = votes.get(room.vertical_section_id) || new Map<number, number>();
+      sectionVotes.set(resolved, (sectionVotes.get(resolved) || 0) + 1);
+      votes.set(room.vertical_section_id, sectionVotes);
+    }
+
+    const mapped = new Map<string, number>();
+    for (const [legacySectionId, sectionVotes] of votes) {
+      const sorted = Array.from(sectionVotes.entries()).sort((a, b) => b[1] - a[1]);
+      if (sorted.length === 0) continue;
+      if (sorted.length > 1 && sorted[0][1] === sorted[1][1]) continue;
+      mapped.set(legacySectionId, sorted[0][0]);
+    }
+
+    return mapped;
+  }, [workspaceRooms, floorZBaseMap, verticalZBaseMap, verticalNameAxisMap]);
+
   const resolveRoomZBase = useCallback((room: WorkspaceRoom): number => {
     // 1) HIGHEST PRIORITY: Use floor_id → floorZBaseMap (most reliable)
     if (room.floor_id) {
@@ -492,12 +579,37 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     const byName = verticalZBaseMap.get(`name:${room.name}`);
     if (byName !== undefined) return byName;
 
-    // 4) Direct match by vertical_section_id
+    // 4) Direct match by current vertical_section_id
     const direct = verticalSections.find(s => s.id === room.vertical_section_id);
     if (direct) return direct.axisValue;
 
+    // 5) Legacy match by stale vertical_section_id values (majority-vote inferred)
+    if (room.vertical_section_id) {
+      const byLegacySection = legacyVerticalSectionZBaseMap.get(room.vertical_section_id);
+      if (byLegacySection !== undefined) return byLegacySection;
+    }
+
+    // 6) Legacy fallback: normalized name matching (e.g. "Atico1" -> "Atico")
+    const normalizedRoomName = normalizeWorkspaceName(room.name);
+    if (normalizedRoomName) {
+      const directAxes = verticalNameAxisMap.get(normalizedRoomName);
+      if (directAxes && directAxes.size === 1) {
+        return Array.from(directAxes)[0];
+      }
+
+      const partialAxes = new Set<number>();
+      for (const [nameKey, axes] of verticalNameAxisEntries) {
+        if (nameKey.includes(normalizedRoomName) || normalizedRoomName.includes(nameKey)) {
+          for (const axis of axes) partialAxes.add(axis);
+        }
+      }
+      if (partialAxes.size === 1) {
+        return Array.from(partialAxes)[0];
+      }
+    }
+
     return 0;
-  }, [floorZBaseMap, verticalZBaseMap, verticalSections]);
+  }, [floorZBaseMap, verticalZBaseMap, verticalSections, legacyVerticalSectionZBaseMap, verticalNameAxisMap, verticalNameAxisEntries]);
 
   const rebaseSavedPolygonToRoomLevel = useCallback((polygon: SectionPolygon): SectionPolygon => {
     const room = workspaceRoomMap.get(polygon.id);

@@ -416,19 +416,24 @@ export function SectionAxisViewer({
     if (totalCols < 1 || totalRows < 1) return null;
     const drawW = w - margin * 2;
     const drawH = h - margin * 2;
-    const cellW = drawW / totalCols;
-    const cellH = drawH / totalRows;
-    const cellPx = Math.floor(Math.min(cellW, cellH));
-    if (cellPx < 8) return null;
-    const gridW = totalCols * cellPx;
-    const gridH = totalRows * cellPx;
+    // Compute proportional cell sizes based on real-world mm scales
+    const totalRealW = totalCols * scale.hScale;
+    const totalRealH = totalRows * scale.vScale;
+    const pxPerMm = Math.min(drawW / totalRealW, drawH / totalRealH);
+    const cellPxW = Math.floor(pxPerMm * scale.hScale);
+    const cellPxH = Math.floor(pxPerMm * scale.vScale);
+    if (cellPxW < 4 || cellPxH < 4) return null;
+    const gridW = totalCols * cellPxW;
+    const gridH = totalRows * cellPxH;
     const ox = margin + Math.floor((drawW - gridW) / 2);
     const oy = margin + Math.floor((drawH - gridH) / 2);
     const originCol = gridLimits.negH;
     const originRow = gridLimits.posV;
-    const originX = ox + originCol * cellPx;
-    const originY = oy + originRow * cellPx;
-    return { totalCols, totalRows, gridW, gridH, ox, oy, originCol, originRow, originX, originY, cellPx };
+    const originX = ox + originCol * cellPxW;
+    const originY = oy + originRow * cellPxH;
+    // Keep cellPx as legacy alias for square-assumption code (= max of both for backward compat)
+    const cellPx = cellPxW; // legacy — prefer cellPxW/cellPxH
+    return { totalCols, totalRows, gridW, gridH, ox, oy, originCol, originRow, originX, originY, cellPx, cellPxW, cellPxH };
   }, [scale, w, h, gridLimits]);
 
   const colRowToPx = useCallback((col: number, row: number) => {

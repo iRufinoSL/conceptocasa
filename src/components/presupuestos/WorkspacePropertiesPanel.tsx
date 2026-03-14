@@ -160,6 +160,7 @@ export function WorkspacePropertiesPanel({
 
   // Active tab: 'faces' | 'objects'
   const [activeTab, setActiveTab] = useState<'faces' | 'objects'>('faces');
+  const [isRegeneratingSuperficies, setIsRegeneratingSuperficies] = useState(false);
 
   const getFaceLabel = useCallback((wallIndex: number) => {
     if (wallIndex === -1) return 'Suelo';

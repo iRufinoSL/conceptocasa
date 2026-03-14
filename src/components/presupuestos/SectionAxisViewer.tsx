@@ -1007,7 +1007,7 @@ export function SectionAxisViewer({
   // Render saved polygons with pattern fills
   const polygonElements = useMemo(() => {
     if (!gridLayout || !scale) return null;
-    const { originX, originY, cellPx } = gridLayout;
+    const { originX, originY, cellPxW, cellPxH } = gridLayout;
     const elements: JSX.Element[] = [];
 
     polygons.forEach((poly, polyIdx) => {
@@ -1016,8 +1016,8 @@ export function SectionAxisViewer({
       if (verts.length < 3) return;
 
       const pxVerts = verts.map(v => ({
-        px: originX + v.x * cellPx,
-        py: originY - v.y * cellPx,
+        px: originX + v.x * cellPxW,
+        py: originY - v.y * cellPxH,
       }));
 
       const pointsStr = pxVerts.map(p => `${p.px},${p.py}`).join(' ');

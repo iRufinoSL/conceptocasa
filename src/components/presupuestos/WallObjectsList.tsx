@@ -144,6 +144,59 @@ interface AutoFace {
   wallIndex: number;
 }
 
+interface WorkspaceAutoFaceSource {
+  id: string;
+  name: string;
+  length: number;
+  width: number;
+  height: number | null;
+  floor_polygon: unknown;
+  is_base: boolean;
+}
+
+const buildAutoFacesForWorkspace = (room: WorkspaceAutoFaceSource, cellSizeM: number): AutoFace[] => {
+  if (room.is_base) return [];
+
+  const poly = Array.isArray(room.floor_polygon)
+    ? (room.floor_polygon as PolygonVertex[])
+    : null;
+  const heightM = room.height || 2.5;
+
+  const floorAreaRaw = poly && poly.length >= 3
+    ? polygonArea(poly) * cellSizeM * cellSizeM
+    : (room.length || 0) * (room.width || 0);
+  const floorArea = Math.round(floorAreaRaw * 100) / 100;
+
+  const faces: AutoFace[] = [
+    { workspace: room.name, roomId: room.id, faceName: 'Suelo', m2: floorArea, m3: null, sortKey: 0, wallIndex: -1 },
+  ];
+
+  const edgeCount = poly && poly.length >= 3 ? poly.length : 4;
+
+  for (let i = 0; i < edgeCount; i++) {
+    const wallLengthM = poly && poly.length >= 3
+      ? edgeLength(poly[i], poly[(i + 1) % poly.length]) * cellSizeM
+      : (i % 2 === 0 ? (room.length || 0) : (room.width || 0));
+
+    faces.push({
+      workspace: room.name,
+      roomId: room.id,
+      faceName: `Pared ${i + 1}`,
+      m2: Math.round(wallLengthM * heightM * 100) / 100,
+      m3: null,
+      sortKey: i + 1,
+      wallIndex: i + 1,
+    });
+  }
+
+  faces.push(
+    { workspace: room.name, roomId: room.id, faceName: 'Techo', m2: floorArea, m3: null, sortKey: edgeCount + 1, wallIndex: -2 },
+    { workspace: room.name, roomId: room.id, faceName: 'Espacio', m2: null, m3: Math.round(floorAreaRaw * heightM * 1000) / 1000, sortKey: edgeCount + 2, wallIndex: 0 },
+  );
+
+  return faces;
+};
+
 interface ObjectTemplate {
   id: string;
   budget_id: string;

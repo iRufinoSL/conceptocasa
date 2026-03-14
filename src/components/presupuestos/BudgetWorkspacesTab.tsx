@@ -2470,16 +2470,71 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
       await rebuildWallsSmart(editingId, formVertices.length);
       // Sync polygon to customSections so Plano view updates
       await syncFloorPolygonToSections(editingId, formVertices);
+
+      // Ensure Superficie (layer 0) exists for every face after edit
+      const { data: editedWalls } = await supabase
+        .from('budget_floor_plan_walls')
+        .select('id, wall_index, wall_type')
+        .eq('room_id', editingId);
+      const roomForMetrics: Workspace = {
+        id: editingId,
+        name: payload.name,
+        length: payload.length,
+        width: payload.width,
+        height: payload.height,
+        has_floor: true,
+        has_ceiling: true,
+        has_roof: false,
+        vertical_section_id: payload.vertical_section_id,
+        floor_id: null,
+        floor_polygon: formVertices,
+        is_base: payload.is_base,
+      };
+      await Promise.all((editedWalls || []).map((w: any) => ensureSuperficieLayer(w.id, roomForMetrics, w.wall_index)));
+
       toast.success('Espacio actualizado');
     } else {
       const { data: newRoom, error } = await supabase
         .from('budget_floor_plan_rooms').insert(payload).select('id').single();
       if (error || !newRoom) { toast.error('Error al crear'); return; }
-      const walls = formVertices.map((_, i) => ({ room_id: newRoom.id, wall_index: i + 1, wall_type: 'exterior' }));
-      const { error: wallsInsertError } = await supabase.from('budget_floor_plan_walls').insert(walls);
-      if (wallsInsertError) { toast.error(`Espacio creado, pero falló la creación de paredes: ${wallsInsertError.message}`); return; }
+
+      const wallsPayload = [
+        ...formVertices.map((_, i) => ({ room_id: newRoom.id, wall_index: i + 1, wall_type: 'exterior' })),
+        { room_id: newRoom.id, wall_index: -1, wall_type: 'suelo_basico' },
+        { room_id: newRoom.id, wall_index: -2, wall_type: 'techo_basico' },
+        { room_id: newRoom.id, wall_index: 0, wall_type: 'espacio' },
+      ];
+
+      const { data: insertedWalls, error: wallsInsertError } = await supabase
+        .from('budget_floor_plan_walls')
+        .insert(wallsPayload)
+        .select('id, wall_index, wall_type');
+
+      if (wallsInsertError) {
+        toast.error(`Espacio creado, pero falló la creación de caras: ${wallsInsertError.message}`);
+        return;
+      }
+
       // Sync polygon to customSections so Plano view updates immediately
       await syncFloorPolygonToSections(newRoom.id, formVertices);
+
+      // Ensure Superficie (layer 0) immediately for all faces
+      const roomForMetrics: Workspace = {
+        id: newRoom.id,
+        name: payload.name,
+        length: payload.length,
+        width: payload.width,
+        height: payload.height,
+        has_floor: true,
+        has_ceiling: true,
+        has_roof: false,
+        vertical_section_id: payload.vertical_section_id,
+        floor_id: null,
+        floor_polygon: formVertices,
+        is_base: payload.is_base,
+      };
+      await Promise.all((insertedWalls || []).map((w: any) => ensureSuperficieLayer(w.id, roomForMetrics, w.wall_index)));
+
       toast.success(`Espacio creado con ${formVertices.length} paredes`);
     }
     resetForm();

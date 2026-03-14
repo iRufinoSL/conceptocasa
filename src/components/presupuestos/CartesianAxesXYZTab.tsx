@@ -60,6 +60,20 @@ function findPolyIntersections(poly: PolygonVertex[], axis: 'x' | 'y', val: numb
   return results;
 }
 
+function normalizeWorkspaceName(value: string | null | undefined): string {
+  if (!value) return '';
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[._-]+/g, ' ')
+    .replace(/\b(techo|cubierta|suelo|piso|planta)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\d+$/g, '')
+    .trim();
+}
+
 interface CartesianAxesXYZTabProps {
   budgetId: string;
   isAdmin: boolean;

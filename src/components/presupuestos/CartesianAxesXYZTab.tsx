@@ -177,9 +177,9 @@ type SectionDraft = {
 };
 
 const SECTION_CONFIG: Record<SectionType, { title: string; axis: 'X' | 'Y' | 'Z'; axisLabel: string; placeholder: string }> = {
-  vertical: { title: 'Crear secciones Z', axis: 'Z', axisLabel: 'Eje Z', placeholder: '0' },
-  longitudinal: { title: 'Crear secciones Y', axis: 'Y', axisLabel: 'Eje Y', placeholder: '0' },
-  transversal: { title: 'Crear secciones X', axis: 'X', axisLabel: 'Eje X', placeholder: '0' },
+  vertical: { title: 'Secciones Z', axis: 'Z', axisLabel: 'Eje Z', placeholder: '0' },
+  longitudinal: { title: 'Secciones Y', axis: 'Y', axisLabel: 'Eje Y', placeholder: '0' },
+  transversal: { title: 'Secciones X', axis: 'X', axisLabel: 'Eje X', placeholder: '0' },
 };
 
 const INITIAL_DRAFTS: Record<SectionType, SectionDraft> = {

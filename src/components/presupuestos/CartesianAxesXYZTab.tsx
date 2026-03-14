@@ -1467,7 +1467,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
                           {section.name} ({section.axis}={section.axisValue})
                           {isAdmin && (
                             <button
-                              onClick={(e) => { e.stopPropagation(); handleDeleteSection(section.id); }}
+                              onClick={(e) => { e.stopPropagation(); handleDeleteSection(section); }}
                               className="ml-0.5 hover:text-destructive transition-colors"
                             >
                               <Trash2 className="h-2.5 w-2.5" />

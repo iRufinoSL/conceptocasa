@@ -476,8 +476,8 @@ export function SectionAxisViewer({
     pt.y = e.clientY;
     const ctm = svg.getScreenCTM();
     if (ctm) pt = pt.matrixTransform(ctm.inverse());
-    const rawCol = (pt.x - gridLayout.ox) / gridLayout.cellPx;
-    const rawRow = (pt.y - gridLayout.oy) / gridLayout.cellPx;
+    const rawCol = (pt.x - gridLayout.ox) / gridLayout.cellPxW;
+    const rawRow = (pt.y - gridLayout.oy) / gridLayout.cellPxH;
     const col = Math.round(rawCol * 2) / 2;
     const row = Math.round(rawRow * 2) / 2;
     if (col < 0 || col > gridLayout.totalCols || row < 0 || row > gridLayout.totalRows) return null;

@@ -69,9 +69,20 @@ function normalizeWorkspaceName(value: string | null | undefined): string {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[._-]+/g, ' ')
-    .replace(/\b(techo|cubierta|suelo|piso|planta)\b/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function normalizeWorkspaceNameLoose(value: string | null | undefined): string {
+  return normalizeWorkspaceName(value)
+    .replace(/\b(techo|cubierta|suelo|piso|planta|roof|ceiling|floor)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function isRoofLikeName(value: string | null | undefined): boolean {
+  const normalized = normalizeWorkspaceName(value);
+  return /\b(techo|cubierta|roof|ceiling)\b/.test(normalized);
 }
 
 function getPolygonBounds(vertices: Array<{ x: number; y: number }>) {

@@ -1224,8 +1224,8 @@ export function SectionAxisViewer({
       const areaGrid = polygonAreaGrid(verts.map(v => ({ x: v.x, y: v.y })));
       const areaM2 = areaGrid * (scale.hScale / 1000) * (scale.vScale / 1000);
       const centroid = polygonCentroid(verts.map(v => ({ x: v.x, y: v.y })));
-      const cx = originX + centroid.x * cellPx;
-      const cy = originY - centroid.y * cellPx;
+      const cx = originX + centroid.x * cellPxW;
+      const cy = originY - centroid.y * cellPxH;
       const heightMm = poly.zTop ? poly.zTop : null;
       const darkColor = color.replace(/(\d+)%\)$/, (_, l) => `${Math.max(parseInt(l) - 20, 15)}%)`);
 

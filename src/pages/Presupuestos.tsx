@@ -23,7 +23,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Badge } from '@/components/ui/badge';
 import { createModelBudget, getModelBudget } from '@/lib/model-budget-sync';
 
-type PresupuestoStatus = 'activo' | 'en_ejecucion' | 'archivado';
+type PresupuestoStatus = 'activo' | 'en_ejecucion' | 'archivado' | 'modelo';
 
 interface Presupuesto {
   id: string;

@@ -285,6 +285,10 @@ export default function Presupuestos() {
   const [showActive, setShowActive] = useState(false);
   const [showEnEjecucion, setShowEnEjecucion] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
+  const [showModelo, setShowModelo] = useState(true);
+  const [creatingModel, setCreatingModel] = useState(false);
+  const [modelSourceDialog, setModelSourceDialog] = useState(false);
+  const [modelSourceId, setModelSourceId] = useState('');
 
   const isAdmin = roles.includes('administrador');
 

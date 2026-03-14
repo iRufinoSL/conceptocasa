@@ -25,7 +25,8 @@ import { formatCurrency, formatNumber, formatPercent } from '@/lib/format-utils'
 import { percentToRatio } from '@/lib/budget-pricing';
 import { syncActivityResourcesRelatedUnits } from '@/lib/budget-utils';
 import { MeasurementInlineSelect, MeasurementInlineSelectHandle } from './MeasurementInlineSelect';
-import { WorkAreaInlineSelect } from './WorkAreaInlineSelect';
+import { WorkspaceInlineSelect } from './WorkspaceInlineSelect';
+import type { WorkspaceRoom, WorkspaceRelation } from './WorkspaceInlineSelect';
 import { ResourceInlineEdit } from './ResourceInlineEdit';
 import { BudgetResourceForm } from './BudgetResourceForm';
 import { ActivitiesWorkAreaGroupedView } from './ActivitiesWorkAreaGroupedView';
@@ -40,18 +41,7 @@ import { format, addDays, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useBudgetBroadcast } from '@/hooks/useBudgetBroadcast';
 import { SnapshotRestoreButton } from './SnapshotRestoreButton';
-interface WorkArea {
-  id: string;
-  name: string;
-  level: string;
-  work_area: string;
-  area_id: string;
-}
-
-interface WorkAreaRelation {
-  activity_id: string;
-  work_area_id: string;
-}
+// WorkspaceRoom and WorkspaceRelation imported from WorkspaceInlineSelect
 
 interface BudgetPhase {
   id: string;
@@ -135,7 +125,7 @@ interface ActivityForm {
   start_date: string;
   duration_days: string;
   tolerance_days: string;
-  work_area_ids: string[];
+  workspace_ids: string[];
   actual_start_date: string;
   actual_end_date: string;
   activity_type: string;
@@ -179,7 +169,7 @@ const emptyForm: ActivityForm = {
   start_date: '',
   duration_days: '',
   tolerance_days: '',
-  work_area_ids: [],
+  workspace_ids: [],
   actual_start_date: '',
   actual_end_date: '',
   activity_type: 'normal',
@@ -203,8 +193,8 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
   const [expandedOptions, setExpandedOptions] = useState<Set<string>>(new Set());
   const [activitySortOrder, setActivitySortOrder] = useState<'asc' | 'desc'>('asc');
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set());
-  const [workAreas, setWorkAreas] = useState<WorkArea[]>([]);
-  const [workAreaRelations, setWorkAreaRelations] = useState<WorkAreaRelation[]>([]);
+  const [workspaceRooms, setWorkspaceRooms] = useState<WorkspaceRoom[]>([]);
+  const [workspaceRelations, setWorkspaceRelations] = useState<WorkspaceRelation[]>([]);
   const [unassignedResourcesSubtotal, setUnassignedResourcesSubtotal] = useState(0);
   const [selectedPhasesForPrint, setSelectedPhasesForPrint] = useState<Set<string>>(new Set());
   
@@ -398,7 +388,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
   // Fetch activities and phases
   const fetchData = async () => {
     try {
-      const [activitiesRes, phasesRes, resourcesRes, measurementsRes, measurementRelationsRes, workAreasRes, workAreaRelationsRes] = await Promise.all([
+      const [activitiesRes, phasesRes, resourcesRes, measurementsRes, measurementRelationsRes, workspaceRoomsRes, workspaceRelationsRes] = await Promise.all([
         supabase
           .from('budget_activities')
           .select('*')
@@ -420,16 +410,24 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
         supabase
           .from('budget_measurement_relations')
           .select('measurement_id, related_measurement_id'),
+        // Load workspace rooms (Espacios de trabajo) from the floor plan
+        (async () => {
+          const { data: fp } = await supabase
+            .from('budget_floor_plans')
+            .select('id')
+            .eq('budget_id', budgetId)
+            .maybeSingle();
+          if (!fp) return { data: [], error: null };
+          return supabase
+            .from('budget_floor_plan_rooms')
+            .select('id, name, floor_id')
+            .eq('floor_plan_id', fp.id)
+            .order('name');
+        })(),
+        // Load activity-workspace relations
         supabase
-          .from('budget_work_areas')
-          .select('id, name, level, work_area, area_id')
-          .eq('budget_id', budgetId)
-          .order('area_id', { ascending: true }),
-        // IMPORTANT: Filter by budget at query level to avoid the 1000-row default limit
-        // and ensure QUÉ? matches DÓNDE? (source of truth).
-        supabase
-          .from('budget_work_area_activities')
-          .select('activity_id, work_area_id, budget_activities!inner(budget_id)')
+          .from('budget_activity_workspaces')
+          .select('activity_id, workspace_id, budget_activities!inner(budget_id)')
           .eq('budget_activities.budget_id', budgetId)
       ]);
 
@@ -438,8 +436,8 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
       if (resourcesRes.error) throw resourcesRes.error;
       if (measurementsRes.error) throw measurementsRes.error;
       if (measurementRelationsRes.error) throw measurementRelationsRes.error;
-      if (workAreasRes.error) throw workAreasRes.error;
-      if (workAreaRelationsRes.error) throw workAreaRelationsRes.error;
+      if (workspaceRoomsRes.error) throw workspaceRoomsRes.error;
+      if (workspaceRelationsRes.error) throw workspaceRelationsRes.error;
 
       const allResources = resourcesRes.data || [];
 
@@ -460,10 +458,10 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
       );
       setUnassignedResourcesSubtotal(resourcesWithoutActivitySubtotal);
 
-      // Filter work area relations to only those for activities in this budget
+      // Filter workspace relations to only those for activities in this budget
       const activityIds = (activitiesRes.data || []).map(a => a.id);
-      const filteredWorkAreaRelations = (workAreaRelationsRes.data || [])
-        .map((r: any) => ({ activity_id: r.activity_id, work_area_id: r.work_area_id }))
+      const filteredWorkspaceRelations = (workspaceRelationsRes.data || [])
+        .map((r: any) => ({ activity_id: r.activity_id, workspace_id: r.workspace_id }))
         .filter((r: any) => activityIds.includes(r.activity_id));
 
       // Get file counts and resource subtotals for each activity
@@ -515,8 +513,8 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
       setPhases(phasesRes.data || []);
       setMeasurements(measurementsList);
       setMeasurementRelations(filteredRelations);
-      setWorkAreas(workAreasRes.data || []);
-      setWorkAreaRelations(filteredWorkAreaRelations);
+      setWorkspaceRooms((workspaceRoomsRes.data || []) as WorkspaceRoom[]);
+      setWorkspaceRelations(filteredWorkspaceRelations);
     } catch (err: any) {
       console.error('Error fetching data:', err);
       toast.error('Error al cargar datos');
@@ -529,34 +527,31 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
   fetchDataRef.current = fetchData;
   useEffect(() => {
     const channel = supabase
-      .channel('budget-work-area-activities-changes')
+      .channel('budget-activity-workspaces-changes')
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
-          table: 'budget_work_area_activities'
+          table: 'budget_activity_workspaces'
         },
         (payload) => {
-          console.log('Work area relation change:', payload);
-          // Refetch work area relations when changes occur
-          const fetchWorkAreaRelations = async () => {
-            // IMPORTANT: Filter by budget at query level to avoid hitting default limits.
-            const { data: workAreaRelationsRes } = await supabase
-              .from('budget_work_area_activities')
-              .select('activity_id, work_area_id, budget_activities!inner(budget_id)')
+          console.log('Workspace relation change:', payload);
+          const fetchWorkspaceRelations = async () => {
+            const { data: wsRelRes } = await supabase
+              .from('budget_activity_workspaces')
+              .select('activity_id, workspace_id, budget_activities!inner(budget_id)')
               .eq('budget_activities.budget_id', budgetId);
             
-            if (workAreaRelationsRes) {
-              // Filter to only activities in this budget
+            if (wsRelRes) {
               const activityIds = activities.map(a => a.id);
-              const filteredRelations = workAreaRelationsRes
-                .map((r: any) => ({ activity_id: r.activity_id, work_area_id: r.work_area_id }))
+              const filteredRelations = wsRelRes
+                .map((r: any) => ({ activity_id: r.activity_id, workspace_id: r.workspace_id }))
                 .filter((r: any) => activityIds.includes(r.activity_id));
-              setWorkAreaRelations(filteredRelations);
+              setWorkspaceRelations(filteredRelations);
             }
           };
-          fetchWorkAreaRelations();
+          fetchWorkspaceRelations();
         }
       )
       .subscribe();
@@ -589,15 +584,15 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
           handleEdit(fullActivity);
         } else {
           // Activity might not be loaded yet, fetch and edit
-          const [activityRes, workAreaLinksRes] = await Promise.all([
+          const [activityRes, wsLinksRes] = await Promise.all([
             supabase
               .from('budget_activities')
               .select('*')
               .eq('id', activityData.id)
               .single(),
             supabase
-              .from('budget_work_area_activities')
-              .select('work_area_id')
+              .from('budget_activity_workspaces')
+              .select('workspace_id')
               .eq('activity_id', activityData.id)
           ]);
           
@@ -616,7 +611,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
               start_date: data.start_date || '',
               duration_days: data.duration_days?.toString() || '',
               tolerance_days: data.tolerance_days?.toString() || '',
-              work_area_ids: (workAreaLinksRes.data || []).map(r => r.work_area_id),
+              workspace_ids: (wsLinksRes.data || []).map((r: any) => r.workspace_id),
               actual_start_date: data.actual_start_date || '',
               actual_end_date: data.actual_end_date || '',
               activity_type: data.activity_type || 'normal',
@@ -705,14 +700,12 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
   const handleEdit = async (activity: BudgetActivity) => {
     setEditingActivity(activity);
     
-    // CRITICAL: Always fetch work area links directly from DB to ensure accurate data
-    // The local state (workAreaRelations) might be stale or filtered incorrectly
-    const { data: workAreaLinksRes } = await supabase
-      .from('budget_work_area_activities')
-      .select('work_area_id')
+    const { data: wsLinksRes } = await supabase
+      .from('budget_activity_workspaces')
+      .select('workspace_id')
       .eq('activity_id', activity.id);
     
-    const fetchedWorkAreaIds = (workAreaLinksRes || []).map(r => r.work_area_id);
+    const fetchedWsIds = (wsLinksRes || []).map((r: any) => r.workspace_id);
     
     setForm({
       name: activity.name,
@@ -726,7 +719,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
       start_date: activity.start_date || '',
       duration_days: activity.duration_days?.toString() || '',
       tolerance_days: activity.tolerance_days?.toString() || '',
-      work_area_ids: fetchedWorkAreaIds,
+      workspace_ids: fetchedWsIds,
       actual_start_date: activity.actual_start_date || '',
       actual_end_date: activity.actual_end_date || '',
       activity_type: activity.activity_type || 'normal',
@@ -1008,29 +1001,26 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
       if (savedActivityId) {
         await syncActivityResourcesRelatedUnits(savedActivityId);
         
-        // Update work area relations
-        const normalizedWorkAreaIds = normalizeIds(form.work_area_ids);
+        // Update workspace relations
+        const normalizedWsIds = normalizeIds(form.workspace_ids);
 
-        // First, delete existing relations for this activity
         const { error: deleteRelError } = await supabase
-          .from('budget_work_area_activities')
+          .from('budget_activity_workspaces')
           .delete()
           .eq('activity_id', savedActivityId);
 
         if (deleteRelError) throw deleteRelError;
 
-        // Insert new relations (idempotent; avoid unique violations)
-        if (normalizedWorkAreaIds.length > 0) {
-          // CRITICAL: Use the correct column order matching the unique constraint (work_area_id, activity_id)
-          const relationsToInsert = normalizedWorkAreaIds.map((workAreaId) => ({
-            work_area_id: workAreaId,
+        if (normalizedWsIds.length > 0) {
+          const relationsToInsert = normalizedWsIds.map((wsId) => ({
+            workspace_id: wsId,
             activity_id: savedActivityId,
           }));
 
           const { error: relError } = await supabase
-            .from('budget_work_area_activities')
+            .from('budget_activity_workspaces')
             .upsert(relationsToInsert, {
-              onConflict: 'work_area_id,activity_id',
+              onConflict: 'activity_id,workspace_id',
               ignoreDuplicates: true,
             });
 
@@ -1426,62 +1416,53 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
     }
   };
 
-  // Update activity work areas
-  const handleUpdateActivityWorkAreas = async (activityId: string, workAreaIds: string[]) => {
+  // Update activity workspaces
+  const handleUpdateActivityWorkspaces = async (activityId: string, workspaceIds: string[]) => {
     return enqueueWorkAreaUpdate(activityId, async () => {
-      const normalizedIds = normalizeIds(workAreaIds);
+      const normalizedIds = normalizeIds(workspaceIds);
 
       try {
-        // Always compute diff from the DB to avoid stale local state (fast toggles + realtime)
         const { data: currentRows, error: currentError } = await supabase
-          .from('budget_work_area_activities')
-          .select('work_area_id')
+          .from('budget_activity_workspaces')
+          .select('workspace_id')
           .eq('activity_id', activityId);
 
         if (currentError) throw currentError;
 
-        const currentWorkAreaIds = new Set((currentRows || []).map((r) => r.work_area_id));
-        const newWorkAreaIds = new Set(normalizedIds);
-        const toAdd = normalizedIds.filter((id) => !currentWorkAreaIds.has(id));
-        const toRemove = [...currentWorkAreaIds].filter((id) => !newWorkAreaIds.has(id));
+        const currentIds = new Set((currentRows || []).map((r: any) => r.workspace_id));
+        const newIds = new Set(normalizedIds);
+        const toAdd = normalizedIds.filter((id) => !currentIds.has(id));
+        const toRemove = [...currentIds].filter((id) => !newIds.has(id));
 
         if (toRemove.length > 0) {
           const { error: removeError } = await supabase
-            .from('budget_work_area_activities')
+            .from('budget_activity_workspaces')
             .delete()
             .eq('activity_id', activityId)
-            .in('work_area_id', toRemove);
-
+            .in('workspace_id', toRemove);
           if (removeError) throw removeError;
         }
 
         if (toAdd.length > 0) {
-          // Idempotent insert: avoid unique constraint errors under concurrent updates.
-          // CRITICAL: Use the correct column order matching the unique constraint (work_area_id, activity_id)
           const { error: addError } = await supabase
-            .from('budget_work_area_activities')
-            .upsert(toAdd.map((wid) => ({ work_area_id: wid, activity_id: activityId })), {
-              onConflict: 'work_area_id,activity_id',
+            .from('budget_activity_workspaces')
+            .upsert(toAdd.map((wid) => ({ workspace_id: wid, activity_id: activityId })), {
+              onConflict: 'activity_id,workspace_id',
               ignoreDuplicates: true,
             });
-
           if (addError) throw addError;
         }
 
-        // Update local state optimistically
-        setWorkAreaRelations((prev) => {
+        setWorkspaceRelations((prev) => {
           const filtered = prev.filter((r) => r.activity_id !== activityId);
           return [
             ...filtered,
-            ...normalizedIds.map((wid) => ({ activity_id: activityId, work_area_id: wid })),
+            ...normalizedIds.map((wid) => ({ activity_id: activityId, workspace_id: wid })),
           ];
         });
       } catch (err: any) {
-        console.error('Error updating work areas:', err);
-        const msg = err?.message || 'Error desconocido';
-        const details = err?.details ? ` (${err.details})` : '';
-        toast.error('Error al actualizar áreas: ' + msg + details);
-        // Refetch to restore correct state
+        console.error('Error updating workspaces:', err);
+        toast.error('Error al actualizar espacios: ' + (err?.message || 'Error'));
         fetchData();
       }
     });
@@ -2410,15 +2391,16 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                     </TableCell>
                     <TableCell className="max-w-[180px]">
                       {canEditActivity(activity.id) ? (
-                        <WorkAreaInlineSelect
+                        <WorkspaceInlineSelect
                           activityId={activity.id}
-                          workAreas={workAreas}
-                          workAreaRelations={workAreaRelations}
-                          onSave={(ids) => handleUpdateActivityWorkAreas(activity.id, ids)}
+                          workspaces={workspaceRooms}
+                          workspaceRelations={workspaceRelations}
+                          inheritedWorkspaceIds={activity.parent_activity_id ? workspaceRelations.filter(r => r.activity_id === activity.parent_activity_id).map(r => r.workspace_id) : undefined}
+                          onSave={(ids) => handleUpdateActivityWorkspaces(activity.id, ids)}
                         />
                       ) : (
                         <span className="text-muted-foreground text-xs">
-                          {workAreaRelations.filter(r => r.activity_id === activity.id).length} áreas
+                          {workspaceRelations.filter(r => r.activity_id === activity.id).length} espacios
                         </span>
                       )}
                     </TableCell>
@@ -3271,8 +3253,8 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
         <ActivitiesWorkAreaGroupedView
           activities={filteredActivities}
           phases={phases}
-          workAreas={workAreas}
-          workAreaRelations={workAreaRelations}
+          workAreas={workspaceRooms as any}
+          workAreaRelations={workspaceRelations as any}
           measurements={measurements}
           measurementRelations={measurementRelations}
           permissions={permissions}
@@ -3282,7 +3264,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
           onDelete={handleDeleteClick}
           onManageFiles={handleManageFiles}
           onUpdateMeasurement={handleUpdateActivityMeasurement}
-          onUpdateWorkAreas={handleUpdateActivityWorkAreas}
+          onUpdateWorkAreas={handleUpdateActivityWorkspaces as any}
           generateActivityId={generateActivityId}
           getMeasurementData={getMeasurementData}
         />

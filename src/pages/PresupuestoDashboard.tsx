@@ -39,6 +39,7 @@ import { BudgetDondeTab } from '@/components/presupuestos/BudgetDondeTab';
 import { toast } from 'sonner';
 import { BudgetAdministracionTab } from '@/components/presupuestos/BudgetAdministracionTab';
 import { TolosaBrainstormView } from '@/components/presupuestos/TolosaBrainstormView';
+import { scheduleSyncToModel } from '@/lib/model-budget-sync';
 interface Presupuesto {
   id: string;
   nombre: string;

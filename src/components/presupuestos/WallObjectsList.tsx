@@ -1047,6 +1047,7 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
         return;
       }
       wall = newWall;
+      queryClient.invalidateQueries({ queryKey: ['budget-walls-for-panel', budgetId] });
     }
     await ensureSuperficieObject(wall.id, face);
     setPanelWallId(wall.id);

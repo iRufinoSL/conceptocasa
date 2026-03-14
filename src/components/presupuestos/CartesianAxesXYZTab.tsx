@@ -1036,9 +1036,65 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     // Merge: auto-projected polygons + manually saved ones.
     // For X/Y sections, rebase + heal stale legacy geometries (degenerate lines, mirrored X, invalid Z units).
     const savedPolys = liveSection.polygons || [];
+
+    // Recover real workspaces that still exist in DB but were lost from vertical section JSON (ghost-cleanup regressions).
+    const recoveredVerticalPolys: SectionPolygon[] = liveSection.sectionType !== 'vertical'
+      ? []
+      : (() => {
+          const existingIds = new Set(savedPolys.map(p => p.id));
+          const existingNames = new Set(
+            savedPolys
+              .map(p => normalizeWorkspaceName(p.name))
+              .filter(Boolean),
+          );
+
+          const grouped = new Map<string, WorkspaceRoom[]>();
+          for (const room of (workspaceRooms || [])) {
+            if (!room.floor_polygon || room.floor_polygon.length < 3) continue;
+            if (existingIds.has(room.id)) continue;
+
+            const normalized = normalizeWorkspaceName(room.name);
+            if (!normalized || existingNames.has(normalized)) continue;
+
+            const roomZBase = resolveRoomZBase(room);
+            if (Math.abs(roomZBase - liveSection.axisValue) > 0.001) continue;
+
+            const list = grouped.get(normalized) || [];
+            list.push(room);
+            grouped.set(normalized, list);
+          }
+
+          const recovered: SectionPolygon[] = [];
+          for (const candidates of grouped.values()) {
+            const room = pickMostRecentlyUpdatedRoom(candidates);
+            if (!room || !room.floor_polygon || room.floor_polygon.length < 3) continue;
+
+            const zBase = liveSection.axisValue;
+            const heightBlocks = room.height && room.height > 0
+              ? Math.round((room.height * 1000) / 250)
+              : 10;
+
+            recovered.push({
+              id: room.id,
+              name: room.name,
+              vertices: room.floor_polygon.map(v => ({ x: v.x, y: v.y, z: 0 })),
+              zBase,
+              zTop: zBase + Math.max(1, heightBlocks),
+              hasFloor: room.has_floor,
+              hasCeiling: room.has_ceiling,
+            });
+          }
+
+          return recovered;
+        })();
+
+    const effectiveSavedPolys = liveSection.sectionType === 'vertical'
+      ? [...savedPolys, ...recoveredVerticalPolys]
+      : savedPolys;
+
     const normalizedSavedPolys = liveSection.sectionType === 'vertical'
-      ? savedPolys
-      : savedPolys.map(rebaseSavedPolygonToRoomLevel);
+      ? effectiveSavedPolys
+      : effectiveSavedPolys.map(rebaseSavedPolygonToRoomLevel);
 
     const autoPolys = computeProjectedPolygons(liveSection);
     const autoPolysById = new Map(autoPolys.map(p => [p.id, p]));

@@ -832,9 +832,12 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
 
     // Filter: only project rooms that exist in a Z section (by id or by normalized name)
     const eligibleRooms = (workspaceRooms || []).filter(room => {
-      if (validRoomIds.size === 0 && verticalRoomNameSet.size === 0) return true;
-      const normalized = normalizeWorkspaceName(room.name);
-      return validRoomIds.has(room.id) || (normalized ? verticalRoomNameSet.has(normalized) : false);
+      if (validRoomIds.size > 0) return validRoomIds.has(room.id);
+      if (verticalRoomNameSet.size > 0) {
+        const normalized = normalizeWorkspaceName(room.name);
+        return normalized ? verticalRoomNameSet.has(normalized) : false;
+      }
+      return true;
     });
 
     // For transversal sections (X cut), keep Y orientation tied to the immutable origin.

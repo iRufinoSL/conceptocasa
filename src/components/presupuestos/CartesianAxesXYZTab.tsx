@@ -1047,16 +1047,19 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       let maxY = 0;
       for (const poly of mergedPolygons) {
         for (const v of (poly.vertices || [])) {
-          if (Number.isFinite(v.x)) maxX = Math.max(maxX, v.x);
-          if (Number.isFinite(v.y)) maxY = Math.max(maxY, v.y);
+          // Sanitize: ignore absurd values (>100 grid units = likely mm-encoded bug)
+          if (Number.isFinite(v.x) && v.x < 100) maxX = Math.max(maxX, v.x);
+          if (Number.isFinite(v.y) && v.y < 100) maxY = Math.max(maxY, v.y);
         }
       }
 
+      // Cap auto-expansion to prevent unmanageable grids (max ~40 cells per axis)
+      const MAX_AUTO = 40;
       return {
         negH: 0,
         negV: 0,
-        posH: Math.max(base.posH, Math.ceil(maxX) + 2),
-        posV: Math.max(base.posV, Math.ceil(maxY) + 2),
+        posH: Math.min(MAX_AUTO, Math.max(base.posH, Math.ceil(maxX) + 2)),
+        posV: Math.min(MAX_AUTO, Math.max(base.posV, Math.ceil(maxY) + 2)),
       };
     })();
 

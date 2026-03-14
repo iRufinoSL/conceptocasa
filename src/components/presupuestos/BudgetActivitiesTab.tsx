@@ -3253,8 +3253,8 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
         <ActivitiesWorkAreaGroupedView
           activities={filteredActivities}
           phases={phases}
-          workAreas={workAreas}
-          workAreaRelations={workAreaRelations}
+          workAreas={workspaceRooms as any}
+          workAreaRelations={workspaceRelations as any}
           measurements={measurements}
           measurementRelations={measurementRelations}
           permissions={permissions}
@@ -3264,7 +3264,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
           onDelete={handleDeleteClick}
           onManageFiles={handleManageFiles}
           onUpdateMeasurement={handleUpdateActivityMeasurement}
-          onUpdateWorkAreas={handleUpdateActivityWorkAreas}
+          onUpdateWorkAreas={handleUpdateActivityWorkspaces as any}
           generateActivityId={generateActivityId}
           getMeasurementData={getMeasurementData}
         />

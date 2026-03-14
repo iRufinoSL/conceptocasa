@@ -2618,16 +2618,29 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
   };
 
   /** Open the wall objects panel for a specific wall */
-  const openWallPanel = (roomId: string, wallDbIndex: number, sectionType: 'z' | 'xy' = 'z') => {
+  const openWallPanel = async (roomId: string, wallDbIndex: number, sectionType: 'z' | 'xy' = 'z') => {
     const room = rooms.find(r => r.id === roomId);
     if (!room) return;
-    const wall = allWalls.find(w => w.room_id === roomId && w.wall_index === wallDbIndex);
-    const poly = room.floor_polygon;
-    const edgeCount = poly ? poly.length : 4;
-    setWallPanelWallId(wall?.id || null);
+    let wall = allWalls.find(w => w.room_id === roomId && w.wall_index === wallDbIndex);
+    // Auto-create the wall record if it doesn't exist
+    if (!wall) {
+      const wallType = wallDbIndex === 0 ? 'espacio' : wallDbIndex === -1 ? 'suelo_basico' : wallDbIndex === -2 ? 'techo_basico' : 'exterior';
+      const { data: newWall, error } = await supabase
+        .from('budget_floor_plan_walls')
+        .insert({ room_id: roomId, wall_index: wallDbIndex, wall_type: wallType })
+        .select('id, room_id, wall_index, wall_type')
+        .single();
+      if (error || !newWall) {
+        toast.error('Error al abrir el ámbito');
+        return;
+      }
+      queryClient.invalidateQueries({ queryKey: ['workspace-walls'] });
+      wall = newWall as WallData;
+    }
+    setWallPanelWallId(wall.id);
     setWallPanelWallIndex(wallDbIndex);
-    setWallPanelWallType(normalizeWallType(wall?.wall_type));
-    setWallPanelLabel(wallDbIndex === 0 ? 'Espacio' : `P${wallDbIndex}`);
+    setWallPanelWallType(normalizeWallType(wall.wall_type));
+    setWallPanelLabel(wallDbIndex === 0 ? 'Espacio' : wallDbIndex === -1 ? 'Suelo' : wallDbIndex === -2 ? 'Techo' : `P${wallDbIndex}`);
     setWallPanelRoomName(room.name);
     setWallPanelRoomId(roomId);
     setWallPanelOpen(true);

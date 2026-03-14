@@ -114,6 +114,30 @@ export function WallObjectsPanel({
   const faceSurfaceM2 = superficieObj?.surface_m2 ?? 0;
   const faceVolumeM3 = superficieObj?.volume_m3 ?? null;
 
+  // Auto-create Superficie (layer_order=0) when panel opens and it doesn't exist
+  useEffect(() => {
+    if (!open || !wallId || isLoading) return;
+    const hasSuperficie = objects.some(o => o.layer_order === 0);
+    if (hasSuperficie) return;
+
+    const faceLabel = wallLabel || (wallIndex === 0 ? 'Espacio' : wallIndex === -1 ? 'Suelo' : wallIndex === -2 ? 'Techo' : `Pared ${wallIndex}`);
+    const desc = `${roomName} / ${faceLabel}`;
+
+    (async () => {
+      await supabase.from('budget_wall_objects').insert({
+        wall_id: wallId,
+        layer_order: 0,
+        name: 'Superficie',
+        description: desc,
+        object_type: 'material',
+        is_core: false,
+        surface_m2: null,
+        volume_m3: null,
+      });
+      queryClient.invalidateQueries({ queryKey: ['wall-objects', wallId] });
+    })();
+  }, [open, wallId, isLoading, objects, wallLabel, wallIndex, roomName, queryClient]);
+
   const resetForm = () => {
     setFormName('');
     setFormDescription('');

@@ -25,6 +25,7 @@ interface WorkspaceRoom {
   vertical_section_id: string | null;
   floor_id: string | null;
   floor_polygon: PolygonVertex[] | null;
+  updated_at: string | null;
 }
 
 interface FloorData {
@@ -70,8 +71,6 @@ function normalizeWorkspaceName(value: string | null | undefined): string {
     .replace(/[._-]+/g, ' ')
     .replace(/\b(techo|cubierta|suelo|piso|planta)\b/g, ' ')
     .replace(/\s+/g, ' ')
-    .trim()
-    .replace(/\d+$/g, '')
     .trim();
 }
 
@@ -215,7 +214,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       if (!floorPlan?.id) return [];
       const { data, error } = await supabase
         .from('budget_floor_plan_rooms')
-        .select('id, name, height, has_floor, has_ceiling, has_roof, vertical_section_id, floor_id, floor_polygon')
+        .select('id, name, height, has_floor, has_ceiling, has_roof, vertical_section_id, floor_id, floor_polygon, updated_at')
         .eq('floor_plan_id', floorPlan.id);
       if (error) throw error;
       return (data || []).map((r: any) => ({
@@ -774,6 +773,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     const ids = new Set<string>();
     for (const vs of verticalSections) {
       for (const p of (vs.polygons || [])) {
+        if (!p.vertices || p.vertices.length < 3) continue;
         ids.add(p.id);
       }
     }
@@ -813,6 +813,15 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     return map;
   }, [workspaceRooms]);
 
+  const pickMostRecentlyUpdatedRoom = useCallback((rooms: WorkspaceRoom[]): WorkspaceRoom | null => {
+    if (!rooms || rooms.length === 0) return null;
+    return [...rooms].sort((a, b) => {
+      const aTime = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+      const bTime = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+      return bTime - aTime;
+    })[0] || null;
+  }, []);
+
   /** Compute auto-projected polygons for Y/X sections from workspace rooms */
   const computeProjectedPolygons = useCallback((section: CustomSection): SectionPolygon[] => {
     if (section.sectionType === 'vertical') return [];
@@ -823,9 +832,12 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
 
     // Filter: only project rooms that exist in a Z section (by id or by normalized name)
     const eligibleRooms = (workspaceRooms || []).filter(room => {
-      if (validRoomIds.size === 0 && verticalRoomNameSet.size === 0) return true;
-      const normalized = normalizeWorkspaceName(room.name);
-      return validRoomIds.has(room.id) || (normalized ? verticalRoomNameSet.has(normalized) : false);
+      if (validRoomIds.size > 0) return validRoomIds.has(room.id);
+      if (verticalRoomNameSet.size > 0) {
+        const normalized = normalizeWorkspaceName(room.name);
+        return normalized ? verticalRoomNameSet.has(normalized) : false;
+      }
+      return true;
     });
 
     // For transversal sections (X cut), keep Y orientation tied to the immutable origin.
@@ -965,16 +977,26 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       );
     }
 
-    // 2) Fallback source: polygons drawn in vertical sections — ONLY if they match a real workspace room
+    // 2) Fallback source: polygons drawn in vertical sections
     for (const src of verticalPolygonSources) {
       const normalized = normalizeWorkspaceName(src.polygon.name);
-      const matchedRoom = workspaceRoomMap.get(src.polygon.id)
-        || (normalized ? (workspaceRoomsByNormalizedName.get(normalized)?.[0] || null) : null);
+      const directMatch = workspaceRoomMap.get(src.polygon.id) || null;
+      const exactCandidates = normalized ? (workspaceRoomsByNormalizedName.get(normalized) || []) : [];
 
-      // Skip ghost polygons that don't correspond to any real workspace room in the DB
-      if (!matchedRoom) continue;
+      let matchedRoom = directMatch;
+      if (!matchedRoom && exactCandidates.length > 0) {
+        matchedRoom = pickMostRecentlyUpdatedRoom(exactCandidates);
+      }
 
-      const fallbackId = matchedRoom.id;
+      if (!matchedRoom && normalized) {
+        const partialCandidates = (workspaceRooms || []).filter(room => {
+          const roomName = normalizeWorkspaceName(room.name);
+          return !!roomName && (roomName.includes(normalized) || normalized.includes(roomName));
+        });
+        matchedRoom = pickMostRecentlyUpdatedRoom(partialCandidates);
+      }
+
+      const fallbackId = matchedRoom?.id || src.polygon.id;
       if (projectedKeys.has(fallbackId)) continue;
 
       const footprint: PolygonVertex[] = src.polygon.vertices.map(v => ({ x: v.x, y: v.y }));
@@ -990,18 +1012,18 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
 
       pushProjectedRoom(
         fallbackId,
-        matchedRoom.name,
+        matchedRoom?.name || src.polygon.name || `Espacio ${src.axisValue}`,
         footprint,
         src.axisValue,
-        matchedRoom.height ?? inferredHeightM ?? defaultHeight,
-        matchedRoom.has_floor ?? src.polygon.hasFloor,
-        matchedRoom.has_ceiling ?? src.polygon.hasCeiling,
-        matchedRoom.id,
+        matchedRoom?.height ?? inferredHeightM ?? defaultHeight,
+        matchedRoom?.has_floor ?? src.polygon.hasFloor,
+        matchedRoom?.has_ceiling ?? src.polygon.hasCeiling,
+        matchedRoom?.id,
       );
     }
 
     return projected;
-  }, [workspaceRooms, allWalls, resolveRoomZBase, validRoomIds, verticalRoomNameSet, verticalPolygonSources, workspaceRoomsByNormalizedName, workspaceRoomMap]);
+  }, [workspaceRooms, allWalls, resolveRoomZBase, validRoomIds, verticalRoomNameSet, verticalPolygonSources, workspaceRoomsByNormalizedName, workspaceRoomMap, pickMostRecentlyUpdatedRoom]);
 
   // If viewing a section, show the viewer
   if (activeSection) {
@@ -1018,9 +1040,31 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
 
     const autoPolys = computeProjectedPolygons(liveSection);
     const autoPolysById = new Map(autoPolys.map(p => [p.id, p]));
-    const healedSavedPolys = liveSection.sectionType === 'vertical'
+    const autoNameToId = new Map<string, string>();
+    for (const poly of autoPolys) {
+      const key = normalizeWorkspaceName(poly.name);
+      if (key && !autoNameToId.has(key)) autoNameToId.set(key, poly.id);
+    }
+
+    const filteredSavedPolys = liveSection.sectionType === 'vertical'
       ? normalizedSavedPolys
-      : normalizedSavedPolys.map(p => maybeHealLegacySavedPolygon(
+      : normalizedSavedPolys.filter(poly => {
+          if (!poly.vertices || poly.vertices.length === 0) return true;
+          if (autoPolysById.has(poly.id)) return true;
+
+          const key = normalizeWorkspaceName(poly.name);
+          if (!key) return true;
+
+          const canonicalId = autoNameToId.get(key);
+          if (!canonicalId) return true;
+
+          // Remove stale duplicates with same normalized name but obsolete IDs
+          return canonicalId === poly.id;
+        });
+
+    const healedSavedPolys = liveSection.sectionType === 'vertical'
+      ? filteredSavedPolys
+      : filteredSavedPolys.map(p => maybeHealLegacySavedPolygon(
           p,
           autoPolysById.get(p.id),
           liveSection.sectionType as 'vertical' | 'longitudinal' | 'transversal',

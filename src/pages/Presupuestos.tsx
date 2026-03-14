@@ -121,6 +121,7 @@ const PresupuestoCard = ({ p, isAdmin, recalculatingId, onRecalculate, onEdit, o
             <Badge className={STATUS_COLORS[p.status]}>
               {p.status === 'en_ejecucion' && <Play className="h-3 w-3 mr-1" />}
               {p.status === 'archivado' && <Archive className="h-3 w-3 mr-1" />}
+              {p.status === 'modelo' && <Crown className="h-3 w-3 mr-1" />}
               {STATUS_LABELS[p.status]}
             </Badge>
           </div>

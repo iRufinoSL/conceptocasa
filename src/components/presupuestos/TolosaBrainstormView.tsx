@@ -1022,7 +1022,36 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
     toast.success(`"${item.name}" movido al nivel de "${parent.name}"`);
   };
 
-  const getDepthColor = (depth: number) => {
+  // Reparent item: move an item to become a child of another item (drag-and-drop)
+  const reparentItem = useCallback(async (itemId: string, newParentId: string | null) => {
+    if (itemId === newParentId) return;
+    const item = items.find(i => i.id === itemId);
+    if (!item) return;
+    // Prevent circular: newParent cannot be a descendant of item
+    if (newParentId) {
+      const descendants = getAllDescendants(itemId);
+      if (descendants.some(d => d.id === newParentId)) {
+        toast.error('No se puede mover a un descendiente propio');
+        return;
+      }
+      if (item.parent_id === newParentId) {
+        toast.info('Ya es hijo de ese elemento');
+        return;
+      }
+    }
+    const newSiblings = newParentId ? getChildren(newParentId) : rootItems;
+    await supabase.from('tolosa_items').update({
+      parent_id: newParentId,
+      order_index: newSiblings.length,
+    }).eq('id', itemId);
+    if (newParentId) {
+      setExpandedIds(prev => new Set(prev).add(newParentId));
+    }
+    await recalculateAllCodes();
+    const targetName = newParentId ? items.find(i => i.id === newParentId)?.name || '' : 'Raíz';
+    toast.success(`"${item.name}" movido dentro de "${targetName}"`);
+  }, [items, getAllDescendants, getChildren, rootItems, recalculateAllCodes]);
+
     const colors = [
       'border-l-primary',
       'border-l-blue-500',

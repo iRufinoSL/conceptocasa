@@ -584,15 +584,15 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
           handleEdit(fullActivity);
         } else {
           // Activity might not be loaded yet, fetch and edit
-          const [activityRes, workAreaLinksRes] = await Promise.all([
+          const [activityRes, wsLinksRes] = await Promise.all([
             supabase
               .from('budget_activities')
               .select('*')
               .eq('id', activityData.id)
               .single(),
             supabase
-              .from('budget_work_area_activities')
-              .select('work_area_id')
+              .from('budget_activity_workspaces')
+              .select('workspace_id')
               .eq('activity_id', activityData.id)
           ]);
           
@@ -611,7 +611,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
               start_date: data.start_date || '',
               duration_days: data.duration_days?.toString() || '',
               tolerance_days: data.tolerance_days?.toString() || '',
-              work_area_ids: (workAreaLinksRes.data || []).map(r => r.work_area_id),
+              workspace_ids: (wsLinksRes.data || []).map((r: any) => r.workspace_id),
               actual_start_date: data.actual_start_date || '',
               actual_end_date: data.actual_end_date || '',
               activity_type: data.activity_type || 'normal',

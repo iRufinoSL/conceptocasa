@@ -75,6 +75,95 @@ function normalizeWorkspaceName(value: string | null | undefined): string {
     .trim();
 }
 
+function getPolygonBounds(vertices: Array<{ x: number; y: number }>) {
+  if (!vertices || vertices.length === 0) return null;
+  const xs = vertices.map(v => v.x).filter(Number.isFinite);
+  const ys = vertices.map(v => v.y).filter(Number.isFinite);
+  if (xs.length === 0 || ys.length === 0) return null;
+
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  return {
+    minX,
+    maxX,
+    minY,
+    maxY,
+    width: maxX - minX,
+    height: maxY - minY,
+  };
+}
+
+function buildHealedPolygonFromAuto(saved: SectionPolygon, auto: SectionPolygon): SectionPolygon {
+  return {
+    ...auto,
+    name: saved.name || auto.name,
+    hasFloor: saved.hasFloor ?? auto.hasFloor,
+    hasCeiling: saved.hasCeiling ?? auto.hasCeiling,
+    faceTypes: saved.faceTypes ?? auto.faceTypes,
+  };
+}
+
+function maybeHealLegacySavedPolygon(
+  saved: SectionPolygon,
+  auto: SectionPolygon | undefined,
+  sectionType: 'vertical' | 'longitudinal' | 'transversal',
+): SectionPolygon {
+  if (!auto) return saved;
+  if (!saved.vertices || saved.vertices.length < 3) return saved;
+
+  const savedBounds = getPolygonBounds(saved.vertices);
+  const autoBounds = getPolygonBounds(auto.vertices);
+  if (!savedBounds || !autoBounds) return buildHealedPolygonFromAuto(saved, auto);
+
+  // 1) Legacy degenerate lines in X/Y (height or width collapsed)
+  const isDegenerate = savedBounds.width < 0.01 || savedBounds.height < 0.01;
+
+  // 2) Legacy outliers where Z was persisted in incompatible units (e.g. thousands)
+  const isOutlier =
+    Math.abs(savedBounds.height - autoBounds.height) > Math.max(2, autoBounds.height * 4) ||
+    Math.abs(savedBounds.minY - autoBounds.minY) > Math.max(2, autoBounds.height * 4) ||
+    Math.abs(savedBounds.maxY - autoBounds.maxY) > Math.max(2, autoBounds.height * 4);
+
+  if (isDegenerate || isOutlier) {
+    return buildHealedPolygonFromAuto(saved, auto);
+  }
+
+  // 3) Legacy mirrored X-sections: unmirror around inferred mirror constant
+  if (sectionType === 'transversal') {
+    const mirrorConst = ((autoBounds.minX + savedBounds.maxX) + (autoBounds.maxX + savedBounds.minX)) / 2;
+    const mirroredVertices = saved.vertices.map(v => ({ ...v, x: mirrorConst - v.x }));
+    const mirroredBounds = getPolygonBounds(mirroredVertices);
+
+    if (mirroredBounds) {
+      const originalDiff =
+        Math.abs(savedBounds.minX - autoBounds.minX) +
+        Math.abs(savedBounds.maxX - autoBounds.maxX) +
+        Math.abs(savedBounds.minY - autoBounds.minY) +
+        Math.abs(savedBounds.maxY - autoBounds.maxY);
+
+      const mirroredDiff =
+        Math.abs(mirroredBounds.minX - autoBounds.minX) +
+        Math.abs(mirroredBounds.maxX - autoBounds.maxX) +
+        Math.abs(mirroredBounds.minY - autoBounds.minY) +
+        Math.abs(mirroredBounds.maxY - autoBounds.maxY);
+
+      const shouldUnmirror = originalDiff > 1 && mirroredDiff + 0.05 < originalDiff * 0.45;
+      if (shouldUnmirror) {
+        return {
+          ...saved,
+          vertices: mirroredVertices,
+          zBase: auto.zBase,
+          zTop: auto.zTop,
+        };
+      }
+    }
+  }
+
+  return saved;
+}
+
 interface CartesianAxesXYZTabProps {
   budgetId: string;
   isAdmin: boolean;
@@ -910,22 +999,59 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
   if (activeSection) {
     const liveSection = allSections.find(s => s.id === activeSection.id) || activeSection;
     const savedScale = (liveSection as any).scale as { hScale: number; vScale: number } | undefined;
-    const savedNegLimits = (liveSection as any).negLimits as { negH: number; negV: number } | undefined;
+    const savedNegLimits = (liveSection as any).negLimits as { negH: number; negV: number; posH?: number; posV?: number } | undefined;
 
     // Merge: auto-projected polygons + manually saved ones.
-    // For X/Y sections, rebase saved room polygons to their resolved floor Z before merge
-    // so stale historical saves (e.g. old Z0 overlap) no longer collapse upper floors.
+    // For X/Y sections, rebase + heal stale legacy geometries (degenerate lines, mirrored X, invalid Z units).
     const savedPolys = liveSection.polygons || [];
     const normalizedSavedPolys = liveSection.sectionType === 'vertical'
       ? savedPolys
       : savedPolys.map(rebaseSavedPolygonToRoomLevel);
 
     const autoPolys = computeProjectedPolygons(liveSection);
-    const savedIds = new Set(normalizedSavedPolys.map(p => p.id));
+    const autoPolysById = new Map(autoPolys.map(p => [p.id, p]));
+    const healedSavedPolys = liveSection.sectionType === 'vertical'
+      ? normalizedSavedPolys
+      : normalizedSavedPolys.map(p => maybeHealLegacySavedPolygon(
+          p,
+          autoPolysById.get(p.id),
+          liveSection.sectionType as 'vertical' | 'longitudinal' | 'transversal',
+        ));
+
+    const savedIds = new Set(healedSavedPolys.map(p => p.id));
     const mergedPolygons = [
-      ...normalizedSavedPolys,
+      ...healedSavedPolys,
       ...autoPolys.filter(ap => !savedIds.has(ap.id)),
     ];
+
+    // X/Y sections always referenced from (0,0,0) at bottom-left.
+    // Auto-expand positive ranges so all projected polygons stay visible.
+    const effectiveNegLimits = (() => {
+      const base = {
+        negH: savedNegLimits?.negH ?? 3,
+        negV: savedNegLimits?.negV ?? 3,
+        posH: savedNegLimits?.posH ?? 8,
+        posV: savedNegLimits?.posV ?? 6,
+      };
+
+      if (liveSection.sectionType === 'vertical') return base;
+
+      let maxX = 0;
+      let maxY = 0;
+      for (const poly of mergedPolygons) {
+        for (const v of (poly.vertices || [])) {
+          if (Number.isFinite(v.x)) maxX = Math.max(maxX, v.x);
+          if (Number.isFinite(v.y)) maxY = Math.max(maxY, v.y);
+        }
+      }
+
+      return {
+        negH: 0,
+        negV: 0,
+        posH: Math.max(base.posH, Math.ceil(maxX) + 2),
+        posV: Math.max(base.posV, Math.ceil(maxY) + 2),
+      };
+    })();
 
     // Merge saved section facePatterns with auto-generated surface patterns
     const savedSectionPatterns: PolygonFacePatterns = (liveSection as any).facePatterns || {};
@@ -982,8 +1108,13 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
           floorPlanId={floorPlan?.id}
           savedScale={savedScale}
           onSaveScale={(scale) => handleSaveScale(liveSection.id, scale)}
-          savedNegLimits={savedNegLimits}
-          onSaveNegLimits={(limits) => handleSaveNegLimits(liveSection.id, limits)}
+          savedNegLimits={effectiveNegLimits}
+          onSaveNegLimits={(limits) => {
+            const normalizedLimits = liveSection.sectionType === 'vertical'
+              ? limits
+              : { ...limits, negH: 0, negV: 0 };
+            handleSaveNegLimits(liveSection.id, normalizedLimits);
+          }}
           ridgeLine={ridgeLine}
           polygons={mergedPolygons}
           onSavePolygons={(polys) => handleSavePolygons(liveSection.id, polys)}

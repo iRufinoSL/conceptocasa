@@ -590,6 +590,12 @@ export default function Presupuestos() {
           </div>
           <div className="flex items-center gap-2">
             {isAdmin && <BackupButton module="budgets" variant="outline" />}
+            {isAdmin && !hasModel && (
+              <Button variant="outline" className="gap-2 border-violet-300 text-violet-600 hover:bg-violet-50" onClick={() => setModelSourceDialog(true)}>
+                <Crown className="h-4 w-4" />
+                Crear Modelo
+              </Button>
+            )}
             {isAdmin && (
               <Button variant="outline" onClick={() => setCloneDialogOpen(true)}>
                 <Copy className="h-4 w-4 mr-2" />

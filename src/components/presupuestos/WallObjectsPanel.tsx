@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -116,13 +116,13 @@ export function WallObjectsPanel({
 
   // Auto-create Superficie (layer_order=0) when panel opens and it doesn't exist
   // Use a ref to avoid duplicate inserts from re-renders
-  const creatingSuperficieRef = useState<Record<string, boolean>>(() => ({}))[0];
+  const creatingSuperficieRef = useRef<Record<string, boolean>>({});
 
   useEffect(() => {
     if (!open || !wallId || isLoading) return;
     if (objects.some(o => o.layer_order === 0)) return;
-    if (creatingSuperficieRef[wallId]) return;
-    creatingSuperficieRef[wallId] = true;
+    if (creatingSuperficieRef.current[wallId]) return;
+    creatingSuperficieRef.current[wallId] = true;
 
     const faceLabel = wallLabel || (wallIndex === 0 ? 'Espacio' : wallIndex === -1 ? 'Suelo' : wallIndex === -2 ? 'Techo' : `Pared ${wallIndex}`);
     const desc = `${roomName} / ${faceLabel}`;
@@ -151,10 +151,10 @@ export function WallObjectsPanel({
           console.error('Error creating Superficie:', error);
         }
       }
-      creatingSuperficieRef[wallId] = false;
+      creatingSuperficieRef.current[wallId] = false;
       queryClient.invalidateQueries({ queryKey: ['wall-objects', wallId] });
     })();
-  }, [open, wallId, isLoading, objects, wallLabel, wallIndex, roomName, queryClient, creatingSuperficieRef]);
+  }, [open, wallId, isLoading, objects, wallLabel, wallIndex, roomName, queryClient]);
 
   const resetForm = () => {
     setFormName('');
@@ -475,7 +475,15 @@ export function WallObjectsPanel({
                   </div>
                   <div>
                     <Label className="text-[10px]">Orden capa</Label>
-                    <Input className="h-7 text-xs" type="number" min={1} value={formLayerOrder} onChange={e => setFormLayerOrder(parseInt(e.target.value) || 1)} />
+                    <Input
+                      className="h-7 text-xs"
+                      type="number"
+                      value={formLayerOrder}
+                      onChange={e => {
+                        const parsed = Number.parseInt(e.target.value, 10);
+                        setFormLayerOrder(Number.isNaN(parsed) ? 1 : parsed);
+                      }}
+                    />
                   </div>
                   <div>
                     <Label className="text-[10px]">Espesor (mm)</Label>

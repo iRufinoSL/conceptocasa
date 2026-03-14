@@ -555,7 +555,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       });
     }
     return projected;
-  }, [workspaceRooms, allWalls, allSections]);
+  }, [workspaceRooms, allWalls, allSections, verticalZBaseMap]);
 
   // If viewing a section, show the viewer
   if (activeSection) {

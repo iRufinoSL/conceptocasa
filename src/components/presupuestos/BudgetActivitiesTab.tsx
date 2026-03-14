@@ -25,7 +25,8 @@ import { formatCurrency, formatNumber, formatPercent } from '@/lib/format-utils'
 import { percentToRatio } from '@/lib/budget-pricing';
 import { syncActivityResourcesRelatedUnits } from '@/lib/budget-utils';
 import { MeasurementInlineSelect, MeasurementInlineSelectHandle } from './MeasurementInlineSelect';
-import { WorkAreaInlineSelect } from './WorkAreaInlineSelect';
+import { WorkspaceInlineSelect } from './WorkspaceInlineSelect';
+import type { WorkspaceRoom, WorkspaceRelation } from './WorkspaceInlineSelect';
 import { ResourceInlineEdit } from './ResourceInlineEdit';
 import { BudgetResourceForm } from './BudgetResourceForm';
 import { ActivitiesWorkAreaGroupedView } from './ActivitiesWorkAreaGroupedView';

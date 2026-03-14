@@ -594,6 +594,9 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
   const [search, setSearch] = useState('');
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
   const [mainTab, setMainTab] = useState<'modelos' | 'espacios'>('modelos');
+  const [isSyncingSuperficies, setIsSyncingSuperficies] = useState(false);
+  const syncingSuperficiesRef = useRef(false);
+  const autoSyncSignatureRef = useRef('');
 
   // Panel state
   const [panelOpen, setPanelOpen] = useState(false);

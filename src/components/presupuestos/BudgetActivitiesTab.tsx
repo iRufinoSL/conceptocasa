@@ -420,7 +420,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
           if (!fp) return { data: [], error: null };
           return supabase
             .from('budget_floor_plan_rooms')
-            .select('id, name, floor_id')
+            .select('id, name, floor_id, floor_polygon')
             .eq('floor_plan_id', fp.id)
             .order('name');
         })(),

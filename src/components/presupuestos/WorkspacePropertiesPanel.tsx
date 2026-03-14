@@ -561,8 +561,8 @@ export function WorkspacePropertiesPanel({
           const rangeY = maxY - minY || 1;
           const edgeN = diagramVerts.length;
           const svgW = 320;
-          const svgH = edgeN > 4 ? 220 : 180;
-          const pad = 36;
+          const svgH = edgeN > 4 ? 280 : 240;
+          const pad = 50; // increased padding for labels outside
           const drawW = svgW - pad * 2;
           const drawH = svgH - pad * 2;
           const scaleF = Math.min(drawW / rangeX, drawH / rangeY);
@@ -575,10 +575,13 @@ export function WorkspacePropertiesPanel({
           const svgPts = diagramVerts.map(toSvg);
           const pointsStr = svgPts.map(p => `${p.sx},${p.sy}`).join(' ');
 
+          // Determine if we're in a cross-section
+          const isCrossSection = sectionType === 'transversal' || sectionType === 'longitudinal';
+
           return (
             <div className="px-2 py-1.5 border-b">
               <svg width={svgW} height={svgH} className="w-full" viewBox={`0 0 ${svgW} ${svgH}`}>
-                <polygon points={pointsStr} fill="hsl(var(--primary))" fillOpacity={0.1} stroke="hsl(var(--primary))" strokeWidth={2} />
+                <polygon points={pointsStr} fill="hsl(var(--primary))" fillOpacity={0.1} stroke="hsl(var(--primary))" strokeWidth={2.5} />
                 {diagramVerts.map((_, i) => {
                   const j = (i + 1) % diagramVerts.length;
                   const a = svgPts[i];
@@ -590,24 +593,38 @@ export function WorkspacePropertiesPanel({
                   const len = Math.sqrt(dx * dx + dy * dy);
                   const nx = len > 0 ? -dy / len : 0;
                   const ny = len > 0 ? dx / len : 0;
-                  const off = 16;
+                  const off = 24; // label offset further from edge
                   const isHighlighted = expandedFace === `wall-${i}`;
                   const wallObjs = getObjectsForWall(i + 1);
                   const wallHuecos = wallObjs.filter(o => o.object_type === 'hueco');
+
+                  // Determine label: T (techo) / S (suelo) for cross-sections
+                  let wallLabel = `P${i + 1}`;
+                  if (isCrossSection && diagramVerts.length >= 3) {
+                    const eMinY = Math.min(diagramVerts[i].y, diagramVerts[j].y);
+                    const eMaxY = Math.max(diagramVerts[i].y, diagramVerts[j].y);
+                    if (rangeY > 0.01) {
+                      const isBottom = Math.abs(eMinY - minY) < rangeY * 0.15 && Math.abs(eMaxY - minY) < rangeY * 0.15;
+                      const isTop = Math.abs(eMinY - maxY) < rangeY * 0.15 && Math.abs(eMaxY - maxY) < rangeY * 0.15;
+                      if (isBottom) wallLabel = 'S';
+                      else if (isTop) wallLabel = 'T';
+                    }
+                  }
+
                   return (
                     <g key={i} style={{ cursor: 'pointer' }} onClick={() => setExpandedFace(expandedFace === `wall-${i}` ? null : `wall-${i}`)}>
-                      <rect x={mx + nx * off - 14} y={my + ny * off - 9} width={28} height={18} rx={4}
+                      <rect x={mx + nx * off - 16} y={my + ny * off - 10} width={32} height={20} rx={4}
                         fill={isHighlighted ? 'hsl(var(--primary))' : 'hsl(var(--muted))'} stroke="hsl(var(--border))" strokeWidth={0.5} />
                       <text x={mx + nx * off} y={my + ny * off + 5} textAnchor="middle"
-                        fontSize={11} fontWeight={700} fill={isHighlighted ? 'hsl(var(--primary-foreground))' : 'hsl(var(--foreground))'} fontFamily="monospace">
-                        P{i + 1}
+                        fontSize={12} fontWeight={700} fill={isHighlighted ? 'hsl(var(--primary-foreground))' : 'hsl(var(--foreground))'} fontFamily="monospace">
+                        {wallLabel}
                       </text>
                       {wallHuecos.length > 0 && (
-                        <circle cx={mx + nx * off + 12} cy={my + ny * off - 6} r={5}
+                        <circle cx={mx + nx * off + 14} cy={my + ny * off - 7} r={5}
                           fill="hsl(var(--destructive))" />
                       )}
                       {wallHuecos.length > 0 && (
-                        <text x={mx + nx * off + 12} y={my + ny * off - 3}
+                        <text x={mx + nx * off + 14} y={my + ny * off - 4}
                           textAnchor="middle" fontSize={7} fill="white" fontWeight={700}>
                           {wallHuecos.length}
                         </text>
@@ -616,7 +633,7 @@ export function WorkspacePropertiesPanel({
                   );
                 })}
                 {svgPts.map((p, i) => (
-                  <circle key={`v${i}`} cx={p.sx} cy={p.sy} r={4} fill="hsl(var(--primary))" stroke="hsl(var(--background))" strokeWidth={2} />
+                  <circle key={`v${i}`} cx={p.sx} cy={p.sy} r={5} fill="hsl(var(--primary))" stroke="hsl(var(--background))" strokeWidth={2} />
                 ))}
               </svg>
             </div>

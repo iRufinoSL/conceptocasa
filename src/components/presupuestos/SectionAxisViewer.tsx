@@ -1631,18 +1631,40 @@ export function SectionAxisViewer({
               <X className="h-3 w-3" /> Cancelar
             </Button>
           </div>
+          <p className="text-[9px] text-muted-foreground font-medium">Coordenadas de vértices (inicio → fin de cada línea/pared)</p>
           <div className="flex flex-wrap gap-2">
-            {editVertices.map((v, i) => (
-              <div key={i} className="flex items-center gap-1 text-[10px] border rounded px-1.5 py-0.5 bg-background">
-                <span className="font-mono font-bold text-muted-foreground">V{i + 1}</span>
-                <span className="text-muted-foreground">{hAxis}:</span>
-                <Input className="h-5 w-12 text-[10px] font-mono px-1" type="number"
-                  value={v.x} onChange={e => updateEditVertex(i, 'x', parseFloat(e.target.value) || 0)} />
-                <span className="text-muted-foreground">{vAxis}:</span>
-                <Input className="h-5 w-12 text-[10px] font-mono px-1" type="number"
-                  value={v.y} onChange={e => updateEditVertex(i, 'y', parseFloat(e.target.value) || 0)} />
-              </div>
-            ))}
+            {editVertices.map((v, i) => {
+              const j = (i + 1) % editVertices.length;
+              const isCross = sectionType === 'transversal' || sectionType === 'longitudinal';
+              // Determine label for this edge
+              let edgeLabel = `P${i + 1}`;
+              if (isCross && editVertices.length >= 3) {
+                const minY = Math.min(...editVertices.map(vv => vv.y));
+                const maxY = Math.max(...editVertices.map(vv => vv.y));
+                const rangeY = maxY - minY;
+                const eMinY = Math.min(editVertices[i].y, editVertices[j].y);
+                const eMaxY = Math.max(editVertices[i].y, editVertices[j].y);
+                if (rangeY > 0.01) {
+                  if (Math.abs(eMinY - minY) < rangeY * 0.15 && Math.abs(eMaxY - minY) < rangeY * 0.15) edgeLabel = 'S';
+                  else if (Math.abs(eMinY - maxY) < rangeY * 0.15 && Math.abs(eMaxY - maxY) < rangeY * 0.15) edgeLabel = 'T';
+                }
+              }
+              return (
+                <div key={i} className="flex items-center gap-1 text-[10px] border rounded px-1.5 py-0.5 bg-background">
+                  <span className="font-mono font-bold text-primary">{edgeLabel}</span>
+                  <span className="text-muted-foreground text-[9px]">ini:</span>
+                  <span className="text-muted-foreground">{hAxis}:</span>
+                  <Input className="h-5 w-12 text-[10px] font-mono px-1" type="number"
+                    value={v.x} onChange={e => updateEditVertex(i, 'x', parseFloat(e.target.value) || 0)} />
+                  <span className="text-muted-foreground">{vAxis}:</span>
+                  <Input className="h-5 w-12 text-[10px] font-mono px-1" type="number"
+                    value={v.y} onChange={e => updateEditVertex(i, 'y', parseFloat(e.target.value) || 0)} />
+                  <span className="text-muted-foreground">Z:</span>
+                  <Input className="h-5 w-12 text-[10px] font-mono px-1" type="number"
+                    value={v.z} onChange={e => updateEditVertex(i, 'z', parseFloat(e.target.value) || 0)} />
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

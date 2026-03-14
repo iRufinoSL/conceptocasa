@@ -206,7 +206,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     return patterns;
   }, [allWalls, wallObjectSurfaces]);
 
-
+  const allSections = useMemo<CustomSection[]>(() => {
     if (!floorPlan?.custom_corners) return [];
     try {
       const parsed = typeof floorPlan.custom_corners === 'string'

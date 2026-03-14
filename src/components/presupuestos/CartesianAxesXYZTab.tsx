@@ -1046,26 +1046,44 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     // 2) Fallback source: polygons drawn in vertical sections
     for (const src of verticalPolygonSources) {
       const normalized = normalizeWorkspaceName(src.polygon.name);
+      const looseNormalized = normalizeWorkspaceNameLoose(src.polygon.name);
+      const sourceIsRoofLike = isRoofLikeName(src.polygon.name);
       const directMatch = workspaceRoomMap.get(src.polygon.id) || null;
       const exactCandidates = normalized ? (workspaceRoomsByNormalizedName.get(normalized) || []) : [];
 
       let matchedRoom = directMatch;
       if (!matchedRoom && exactCandidates.length > 0) {
-        matchedRoom = pickMostRecentlyUpdatedRoom(exactCandidates);
+        const compatible = exactCandidates.filter(room => isRoofLikeName(room.name) === sourceIsRoofLike);
+        matchedRoom = pickMostRecentlyUpdatedRoom(compatible.length > 0 ? compatible : exactCandidates);
+      }
+
+      if (!matchedRoom && looseNormalized) {
+        const looseCandidates = workspaceRoomsByLooseName.get(looseNormalized) || [];
+        if (looseCandidates.length > 0) {
+          const compatible = looseCandidates.filter(room => isRoofLikeName(room.name) === sourceIsRoofLike);
+          matchedRoom = pickMostRecentlyUpdatedRoom(compatible.length > 0 ? compatible : looseCandidates);
+        }
       }
 
       if (!matchedRoom && normalized) {
         const partialCandidates = (workspaceRooms || []).filter(room => {
           const roomName = normalizeWorkspaceName(room.name);
-          return !!roomName && (roomName.includes(normalized) || normalized.includes(roomName));
+          if (!roomName) return false;
+          return roomName.includes(normalized) || normalized.includes(roomName);
         });
-        matchedRoom = pickMostRecentlyUpdatedRoom(partialCandidates);
+        if (partialCandidates.length > 0) {
+          const compatible = partialCandidates.filter(room => isRoofLikeName(room.name) === sourceIsRoofLike);
+          matchedRoom = pickMostRecentlyUpdatedRoom(compatible.length > 0 ? compatible : partialCandidates);
+        }
       }
 
       const fallbackId = matchedRoom?.id || src.polygon.id;
       if (projectedKeys.has(fallbackId)) continue;
 
-      const footprint: PolygonVertex[] = src.polygon.vertices.map(v => ({ x: v.x, y: v.y }));
+      const roomFootprint = matchedRoom?.floor_polygon && matchedRoom.floor_polygon.length >= 3
+        ? matchedRoom.floor_polygon
+        : null;
+      const footprint: PolygonVertex[] = (roomFootprint || src.polygon.vertices).map(v => ({ x: v.x, y: v.y }));
       let inferredHeightM: number | null = null;
       if (typeof src.polygon.zTop === 'number' && typeof src.polygon.zBase === 'number') {
         const rawDelta = src.polygon.zTop - src.polygon.zBase;
@@ -1076,11 +1094,13 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
         }
       }
 
+      const resolvedZBase = matchedRoom ? resolveRoomZBase(matchedRoom) : src.axisValue;
+
       pushProjectedRoom(
         fallbackId,
         matchedRoom?.name || src.polygon.name || `Espacio ${src.axisValue}`,
         footprint,
-        src.axisValue,
+        resolvedZBase,
         matchedRoom?.height ?? inferredHeightM ?? defaultHeight,
         matchedRoom?.has_floor ?? src.polygon.hasFloor,
         matchedRoom?.has_ceiling ?? src.polygon.hasCeiling,
@@ -1089,7 +1109,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     }
 
     return projected;
-  }, [workspaceRooms, allWalls, resolveRoomZBase, validRoomIds, verticalRoomNameSet, verticalPolygonSources, workspaceRoomsByNormalizedName, workspaceRoomMap, pickMostRecentlyUpdatedRoom]);
+  }, [workspaceRooms, allWalls, resolveRoomZBase, validRoomIds, verticalRoomNameSet, verticalPolygonSources, workspaceRoomsByNormalizedName, workspaceRoomsByLooseName, workspaceRoomMap, pickMostRecentlyUpdatedRoom]);
 
   // If viewing a section, show the viewer
   if (activeSection) {

@@ -642,8 +642,78 @@ export default function Presupuestos() {
 
         {/* Results count */}
         <p className="text-sm text-muted-foreground mb-4">
-          {activePresupuestos.length} activo(s), {enEjecucionPresupuestos.length} en ejecución{archivedPresupuestos.length > 0 && `, ${archivedPresupuestos.length} archivado(s)`}
+          {modeloPresupuestos.length > 0 && `${modeloPresupuestos.length} modelo, `}{activePresupuestos.length} activo(s), {enEjecucionPresupuestos.length} en ejecución{archivedPresupuestos.length > 0 && `, ${archivedPresupuestos.length} archivado(s)`}
         </p>
+
+        {/* Modelo Presupuesto Section */}
+        {modeloPresupuestos.length > 0 && (
+          <Collapsible open={showModelo} onOpenChange={setShowModelo} className="mb-6">
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" className="flex items-center gap-2 mb-4 text-violet-600 hover:text-violet-700">
+                {showModelo ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                <Crown className="h-4 w-4" />
+                <Badge className="bg-violet-500/10 text-violet-600 hover:bg-violet-500/20">
+                  Presupuesto Modelo ({modeloPresupuestos.length})
+                </Badge>
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              {viewMode === 'cards' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {modeloPresupuestos.map((p) => (
+                    <PresupuestoCard 
+                      key={p.id} 
+                      p={p} 
+                      isAdmin={isAdmin}
+                      recalculatingId={recalculatingId}
+                      onRecalculate={handleRecalculate}
+                      onEdit={handleEdit}
+                      onDelete={handleDeleteClick}
+                      onStatusChange={handleStatusChange}
+                      onNavigate={(id) => navigate(`/presupuestos/${id}`)}
+                      generatePresupuestoId={generatePresupuestoId}
+                    />
+                  ))}
+                </div>
+              )}
+              {viewMode === 'list' && (
+                <div className="border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>PresupuestoID</TableHead>
+                        <TableHead>Nombre</TableHead>
+                        <TableHead>Estado</TableHead>
+                        <TableHead>Código</TableHead>
+                        <TableHead>Versión</TableHead>
+                        <TableHead>Población</TableHead>
+                        <TableHead>Provincia</TableHead>
+                        <TableHead>Creado</TableHead>
+                        <TableHead className="w-40">Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {modeloPresupuestos.map((p) => (
+                        <PresupuestoRow
+                          key={p.id}
+                          p={p}
+                          isAdmin={isAdmin}
+                          recalculatingId={recalculatingId}
+                          onRecalculate={handleRecalculate}
+                          onEdit={handleEdit}
+                          onDelete={handleDeleteClick}
+                          onStatusChange={handleStatusChange}
+                          onNavigate={(id) => navigate(`/presupuestos/${id}`)}
+                          generatePresupuestoId={generatePresupuestoId}
+                        />
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CollapsibleContent>
+          </Collapsible>
+        )}
 
         {/* Active Presupuestos Section */}
         {activePresupuestos.length > 0 && (

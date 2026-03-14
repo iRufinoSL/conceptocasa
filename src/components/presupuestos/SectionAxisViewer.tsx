@@ -437,10 +437,13 @@ export function SectionAxisViewer({
     // Compute proportional cell sizes based on real-world mm scales
     const totalRealW = totalCols * scale.hScale;
     const totalRealH = totalRows * scale.vScale;
+    if (!Number.isFinite(totalRealW) || !Number.isFinite(totalRealH) || totalRealW <= 0 || totalRealH <= 0) return null;
+
     const pxPerMm = Math.min(drawW / totalRealW, drawH / totalRealH);
-    const cellPxW = Math.floor(pxPerMm * scale.hScale);
-    const cellPxH = Math.floor(pxPerMm * scale.vScale);
-    if (cellPxW < 4 || cellPxH < 4) return null;
+    if (!Number.isFinite(pxPerMm) || pxPerMm <= 0) return null;
+
+    const cellPxW = Math.max(4, Math.floor(pxPerMm * scale.hScale));
+    const cellPxH = Math.max(4, Math.floor(pxPerMm * scale.vScale));
     const gridW = totalCols * cellPxW;
     const gridH = totalRows * cellPxH;
     const ox = margin + Math.floor((drawW - gridW) / 2);

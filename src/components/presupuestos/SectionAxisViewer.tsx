@@ -321,12 +321,11 @@ export function SectionAxisViewer({
 
   useEffect(() => { if (savedRulerLines) setRulerLines(savedRulerLines); }, [savedRulerLines]);
   useEffect(() => {
-    if (savedScale) {
-      setScale(savedScale);
-      setHScaleInput(String(savedScale.hScale));
-      setVScaleInput(String(savedScale.vScale));
-    }
-  }, [savedScale]);
+    const nextScale = getSafeScale(sectionType, savedScale);
+    setScale(nextScale);
+    setHScaleInput(String(nextScale.hScale));
+    setVScaleInput(String(nextScale.vScale));
+  }, [sectionType, savedScale]);
 
   useEffect(() => {
     if (savedNegLimits) {

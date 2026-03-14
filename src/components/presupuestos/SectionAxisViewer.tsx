@@ -431,9 +431,7 @@ export function SectionAxisViewer({
     const originRow = gridLimits.posV;
     const originX = ox + originCol * cellPxW;
     const originY = oy + originRow * cellPxH;
-    // Keep cellPx as legacy alias for square-assumption code (= max of both for backward compat)
-    const cellPx = cellPxW; // legacy — prefer cellPxW/cellPxH
-    return { totalCols, totalRows, gridW, gridH, ox, oy, originCol, originRow, originX, originY, cellPx, cellPxW, cellPxH };
+    return { totalCols, totalRows, gridW, gridH, ox, oy, originCol, originRow, originX, originY, cellPxW, cellPxH };
   }, [scale, w, h, gridLimits]);
 
   const colRowToPx = useCallback((col: number, row: number) => {

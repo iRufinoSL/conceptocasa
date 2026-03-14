@@ -22,7 +22,15 @@ interface WorkspaceRoom {
   has_ceiling: boolean;
   has_roof: boolean;
   vertical_section_id: string | null;
+  floor_id: string | null;
   floor_polygon: PolygonVertex[] | null;
+}
+
+interface FloorData {
+  id: string;
+  name: string;
+  order_index: number;
+  floor_plan_id: string;
 }
 
 interface WallData {
@@ -103,13 +111,29 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       if (!floorPlan?.id) return [];
       const { data, error } = await supabase
         .from('budget_floor_plan_rooms')
-        .select('id, name, height, has_floor, has_ceiling, has_roof, vertical_section_id, floor_polygon')
+        .select('id, name, height, has_floor, has_ceiling, has_roof, vertical_section_id, floor_id, floor_polygon')
         .eq('floor_plan_id', floorPlan.id);
       if (error) throw error;
       return (data || []).map((r: any) => ({
         ...r,
         floor_polygon: r.floor_polygon ? (typeof r.floor_polygon === 'string' ? JSON.parse(r.floor_polygon) : r.floor_polygon) : null,
       })) as WorkspaceRoom[];
+    },
+    enabled: !!floorPlan?.id,
+  });
+
+  // ── Load floors for Z-level computation ──
+  const { data: allFloors } = useQuery({
+    queryKey: ['budget-floors-for-projection', budgetId],
+    queryFn: async () => {
+      if (!floorPlan?.id) return [];
+      const { data, error } = await supabase
+        .from('budget_floors')
+        .select('id, name, order_index, floor_plan_id')
+        .eq('floor_plan_id', floorPlan.id)
+        .order('order_index', { ascending: true });
+      if (error) throw error;
+      return (data || []) as FloorData[];
     },
     enabled: !!floorPlan?.id,
   });
@@ -428,6 +452,26 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     return map;
   }, [allSections]);
 
+  // Build floor_id → Z base mapping from vertical sections sorted by axisValue
+  // Each floor's Z base = the vertical section axisValue at that floor's order_index
+  const floorZBaseMap = useMemo(() => {
+    const map = new Map<string, number>();
+    if (!allFloors || allFloors.length === 0) return map;
+    const verticalSections = allSections
+      .filter(s => s.sectionType === 'vertical')
+      .sort((a, b) => a.axisValue - b.axisValue);
+    
+    // Map each floor (by order_index) to the corresponding vertical section's axisValue
+    const sortedFloors = [...allFloors].sort((a, b) => a.order_index - b.order_index);
+    for (let i = 0; i < sortedFloors.length; i++) {
+      const floor = sortedFloors[i];
+      if (i < verticalSections.length) {
+        map.set(floor.id, verticalSections[i].axisValue);
+      }
+    }
+    return map;
+  }, [allFloors, allSections]);
+
   // Collect ALL polygon names across ALL sections for uniqueness check
   const allPolygonNames = useMemo(() => {
     const names: string[] = [];
@@ -458,18 +502,23 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       }
     }
 
-    /** Resolve zBase for a room using the precomputed map + fallbacks */
+    /** Resolve zBase for a room using floor assignment + polygon map + fallbacks */
     const resolveZBase = (room: WorkspaceRoom): number => {
-      // 1) Check by room ID in vertical section polygons
+      // 1) HIGHEST PRIORITY: Use floor_id → floorZBaseMap (most reliable)
+      if (room.floor_id) {
+        const byFloor = floorZBaseMap.get(room.floor_id);
+        if (byFloor !== undefined) return byFloor;
+      }
+      // 2) Check by room ID in vertical section polygons
       const byId = verticalZBaseMap.get(room.id);
       if (byId !== undefined) return byId;
-      // 2) Check by room name in vertical section polygons
+      // 3) Check by room name in vertical section polygons
       const byName = verticalZBaseMap.get(`name:${room.name}`);
       if (byName !== undefined) return byName;
-      // 3) Direct match by vertical_section_id
+      // 4) Direct match by vertical_section_id
       const direct = verticalSections.find(s => s.id === room.vertical_section_id);
       if (direct) return direct.axisValue;
-      // 4) Search vertical sections for a saved polygon whose id or name matches
+      // 5) Search vertical sections for a saved polygon whose id or name matches
       for (const vs of verticalSections) {
         const polys = vs.polygons;
         if (polys?.some(p => p.id === room.id || p.name === room.name)) return vs.axisValue;
@@ -555,7 +604,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       });
     }
     return projected;
-  }, [workspaceRooms, allWalls, allSections, verticalZBaseMap]);
+  }, [workspaceRooms, allWalls, allSections, verticalZBaseMap, floorZBaseMap]);
 
   // If viewing a section, show the viewer
   if (activeSection) {

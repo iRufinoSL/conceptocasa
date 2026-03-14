@@ -1958,8 +1958,11 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
     return (
       <div key={item.id} className="group/item">
         <div
-          className={`flex items-start gap-2 p-3 rounded-lg border-l-4 ${isEst ? 'border-l-amber-500 bg-amber-50/50 dark:bg-amber-950/20' : getDepthColor(depth) + ' bg-card'} hover:bg-accent/30 transition-colors`}
+          className={`flex items-start gap-2 p-3 rounded-lg border-l-4 ${isEst ? 'border-l-amber-500 bg-amber-50/50 dark:bg-amber-950/20' : getDepthColor(depth) + ' bg-card'} hover:bg-accent/30 transition-colors ${dropTargetId === item.id ? 'ring-2 ring-primary bg-primary/10' : ''}`}
           style={{ marginLeft: depth * 24 }}
+          onDragOver={(e) => { e.preventDefault(); if (dragItemId && dragItemId !== item.id) setDropTargetId(item.id); }}
+          onDragLeave={() => { if (dropTargetId === item.id) setDropTargetId(null); }}
+          onDrop={(e) => { e.preventDefault(); if (dragItemId && dragItemId !== item.id) { reparentItem(dragItemId, item.id); } setDragItemId(null); setDropTargetId(null); }}
         >
           {/* Expand/collapse chevron - toggles children tree only, NOT the detail form */}
           <button

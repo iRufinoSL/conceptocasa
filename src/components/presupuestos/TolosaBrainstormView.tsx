@@ -2718,7 +2718,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
           onReparentItem={(itemId, newParentId) => reparentItem(itemId, newParentId)}
         />
       ) : (
-        <div className="space-y-1">
+        <div className="space-y-1" onDragOver={(e) => e.preventDefault()} onDrop={() => { setDragItemId(null); setDropTargetId(null); }}>
           {rootItems.map(item => renderItem(item, 0))}
         </div>
       )}

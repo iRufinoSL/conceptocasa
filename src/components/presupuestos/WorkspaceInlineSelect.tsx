@@ -10,6 +10,7 @@ export interface WorkspaceRoom {
   id: string;
   name: string;
   floor_id: string | null;
+  floor_polygon?: Array<{ x: number; y: number }> | null;
 }
 
 export interface WorkspaceRelation {
@@ -21,6 +22,7 @@ interface WorkspaceInlineSelectProps {
   activityId: string;
   workspaces: WorkspaceRoom[];
   workspaceRelations: WorkspaceRelation[];
+  /** Called with a single-element array [workspaceId] or empty [] */
   onSave: (workspaceIds: string[]) => void | Promise<void>;
   /** If true, this activity inherits from parent — show inherited badge */
   inheritedWorkspaceIds?: string[];
@@ -50,18 +52,17 @@ export const WorkspaceInlineSelect = forwardRef<WorkspaceInlineSelectHandle, Wor
     const [open, setOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [showSuccess, setShowSuccess] = useState(false);
-    const [localSelectedIds, setLocalSelectedIds] = useState<string[]>([]);
     const triggerRef = useRef<HTMLButtonElement>(null);
 
-    const currentWorkspaceIds = useMemo(() => {
-      return workspaceRelations
-        .filter(r => r.activity_id === activityId)
-        .map(r => r.workspace_id);
+    // Single workspace: get current assigned workspace
+    const currentWorkspaceId = useMemo(() => {
+      const rel = workspaceRelations.find(r => r.activity_id === activityId);
+      return rel?.workspace_id || null;
     }, [workspaceRelations, activityId]);
 
-    useEffect(() => {
-      setLocalSelectedIds(Array.from(new Set(currentWorkspaceIds)));
-    }, [currentWorkspaceIds]);
+    const currentWorkspace = useMemo(() => {
+      return currentWorkspaceId ? workspaces.find(ws => ws.id === currentWorkspaceId) || null : null;
+    }, [currentWorkspaceId, workspaces]);
 
     useImperativeHandle(ref, () => ({
       focus: () => triggerRef.current?.focus(),
@@ -73,48 +74,36 @@ export const WorkspaceInlineSelect = forwardRef<WorkspaceInlineSelectHandle, Wor
       setTimeout(() => setShowSuccess(false), 1200);
     };
 
-    const selectedWorkspaces = useMemo(() => {
-      return workspaces.filter(ws => localSelectedIds.includes(ws.id));
-    }, [localSelectedIds, workspaces]);
-
-    // Inherited workspaces (from parent) that are NOT directly assigned
-    const inheritedOnly = useMemo(() => {
-      if (!inheritedWorkspaceIds || inheritedWorkspaceIds.length === 0) return [];
-      return inheritedWorkspaceIds
-        .filter(id => !localSelectedIds.includes(id))
-        .map(id => workspaces.find(ws => ws.id === id))
-        .filter(Boolean) as WorkspaceRoom[];
-    }, [inheritedWorkspaceIds, localSelectedIds, workspaces]);
+    // Inherited workspace (from parent) if not directly assigned
+    const inheritedWorkspace = useMemo(() => {
+      if (!inheritedWorkspaceIds || inheritedWorkspaceIds.length === 0 || currentWorkspaceId) return null;
+      const inheritedId = inheritedWorkspaceIds[0];
+      return inheritedId ? workspaces.find(ws => ws.id === inheritedId) || null : null;
+    }, [inheritedWorkspaceIds, currentWorkspaceId, workspaces]);
 
     const filteredWorkspaces = useMemo(() => {
       return workspaces
-        .filter(ws =>
-          searchMatch(ws.name, searchQuery)
-        )
+        .filter(ws => searchMatch(ws.name, searchQuery))
         .sort((a, b) => a.name.localeCompare(b.name));
     }, [workspaces, searchQuery]);
 
-    const handleToggle = async (workspaceId: string) => {
-      const base = localSelectedIds;
-      const newIds = base.includes(workspaceId)
-        ? base.filter(id => id !== workspaceId)
-        : [...base, workspaceId];
-
-      setLocalSelectedIds(Array.from(new Set(newIds)));
+    const handleSelect = async (workspaceId: string) => {
+      // If clicking the already-selected one, deselect
+      const newIds = workspaceId === currentWorkspaceId ? [] : [workspaceId];
+      setOpen(false);
+      setSearchQuery('');
       try {
-        await onSave(Array.from(new Set(newIds)));
+        await onSave(newIds);
         triggerSuccess();
       } catch {
-        setLocalSelectedIds(Array.from(new Set(currentWorkspaceIds)));
+        // revert handled by parent
       }
     };
 
-    const handleRemove = (e: React.MouseEvent, workspaceId: string) => {
+    const handleRemove = (e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      const newIds = localSelectedIds.filter(id => id !== workspaceId);
-      setLocalSelectedIds(Array.from(new Set(newIds)));
-      void onSave(Array.from(new Set(newIds)));
+      void onSave([]);
       triggerSuccess();
     };
 
@@ -135,34 +124,34 @@ export const WorkspaceInlineSelect = forwardRef<WorkspaceInlineSelectHandle, Wor
 
     return (
       <div className="flex items-center gap-1 flex-wrap">
-        {/* Inherited workspaces (from parent) */}
-        {inheritedOnly.map(ws => (
-          <Badge key={`inh-${ws.id}`} variant="outline" className="text-xs flex items-center gap-1 opacity-60 border-dashed">
-            <span className="truncate max-w-[100px]" title={`Heredado: ${ws.name}`}>
-              {ws.name}
+        {/* Inherited workspace (from parent) */}
+        {inheritedWorkspace && (
+          <Badge variant="outline" className="text-xs flex items-center gap-1 opacity-60 border-dashed">
+            <span className="truncate max-w-[100px]" title={`Heredado: ${inheritedWorkspace.name}`}>
+              {inheritedWorkspace.name}
             </span>
             <span className="text-[9px]">↑</span>
           </Badge>
-        ))}
+        )}
 
-        {/* Directly assigned workspaces */}
-        {selectedWorkspaces.map(ws => (
-          <Badge key={ws.id} variant="secondary" className="text-xs flex items-center gap-1 cursor-default">
-            <span className="truncate max-w-[100px]" title={ws.name}>
-              {ws.name}
+        {/* Currently assigned workspace */}
+        {currentWorkspace && (
+          <Badge variant="secondary" className="text-xs flex items-center gap-1 cursor-default">
+            <span className="truncate max-w-[120px]" title={currentWorkspace.name}>
+              {currentWorkspace.name}
             </span>
             <button
               type="button"
-              onClick={(e) => handleRemove(e, ws.id)}
+              onClick={handleRemove}
               className="ml-0.5 rounded-full hover:bg-destructive/20 hover:text-destructive p-0.5 transition-colors"
               title="Quitar espacio de trabajo"
             >
               <X className="h-3 w-3" />
             </button>
           </Badge>
-        ))}
+        )}
 
-        {/* Popover to add more */}
+        {/* Popover to select workspace */}
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
             <button
@@ -174,11 +163,11 @@ export const WorkspaceInlineSelect = forwardRef<WorkspaceInlineSelectHandle, Wor
                 open && "ring-2 ring-primary ring-offset-1 bg-primary/5",
                 "text-muted-foreground text-xs"
               )}
-              title="Añadir espacio de trabajo"
+              title={currentWorkspace ? 'Cambiar espacio de trabajo' : 'Asignar espacio de trabajo'}
               onKeyDown={handleKeyDown}
             >
               <MapPin className="h-3 w-3 flex-shrink-0" />
-              <span>{selectedWorkspaces.length === 0 && inheritedOnly.length === 0 ? 'Añadir' : '+'}</span>
+              <span>{!currentWorkspace && !inheritedWorkspace ? 'Asignar' : '⇄'}</span>
               {showSuccess && (
                 <CheckCircle2 className="h-3.5 w-3.5 text-green-500 animate-scale-in flex-shrink-0" />
               )}
@@ -195,18 +184,23 @@ export const WorkspaceInlineSelect = forwardRef<WorkspaceInlineSelectHandle, Wor
                 <CommandEmpty>No se encontraron espacios de trabajo</CommandEmpty>
                 <CommandGroup>
                   {filteredWorkspaces.map(ws => {
-                    const isSelected = localSelectedIds.includes(ws.id);
+                    const isSelected = ws.id === currentWorkspaceId;
                     const isInherited = inheritedWorkspaceIds?.includes(ws.id) && !isSelected;
                     return (
                       <CommandItem
                         key={ws.id}
                         value={ws.id}
-                        onSelect={() => void handleToggle(ws.id)}
+                        onSelect={() => void handleSelect(ws.id)}
                         className="flex items-center gap-2"
                       >
                         <Check className={cn("h-4 w-4", isSelected ? "opacity-100" : "opacity-0")} />
                         <div className="flex flex-col flex-1 min-w-0">
                           <span className="truncate font-medium">{ws.name}</span>
+                          {ws.floor_polygon && (
+                            <span className="text-[10px] text-muted-foreground">
+                              {ws.floor_polygon.length} paredes
+                            </span>
+                          )}
                         </div>
                         {isInherited && (
                           <Badge variant="outline" className="text-[9px] shrink-0 border-dashed">Heredado</Badge>

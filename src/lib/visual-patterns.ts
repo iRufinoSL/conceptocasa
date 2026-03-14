@@ -245,6 +245,12 @@ export const PATTERN_CATEGORIES = [
   { id: 'color', label: 'Color' },
 ] as const;
 
+/** Simplified pattern IDs for the Superficie (layer 0) selector */
+export const SUPERFICIE_PATTERN_IDS = ['vacio', 'bloques', 'ladrillo', 'parquet', 'teja'] as const;
+
+/** Filtered patterns for Superficie selector */
+export const SUPERFICIE_PATTERNS = VISUAL_PATTERNS.filter(p => (SUPERFICIE_PATTERN_IDS as readonly string[]).includes(p.id));
+
 export function getPatternById(id: string | null | undefined): VisualPattern | undefined {
   if (!id) return undefined;
   return VISUAL_PATTERNS.find(p => p.id === id);

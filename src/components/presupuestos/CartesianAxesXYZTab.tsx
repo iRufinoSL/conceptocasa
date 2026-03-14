@@ -177,9 +177,9 @@ type SectionDraft = {
 };
 
 const SECTION_CONFIG: Record<SectionType, { title: string; axis: 'X' | 'Y' | 'Z'; axisLabel: string; placeholder: string }> = {
-  vertical: { title: 'Crear secciones Z', axis: 'Z', axisLabel: 'Eje Z', placeholder: '0' },
-  longitudinal: { title: 'Crear secciones Y', axis: 'Y', axisLabel: 'Eje Y', placeholder: '0' },
-  transversal: { title: 'Crear secciones X', axis: 'X', axisLabel: 'Eje X', placeholder: '0' },
+  vertical: { title: 'Secciones Z', axis: 'Z', axisLabel: 'Eje Z', placeholder: '0' },
+  longitudinal: { title: 'Secciones Y', axis: 'Y', axisLabel: 'Eje Y', placeholder: '0' },
+  transversal: { title: 'Secciones X', axis: 'X', axisLabel: 'Eje X', placeholder: '0' },
 };
 
 const INITIAL_DRAFTS: Record<SectionType, SectionDraft> = {
@@ -975,10 +975,17 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       if (projectedKeys.has(fallbackId)) continue;
 
       const footprint: PolygonVertex[] = src.polygon.vertices.map(v => ({ x: v.x, y: v.y }));
-      const inferredHeightM =
-        typeof src.polygon.zTop === 'number' && typeof src.polygon.zBase === 'number'
-          ? Math.max(0.25, ((src.polygon.zTop - src.polygon.zBase) * zUnitMm) / 1000)
-          : null;
+      let inferredHeightM: number | null = null;
+      if (typeof src.polygon.zTop === 'number' && typeof src.polygon.zBase === 'number') {
+        const rawDelta = src.polygon.zTop - src.polygon.zBase;
+        // Sanitize: if zTop looks like mm (>50 grid units is unreasonable), treat as mm directly
+        if (rawDelta > 50) {
+          // zTop was stored in mm, convert to metres
+          inferredHeightM = Math.max(0.25, rawDelta / 1000);
+        } else {
+          inferredHeightM = Math.max(0.25, (rawDelta * zUnitMm) / 1000);
+        }
+      }
 
       pushProjectedRoom(
         fallbackId,
@@ -1040,16 +1047,19 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       let maxY = 0;
       for (const poly of mergedPolygons) {
         for (const v of (poly.vertices || [])) {
-          if (Number.isFinite(v.x)) maxX = Math.max(maxX, v.x);
-          if (Number.isFinite(v.y)) maxY = Math.max(maxY, v.y);
+          // Sanitize: ignore absurd values (>100 grid units = likely mm-encoded bug)
+          if (Number.isFinite(v.x) && v.x < 100) maxX = Math.max(maxX, v.x);
+          if (Number.isFinite(v.y) && v.y < 100) maxY = Math.max(maxY, v.y);
         }
       }
 
+      // Cap auto-expansion to prevent unmanageable grids (max ~40 cells per axis)
+      const MAX_AUTO = 40;
       return {
         negH: 0,
         negV: 0,
-        posH: Math.max(base.posH, Math.ceil(maxX) + 2),
-        posV: Math.max(base.posV, Math.ceil(maxY) + 2),
+        posH: Math.min(MAX_AUTO, Math.max(base.posH, Math.ceil(maxX) + 2)),
+        posV: Math.min(MAX_AUTO, Math.max(base.posV, Math.ceil(maxY) + 2)),
       };
     })();
 

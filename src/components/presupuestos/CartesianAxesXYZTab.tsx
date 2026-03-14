@@ -458,7 +458,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       wallIds = (wallRows || []).map(w => w.id);
     }
 
-    const childCleanupOps: Promise<any>[] = [];
+    const childCleanupOps: any[] = [];
 
     if (wallIds.length > 0) {
       childCleanupOps.push(

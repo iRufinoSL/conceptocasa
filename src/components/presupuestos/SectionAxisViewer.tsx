@@ -633,7 +633,9 @@ export function SectionAxisViewer({
     // Validate unique name across all sections
     const existingNames = [
       ...(allPolygonNames || []),
-      ...polygons.map(p => p.name),
+      ...polygons
+        .filter(p => Array.isArray(p.vertices) && p.vertices.length >= 3)
+        .map(p => p.name),
     ];
     if (existingNames.some(n => n.toLowerCase() === name.toLowerCase())) {
       toast.error(`Ya existe un espacio llamado "${name}". Los nombres deben ser únicos.`);

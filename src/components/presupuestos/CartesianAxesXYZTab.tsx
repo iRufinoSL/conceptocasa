@@ -634,12 +634,18 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     const savedScale = (liveSection as any).scale as { hScale: number; vScale: number } | undefined;
     const savedNegLimits = (liveSection as any).negLimits as { negH: number; negV: number } | undefined;
 
-    // Merge: auto-projected polygons + manually saved ones (saved override auto by id)
+    // Merge: auto-projected polygons + manually saved ones.
+    // For X/Y sections, rebase saved room polygons to their resolved floor Z before merge
+    // so stale historical saves (e.g. old Z0 overlap) no longer collapse upper floors.
     const savedPolys = liveSection.polygons || [];
+    const normalizedSavedPolys = liveSection.sectionType === 'vertical'
+      ? savedPolys
+      : savedPolys.map(rebaseSavedPolygonToRoomLevel);
+
     const autoPolys = computeProjectedPolygons(liveSection);
-    const savedIds = new Set(savedPolys.map(p => p.id));
+    const savedIds = new Set(normalizedSavedPolys.map(p => p.id));
     const mergedPolygons = [
-      ...savedPolys,
+      ...normalizedSavedPolys,
       ...autoPolys.filter(ap => !savedIds.has(ap.id)),
     ];
 

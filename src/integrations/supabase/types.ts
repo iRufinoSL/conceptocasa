@@ -4275,7 +4275,9 @@ export type Database = {
           estimated_surface_m2: number | null
           google_maps_url: string | null
           id: string
+          is_model: boolean
           is_signed: boolean
+          model_budget_id: string | null
           nombre: string
           option_a_description: string | null
           option_b_description: string | null
@@ -4312,7 +4314,9 @@ export type Database = {
           estimated_surface_m2?: number | null
           google_maps_url?: string | null
           id?: string
+          is_model?: boolean
           is_signed?: boolean
+          model_budget_id?: string | null
           nombre: string
           option_a_description?: string | null
           option_b_description?: string | null
@@ -4349,7 +4353,9 @@ export type Database = {
           estimated_surface_m2?: number | null
           google_maps_url?: string | null
           id?: string
+          is_model?: boolean
           is_signed?: boolean
+          model_budget_id?: string | null
           nombre?: string
           option_a_description?: string | null
           option_b_description?: string | null
@@ -4371,6 +4377,13 @@ export type Database = {
           version?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "presupuestos_model_budget_id_fkey"
+            columns: ["model_budget_id"]
+            isOneToOne: false
+            referencedRelation: "presupuestos"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "presupuestos_project_id_fkey"
             columns: ["project_id"]

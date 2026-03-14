@@ -513,8 +513,8 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
       setPhases(phasesRes.data || []);
       setMeasurements(measurementsList);
       setMeasurementRelations(filteredRelations);
-      setWorkAreas(workAreasRes.data || []);
-      setWorkAreaRelations(filteredWorkAreaRelations);
+      setWorkspaceRooms((workspaceRoomsRes.data || []) as WorkspaceRoom[]);
+      setWorkspaceRelations(filteredWorkspaceRelations);
     } catch (err: any) {
       console.error('Error fetching data:', err);
       toast.error('Error al cargar datos');

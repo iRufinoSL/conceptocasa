@@ -521,18 +521,8 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
   const handleDeleteSection = async (section: CustomSection) => {
     if (!isAdmin || !floorPlan?.id) return;
 
-    if (section.sectionType === 'vertical') {
-      const confirmed = window.confirm('Eliminar una Sección Z hará limpieza total: se borrarán todas las secciones y todos los espacios. ¿Continuar?');
-      if (!confirmed) return;
-
-      try {
-        await resetAllSectionsAndWorkspaces();
-        toast.success('Limpieza total aplicada: todo quedó vacío para reiniciar.');
-      } catch (error: any) {
-        toast.error(`Error en limpieza total: ${error?.message || 'inténtalo de nuevo'}`);
-      }
-      return;
-    }
+    const confirmed = window.confirm(`¿Eliminar solo la sección "${section.name}"? Esta acción no borrará las demás secciones.`);
+    if (!confirmed) return;
 
     const parsedCorners = parseCustomCorners();
     const existingSections = Array.isArray(parsedCorners.customSections)

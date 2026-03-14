@@ -214,7 +214,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       if (!floorPlan?.id) return [];
       const { data, error } = await supabase
         .from('budget_floor_plan_rooms')
-        .select('id, name, height, has_floor, has_ceiling, has_roof, vertical_section_id, floor_id, floor_polygon')
+        .select('id, name, height, has_floor, has_ceiling, has_roof, vertical_section_id, floor_id, floor_polygon, updated_at')
         .eq('floor_plan_id', floorPlan.id);
       if (error) throw error;
       return (data || []).map((r: any) => ({

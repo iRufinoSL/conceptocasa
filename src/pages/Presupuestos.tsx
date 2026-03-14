@@ -1109,6 +1109,7 @@ export default function Presupuestos() {
                   <SelectContent>
                     <SelectItem value="activo">Activo</SelectItem>
                     <SelectItem value="en_ejecucion">En Ejecución</SelectItem>
+                    <SelectItem value="modelo">Modelo</SelectItem>
                     <SelectItem value="archivado">Archivado</SelectItem>
                   </SelectContent>
                 </Select>

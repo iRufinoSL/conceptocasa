@@ -2714,6 +2714,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
           }}
           onDeleteItem={handleDeleteById}
           onDuplicate={(item, asSub) => openDuplicateDialog(item as any, asSub)}
+          onReparentItem={(itemId, newParentId) => reparentItem(itemId, newParentId)}
         />
       ) : (
         <div className="space-y-1">

@@ -1102,6 +1102,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
           </Badge>
         </div>
         <SectionAxisViewer
+          key={liveSection.id}
           sectionType={liveSection.sectionType as 'vertical' | 'longitudinal' | 'transversal'}
           axisValue={liveSection.axisValue}
           sectionName={liveSection.name}

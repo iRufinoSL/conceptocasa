@@ -961,7 +961,13 @@ export function WorkspacePropertiesPanel({
             isExpanded={expandedFace === 'ceiling'} onToggle={() => setExpandedFace(expandedFace === 'ceiling' ? null : 'ceiling')}
             onOpenPatternPicker={() => setPatternPickerFace('ceiling')}
             objectCount={getObjectsForWall(-2).length}
-            onAddObject={() => { setObjTargetFace('ceiling'); setShowObjectForm(true); setActiveTab('objects'); }}
+            onAddObject={() => {
+              setObjTargetFace('ceiling');
+              setObjLayerOrder(String(getNextLayerOrder('ceiling')));
+              setObjResourceId('_none');
+              setShowObjectForm(true);
+              setActiveTab('objects');
+            }}
           />
 
           <div className="flex items-center justify-between gap-2 py-0.5 px-1 rounded">

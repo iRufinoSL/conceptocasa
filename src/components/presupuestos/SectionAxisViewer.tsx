@@ -737,7 +737,9 @@ export function SectionAxisViewer({
     if (trimmedName) {
       const existingNames = [
         ...(allPolygonNames || []),
-        ...polygons.filter(p => p.id !== editingPolyId).map(p => p.name),
+        ...polygons
+          .filter(p => p.id !== editingPolyId && Array.isArray(p.vertices) && p.vertices.length >= 3)
+          .map(p => p.name),
       ];
       if (existingNames.some(n => n.toLowerCase() === trimmedName.toLowerCase())) {
         toast.error(`Ya existe un espacio llamado "${trimmedName}". Los nombres deben ser únicos.`);

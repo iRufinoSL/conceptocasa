@@ -1254,7 +1254,7 @@ export function SectionAxisViewer({
   // ── Openings visual rendering on edges ──
   const openingElements = useMemo(() => {
     if (!gridLayout || !scale || Object.keys(openingsMap).length === 0) return null;
-    const { originX, originY, cellPx } = gridLayout;
+    const { originX, originY, cellPxW, cellPxH } = gridLayout;
     const elements: JSX.Element[] = [];
     const OPENING_COLOR = 'hsl(30, 90%, 50%)'; // orange for visibility
     const DOOR_COLOR = 'hsl(200, 70%, 45%)';
@@ -1263,8 +1263,8 @@ export function SectionAxisViewer({
       const verts = poly.vertices;
       if (verts.length < 3) return;
       const pxVerts = verts.map(v => ({
-        px: originX + v.x * cellPx,
-        py: originY - v.y * cellPx,
+        px: originX + v.x * cellPxW,
+        py: originY - v.y * cellPxH,
       }));
 
       for (let i = 0; i < verts.length; i++) {

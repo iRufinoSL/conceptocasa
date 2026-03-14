@@ -701,23 +701,8 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       return validRoomIds.has(room.id) || (normalized ? verticalRoomNameSet.has(normalized) : false);
     });
 
-    // For transversal sections (X cut), compute maxY to invert Y axis
-    let globalMaxY = 0;
-    if (section.sectionType === 'transversal') {
-      for (const r of eligibleRooms) {
-        if (!r.floor_polygon) continue;
-        for (const v of r.floor_polygon) {
-          if (v.y > globalMaxY) globalMaxY = v.y;
-        }
-      }
-      // Fallback maxY from vertical polygons when rooms are missing/stale
-      for (const src of verticalPolygonSources) {
-        for (const v of src.polygon.vertices) {
-          if (v.y > globalMaxY) globalMaxY = v.y;
-        }
-      }
-    }
-
+    // For transversal sections (X cut), keep Y orientation tied to the immutable origin.
+    // No mirroring by point of view: Y=0 must remain the same reference side.
     const projected: SectionPolygon[] = [];
     const projectedKeys = new Set<string>();
 
@@ -738,13 +723,8 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       const intersections = findPolyIntersections(poly, cutAxis, axisVal);
       if (intersections.length < 2) return;
 
-      // For transversal sections, invert Y: section_h = maxY - polygon_y
-      const mappedIntersections = section.sectionType === 'transversal'
-        ? intersections.map(v => globalMaxY - v)
-        : intersections;
-
-      const hMin = Math.min(...mappedIntersections);
-      const hMax = Math.max(...mappedIntersections);
+      const hMin = Math.min(...intersections);
+      const hMax = Math.max(...intersections);
       if (Math.abs(hMax - hMin) < 0.01) return;
 
       const heightM = roomHeightM || defaultHeight;

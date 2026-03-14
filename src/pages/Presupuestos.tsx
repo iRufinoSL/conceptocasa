@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ArrowLeft, Calculator, Search, LayoutGrid, List, Plus, Pencil, Trash2, ExternalLink, RefreshCw, Copy, Archive, ChevronDown, ChevronRight, Play } from 'lucide-react';
+import { ArrowLeft, Calculator, Search, LayoutGrid, List, Plus, Pencil, Trash2, ExternalLink, RefreshCw, Copy, Archive, ChevronDown, ChevronRight, Play, Crown } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -21,8 +21,9 @@ import { searchMatch } from '@/lib/search-utils';
 import { CloneBudgetDialog } from '@/components/presupuestos/CloneBudgetDialog';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Badge } from '@/components/ui/badge';
+import { createModelBudget, getModelBudget } from '@/lib/model-budget-sync';
 
-type PresupuestoStatus = 'activo' | 'en_ejecucion' | 'archivado';
+type PresupuestoStatus = 'activo' | 'en_ejecucion' | 'archivado' | 'modelo';
 
 interface Presupuesto {
   id: string;
@@ -37,6 +38,8 @@ interface Presupuesto {
   project_id: string | null;
   archived: boolean;
   status: PresupuestoStatus;
+  is_model?: boolean;
+  model_budget_id?: string | null;
 }
 
 interface PresupuestoForm {
@@ -82,13 +85,15 @@ const calculateDurationDays = (startDate: string, endDate: string): number | nul
 const STATUS_LABELS: Record<PresupuestoStatus, string> = {
   activo: 'Activo',
   en_ejecucion: 'En Ejecución',
-  archivado: 'Archivado'
+  archivado: 'Archivado',
+  modelo: 'Modelo',
 };
 
 const STATUS_COLORS: Record<PresupuestoStatus, string> = {
   activo: 'bg-primary/10 text-primary',
   en_ejecucion: 'bg-amber-500/10 text-amber-600',
-  archivado: 'bg-muted text-muted-foreground'
+  archivado: 'bg-muted text-muted-foreground',
+  modelo: 'bg-violet-500/10 text-violet-600',
 };
 
 // Subcomponent for Card view
@@ -116,6 +121,7 @@ const PresupuestoCard = ({ p, isAdmin, recalculatingId, onRecalculate, onEdit, o
             <Badge className={STATUS_COLORS[p.status]}>
               {p.status === 'en_ejecucion' && <Play className="h-3 w-3 mr-1" />}
               {p.status === 'archivado' && <Archive className="h-3 w-3 mr-1" />}
+              {p.status === 'modelo' && <Crown className="h-3 w-3 mr-1" />}
               {STATUS_LABELS[p.status]}
             </Badge>
           </div>
@@ -279,6 +285,10 @@ export default function Presupuestos() {
   const [showActive, setShowActive] = useState(false);
   const [showEnEjecucion, setShowEnEjecucion] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
+  const [showModelo, setShowModelo] = useState(true);
+  const [creatingModel, setCreatingModel] = useState(false);
+  const [modelSourceDialog, setModelSourceDialog] = useState(false);
+  const [modelSourceId, setModelSourceId] = useState('');
 
   const isAdmin = roles.includes('administrador');
 
@@ -516,6 +526,33 @@ export default function Presupuestos() {
   const activePresupuestos = filteredPresupuestos.filter(p => p.status === 'activo');
   const enEjecucionPresupuestos = filteredPresupuestos.filter(p => p.status === 'en_ejecucion');
   const archivedPresupuestos = filteredPresupuestos.filter(p => p.status === 'archivado');
+  const modeloPresupuestos = filteredPresupuestos.filter(p => p.status === 'modelo' || (p as any).is_model);
+
+  const handleCreateModel = async () => {
+    if (!modelSourceId) {
+      toast.error('Selecciona un presupuesto origen');
+      return;
+    }
+    setCreatingModel(true);
+    try {
+      const result = await createModelBudget(modelSourceId);
+      if (result.success) {
+        toast.success('Presupuesto Modelo creado correctamente');
+        setModelSourceDialog(false);
+        setModelSourceId('');
+        fetchPresupuestos();
+      } else {
+        toast.error(result.error || 'Error al crear modelo');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Error inesperado');
+    } finally {
+      setCreatingModel(false);
+    }
+  };
+
+  const hasModel = modeloPresupuestos.length > 0;
+  const enEjecucionForModel = presupuestos.filter(p => p.status === 'en_ejecucion');
 
   if (loading || isLoading) {
     return (
@@ -553,6 +590,12 @@ export default function Presupuestos() {
           </div>
           <div className="flex items-center gap-2">
             {isAdmin && <BackupButton module="budgets" variant="outline" />}
+            {isAdmin && !hasModel && (
+              <Button variant="outline" className="gap-2 border-violet-300 text-violet-600 hover:bg-violet-50" onClick={() => setModelSourceDialog(true)}>
+                <Crown className="h-4 w-4" />
+                Crear Modelo
+              </Button>
+            )}
             {isAdmin && (
               <Button variant="outline" onClick={() => setCloneDialogOpen(true)}>
                 <Copy className="h-4 w-4 mr-2" />
@@ -599,8 +642,78 @@ export default function Presupuestos() {
 
         {/* Results count */}
         <p className="text-sm text-muted-foreground mb-4">
-          {activePresupuestos.length} activo(s), {enEjecucionPresupuestos.length} en ejecución{archivedPresupuestos.length > 0 && `, ${archivedPresupuestos.length} archivado(s)`}
+          {modeloPresupuestos.length > 0 && `${modeloPresupuestos.length} modelo, `}{activePresupuestos.length} activo(s), {enEjecucionPresupuestos.length} en ejecución{archivedPresupuestos.length > 0 && `, ${archivedPresupuestos.length} archivado(s)`}
         </p>
+
+        {/* Modelo Presupuesto Section */}
+        {modeloPresupuestos.length > 0 && (
+          <Collapsible open={showModelo} onOpenChange={setShowModelo} className="mb-6">
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" className="flex items-center gap-2 mb-4 text-violet-600 hover:text-violet-700">
+                {showModelo ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                <Crown className="h-4 w-4" />
+                <Badge className="bg-violet-500/10 text-violet-600 hover:bg-violet-500/20">
+                  Presupuesto Modelo ({modeloPresupuestos.length})
+                </Badge>
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              {viewMode === 'cards' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {modeloPresupuestos.map((p) => (
+                    <PresupuestoCard 
+                      key={p.id} 
+                      p={p} 
+                      isAdmin={isAdmin}
+                      recalculatingId={recalculatingId}
+                      onRecalculate={handleRecalculate}
+                      onEdit={handleEdit}
+                      onDelete={handleDeleteClick}
+                      onStatusChange={handleStatusChange}
+                      onNavigate={(id) => navigate(`/presupuestos/${id}`)}
+                      generatePresupuestoId={generatePresupuestoId}
+                    />
+                  ))}
+                </div>
+              )}
+              {viewMode === 'list' && (
+                <div className="border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>PresupuestoID</TableHead>
+                        <TableHead>Nombre</TableHead>
+                        <TableHead>Estado</TableHead>
+                        <TableHead>Código</TableHead>
+                        <TableHead>Versión</TableHead>
+                        <TableHead>Población</TableHead>
+                        <TableHead>Provincia</TableHead>
+                        <TableHead>Creado</TableHead>
+                        <TableHead className="w-40">Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {modeloPresupuestos.map((p) => (
+                        <PresupuestoRow
+                          key={p.id}
+                          p={p}
+                          isAdmin={isAdmin}
+                          recalculatingId={recalculatingId}
+                          onRecalculate={handleRecalculate}
+                          onEdit={handleEdit}
+                          onDelete={handleDeleteClick}
+                          onStatusChange={handleStatusChange}
+                          onNavigate={(id) => navigate(`/presupuestos/${id}`)}
+                          generatePresupuestoId={generatePresupuestoId}
+                        />
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CollapsibleContent>
+          </Collapsible>
+        )}
 
         {/* Active Presupuestos Section */}
         {activePresupuestos.length > 0 && (
@@ -996,6 +1109,7 @@ export default function Presupuestos() {
                   <SelectContent>
                     <SelectItem value="activo">Activo</SelectItem>
                     <SelectItem value="en_ejecucion">En Ejecución</SelectItem>
+                    <SelectItem value="modelo">Modelo</SelectItem>
                     <SelectItem value="archivado">Archivado</SelectItem>
                   </SelectContent>
                 </Select>
@@ -1032,6 +1146,73 @@ export default function Presupuestos() {
           navigate(`/presupuestos/${newBudgetId}`);
         }}
       />
+
+      {/* Create Model Budget Dialog */}
+      <Dialog open={modelSourceDialog} onOpenChange={setModelSourceDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Crown className="h-5 w-5 text-violet-600" />
+              Crear Presupuesto Modelo
+            </DialogTitle>
+            <DialogDescription>
+              Selecciona un presupuesto en ejecución como base para crear el Modelo global. 
+              Todos los presupuestos futuros se sincronizarán con este modelo.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Presupuesto origen *</Label>
+              <Select value={modelSourceId} onValueChange={setModelSourceId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar presupuesto base" />
+                </SelectTrigger>
+                <SelectContent>
+                  {enEjecucionForModel.length > 0 ? (
+                    enEjecucionForModel.map(p => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.nombre} ({p.poblacion})
+                      </SelectItem>
+                    ))
+                  ) : (
+                    presupuestos.filter(p => !p.is_model && p.status !== 'archivado').map(p => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.nombre} ({p.poblacion})
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="p-3 rounded-lg bg-violet-50 border border-violet-200 text-sm text-violet-700">
+              <p className="font-medium mb-1">ℹ️ Información</p>
+              <p>Se clonará toda la estructura (fases, actividades, recursos, mediciones, espacios) del presupuesto seleccionado. Los cambios futuros en cualquier presupuesto de trabajo se sincronizarán automáticamente al Modelo.</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setModelSourceDialog(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleCreateModel} 
+              disabled={creatingModel || !modelSourceId}
+              className="bg-violet-600 hover:bg-violet-700 text-white gap-2"
+            >
+              {creatingModel ? (
+                <>
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                  Creando...
+                </>
+              ) : (
+                <>
+                  <Crown className="h-4 w-4" />
+                  Crear Modelo
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

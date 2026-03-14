@@ -39,6 +39,7 @@ import { BudgetDondeTab } from '@/components/presupuestos/BudgetDondeTab';
 import { toast } from 'sonner';
 import { BudgetAdministracionTab } from '@/components/presupuestos/BudgetAdministracionTab';
 import { TolosaBrainstormView } from '@/components/presupuestos/TolosaBrainstormView';
+import { scheduleSyncToModel } from '@/lib/model-budget-sync';
 interface Presupuesto {
   id: string;
   nombre: string;
@@ -114,6 +115,8 @@ export default function PresupuestoDashboard() {
       }
       // Dispatch event to refresh data in all tabs
       window.dispatchEvent(new CustomEvent('budget-recalculated'));
+      // Schedule sync to model budget
+      scheduleSyncToModel(id);
     } catch (err) {
       console.error('Error recalculating:', err);
       toast.error('Error al recalcular');

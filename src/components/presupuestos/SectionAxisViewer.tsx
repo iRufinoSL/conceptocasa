@@ -37,6 +37,22 @@ interface RidgeLineData {
   x1: number; y1: number; x2: number; y2: number; z: number;
 }
 
+const getDefaultScale = (sectionType: 'vertical' | 'longitudinal' | 'transversal'): SectionScale => (
+  sectionType === 'vertical'
+    ? { hScale: 625, vScale: 625 }
+    : { hScale: 625, vScale: 250 }
+);
+
+const getSafeScale = (
+  sectionType: 'vertical' | 'longitudinal' | 'transversal',
+  input?: { hScale: number; vScale: number }
+): SectionScale => {
+  if (input && Number.isFinite(input.hScale) && Number.isFinite(input.vScale) && input.hScale > 0 && input.vScale > 0) {
+    return { hScale: input.hScale, vScale: input.vScale };
+  }
+  return getDefaultScale(sectionType);
+};
+
 export interface RulerLine {
   id: string;
   start: { col: number; row: number };
@@ -143,10 +159,7 @@ export function SectionAxisViewer({
   const fixedColor = AXIS_COLORS[fixedAxis];
 
   // Default scale: vertical sections use 625/625, X/Y sections use 625/250
-  const defaultScale: SectionScale = sectionType === 'vertical'
-    ? { hScale: 625, vScale: 625 }
-    : { hScale: 625, vScale: 250 };
-  const initialScale = savedScale || defaultScale;
+  const initialScale = getSafeScale(sectionType, savedScale);
 
   // Scale inputs
   const [hScaleInput, setHScaleInput] = useState(String(initialScale.hScale));
@@ -308,12 +321,11 @@ export function SectionAxisViewer({
 
   useEffect(() => { if (savedRulerLines) setRulerLines(savedRulerLines); }, [savedRulerLines]);
   useEffect(() => {
-    if (savedScale) {
-      setScale(savedScale);
-      setHScaleInput(String(savedScale.hScale));
-      setVScaleInput(String(savedScale.vScale));
-    }
-  }, [savedScale]);
+    const nextScale = getSafeScale(sectionType, savedScale);
+    setScale(nextScale);
+    setHScaleInput(String(nextScale.hScale));
+    setVScaleInput(String(nextScale.vScale));
+  }, [sectionType, savedScale]);
 
   useEffect(() => {
     if (savedNegLimits) {
@@ -425,10 +437,13 @@ export function SectionAxisViewer({
     // Compute proportional cell sizes based on real-world mm scales
     const totalRealW = totalCols * scale.hScale;
     const totalRealH = totalRows * scale.vScale;
+    if (!Number.isFinite(totalRealW) || !Number.isFinite(totalRealH) || totalRealW <= 0 || totalRealH <= 0) return null;
+
     const pxPerMm = Math.min(drawW / totalRealW, drawH / totalRealH);
-    const cellPxW = Math.floor(pxPerMm * scale.hScale);
-    const cellPxH = Math.floor(pxPerMm * scale.vScale);
-    if (cellPxW < 4 || cellPxH < 4) return null;
+    if (!Number.isFinite(pxPerMm) || pxPerMm <= 0) return null;
+
+    const cellPxW = Math.max(4, Math.floor(pxPerMm * scale.hScale));
+    const cellPxH = Math.max(4, Math.floor(pxPerMm * scale.vScale));
     const gridW = totalCols * cellPxW;
     const gridH = totalRows * cellPxH;
     const ox = margin + Math.floor((drawW - gridW) / 2);

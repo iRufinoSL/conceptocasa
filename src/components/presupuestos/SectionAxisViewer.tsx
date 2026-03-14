@@ -1628,7 +1628,23 @@ export function SectionAxisViewer({
       {/* Drawing toolbar */}
       {scale && (
         <div className="px-3 py-2 border-b bg-muted/10 flex items-center gap-3 flex-wrap">
-          {!drawMode ? (
+          {vertexEditMode ? (
+            <div className="flex items-center gap-3 w-full">
+              <span className="text-xs font-semibold text-primary">
+                ✏️ Modo Modificar — Arrastra vértices · Clic en <span className="text-green-600 font-bold">+</span> para insertar · Doble clic en vértice para eliminar
+              </span>
+              <div className="ml-auto flex items-center gap-1">
+                <Button size="sm" variant="default" className="h-7 text-xs gap-1"
+                  onClick={() => { setVertexEditMode(false); onSavePolygons?.(polygons); toast.success('Cambios guardados'); }}>
+                  <Check className="h-3 w-3" /> Listo
+                </Button>
+                <Button size="sm" variant="ghost" className="h-7 text-xs gap-1"
+                  onClick={() => { setVertexEditMode(false); handleUndo(); }}>
+                  <X className="h-3 w-3" /> Cancelar
+                </Button>
+              </div>
+            </div>
+          ) : !drawMode ? (
             <>
               <div className="flex items-end gap-2">
                 <div>
@@ -1646,6 +1662,12 @@ export function SectionAxisViewer({
                   disabled={!drawingName.trim() || !drawingHeight.trim()}>
                   <PenTool className="h-3 w-3" /> Dibujar espacio
                 </Button>
+                {polygons.length > 0 && (
+                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
+                    onClick={() => { pushUndo(); setVertexEditMode(true); setRulerMode(false); setDrawMode(false); }}>
+                    <PenTool className="h-3 w-3" /> Modificar
+                  </Button>
+                )}
               </div>
               {polygons.length > 0 && (
                 <span className="text-[10px] text-muted-foreground ml-auto">

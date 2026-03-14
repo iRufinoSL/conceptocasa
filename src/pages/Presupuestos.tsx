@@ -526,6 +526,33 @@ export default function Presupuestos() {
   const activePresupuestos = filteredPresupuestos.filter(p => p.status === 'activo');
   const enEjecucionPresupuestos = filteredPresupuestos.filter(p => p.status === 'en_ejecucion');
   const archivedPresupuestos = filteredPresupuestos.filter(p => p.status === 'archivado');
+  const modeloPresupuestos = filteredPresupuestos.filter(p => p.status === 'modelo' || (p as any).is_model);
+
+  const handleCreateModel = async () => {
+    if (!modelSourceId) {
+      toast.error('Selecciona un presupuesto origen');
+      return;
+    }
+    setCreatingModel(true);
+    try {
+      const result = await createModelBudget(modelSourceId);
+      if (result.success) {
+        toast.success('Presupuesto Modelo creado correctamente');
+        setModelSourceDialog(false);
+        setModelSourceId('');
+        fetchPresupuestos();
+      } else {
+        toast.error(result.error || 'Error al crear modelo');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Error inesperado');
+    } finally {
+      setCreatingModel(false);
+    }
+  };
+
+  const hasModel = modeloPresupuestos.length > 0;
+  const enEjecucionForModel = presupuestos.filter(p => p.status === 'en_ejecucion');
 
   if (loading || isLoading) {
     return (

@@ -68,6 +68,8 @@ interface SectionAxisViewerProps {
   /** Face patterns per polygon */
   facePatterns?: PolygonFacePatterns;
   onFacePatternChange?: (polyId: string, faceKey: string, patternId: string | null) => void;
+  /** All polygon names across ALL sections for uniqueness validation */
+  allPolygonNames?: string[];
 }
 
 const AXIS_COLORS = {
@@ -133,6 +135,7 @@ export function SectionAxisViewer({
   onSaveRulerLines,
   facePatterns: savedFacePatterns,
   onFacePatternChange,
+  allPolygonNames,
 }: SectionAxisViewerProps) {
   const { fixedAxis, hAxis, vAxis } = getConfig(sectionType);
   const hColor = AXIS_COLORS[hAxis];
@@ -574,8 +577,19 @@ export function SectionAxisViewer({
 
   const finishDrawing = useCallback(() => {
     if (drawingVertices.length < 3 || !scale || !gridLayout) return;
-    pushUndo();
     const name = drawingName.trim() || `Espacio ${polygons.length + 1}`;
+
+    // Validate unique name across all sections
+    const existingNames = [
+      ...(allPolygonNames || []),
+      ...polygons.map(p => p.name),
+    ];
+    if (existingNames.some(n => n.toLowerCase() === name.toLowerCase())) {
+      toast.error(`Ya existe un espacio llamado "${name}". Los nombres deben ser únicos.`);
+      return;
+    }
+
+    pushUndo();
     const heightMm = parseInt(drawingHeight) || 0;
 
     const vertices = drawingVertices.map(v => {
@@ -599,7 +613,7 @@ export function SectionAxisViewer({
     setDrawingName('');
     setDrawingHeight('');
     setHoverNode(null);
-  }, [drawingVertices, drawingName, drawingHeight, polygons, scale, gridLayout, colRowToCoord, onSavePolygons]);
+  }, [drawingVertices, drawingName, drawingHeight, polygons, scale, gridLayout, colRowToCoord, onSavePolygons, allPolygonNames]);
 
   const cancelDrawing = () => {
     setDrawMode(false);
@@ -627,12 +641,24 @@ export function SectionAxisViewer({
 
   const saveEditPolygon = () => {
     if (!editingPolyId) return;
+    const trimmedName = editName.trim();
+    // Validate unique name (skip current polygon's own name)
+    if (trimmedName) {
+      const existingNames = [
+        ...(allPolygonNames || []),
+        ...polygons.filter(p => p.id !== editingPolyId).map(p => p.name),
+      ];
+      if (existingNames.some(n => n.toLowerCase() === trimmedName.toLowerCase())) {
+        toast.error(`Ya existe un espacio llamado "${trimmedName}". Los nombres deben ser únicos.`);
+        return;
+      }
+    }
     pushUndo();
     const updated = polygons.map(p => {
       if (p.id !== editingPolyId) return p;
       return {
         ...p,
-        name: editName.trim() || p.name,
+        name: trimmedName || p.name,
         zTop: parseInt(editHeight) || p.zTop,
         vertices: editVertices,
         hasFloor: editHasFloor,
@@ -648,7 +674,7 @@ export function SectionAxisViewer({
     setEditingPolyId(null);
   };
 
-  const updateEditVertex = (idx: number, axis: 'x' | 'y', value: number) => {
+  const updateEditVertex = (idx: number, axis: 'x' | 'y' | 'z', value: number) => {
     setEditVertices(prev => prev.map((v, i) => i === idx ? { ...v, [axis]: value } : v));
   };
 
@@ -1024,11 +1050,27 @@ export function SectionAxisViewer({
           );
         }
 
-        // Label text
+        // Label text - use T (techo) / S (suelo) for top/bottom edges in cross-sections
         if (wallLabelMode !== 'none') {
+          let wallLabel = `P${wallNum}`;
+          const isCrossSection = sectionType === 'transversal' || sectionType === 'longitudinal';
+          if (isCrossSection && verts.length >= 3) {
+            const minY = Math.min(...verts.map(v => v.y));
+            const maxY = Math.max(...verts.map(v => v.y));
+            const rangeY = maxY - minY;
+            const edgeMinY = Math.min(verts[i].y, verts[j].y);
+            const edgeMaxY = Math.max(verts[i].y, verts[j].y);
+            if (rangeY > 0.01) {
+              const isBottom = Math.abs(edgeMinY - minY) < rangeY * 0.15 && Math.abs(edgeMaxY - minY) < rangeY * 0.15;
+              const isTop = Math.abs(edgeMinY - maxY) < rangeY * 0.15 && Math.abs(edgeMaxY - maxY) < rangeY * 0.15;
+              if (isBottom) wallLabel = 'S';
+              else if (isTop) wallLabel = 'T';
+            }
+          }
+
           let labelText = '';
-          if (wallLabelMode === 'both') labelText = `P${wallNum} ${Math.round(lengthMm)}mm`;
-          else if (wallLabelMode === 'name-only') labelText = `P${wallNum}`;
+          if (wallLabelMode === 'both') labelText = `${wallLabel} ${Math.round(lengthMm)}mm`;
+          else if (wallLabelMode === 'name-only') labelText = wallLabel;
           else if (wallLabelMode === 'measure-only') labelText = `${Math.round(lengthMm)}mm`;
 
           const edgeDx = b.px - a.px;
@@ -1589,18 +1631,40 @@ export function SectionAxisViewer({
               <X className="h-3 w-3" /> Cancelar
             </Button>
           </div>
+          <p className="text-[9px] text-muted-foreground font-medium">Coordenadas de vértices (inicio → fin de cada línea/pared)</p>
           <div className="flex flex-wrap gap-2">
-            {editVertices.map((v, i) => (
-              <div key={i} className="flex items-center gap-1 text-[10px] border rounded px-1.5 py-0.5 bg-background">
-                <span className="font-mono font-bold text-muted-foreground">V{i + 1}</span>
-                <span className="text-muted-foreground">{hAxis}:</span>
-                <Input className="h-5 w-12 text-[10px] font-mono px-1" type="number"
-                  value={v.x} onChange={e => updateEditVertex(i, 'x', parseFloat(e.target.value) || 0)} />
-                <span className="text-muted-foreground">{vAxis}:</span>
-                <Input className="h-5 w-12 text-[10px] font-mono px-1" type="number"
-                  value={v.y} onChange={e => updateEditVertex(i, 'y', parseFloat(e.target.value) || 0)} />
-              </div>
-            ))}
+            {editVertices.map((v, i) => {
+              const j = (i + 1) % editVertices.length;
+              const isCross = sectionType === 'transversal' || sectionType === 'longitudinal';
+              // Determine label for this edge
+              let edgeLabel = `P${i + 1}`;
+              if (isCross && editVertices.length >= 3) {
+                const minY = Math.min(...editVertices.map(vv => vv.y));
+                const maxY = Math.max(...editVertices.map(vv => vv.y));
+                const rangeY = maxY - minY;
+                const eMinY = Math.min(editVertices[i].y, editVertices[j].y);
+                const eMaxY = Math.max(editVertices[i].y, editVertices[j].y);
+                if (rangeY > 0.01) {
+                  if (Math.abs(eMinY - minY) < rangeY * 0.15 && Math.abs(eMaxY - minY) < rangeY * 0.15) edgeLabel = 'S';
+                  else if (Math.abs(eMinY - maxY) < rangeY * 0.15 && Math.abs(eMaxY - maxY) < rangeY * 0.15) edgeLabel = 'T';
+                }
+              }
+              return (
+                <div key={i} className="flex items-center gap-1 text-[10px] border rounded px-1.5 py-0.5 bg-background">
+                  <span className="font-mono font-bold text-primary">{edgeLabel}</span>
+                  <span className="text-muted-foreground text-[9px]">ini:</span>
+                  <span className="text-muted-foreground">{hAxis}:</span>
+                  <Input className="h-5 w-12 text-[10px] font-mono px-1" type="number"
+                    value={v.x} onChange={e => updateEditVertex(i, 'x', parseFloat(e.target.value) || 0)} />
+                  <span className="text-muted-foreground">{vAxis}:</span>
+                  <Input className="h-5 w-12 text-[10px] font-mono px-1" type="number"
+                    value={v.y} onChange={e => updateEditVertex(i, 'y', parseFloat(e.target.value) || 0)} />
+                  <span className="text-muted-foreground">Z:</span>
+                  <Input className="h-5 w-12 text-[10px] font-mono px-1" type="number"
+                    value={v.z} onChange={e => updateEditVertex(i, 'z', parseFloat(e.target.value) || 0)} />
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

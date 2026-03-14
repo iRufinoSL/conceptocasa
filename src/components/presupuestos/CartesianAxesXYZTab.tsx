@@ -413,6 +413,32 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces', budgetId] });
   };
 
+  // Build a name/id → zBase mapping from ALL vertical section polygons
+  const verticalZBaseMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const vs of allSections.filter(s => s.sectionType === 'vertical')) {
+      const polys = vs.polygons;
+      if (polys) {
+        for (const p of polys) {
+          map.set(p.id, vs.axisValue);
+          if (p.name) map.set(`name:${p.name}`, vs.axisValue);
+        }
+      }
+    }
+    return map;
+  }, [allSections]);
+
+  // Collect ALL polygon names across ALL sections for uniqueness check
+  const allPolygonNames = useMemo(() => {
+    const names: string[] = [];
+    for (const section of allSections) {
+      for (const poly of (section.polygons || [])) {
+        if (poly.name) names.push(poly.name);
+      }
+    }
+    return names;
+  }, [allSections]);
+
   /** Compute auto-projected polygons for Y/X sections from workspace rooms */
   const computeProjectedPolygons = useCallback((section: CustomSection): SectionPolygon[] => {
     if (section.sectionType === 'vertical') return [];
@@ -422,7 +448,6 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     const defaultHeight = 2.5; // fallback metres
 
     // For transversal sections (X cut), compute maxY to invert Y axis
-    // In 2D plan Y increases downward, but in section view Y should increase upward/left-to-right
     let globalMaxY = 0;
     if (section.sectionType === 'transversal') {
       for (const r of workspaceRooms) {
@@ -433,22 +458,21 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       }
     }
 
-    /** Resolve zBase for a room: try vertical_section_id match, then search saved polygons */
+    /** Resolve zBase for a room using the precomputed map + fallbacks */
     const resolveZBase = (room: WorkspaceRoom): number => {
-      // 1) Direct match by vertical_section_id
+      // 1) Check by room ID in vertical section polygons
+      const byId = verticalZBaseMap.get(room.id);
+      if (byId !== undefined) return byId;
+      // 2) Check by room name in vertical section polygons
+      const byName = verticalZBaseMap.get(`name:${room.name}`);
+      if (byName !== undefined) return byName;
+      // 3) Direct match by vertical_section_id
       const direct = verticalSections.find(s => s.id === room.vertical_section_id);
       if (direct) return direct.axisValue;
-      // 2) Search vertical sections for a saved polygon whose id matches the room id
+      // 4) Search vertical sections for a saved polygon whose id or name matches
       for (const vs of verticalSections) {
-        const polys = (vs as any).polygons as SectionPolygon[] | undefined;
-        if (polys?.some(p => p.id === room.id)) return vs.axisValue;
-      }
-      // 3) Search ALL sections for a saved polygon matching room id (in case it was drawn on Y/X section with Z info)
-      // Fallback: try to infer from room name patterns (e.g. "Techo", "Atico" → higher Z)
-      // For robustness, check if any vertical section's axisValue > 0 has the room
-      for (const vs of verticalSections) {
-        const polys = (vs as any).polygons as SectionPolygon[] | undefined;
-        if (polys?.some(p => p.name === room.name)) return vs.axisValue;
+        const polys = vs.polygons;
+        if (polys?.some(p => p.id === room.id || p.name === room.name)) return vs.axisValue;
       }
       return 0;
     };
@@ -531,7 +555,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       });
     }
     return projected;
-  }, [workspaceRooms, allWalls, allSections]);
+  }, [workspaceRooms, allWalls, allSections, verticalZBaseMap]);
 
   // If viewing a section, show the viewer
   if (activeSection) {
@@ -574,6 +598,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
           onSavePolygons={(polys) => handleSavePolygons(liveSection.id, polys)}
           savedRulerLines={(liveSection as any).rulerLines || []}
           onSaveRulerLines={(lines) => handleSaveRulerLines(liveSection.id, lines)}
+          allPolygonNames={allPolygonNames}
         />
       </div>
     );

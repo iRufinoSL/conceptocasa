@@ -2586,17 +2586,17 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
   };
 
   const ensureAndUpdateWallType = async (roomId: string, wallIndex: number, newType: string, existingWallId?: string) => {
-    const normalizedType = normalizeWallType(newType);
     const dbWallIndex = wallIndex + 1;
+    const effectiveType = dbWallIndex > 0 ? normalizeWallType(newType) : newType;
 
     if (existingWallId) {
-      await updateWallType(existingWallId, normalizedType);
+      await updateWallType(existingWallId, effectiveType);
       return;
     }
 
     const { error } = await supabase
       .from('budget_floor_plan_walls')
-      .insert({ room_id: roomId, wall_index: dbWallIndex, wall_type: normalizedType });
+      .insert({ room_id: roomId, wall_index: dbWallIndex, wall_type: effectiveType });
 
     if (error) {
       toast.error(`No se pudo guardar el tipo de pared: ${error.message}`);
@@ -2617,12 +2617,125 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
     refetch();
   };
 
+  const getFaceLabel = useCallback((wallDbIndex: number) => {
+    if (wallDbIndex === 0) return 'Espacio';
+    if (wallDbIndex === -1) return 'Suelo';
+    if (wallDbIndex === -2) return 'Techo';
+    return `Pared ${wallDbIndex}`;
+  }, []);
+
+  const getFaceMetrics = useCallback((room: Workspace, wallDbIndex: number) => {
+    const polygon = Array.isArray(room.floor_polygon) && room.floor_polygon.length >= 3
+      ? room.floor_polygon
+      : null;
+
+    const floorAreaRaw = polygon
+      ? polygonArea(polygon) * cellSizeM * cellSizeM
+      : (room.length || 0) * (room.width || 0);
+    const floorArea = Math.round(floorAreaRaw * 100) / 100;
+
+    const heightM = room.height || floorPlan?.default_height || 2.5;
+
+    if (wallDbIndex === 0) {
+      return {
+        surface_m2: null as number | null,
+        volume_m3: Math.round(floorAreaRaw * heightM * 1000) / 1000,
+      };
+    }
+
+    if (wallDbIndex === -1 || wallDbIndex === -2) {
+      return {
+        surface_m2: floorArea,
+        volume_m3: null as number | null,
+      };
+    }
+
+    let wallLengthM = 0;
+    if (polygon) {
+      const edgeCount = polygon.length;
+      const edgeIndex = ((wallDbIndex - 1) % edgeCount + edgeCount) % edgeCount;
+      const a = polygon[edgeIndex];
+      const b = polygon[(edgeIndex + 1) % edgeCount];
+      wallLengthM = edgeLength(a, b) * cellSizeM;
+    } else {
+      wallLengthM = wallDbIndex % 2 === 1 ? (room.length || 0) : (room.width || 0);
+    }
+
+    return {
+      surface_m2: Math.round(wallLengthM * heightM * 100) / 100,
+      volume_m3: null as number | null,
+    };
+  }, [cellSizeM, floorPlan?.default_height]);
+
+  const ensureSuperficieLayer = useCallback(async (wallId: string, room: Workspace, wallDbIndex: number) => {
+    const faceLabel = getFaceLabel(wallDbIndex);
+    const { surface_m2, volume_m3 } = getFaceMetrics(room, wallDbIndex);
+    const metricLabel = surface_m2 != null
+      ? `${surface_m2} m²`
+      : volume_m3 != null
+        ? `${volume_m3} m³`
+        : null;
+    const description = `${room.name} / ${faceLabel}${metricLabel ? ` — ${metricLabel}` : ''}`;
+
+    const { data: existing, error: existingError } = await supabase
+      .from('budget_wall_objects')
+      .select('id')
+      .eq('wall_id', wallId)
+      .eq('layer_order', 0)
+      .maybeSingle();
+
+    if (existingError) {
+      console.error('Error verificando capa Superficie:', existingError);
+      return;
+    }
+
+    if (existing?.id) {
+      const { error: updateError } = await supabase
+        .from('budget_wall_objects')
+        .update({
+          name: 'Superficie',
+          description,
+          surface_m2,
+          volume_m3,
+          object_type: 'material',
+          is_core: false,
+          layer_order: 0,
+        })
+        .eq('id', existing.id);
+
+      if (updateError) {
+        console.error('Error actualizando capa Superficie:', updateError);
+      }
+      return;
+    }
+
+    const { error: insertError } = await supabase
+      .from('budget_wall_objects')
+      .insert({
+        wall_id: wallId,
+        layer_order: 0,
+        name: 'Superficie',
+        description,
+        object_type: 'material',
+        is_core: false,
+        surface_m2,
+        volume_m3,
+        visual_pattern: 'vacio',
+      });
+
+    if (insertError) {
+      console.error('Error creando capa Superficie:', insertError);
+      toast.error('No se pudo crear la capa automática Superficie');
+    }
+  }, [getFaceLabel, getFaceMetrics]);
+
   /** Open the wall objects panel for a specific wall */
-  const openWallPanel = async (roomId: string, wallDbIndex: number, sectionType: 'z' | 'xy' = 'z') => {
+  const openWallPanel = async (roomId: string, wallDbIndex: number, _sectionType: 'z' | 'xy' = 'z') => {
     const room = rooms.find(r => r.id === roomId);
     if (!room) return;
     let wall = allWalls.find(w => w.room_id === roomId && w.wall_index === wallDbIndex);
-    // Auto-create the wall record if it doesn't exist
+
+    // Auto-create the face record if it doesn't exist
     if (!wall) {
       const wallType = wallDbIndex === 0 ? 'espacio' : wallDbIndex === -1 ? 'suelo_basico' : wallDbIndex === -2 ? 'techo_basico' : 'exterior';
       const { data: newWall, error } = await supabase
@@ -2637,13 +2750,17 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
       queryClient.invalidateQueries({ queryKey: ['workspace-walls'] });
       wall = newWall as WallData;
     }
+
+    await ensureSuperficieLayer(wall.id, room, wallDbIndex);
+
     setWallPanelWallId(wall.id);
     setWallPanelWallIndex(wallDbIndex);
-    setWallPanelWallType(normalizeWallType(wall.wall_type));
+    setWallPanelWallType(wallDbIndex > 0 ? normalizeWallType(wall.wall_type) : wall.wall_type);
     setWallPanelLabel(wallDbIndex === 0 ? 'Espacio' : wallDbIndex === -1 ? 'Suelo' : wallDbIndex === -2 ? 'Techo' : `P${wallDbIndex}`);
     setWallPanelRoomName(room.name);
     setWallPanelRoomId(roomId);
     setWallPanelOpen(true);
+
     // Also highlight in the wall map (skip for Espacio)
     if (wallDbIndex > 0) {
       setSelectedWallMap(prev => ({ ...prev, [roomId]: wallDbIndex - 1 }));
@@ -2654,7 +2771,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
   const openEspacioPanel = async (roomId: string) => {
     const room = rooms.find(r => r.id === roomId);
     if (!room) return;
-    // Ensure a wall record with wall_index=0 (espacio) exists
+
+    // Ensure a face record with wall_index=0 (espacio) exists
     let wall = allWalls.find(w => w.room_id === roomId && w.wall_index === 0);
     if (!wall) {
       const { data: newWall, error } = await supabase
@@ -2669,6 +2787,9 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
       queryClient.invalidateQueries({ queryKey: ['workspace-walls'] });
       wall = newWall as WallData;
     }
+
+    await ensureSuperficieLayer(wall.id, room, 0);
+
     setWallPanelWallId(wall.id);
     setWallPanelWallIndex(0);
     setWallPanelWallType('espacio');
@@ -2680,9 +2801,9 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
 
   const handleWallPanelTypeChange = async (newType: string) => {
     if (!wallPanelRoomId) return;
-    const normalized = normalizeWallType(newType);
-    setWallPanelWallType(normalized);
-    await ensureAndUpdateWallType(wallPanelRoomId, wallPanelWallIndex - 1, normalized, wallPanelWallId || undefined);
+    const effectiveType = wallPanelWallIndex > 0 ? normalizeWallType(newType) : newType;
+    setWallPanelWallType(effectiveType);
+    await ensureAndUpdateWallType(wallPanelRoomId, wallPanelWallIndex - 1, effectiveType, wallPanelWallId || undefined);
   };
 
   const openGridEditor = (r: Workspace) => {

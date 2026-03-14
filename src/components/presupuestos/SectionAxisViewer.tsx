@@ -1243,7 +1243,7 @@ export function SectionAxisViewer({
     });
 
     return elements;
-  }, [polygons, gridLayout, scale, wallLabelMode, facePatterns, handleEdgeClick]);
+  }, [polygons, gridLayout, scale, wallLabelMode, facePatterns, handleEdgeClick, vertexEditMode, pushUndo, handleInsertVertexOnEdge, handleDeleteVertex]);
 
   // ── Openings visual rendering on edges ──
   const openingElements = useMemo(() => {

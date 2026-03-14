@@ -1366,24 +1366,30 @@ export function SectionAxisViewer({
             );
           }
         } else {
-          // X/Y sections: openings appear as vertical rectangles on the wall
-          // Wall is vertical in these sections, so height matters
-          const wallHeightMm = (poly.zTop || 2500);
-          const wallHeightPx = edgeLen; // The edge IS the wall height in vertical sections
+          // X/Y sections: openings appear as vertical rectangles on the wall.
+          // Here polygon Y-values are in grid units, so convert with current vertical scale (mm per unit).
+          const polyMinY = Math.min(...verts.map(v => v.y));
+          const polyMaxY = Math.max(...verts.map(v => v.y));
+          const wallHeightUnits = Math.max(0.001, polyMaxY - polyMinY);
+          const wallHeightMm = Math.max(1, wallHeightUnits * scale.vScale);
+          const wallHeightPx = edgeLen;
           const pxPerMmV = wallHeightPx / wallHeightMm;
 
           for (const op of entry.openings) {
-            const sillPx = op.sill_height * pxPerMmV;
-            const hPx = op.height * pxPerMmV;
+            const rawSillPx = op.sill_height * pxPerMmV;
+            const rawHeightPx = op.height * pxPerMmV;
+            const startFromBottom = Math.max(0, Math.min(rawSillPx, wallHeightPx));
+            const openingHeightPx = Math.max(0, Math.min(rawHeightPx, wallHeightPx - startFromBottom));
+            if (openingHeightPx <= 0.5) continue;
+
             const color = op.opening_type === 'puerta' ? DOOR_COLOR : OPENING_COLOR;
             const thickness = 6;
 
             // Opening rectangle: from bottom (b) going up
-            const startFromBottom = sillPx;
             const x1 = b.px - ux * startFromBottom;
             const y1 = b.py - uy * startFromBottom;
-            const x2 = b.px - ux * (startFromBottom + hPx);
-            const y2 = b.py - uy * (startFromBottom + hPx);
+            const x2 = b.px - ux * (startFromBottom + openingHeightPx);
+            const y2 = b.py - uy * (startFromBottom + openingHeightPx);
 
             const p1 = `${x1 + nx * thickness / 2},${y1 + ny * thickness / 2}`;
             const p2 = `${x2 + nx * thickness / 2},${y2 + ny * thickness / 2}`;

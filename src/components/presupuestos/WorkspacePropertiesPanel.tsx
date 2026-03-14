@@ -310,7 +310,8 @@ export function WorkspacePropertiesPanel({
           .from('budget_wall_objects')
           .select('id, wall_id')
           .in('wall_id', wallIds)
-          .eq('layer_order', 0);
+          .eq('layer_order', 0)
+          .eq('name', 'Superficie');
 
         if (existingSuperficiesError) {
           console.error('Error consultando capas Superficie:', existingSuperficiesError);
@@ -357,14 +358,16 @@ export function WorkspacePropertiesPanel({
             };
           });
 
+        console.log(`[Superficie Auto] walls=${nextWalls.length}, existing=${existingByWall.size}, toInsert=${inserts.length}, toUpdate=${updates.length}`);
+
         const mutationResults = await Promise.all([
           ...updates.map(u => supabase.from('budget_wall_objects').update(u.payload).eq('id', u.id)),
           ...(inserts.length > 0 ? [supabase.from('budget_wall_objects').insert(inserts)] : []),
         ]);
 
-        mutationResults.forEach((res) => {
+        mutationResults.forEach((res, idx) => {
           if (res.error) {
-            console.error('Error sincronizando Superficie automática:', res.error);
+            console.error(`Error sincronizando Superficie automática [${idx}]:`, res.error);
           }
         });
 

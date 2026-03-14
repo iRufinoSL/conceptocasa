@@ -944,7 +944,13 @@ export function WorkspacePropertiesPanel({
                   onOpenPatternPicker={() => setPatternPickerFace(faceKey)}
                   objectCount={wallObjs.length}
                   huecoCount={wallHuecos.length}
-                  onAddObject={() => { setObjTargetFace(faceKey); setShowObjectForm(true); setActiveTab('objects'); }}
+                  onAddObject={() => {
+                    setObjTargetFace(faceKey);
+                    setObjLayerOrder(String(getNextLayerOrder(faceKey)));
+                    setObjResourceId('_none');
+                    setShowObjectForm(true);
+                    setActiveTab('objects');
+                  }}
                 />
               </div>
             );

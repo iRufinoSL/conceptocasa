@@ -502,18 +502,23 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       }
     }
 
-    /** Resolve zBase for a room using the precomputed map + fallbacks */
+    /** Resolve zBase for a room using floor assignment + polygon map + fallbacks */
     const resolveZBase = (room: WorkspaceRoom): number => {
-      // 1) Check by room ID in vertical section polygons
+      // 1) HIGHEST PRIORITY: Use floor_id → floorZBaseMap (most reliable)
+      if (room.floor_id) {
+        const byFloor = floorZBaseMap.get(room.floor_id);
+        if (byFloor !== undefined) return byFloor;
+      }
+      // 2) Check by room ID in vertical section polygons
       const byId = verticalZBaseMap.get(room.id);
       if (byId !== undefined) return byId;
-      // 2) Check by room name in vertical section polygons
+      // 3) Check by room name in vertical section polygons
       const byName = verticalZBaseMap.get(`name:${room.name}`);
       if (byName !== undefined) return byName;
-      // 3) Direct match by vertical_section_id
+      // 4) Direct match by vertical_section_id
       const direct = verticalSections.find(s => s.id === room.vertical_section_id);
       if (direct) return direct.axisValue;
-      // 4) Search vertical sections for a saved polygon whose id or name matches
+      // 5) Search vertical sections for a saved polygon whose id or name matches
       for (const vs of verticalSections) {
         const polys = vs.polygons;
         if (polys?.some(p => p.id === room.id || p.name === room.name)) return vs.axisValue;

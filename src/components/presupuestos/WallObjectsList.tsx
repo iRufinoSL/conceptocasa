@@ -661,49 +661,12 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
 
       const { data: rooms } = await supabase
         .from('budget_floor_plan_rooms')
-        .select('id, name, length, width, height, floor_polygon, is_base, has_floor, has_ceiling')
+        .select('id, name, length, width, height, floor_polygon, is_base')
         .eq('floor_plan_id', fp.id)
         .order('name', { ascending: true });
       if (!rooms) return [];
 
-      const faces: AutoFace[] = [];
-
-      for (const room of rooms) {
-        if (room.is_base) continue;
-
-        const poly = Array.isArray(room.floor_polygon) ? (room.floor_polygon as unknown as PolygonVertex[]) : null;
-        const heightM = room.height || 2.5;
-
-        let floorArea: number;
-        if (poly && poly.length >= 3) {
-          floorArea = polygonArea(poly) * cellSizeM * cellSizeM;
-        } else {
-          floorArea = (room.length || 0) * (room.width || 0);
-        }
-
-        faces.push({ workspace: room.name, roomId: room.id, faceName: 'Suelo', m2: Math.round(floorArea * 100) / 100, m3: null, sortKey: 0, wallIndex: -1 });
-
-        const edgeCount = poly && poly.length >= 3 ? poly.length : 4;
-        for (let i = 0; i < edgeCount; i++) {
-          let wallLengthM: number;
-          if (poly && poly.length >= 3) {
-            const a = poly[i];
-            const b = poly[(i + 1) % poly.length];
-            wallLengthM = edgeLength(a, b) * cellSizeM;
-          } else {
-            wallLengthM = i % 2 === 0 ? (room.length || 0) : (room.width || 0);
-          }
-          const wallArea = Math.round(wallLengthM * heightM * 100) / 100;
-          faces.push({ workspace: room.name, roomId: room.id, faceName: `Pared ${i + 1}`, m2: wallArea, m3: null, sortKey: i + 1, wallIndex: i + 1 });
-        }
-
-        faces.push({ workspace: room.name, roomId: room.id, faceName: 'Techo', m2: Math.round(floorArea * 100) / 100, m3: null, sortKey: edgeCount + 1, wallIndex: -2 });
-
-        const vol = Math.round(floorArea * heightM * 1000) / 1000;
-        faces.push({ workspace: room.name, roomId: room.id, faceName: 'Espacio', m2: null, m3: vol, sortKey: edgeCount + 2, wallIndex: 0 });
-      }
-
-      return faces;
+      return (rooms as WorkspaceAutoFaceSource[]).flatMap(room => buildAutoFacesForWorkspace(room, cellSizeM));
     },
   });
 

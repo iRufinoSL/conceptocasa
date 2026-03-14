@@ -125,7 +125,7 @@ interface ActivityForm {
   start_date: string;
   duration_days: string;
   tolerance_days: string;
-  work_area_ids: string[];
+  workspace_ids: string[];
   actual_start_date: string;
   actual_end_date: string;
   activity_type: string;

@@ -1218,7 +1218,7 @@ export function SectionAxisViewer({
         }
       }
 
-      // Center label
+      // Center label — always visible for every polygon
       const areaGrid = polygonAreaGrid(verts.map(v => ({ x: v.x, y: v.y })));
       const areaM2 = areaGrid * (scale.hScale / 1000) * (scale.vScale / 1000);
       const centroid = polygonCentroid(verts.map(v => ({ x: v.x, y: v.y })));
@@ -1227,6 +1227,21 @@ export function SectionAxisViewer({
       const heightMm = poly.zTop ? poly.zTop : null;
       const darkColor = color.replace(/(\d+)%\)$/, (_, l) => `${Math.max(parseInt(l) - 20, 15)}%)`);
 
+      // Compute bounding box to fit label inside
+      const pxMinX = Math.min(...pxVerts.map(p => p.px));
+      const pxMaxX = Math.max(...pxVerts.map(p => p.px));
+      const pxMinY = Math.min(...pxVerts.map(p => p.py));
+      const pxMaxY = Math.max(...pxVerts.map(p => p.py));
+      const polyWidth = pxMaxX - pxMinX;
+      const polyHeight = pxMaxY - pxMinY;
+
+      // Adaptive font size: fit name within polygon bounds
+      const nameFontSize = Math.max(8, Math.min(12, polyWidth / Math.max(poly.name.length, 1) * 1.2, polyHeight / 4));
+      const detailFontSize = Math.max(7, nameFontSize - 2);
+      const labelText = `${areaM2.toFixed(2)} m²${heightMm ? ` · h=${heightMm}mm` : ''}`;
+      const labelW = Math.max(poly.name.length * nameFontSize * 0.65, labelText.length * detailFontSize * 0.55) + 12;
+      const labelH = nameFontSize + detailFontSize + 10;
+
       elements.push(
         <g key={`center-${poly.id}`} data-pdf-layer="center-labels"
           style={{ cursor: 'pointer' }}
@@ -1234,13 +1249,16 @@ export function SectionAxisViewer({
             e.stopPropagation();
             setFacePanel({ polyId: poly.id, polyName: poly.name, faceKey: 'floor', edgeCount: poly.vertices.length, vertices: poly.vertices.map(v => ({ x: v.x, y: v.y })) });
           }}>
-          <text x={cx} y={cy - 4} textAnchor="middle" fontSize={11} fontWeight={800} fill={darkColor} fontFamily="sans-serif"
-            stroke="white" strokeWidth={2.5} paintOrder="stroke">
+          <rect
+            x={cx - labelW / 2} y={cy - labelH / 2}
+            width={labelW} height={labelH} rx={4}
+            fill="white" fillOpacity={0.85} stroke={color} strokeWidth={0.5}
+          />
+          <text x={cx} y={cy - detailFontSize / 2 + 1} textAnchor="middle" fontSize={nameFontSize} fontWeight={800} fill={darkColor} fontFamily="sans-serif">
             {poly.name}
           </text>
-          <text x={cx} y={cy + 10} textAnchor="middle" fontSize={9} fontWeight={700} fill={darkColor} fontFamily="monospace"
-            stroke="white" strokeWidth={2} paintOrder="stroke">
-            {areaM2.toFixed(2)} m²{heightMm ? ` · h=${heightMm}mm` : ''}
+          <text x={cx} y={cy + nameFontSize / 2 + 3} textAnchor="middle" fontSize={detailFontSize} fontWeight={700} fill={darkColor} fontFamily="monospace">
+            {labelText}
           </text>
         </g>
       );

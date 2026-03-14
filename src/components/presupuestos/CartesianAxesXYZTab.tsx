@@ -11,6 +11,7 @@ import { ChevronRight, Plus, Trash2, ArrowLeft, Eye } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { CustomSection, SectionPolygon } from './CustomSectionManager';
 import { SectionAxisViewer } from './SectionAxisViewer';
+import type { PolygonFacePatterns } from './SectionAxisViewer';
 
 interface PolygonVertex { x: number; y: number; }
 
@@ -167,6 +168,43 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     },
     enabled: !!(workspaceRooms && workspaceRooms.length > 0),
   });
+
+  // ── Load wall objects (Layer 0 surface patterns) for visual fill ──
+  const { data: wallObjectSurfaces } = useQuery({
+    queryKey: ['wall-object-surfaces-for-projection', budgetId],
+    queryFn: async () => {
+      const wallIds = (allWalls || []).map(w => w.id);
+      if (wallIds.length === 0) return [];
+      const { data, error } = await supabase
+        .from('budget_wall_objects')
+        .select('id, wall_id, layer_order, visual_pattern')
+        .in('wall_id', wallIds)
+        .eq('layer_order', 0);
+      if (error) throw error;
+      return (data || []) as Array<{ id: string; wall_id: string; layer_order: number; visual_pattern: string | null }>;
+    },
+    enabled: !!(allWalls && allWalls.length > 0),
+  });
+
+  // Build facePatterns map: roomId → { faceKey → patternId }
+  // Maps wall_index: -1=floor, -2=ceiling, 0=space, 1+=wall-N
+  const autoFacePatterns = useMemo<PolygonFacePatterns>(() => {
+    if (!allWalls || !wallObjectSurfaces) return {};
+    const patterns: PolygonFacePatterns = {};
+    for (const surface of wallObjectSurfaces) {
+      if (!surface.visual_pattern) continue;
+      const wall = allWalls.find(w => w.id === surface.wall_id);
+      if (!wall) continue;
+      const roomId = wall.room_id;
+      if (!patterns[roomId]) patterns[roomId] = {};
+      let faceKey: string;
+      if (wall.wall_index === -1) faceKey = 'floor';
+      else if (wall.wall_index === -2) faceKey = 'ceiling';
+      else faceKey = `wall-${wall.wall_index - 1}`;
+      patterns[roomId][faceKey] = surface.visual_pattern;
+    }
+    return patterns;
+  }, [allWalls, wallObjectSurfaces]);
 
   const allSections = useMemo<CustomSection[]>(() => {
     if (!floorPlan?.custom_corners) return [];
@@ -852,6 +890,42 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       ...autoPolys.filter(ap => !savedIds.has(ap.id)),
     ];
 
+    // Merge saved section facePatterns with auto-generated surface patterns
+    const savedSectionPatterns: PolygonFacePatterns = (liveSection as any).facePatterns || {};
+    const mergedFacePatterns: PolygonFacePatterns = { ...autoFacePatterns };
+    // Saved patterns override auto patterns
+    for (const [polyId, faces] of Object.entries(savedSectionPatterns)) {
+      mergedFacePatterns[polyId] = { ...(mergedFacePatterns[polyId] || {}), ...faces };
+    }
+
+    const handleFacePatternChange = async (polyId: string, faceKey: string, patternId: string | null) => {
+      if (!floorPlan?.id) return;
+      let parsedCorners: Record<string, unknown> = {};
+      try {
+        parsedCorners = typeof floorPlan.custom_corners === 'string'
+          ? JSON.parse(floorPlan.custom_corners)
+          : (floorPlan.custom_corners || {});
+      } catch { parsedCorners = {}; }
+      const sections = Array.isArray(parsedCorners.customSections)
+        ? (parsedCorners.customSections as CustomSection[])
+        : [];
+      const updated = sections.map(s => {
+        if (s.id !== liveSection.id) return s;
+        const existing = (s as any).facePatterns || {};
+        return {
+          ...s,
+          facePatterns: {
+            ...existing,
+            [polyId]: { ...(existing[polyId] || {}), [faceKey]: patternId },
+          },
+        };
+      });
+      await supabase.from('budget_floor_plans')
+        .update({ custom_corners: { ...parsedCorners, customSections: updated } as any })
+        .eq('id', floorPlan.id);
+      queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces', budgetId] });
+    };
+
     return (
       <div className="space-y-3">
         <div className="flex items-center gap-2">
@@ -878,6 +952,8 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
           onSavePolygons={(polys) => handleSavePolygons(liveSection.id, polys)}
           savedRulerLines={(liveSection as any).rulerLines || []}
           onSaveRulerLines={(lines) => handleSaveRulerLines(liveSection.id, lines)}
+          facePatterns={mergedFacePatterns}
+          onFacePatternChange={handleFacePatternChange}
           allPolygonNames={allPolygonNames}
         />
       </div>

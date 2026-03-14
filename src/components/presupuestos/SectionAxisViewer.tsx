@@ -1419,8 +1419,8 @@ export function SectionAxisViewer({
     });
 
     if (hoverNode) {
-      const hPx = ox + hoverNode.col * cellPx;
-      const hPy = oy + hoverNode.row * cellPx;
+      const hPx = ox + hoverNode.col * cellPxW;
+      const hPy = oy + hoverNode.row * cellPxH;
       const isCloseNode = drawingVertices.length >= 3 &&
         hoverNode.col === drawingVertices[0].col && hoverNode.row === drawingVertices[0].row;
       elements.push(

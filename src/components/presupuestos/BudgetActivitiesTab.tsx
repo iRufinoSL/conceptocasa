@@ -3850,30 +3850,34 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                     <MapPin className="h-4 w-4" />
                     Espacios de Trabajo
                   </Label>
-                  <p className="text-xs text-muted-foreground">Selecciona los espacios donde aplica esta actividad</p>
+                  <p className="text-xs text-muted-foreground">Selecciona el espacio donde aplica esta actividad</p>
                 </div>
               </div>
               
               <div className="space-y-3 mt-2">
+                {/* Currently selected workspace */}
                 {form.workspace_ids.length > 0 && (
                   <div className="space-y-2">
-                    <p className="text-xs text-muted-foreground font-medium">Espacios seleccionados:</p>
+                    <p className="text-xs text-muted-foreground font-medium">Espacio asignado:</p>
                     <div className="flex flex-wrap gap-2">
-                      {form.workspace_ids.map(wsId => {
-                        const ws = workspaceRooms.find(w => w.id === wsId);
+                      {(() => {
+                        const ws = workspaceRooms.find(w => w.id === form.workspace_ids[0]);
                         if (!ws) return null;
                         return (
                           <Badge
                             key={ws.id}
                             variant="default"
                             className="cursor-pointer"
-                            onClick={() => setForm({ ...form, workspace_ids: form.workspace_ids.filter(id => id !== ws.id) })}
+                            onClick={() => setForm({ ...form, workspace_ids: [] })}
                           >
                             {ws.name}
+                            {(ws as any).floor_polygon && (
+                              <span className="ml-1 text-[10px] opacity-70">({(ws as any).floor_polygon.length} paredes)</span>
+                            )}
                             <X className="h-3 w-3 ml-1" />
                           </Badge>
                         );
-                      })}
+                      })()}
                     </div>
                   </div>
                 )}
@@ -3911,7 +3915,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                       {(showAllWorkAreas || workAreaSearchQuery) && (
                         <div className="max-h-40 overflow-y-auto space-y-1 border rounded-md p-2 bg-background">
                           {workspaceRooms
-                            .filter(ws => !form.workspace_ids.includes(ws.id))
+                            .filter(ws => ws.id !== form.workspace_ids[0])
                             .filter(ws => {
                               if (!workAreaSearchQuery) return true;
                               return ws.name.toLowerCase().includes(workAreaSearchQuery.toLowerCase());
@@ -3920,16 +3924,19 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                               <div
                                 key={ws.id}
                                 className="flex items-center gap-2 p-1.5 rounded hover:bg-muted cursor-pointer transition-colors"
-                                onClick={() => setForm({ ...form, workspace_ids: [...form.workspace_ids, ws.id] })}
+                                onClick={() => setForm({ ...form, workspace_ids: [ws.id] })}
                               >
                                 <Badge variant="outline" className="cursor-pointer">
                                   {ws.name}
+                                  {(ws as any).floor_polygon && (
+                                    <span className="ml-1 text-[10px] opacity-50">({(ws as any).floor_polygon.length}P)</span>
+                                  )}
                                 </Badge>
                               </div>
                             ))
                           }
                           {workspaceRooms
-                            .filter(ws => !form.workspace_ids.includes(ws.id))
+                            .filter(ws => ws.id !== form.workspace_ids[0])
                             .filter(ws => {
                               if (!workAreaSearchQuery) return true;
                               return ws.name.toLowerCase().includes(workAreaSearchQuery.toLowerCase());

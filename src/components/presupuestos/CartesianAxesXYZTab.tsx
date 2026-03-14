@@ -748,7 +748,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       if (byLegacySection !== undefined) return byLegacySection;
     }
 
-    // 6) Legacy fallback: normalized name matching (e.g. "Atico1" -> "Atico")
+    // 6) Strict normalized name fallback (does not merge "Techo" with base room)
     const normalizedRoomName = normalizeWorkspaceName(room.name);
     if (normalizedRoomName) {
       const directAxes = verticalNameAxisMap.get(normalizedRoomName);
@@ -767,8 +767,27 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       }
     }
 
+    // 7) Loose fallback only as last resort for legacy naming mismatches
+    const looseRoomName = normalizeWorkspaceNameLoose(room.name);
+    if (looseRoomName) {
+      const directAxes = verticalLooseNameAxisMap.get(looseRoomName);
+      if (directAxes && directAxes.size === 1) {
+        return Array.from(directAxes)[0];
+      }
+
+      const partialAxes = new Set<number>();
+      for (const [nameKey, axes] of verticalLooseNameAxisEntries) {
+        if (nameKey.includes(looseRoomName) || looseRoomName.includes(nameKey)) {
+          for (const axis of axes) partialAxes.add(axis);
+        }
+      }
+      if (partialAxes.size === 1) {
+        return Array.from(partialAxes)[0];
+      }
+    }
+
     return 0;
-  }, [floorZBaseMap, verticalZBaseMap, verticalSections, legacyVerticalSectionZBaseMap, verticalNameAxisMap, verticalNameAxisEntries]);
+  }, [floorZBaseMap, verticalZBaseMap, verticalSections, legacyVerticalSectionZBaseMap, verticalNameAxisMap, verticalNameAxisEntries, verticalLooseNameAxisMap, verticalLooseNameAxisEntries]);
 
   const rebaseSavedPolygonToRoomLevel = useCallback((polygon: SectionPolygon): SectionPolygon => {
     const room = workspaceRoomMap.get(polygon.id);

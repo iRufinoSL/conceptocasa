@@ -1266,6 +1266,7 @@ function ObjectRow({ obj, isPositioning, onTogglePosition, onMove, onDelete, onL
       <div className="flex items-center gap-1">
         <span className="shrink-0">{icon}</span>
         <span className="font-medium truncate flex-1">{obj.name}</span>
+        <Badge variant="outline" className="text-[8px] h-4 px-1 shrink-0">Capa {obj.layer_order}</Badge>
         <Badge variant="outline" className="text-[8px] h-4 px-1 shrink-0">{obj.object_type}</Badge>
         {obj.resource_id && <Link2 className="h-3 w-3 text-primary shrink-0" />}
       </div>

@@ -132,6 +132,7 @@ export function WorkspacePropertiesPanel({
   const [expandedFace, setExpandedFace] = useState<string | null>(focusFace || null);
   const [patternPickerFace, setPatternPickerFace] = useState<string | null>(null);
   const [localOverrides, setLocalOverrides] = useState<Record<string, string>>({});
+  const [cellSizeM, setCellSizeM] = useState(1);
 
   // Object form state
   const [showObjectForm, setShowObjectForm] = useState(false);
@@ -167,10 +168,20 @@ export function WorkspacePropertiesPanel({
     return `Pared ${wallIndex}`;
   }, []);
 
-  const getFaceMetrics = useCallback((roomData: any, wallIndex: number) => {
-    const polygon = Array.isArray(roomData?.floor_polygon) && roomData.floor_polygon.length >= 3
-      ? roomData.floor_polygon as Array<{ x: number; y: number }>
-      : null;
+  const getEffectivePolygon = useCallback((roomData: any): Array<{ x: number; y: number }> | null => {
+    if (Array.isArray(verticesProp) && verticesProp.length >= 3) {
+      return verticesProp;
+    }
+
+    if (Array.isArray(roomData?.floor_polygon) && roomData.floor_polygon.length >= 3) {
+      return roomData.floor_polygon as Array<{ x: number; y: number }>;
+    }
+
+    return null;
+  }, [verticesProp]);
+
+  const getFaceMetrics = useCallback((roomData: any, wallIndex: number, cellSize: number) => {
+    const polygon = getEffectivePolygon(roomData);
 
     const floorAreaRaw = (() => {
       if (!polygon) return (roomData?.length || 0) * (roomData?.width || 0);
@@ -179,7 +190,7 @@ export function WorkspacePropertiesPanel({
         const j = (i + 1) % polygon.length;
         area += polygon[i].x * polygon[j].y - polygon[j].x * polygon[i].y;
       }
-      return Math.abs(area) / 2;
+      return Math.abs(area) / 2 * cellSize * cellSize;
     })();
 
     const floorArea = Math.round(floorAreaRaw * 100) / 100;
@@ -205,7 +216,7 @@ export function WorkspacePropertiesPanel({
       const edgeIndex = ((wallIndex - 1) % edgeCount + edgeCount) % edgeCount;
       const a = polygon[edgeIndex];
       const b = polygon[(edgeIndex + 1) % edgeCount];
-      wallLengthM = Math.hypot(b.x - a.x, b.y - a.y);
+      wallLengthM = Math.hypot(b.x - a.x, b.y - a.y) * cellSize;
     } else {
       wallLengthM = wallIndex % 2 === 1 ? (roomData?.length || 0) : (roomData?.width || 0);
     }
@@ -214,7 +225,7 @@ export function WorkspacePropertiesPanel({
       surface_m2: Math.round(wallLengthM * heightM * 100) / 100,
       volume_m3: null as number | null,
     };
-  }, []);
+  }, [getEffectivePolygon]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);

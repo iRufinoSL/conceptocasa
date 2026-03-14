@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 import type { CustomSection, SectionPolygon } from './CustomSectionManager';
 import { SectionAxisViewer } from './SectionAxisViewer';
 import type { PolygonFacePatterns } from './SectionAxisViewer';
+import { SnapshotRestoreButton } from './SnapshotRestoreButton';
 
 interface PolygonVertex { x: number; y: number; }
 
@@ -520,18 +521,8 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
   const handleDeleteSection = async (section: CustomSection) => {
     if (!isAdmin || !floorPlan?.id) return;
 
-    if (section.sectionType === 'vertical') {
-      const confirmed = window.confirm('Eliminar una Sección Z hará limpieza total: se borrarán todas las secciones y todos los espacios. ¿Continuar?');
-      if (!confirmed) return;
-
-      try {
-        await resetAllSectionsAndWorkspaces();
-        toast.success('Limpieza total aplicada: todo quedó vacío para reiniciar.');
-      } catch (error: any) {
-        toast.error(`Error en limpieza total: ${error?.message || 'inténtalo de nuevo'}`);
-      }
-      return;
-    }
+    const confirmed = window.confirm(`¿Eliminar solo la sección "${section.name}"? Esta acción no borrará las demás secciones.`);
+    if (!confirmed) return;
 
     const parsedCorners = parseCustomCorners();
     const existingSections = Array.isArray(parsedCorners.customSections)
@@ -1383,16 +1374,26 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
             Crea y gestiona secciones por eje. Total: {totalSections}
           </p>
         </div>
-        {totalSections > 0 && isAdmin && (
-          <Button
-            variant="destructive"
-            size="sm"
-            className="h-7 text-xs gap-1"
-            onClick={handleDeleteAllSections}
-          >
-            <Trash2 className="h-3 w-3" /> Eliminar todas
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          <SnapshotRestoreButton
+            budgetId={budgetId}
+            module="plano"
+            onRestored={() => {
+              setActiveSection(null);
+              invalidateSectionQueries();
+            }}
+          />
+          {totalSections > 0 && isAdmin && (
+            <Button
+              variant="destructive"
+              size="sm"
+              className="h-7 text-xs gap-1"
+              onClick={handleDeleteAllSections}
+            >
+              <Trash2 className="h-3 w-3" /> Eliminar todas
+            </Button>
+          )}
+        </div>
       </div>
 
       {creators.map((type) => {

@@ -1917,11 +1917,11 @@ export function SectionAxisViewer({
           {/* Ruler drawing preview */}
           {rulerMode && rulerStart && rulerHoverNode && gridLayout && (
             (() => {
-              const { ox, oy, cellPx, originCol, originRow } = gridLayout;
-              const x1 = ox + rulerStart.col * cellPx;
-              const y1 = oy + rulerStart.row * cellPx;
-              const x2 = ox + rulerHoverNode.col * cellPx;
-              const y2 = oy + rulerHoverNode.row * cellPx;
+              const { ox, oy, cellPxW, cellPxH, originCol, originRow } = gridLayout;
+              const x1 = ox + rulerStart.col * cellPxW;
+              const y1 = oy + rulerStart.row * cellPxH;
+              const x2 = ox + rulerHoverNode.col * cellPxW;
+              const y2 = oy + rulerHoverNode.row * cellPxH;
               const startCoord = { h: rulerStart.col - originCol, v: originRow - rulerStart.row };
               const endCoord = { h: rulerHoverNode.col - originCol, v: originRow - rulerHoverNode.row };
               const dh = Math.abs(endCoord.h - startCoord.h) * (scale?.hScale || 1);

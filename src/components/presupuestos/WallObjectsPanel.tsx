@@ -46,6 +46,7 @@ const CEILING_TYPES = [
 ];
 
 const OBJECT_TYPES = [
+  { value: 'hueco', label: 'Hueco (ventana/puerta)' },
   { value: 'material', label: 'Material' },
   { value: 'bloque', label: 'Bloque' },
   { value: 'aislamiento', label: 'Aislamiento' },
@@ -54,6 +55,11 @@ const OBJECT_TYPES = [
   { value: 'instalacion', label: 'Instalación' },
   { value: 'otro', label: 'Otro' },
 ];
+
+interface ExternalResourceOption {
+  id: string;
+  name: string;
+}
 
 interface WallObject {
   id: string;
@@ -67,6 +73,13 @@ interface WallObject {
   volume_m3: number | null;
   length_ml: number | null;
   visual_pattern: string | null;
+  thickness_mm: number | null;
+  width_mm: number | null;
+  height_mm: number | null;
+  position_x: number | null;
+  sill_height: number | null;
+  distance_to_wall: number | null;
+  resource_id: string | null;
 }
 
 export function WallObjectsPanel({

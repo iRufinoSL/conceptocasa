@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Trash2, Save, GripVertical, Star, Paintbrush } from 'lucide-react';
+import { Plus, Trash2, Save, GripVertical, Star, Paintbrush, Layers } from 'lucide-react';
 import { VISUAL_PATTERNS, PATTERN_CATEGORIES, SUPERFICIE_PATTERNS, getPatternById, patternPreviewDataUri } from '@/lib/visual-patterns';
 import { toast } from 'sonner';
 
@@ -83,8 +83,13 @@ export function WallObjectsPanel({
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingObj, setEditingObj] = useState<string | null>(null);
   const [editingSuperficiePattern, setEditingSuperficiePattern] = useState<string | null>(null);
+  // Quick "Superficie" layer form
+  const [showSuperficieForm, setShowSuperficieForm] = useState(false);
+  const [supName, setSupName] = useState('');
+  const [supLayerOrder, setSupLayerOrder] = useState(1);
+  const [supVisualPattern, setSupVisualPattern] = useState('');
 
-  // Form state
+  // Full form state
   const [formName, setFormName] = useState('');
   const [formDescription, setFormDescription] = useState('');
   const [formObjectType, setFormObjectType] = useState('material');
@@ -447,7 +452,94 @@ export function WallObjectsPanel({
               </div>
             )}
 
-            {/* Add/Edit form */}
+            {/* Quick Superficie layer form */}
+            {showSuperficieForm && !showAddForm && (
+              <div className="space-y-2 border rounded p-2.5 bg-accent/10 border-accent">
+                <div className="flex items-center justify-between">
+                  <Label className="text-[10px] font-semibold">Nueva capa Superficie</Label>
+                  <Button variant="ghost" size="sm" className="h-5 text-[9px]" onClick={() => setShowSuperficieForm(false)}>✕</Button>
+                </div>
+                <p className="text-[9px] text-muted-foreground">
+                  Hereda automáticamente los m² de la cara ({faceSurfaceM2 || '—'} m²). Solo indica nombre y posición.
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="col-span-2">
+                    <Label className="text-[10px]">Nombre *</Label>
+                    <Input className="h-7 text-xs" value={supName} onChange={e => setSupName(e.target.value)} placeholder="Ej: Enfoscado, Alicatado..." />
+                  </div>
+                  <div>
+                    <Label className="text-[10px]">Orden capa</Label>
+                    <Input
+                      className="h-7 text-xs"
+                      type="number"
+                      value={supLayerOrder}
+                      onChange={e => {
+                        const parsed = Number.parseInt(e.target.value, 10);
+                        setSupLayerOrder(Number.isNaN(parsed) ? 1 : parsed);
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-[10px]">Patrón visual</Label>
+                    <Select value={supVisualPattern || '_none'} onValueChange={v => setSupVisualPattern(v === '_none' ? '' : v)}>
+                      <SelectTrigger className="h-7 text-xs">
+                        <div className="flex items-center gap-1.5">
+                          {supVisualPattern && getPatternById(supVisualPattern) ? (
+                            <>
+                              <img src={patternPreviewDataUri(getPatternById(supVisualPattern)!)} className="w-4 h-4 rounded border" alt="" />
+                              <span>{getPatternById(supVisualPattern)!.label}</span>
+                            </>
+                          ) : (
+                            <span className="text-muted-foreground">Sin patrón</span>
+                          )}
+                        </div>
+                      </SelectTrigger>
+                      <SelectContent className="max-h-64">
+                        <SelectItem value="_none" className="text-xs">
+                          <span className="text-muted-foreground">Sin patrón</span>
+                        </SelectItem>
+                        {SUPERFICIE_PATTERNS.map(p => (
+                          <SelectItem key={p.id} value={p.id} className="text-xs">
+                            <div className="flex items-center gap-2">
+                              <img src={patternPreviewDataUri(p)} className="w-4 h-4 rounded border" alt="" />
+                              <span>{p.label}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="flex gap-1 justify-end">
+                  <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => setShowSuperficieForm(false)}>Cancelar</Button>
+                  <Button size="sm" className="h-6 text-[10px] gap-1" disabled={!supName.trim()} onClick={async () => {
+                    if (!supName.trim() || !wallId) return;
+                    const faceLabel = wallLabel || (wallIndex === 0 ? 'Espacio' : wallIndex === -1 ? 'Suelo' : wallIndex === -2 ? 'Techo' : `Pared ${wallIndex}`);
+                    const { error } = await supabase.from('budget_wall_objects').insert({
+                      wall_id: wallId,
+                      layer_order: supLayerOrder,
+                      name: supName.trim(),
+                      description: `${roomName} / ${faceLabel} — ${faceSurfaceM2 || 0} m²`,
+                      object_type: 'material',
+                      is_core: false,
+                      surface_m2: faceSurfaceM2 || null,
+                      volume_m3: null,
+                      visual_pattern: supVisualPattern.trim() || null,
+                    });
+                    if (error) { toast.error('Error al crear superficie'); return; }
+                    toast.success('Capa Superficie creada');
+                    setShowSuperficieForm(false);
+                    setSupName('');
+                    setSupVisualPattern('');
+                    queryClient.invalidateQueries({ queryKey: ['wall-objects', wallId] });
+                  }}>
+                    <Save className="h-3 w-3" /> Crear
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Add/Edit full object form */}
             {showAddForm ? (
               <div className="space-y-2 border rounded p-2.5 bg-muted/10">
                 <div className="flex items-center justify-between">
@@ -578,14 +670,25 @@ export function WallObjectsPanel({
                   </Button>
                 </div>
               </div>
-            ) : (
-              <Button variant="outline" size="sm" className="h-7 text-xs gap-1 w-full" onClick={() => {
-                resetForm();
-                setFormLayerOrder(objects.length > 0 ? Math.max(...objects.map(o => o.layer_order)) + 1 : 1);
-                setShowAddForm(true);
-              }}>
-                <Plus className="h-3 w-3" /> Añadir objeto/capa
-              </Button>
+            ) : !showSuperficieForm && (
+              <div className="flex gap-1.5">
+                <Button variant="outline" size="sm" className="h-7 text-xs gap-1 flex-1" onClick={() => {
+                  const nextOrder = objects.length > 0 ? Math.max(...objects.map(o => o.layer_order)) + 1 : 1;
+                  setSupLayerOrder(nextOrder);
+                  setSupName('');
+                  setSupVisualPattern('');
+                  setShowSuperficieForm(true);
+                }}>
+                  <Layers className="h-3 w-3" /> Superficie
+                </Button>
+                <Button variant="outline" size="sm" className="h-7 text-xs gap-1 flex-1" onClick={() => {
+                  resetForm();
+                  setFormLayerOrder(objects.length > 0 ? Math.max(...objects.map(o => o.layer_order)) + 1 : 1);
+                  setShowAddForm(true);
+                }}>
+                  <Plus className="h-3 w-3" /> Objeto/capa
+                </Button>
+              </div>
             )}
           </div>
         </div>

@@ -439,8 +439,8 @@ export function SectionAxisViewer({
   const colRowToPx = useCallback((col: number, row: number) => {
     if (!gridLayout) return { px: 0, py: 0 };
     return {
-      px: gridLayout.ox + col * gridLayout.cellPx,
-      py: gridLayout.oy + row * gridLayout.cellPx,
+      px: gridLayout.ox + col * gridLayout.cellPxW,
+      py: gridLayout.oy + row * gridLayout.cellPxH,
     };
   }, [gridLayout]);
 

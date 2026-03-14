@@ -420,7 +420,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
           if (!fp) return { data: [], error: null };
           return supabase
             .from('budget_floor_plan_rooms')
-            .select('id, name, floor_id')
+            .select('id, name, floor_id, floor_polygon')
             .eq('floor_plan_id', fp.id)
             .order('name');
         })(),
@@ -1001,8 +1001,8 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
       if (savedActivityId) {
         await syncActivityResourcesRelatedUnits(savedActivityId);
         
-        // Update workspace relations
-        const normalizedWsIds = normalizeIds(form.workspace_ids);
+        // Update workspace relations (single workspace)
+        const newWorkspaceId = form.workspace_ids.length > 0 ? form.workspace_ids[0] : null;
 
         const { error: deleteRelError } = await supabase
           .from('budget_activity_workspaces')
@@ -1011,26 +1011,23 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
 
         if (deleteRelError) throw deleteRelError;
 
-        if (normalizedWsIds.length > 0) {
-          const relationsToInsert = normalizedWsIds.map((wsId) => ({
-            workspace_id: wsId,
-            activity_id: savedActivityId,
-          }));
-
+        if (newWorkspaceId) {
           const { error: relError } = await supabase
             .from('budget_activity_workspaces')
-            .upsert(relationsToInsert, {
+            .upsert([{ workspace_id: newWorkspaceId, activity_id: savedActivityId }], {
               onConflict: 'activity_id,workspace_id',
               ignoreDuplicates: true,
             });
-
           if (relError) throw relError;
+
+          // Auto-create face children for the assigned workspace
+          await autoCreateFaceChildren(savedActivityId, newWorkspaceId);
         }
 
-        // Propagate workspaces to child activities
+        // Propagate workspace to existing child activities
         const children = activities.filter(a => a.parent_activity_id === savedActivityId);
         for (const child of children) {
-          await handleUpdateActivityWorkspaces(child.id, normalizedWsIds);
+          await handleUpdateActivityWorkspaces(child.id, newWorkspaceId ? [newWorkspaceId] : []);
         }
       }
 
@@ -1422,49 +1419,40 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
     }
   };
 
-  // Update activity workspaces
+  // Update activity workspace (single workspace per activity)
   const handleUpdateActivityWorkspaces = async (activityId: string, workspaceIds: string[]) => {
     return enqueueWorkAreaUpdate(activityId, async () => {
-      const normalizedIds = normalizeIds(workspaceIds);
+      // Single workspace: take the first one or empty
+      const newWorkspaceId = workspaceIds.length > 0 ? workspaceIds[0] : null;
 
       try {
-        const { data: currentRows, error: currentError } = await supabase
+        // Remove all existing workspace relations for this activity
+        const { error: deleteError } = await supabase
           .from('budget_activity_workspaces')
-          .select('workspace_id')
+          .delete()
           .eq('activity_id', activityId);
+        if (deleteError) throw deleteError;
 
-        if (currentError) throw currentError;
-
-        const currentIds = new Set((currentRows || []).map((r: any) => r.workspace_id));
-        const newIds = new Set(normalizedIds);
-        const toAdd = normalizedIds.filter((id) => !currentIds.has(id));
-        const toRemove = [...currentIds].filter((id) => !newIds.has(id));
-
-        if (toRemove.length > 0) {
-          const { error: removeError } = await supabase
-            .from('budget_activity_workspaces')
-            .delete()
-            .eq('activity_id', activityId)
-            .in('workspace_id', toRemove);
-          if (removeError) throw removeError;
-        }
-
-        if (toAdd.length > 0) {
+        // Add the new single workspace relation
+        if (newWorkspaceId) {
           const { error: addError } = await supabase
             .from('budget_activity_workspaces')
-            .upsert(toAdd.map((wid) => ({ workspace_id: wid, activity_id: activityId })), {
+            .upsert([{ workspace_id: newWorkspaceId, activity_id: activityId }], {
               onConflict: 'activity_id,workspace_id',
               ignoreDuplicates: true,
             });
           if (addError) throw addError;
+
+          // Auto-create face children based on workspace polygon
+          await autoCreateFaceChildren(activityId, newWorkspaceId);
         }
 
         setWorkspaceRelations((prev) => {
           const filtered = prev.filter((r) => r.activity_id !== activityId);
-          return [
-            ...filtered,
-            ...normalizedIds.map((wid) => ({ activity_id: activityId, workspace_id: wid })),
-          ];
+          if (newWorkspaceId) {
+            return [...filtered, { activity_id: activityId, workspace_id: newWorkspaceId }];
+          }
+          return filtered;
         });
       } catch (err: any) {
         console.error('Error updating workspaces:', err);
@@ -1472,6 +1460,83 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
         fetchData();
       }
     });
+  };
+
+  // Auto-create face children (Suelo, P1..Pn, Techo, Espacio) when workspace is assigned
+  const autoCreateFaceChildren = async (parentActivityId: string, workspaceId: string) => {
+    try {
+      // Get the workspace room to determine number of walls from polygon
+      const room = workspaceRooms.find(r => r.id === workspaceId);
+      if (!room) return;
+
+      const numWalls = (room as any).floor_polygon?.length || 4;
+
+      // Get the parent activity data
+      const parentActivity = activities.find(a => a.id === parentActivityId);
+      if (!parentActivity) return;
+
+      // Check which face children already exist to avoid duplicates
+      const existingChildren = activities.filter(a => a.parent_activity_id === parentActivityId);
+      const existingFaceNames = new Set(existingChildren.map(c => c.name.toLowerCase()));
+
+      // Build face names: Suelo, P1..Pn, Techo, Espacio
+      const faceNames: string[] = ['Suelo'];
+      for (let i = 1; i <= numWalls; i++) {
+        faceNames.push(`Pared ${i}`);
+      }
+      faceNames.push('Techo', 'Espacio');
+
+      // Filter out faces that already exist as children
+      const newFaces = faceNames.filter(name => !existingFaceNames.has(name.toLowerCase()));
+
+      if (newFaces.length === 0) return;
+
+      // Get next available code
+      const allCodes = activities.map(a => a.code).filter(Boolean);
+      let maxCodeNum = 0;
+      allCodes.forEach(c => {
+        const match = c.match(/(\d+)/);
+        if (match) maxCodeNum = Math.max(maxCodeNum, parseInt(match[1]));
+      });
+
+      // Create face children
+      const childrenToInsert = newFaces.map((faceName, idx) => ({
+        budget_id: budgetId,
+        name: faceName,
+        code: `${parentActivity.code}.${(idx + 1 + existingChildren.length).toString().padStart(2, '0')}`,
+        description: `${faceName} — ${room.name}`,
+        measurement_unit: parentActivity.measurement_unit || 'm²',
+        phase_id: parentActivity.phase_id,
+        uses_measurement: parentActivity.uses_measurement,
+        opciones: parentActivity.opciones || ['A', 'B', 'C'],
+        activity_type: 'normal',
+        parent_activity_id: parentActivityId,
+      }));
+
+      const { data: insertedChildren, error: insertError } = await supabase
+        .from('budget_activities')
+        .insert(childrenToInsert)
+        .select('id');
+
+      if (insertError) throw insertError;
+
+      // Assign the same workspace to all children
+      if (insertedChildren && insertedChildren.length > 0) {
+        const childWsRelations = insertedChildren.map((child: any) => ({
+          activity_id: child.id,
+          workspace_id: workspaceId,
+        }));
+        await supabase
+          .from('budget_activity_workspaces')
+          .upsert(childWsRelations, { onConflict: 'activity_id,workspace_id', ignoreDuplicates: true });
+      }
+
+      toast.success(`Creadas ${newFaces.length} sub-actividades por caras de "${room.name}"`);
+      await fetchData();
+    } catch (err: any) {
+      console.error('Error creating face children:', err);
+      // Non-blocking: don't fail the main workspace assignment
+    }
   };
 
   // Navigate to previous/next activity in form
@@ -2389,10 +2454,30 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                           onClick={() => handleEdit(activity)}
                           className="text-left hover:text-primary hover:underline transition-colors cursor-pointer"
                         >
-                          {activity.name}
+                          <span>{activity.name}</span>
+                          {(() => {
+                            const wsRel = workspaceRelations.find(r => r.activity_id === activity.id);
+                            const wsRoom = wsRel ? workspaceRooms.find(w => w.id === wsRel.workspace_id) : null;
+                            return wsRoom ? (
+                              <span className="block text-[10px] text-muted-foreground font-normal mt-0.5">
+                                <MapPin className="h-2.5 w-2.5 inline mr-0.5" />{wsRoom.name}
+                              </span>
+                            ) : null;
+                          })()}
                         </button>
                       ) : (
-                        activity.name
+                        <div>
+                          <span>{activity.name}</span>
+                          {(() => {
+                            const wsRel = workspaceRelations.find(r => r.activity_id === activity.id);
+                            const wsRoom = wsRel ? workspaceRooms.find(w => w.id === wsRel.workspace_id) : null;
+                            return wsRoom ? (
+                              <span className="block text-[10px] text-muted-foreground font-normal mt-0.5">
+                                <MapPin className="h-2.5 w-2.5 inline mr-0.5" />{wsRoom.name}
+                              </span>
+                            ) : null;
+                          })()}
+                        </div>
                       )}
                     </TableCell>
                     <TableCell className="max-w-[180px]">
@@ -3762,30 +3847,34 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                     <MapPin className="h-4 w-4" />
                     Espacios de Trabajo
                   </Label>
-                  <p className="text-xs text-muted-foreground">Selecciona los espacios donde aplica esta actividad</p>
+                  <p className="text-xs text-muted-foreground">Selecciona el espacio donde aplica esta actividad</p>
                 </div>
               </div>
               
               <div className="space-y-3 mt-2">
+                {/* Currently selected workspace */}
                 {form.workspace_ids.length > 0 && (
                   <div className="space-y-2">
-                    <p className="text-xs text-muted-foreground font-medium">Espacios seleccionados:</p>
+                    <p className="text-xs text-muted-foreground font-medium">Espacio asignado:</p>
                     <div className="flex flex-wrap gap-2">
-                      {form.workspace_ids.map(wsId => {
-                        const ws = workspaceRooms.find(w => w.id === wsId);
+                      {(() => {
+                        const ws = workspaceRooms.find(w => w.id === form.workspace_ids[0]);
                         if (!ws) return null;
                         return (
                           <Badge
                             key={ws.id}
                             variant="default"
                             className="cursor-pointer"
-                            onClick={() => setForm({ ...form, workspace_ids: form.workspace_ids.filter(id => id !== ws.id) })}
+                            onClick={() => setForm({ ...form, workspace_ids: [] })}
                           >
                             {ws.name}
+                            {(ws as any).floor_polygon && (
+                              <span className="ml-1 text-[10px] opacity-70">({(ws as any).floor_polygon.length} paredes)</span>
+                            )}
                             <X className="h-3 w-3 ml-1" />
                           </Badge>
                         );
-                      })}
+                      })()}
                     </div>
                   </div>
                 )}
@@ -3823,7 +3912,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                       {(showAllWorkAreas || workAreaSearchQuery) && (
                         <div className="max-h-40 overflow-y-auto space-y-1 border rounded-md p-2 bg-background">
                           {workspaceRooms
-                            .filter(ws => !form.workspace_ids.includes(ws.id))
+                            .filter(ws => ws.id !== form.workspace_ids[0])
                             .filter(ws => {
                               if (!workAreaSearchQuery) return true;
                               return ws.name.toLowerCase().includes(workAreaSearchQuery.toLowerCase());
@@ -3832,16 +3921,19 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                               <div
                                 key={ws.id}
                                 className="flex items-center gap-2 p-1.5 rounded hover:bg-muted cursor-pointer transition-colors"
-                                onClick={() => setForm({ ...form, workspace_ids: [...form.workspace_ids, ws.id] })}
+                                onClick={() => setForm({ ...form, workspace_ids: [ws.id] })}
                               >
                                 <Badge variant="outline" className="cursor-pointer">
                                   {ws.name}
+                                  {(ws as any).floor_polygon && (
+                                    <span className="ml-1 text-[10px] opacity-50">({(ws as any).floor_polygon.length}P)</span>
+                                  )}
                                 </Badge>
                               </div>
                             ))
                           }
                           {workspaceRooms
-                            .filter(ws => !form.workspace_ids.includes(ws.id))
+                            .filter(ws => ws.id !== form.workspace_ids[0])
                             .filter(ws => {
                               if (!workAreaSearchQuery) return true;
                               return ws.name.toLowerCase().includes(workAreaSearchQuery.toLowerCase());

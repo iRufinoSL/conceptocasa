@@ -1174,13 +1174,44 @@ export function SectionAxisViewer({
         }
       }
 
-      // Vertex dots
+      // Vertex dots — draggable in vertex edit mode
       for (let i = 0; i < verts.length; i++) {
         const a = pxVerts[i];
+        const isDraggable = vertexEditMode;
+        const vertIdx = i;
         elements.push(
-          <circle key={`vtx-${poly.id}-${i}`} cx={a.px} cy={a.py} r={3.5}
-            fill={color} stroke="white" strokeWidth={1.5} />
+          <circle key={`vtx-${poly.id}-${i}`} cx={a.px} cy={a.py}
+            r={isDraggable ? 7 : 3.5}
+            fill={isDraggable ? 'hsl(var(--primary))' : color}
+            stroke="white" strokeWidth={isDraggable ? 2.5 : 1.5}
+            style={isDraggable ? { cursor: 'grab' } : undefined}
+            onMouseDown={isDraggable ? (e) => {
+              e.stopPropagation(); e.preventDefault();
+              pushUndo();
+              setDraggingVertexInfo({ polyId: poly.id, vertexIdx: vertIdx });
+            } : undefined}
+            onDoubleClick={isDraggable ? (e) => {
+              e.stopPropagation();
+              handleDeleteVertex(poly.id, vertIdx);
+            } : undefined}
+          />
         );
+        // In edit mode, show "+" on edges to insert vertices
+        if (isDraggable) {
+          const j = (i + 1) % verts.length;
+          const b = pxVerts[j];
+          const midPx = (a.px + b.px) / 2;
+          const midPy = (a.py + b.py) / 2;
+          elements.push(
+            <g key={`insert-${poly.id}-${i}`}
+              style={{ cursor: 'pointer' }}
+              onClick={(e) => { e.stopPropagation(); handleInsertVertexOnEdge(poly.id, i); }}>
+              <circle cx={midPx} cy={midPy} r={6}
+                fill="hsl(140, 60%, 45%)" stroke="white" strokeWidth={1.5} opacity={0.7} />
+              <text x={midPx} y={midPy + 3.5} textAnchor="middle" fontSize={9} fontWeight={900} fill="white">+</text>
+            </g>
+          );
+        }
       }
 
       // Center label

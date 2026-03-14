@@ -1833,7 +1833,7 @@ export function SectionAxisViewer({
         <svg
           ref={svgRef}
           width={w} height={h}
-          style={(drawMode || rulerMode) ? { cursor: rulerMode ? 'crosshair' : 'none' } : undefined}
+          style={(drawMode || rulerMode || vertexEditMode) ? { cursor: vertexEditMode ? 'default' : rulerMode ? 'crosshair' : 'none' } : undefined}
           className="block bg-background"
           onClick={handleSvgClick}
           onMouseMove={handleSvgMouseMove}

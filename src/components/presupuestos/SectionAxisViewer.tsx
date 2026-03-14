@@ -1861,11 +1861,11 @@ export function SectionAxisViewer({
           {/* Ruler lines rendering */}
           <g data-pdf-layer="rulers">
           {gridLayout && scale && rulerLines.map((rl) => {
-            const { ox, oy, cellPx, originCol, originRow } = gridLayout;
-            const x1 = ox + rl.start.col * cellPx;
-            const y1 = oy + rl.start.row * cellPx;
-            const x2 = ox + rl.end.col * cellPx;
-            const y2 = oy + rl.end.row * cellPx;
+            const { ox, oy, cellPxW, cellPxH, originCol, originRow } = gridLayout;
+            const x1 = ox + rl.start.col * cellPxW;
+            const y1 = oy + rl.start.row * cellPxH;
+            const x2 = ox + rl.end.col * cellPxW;
+            const y2 = oy + rl.end.row * cellPxH;
             const startCoord = { h: rl.start.col - originCol, v: originRow - rl.start.row };
             const endCoord = { h: rl.end.col - originCol, v: originRow - rl.end.row };
             const dh = Math.abs(endCoord.h - startCoord.h) * scale.hScale;

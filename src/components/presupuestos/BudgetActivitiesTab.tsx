@@ -1026,6 +1026,12 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
 
           if (relError) throw relError;
         }
+
+        // Propagate workspaces to child activities
+        const children = activities.filter(a => a.parent_activity_id === savedActivityId);
+        for (const child of children) {
+          await handleUpdateActivityWorkspaces(child.id, normalizedWsIds);
+        }
       }
 
       setFormDialogOpen(false);

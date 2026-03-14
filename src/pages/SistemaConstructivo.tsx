@@ -155,8 +155,8 @@ const SistemaConstructivo = () => {
       {/* MA'S System - Featured */}
       <section className="relative py-16 overflow-hidden">
         <div className="absolute inset-0">
-          <img src={hokusaiSection} alt="" className="w-full h-full object-cover opacity-[0.06]" />
-          <div className="absolute inset-0 bg-primary/5" />
+          <div className="absolute inset-0 opacity-[0.12]" style={{ backgroundImage: `url(${hokusaiSection})`, backgroundSize: '500px auto', backgroundRepeat: 'repeat' }} />
+          <div className="absolute inset-0 bg-primary/5 backdrop-blur-[0.5px]" />
         </div>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp}>

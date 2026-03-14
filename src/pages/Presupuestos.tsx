@@ -21,6 +21,7 @@ import { searchMatch } from '@/lib/search-utils';
 import { CloneBudgetDialog } from '@/components/presupuestos/CloneBudgetDialog';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Badge } from '@/components/ui/badge';
+import { createModelBudget, getModelBudget } from '@/lib/model-budget-sync';
 
 type PresupuestoStatus = 'activo' | 'en_ejecucion' | 'archivado';
 

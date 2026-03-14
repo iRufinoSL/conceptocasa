@@ -765,8 +765,39 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       const hMax = Math.max(...intersections);
       if (Math.abs(hMax - hMin) < 0.01) return;
 
-      const heightM = roomHeightM || defaultHeight;
-      const defaultZTop = zBase + Math.round((heightM * 1000) / zUnitMm);
+      // Resolve effective height: room height → max wall height → default
+      let effectiveHeightM = roomHeightM && roomHeightM > 0 ? roomHeightM : null;
+
+      // If room height is missing/zero, compute from individual wall heights (prisma with per-face heights)
+      if (!effectiveHeightM && wallRoomId) {
+        const roomWalls = (allWalls || []).filter(w => w.room_id === wallRoomId);
+        const wallHeights = roomWalls.filter(w => w.height != null && w.height > 0).map(w => w.height!);
+        if (wallHeights.length > 0) {
+          effectiveHeightM = Math.max(...wallHeights);
+        }
+      }
+
+      // Also check vertical section polygons for this room's actual drawn height
+      if (!effectiveHeightM) {
+        for (const src of verticalPolygonSources) {
+          if (src.polygon.id === key || src.polygon.name === roomName) {
+            const verts = src.polygon.vertices;
+            if (verts && verts.length >= 3) {
+              const minY = Math.min(...verts.map(v => v.y));
+              const maxY = Math.max(...verts.map(v => v.y));
+              const drawnHeightUnits = maxY - minY;
+              if (drawnHeightUnits > 0.01) {
+                effectiveHeightM = (drawnHeightUnits * zUnitMm) / 1000;
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      if (!effectiveHeightM) effectiveHeightM = defaultHeight;
+
+      const defaultZTop = zBase + Math.round((effectiveHeightM * 1000) / zUnitMm);
 
       // Check wall heights for non-uniform tops (inclined roofs)
       const getWallZTop = (wallIndex: number): number => {
@@ -806,17 +837,23 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       const zTopLeft = getTopAtIntersection(hMin);
       const zTopRight = getTopAtIntersection(hMax);
 
+      // Guard against degenerate polygons (collapsed to a line)
+      const maxZTop = Math.max(zTopLeft, zTopRight);
+      const finalZTop = maxZTop <= zBase ? zBase + Math.max(1, Math.round((defaultHeight * 1000) / zUnitMm)) : maxZTop;
+      const finalZTopLeft = zTopLeft <= zBase ? finalZTop : zTopLeft;
+      const finalZTopRight = zTopRight <= zBase ? finalZTop : zTopRight;
+
       projected.push({
         id: key,
         name: roomName,
         vertices: [
           { x: hMin, y: zBase, z: 0 },
           { x: hMax, y: zBase, z: 0 },
-          { x: hMax, y: zTopRight, z: 0 },
-          { x: hMin, y: zTopLeft, z: 0 },
+          { x: hMax, y: finalZTopRight, z: 0 },
+          { x: hMin, y: finalZTopLeft, z: 0 },
         ],
         zBase,
-        zTop: Math.max(zTopLeft, zTopRight),
+        zTop: Math.max(finalZTopLeft, finalZTopRight),
         hasFloor,
         hasCeiling,
       });

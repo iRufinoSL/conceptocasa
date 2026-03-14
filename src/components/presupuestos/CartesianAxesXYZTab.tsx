@@ -642,17 +642,35 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     return names;
   }, [allSections]);
 
+  // Set of room IDs that exist in any vertical (Z) section — used to filter auto-projection
+  const validRoomIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const vs of verticalSections) {
+      for (const p of (vs.polygons || [])) {
+        ids.add(p.id);
+      }
+    }
+    return ids;
+  }, [verticalSections]);
+
   /** Compute auto-projected polygons for Y/X sections from workspace rooms */
   const computeProjectedPolygons = useCallback((section: CustomSection): SectionPolygon[] => {
     if (section.sectionType === 'vertical') return [];
     if (!workspaceRooms || workspaceRooms.length === 0) return [];
 
     const defaultHeight = 2.5; // fallback metres
+    // Z unit = 250mm (block_height_mm)
+    const zUnitMm = 250;
+
+    // Filter: only project rooms that exist in a Z section
+    const eligibleRooms = validRoomIds.size > 0
+      ? workspaceRooms.filter(r => validRoomIds.has(r.id))
+      : workspaceRooms;
 
     // For transversal sections (X cut), compute maxY to invert Y axis
     let globalMaxY = 0;
     if (section.sectionType === 'transversal') {
-      for (const r of workspaceRooms) {
+      for (const r of eligibleRooms) {
         if (!r.floor_polygon) continue;
         for (const v of r.floor_polygon) {
           if (v.y > globalMaxY) globalMaxY = v.y;
@@ -662,7 +680,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
 
     const projected: SectionPolygon[] = [];
 
-    for (const room of workspaceRooms) {
+    for (const room of eligibleRooms) {
       if (!room.floor_polygon || room.floor_polygon.length < 3) continue;
       const poly = room.floor_polygon;
       const cutAxis = section.sectionType === 'longitudinal' ? 'y' : 'x';
@@ -683,13 +701,13 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       // Determine Z base from vertical section with fallback resolution
       const zBase = resolveRoomZBase(room);
       const heightM = room.height || defaultHeight;
-      const defaultZTop = zBase + Math.round((heightM * 1000) / 250);
+      const defaultZTop = zBase + Math.round((heightM * 1000) / zUnitMm);
 
-      // Check wall heights for non-uniform tops
+      // Check wall heights for non-uniform tops (inclined roofs)
       const getWallZTop = (wallIndex: number): number => {
         const wall = (allWalls || []).find(w => w.room_id === room.id && w.wall_index === wallIndex);
         if (wall?.height != null && wall.height > 0) {
-          return zBase + Math.round((wall.height * 1000) / 250);
+          return zBase + Math.round((wall.height * 1000) / zUnitMm);
         }
         return defaultZTop;
       };
@@ -738,7 +756,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       });
     }
     return projected;
-  }, [workspaceRooms, allWalls, resolveRoomZBase]);
+  }, [workspaceRooms, allWalls, resolveRoomZBase, validRoomIds]);
 
   // If viewing a section, show the viewer
   if (activeSection) {

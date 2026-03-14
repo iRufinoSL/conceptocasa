@@ -1,16 +1,26 @@
 # Memory: features/budget/xyz-workspace-projection-logic
 Updated: now
 
-El sistema proyecta automáticamente los Espacios de trabajo en las secciones transversales (X) y longitudinales (Y). Cuando una sección corta el plano de un espacio, el motor de geometría calcula la intersección y dibuja el perfil vertical del volumen utilizando las alturas reales (Z) de las paredes y el suelo/techo.
+El sistema proyecta automáticamente los Espacios de trabajo en las secciones transversales (X) y longitudinales (Y) cuando intersectan el plano de corte. Solo se proyectan espacios que existen en alguna sección Z (vertical), filtrando espacios eliminados o fantasma.
+
+### Escala Z en secciones X/Y
+El eje vertical (Z) en secciones X/Y usa unidades de 250mm (block_height_mm). El placeholder del input de escala vertical sugiere 250mm para estas secciones, diferente de los 625mm de las secciones Z.
 
 ### Inversión del eje Y en secciones transversales
-En el plano 2D, Y aumenta hacia abajo (Y=0 arriba, Y=max abajo). En las secciones transversales (corte en X), el eje horizontal representa Y pero invertido: `section_h = maxY - polygon_y`. Esto asegura que la posición visual en la sección coincida con la posición real del espacio en el edificio (ej. un espacio a Y=0-5 del plano se muestra en posición maxY-5 a maxY en la sección).
+En el plano 2D, Y aumenta hacia abajo (Y=0 arriba, Y=max abajo). En las secciones transversales (corte en X), el eje horizontal representa Y pero invertido: `section_h = maxY - polygon_y`. El cálculo de globalMaxY solo considera rooms elegibles (presentes en secciones Z).
 
-### Resolución de Z base con fallback
+### Resolución de Z base con fallback (6 niveles)
 El zBase de cada espacio se determina mediante:
-1. Coincidencia directa por `vertical_section_id`
-2. Búsqueda en polígonos guardados de secciones verticales por ID del espacio
-3. Búsqueda por nombre del espacio en secciones verticales
-4. Fallback a Z=0
+1. Coincidencia directa por `floor_id` → `floorZBaseMap`
+2. Coincidencia por room ID en polígonos de secciones verticales
+3. Coincidencia por nombre del espacio
+4. ID de sección vertical directo
+5. Inferencia por mayoría en secciones heredadas (legacy)
+6. Normalización de nombres (eliminando acentos y términos descriptivos)
 
-Esto previene que espacios con `vertical_section_id` obsoletos (apuntando a secciones eliminadas/renombradas) se proyecten incorrectamente a Z=0 cuando pertenecen a niveles superiores.
+### Edición de vértices en secciones X/Y
+El botón "Modificar" activa el modo de edición de vértices:
+- **Arrastrar vértices**: los puntos se agrandan y se pueden arrastrar a nuevas posiciones (snap a nodos)
+- **Insertar vértices**: botones "+" en el punto medio de cada arista
+- **Eliminar vértices**: doble clic en un vértice (mínimo 3 vértices)
+- Los cambios se guardan automáticamente al pulsar "Listo"

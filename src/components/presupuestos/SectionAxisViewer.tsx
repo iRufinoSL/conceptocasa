@@ -164,6 +164,10 @@ export function SectionAxisViewer({
   const [drawingVertices, setDrawingVertices] = useState<Array<{ col: number; row: number }>>([]);
   const [hoverNode, setHoverNode] = useState<{ col: number; row: number } | null>(null);
 
+  // Vertex editing mode (drag vertices, add new ones)
+  const [vertexEditMode, setVertexEditMode] = useState(false);
+  const [draggingVertexInfo, setDraggingVertexInfo] = useState<{ polyId: string; vertexIdx: number } | null>(null);
+
   // Polygons
   const [polygons, setPolygons] = useState<SectionPolygon[]>(savedPolygons || []);
 
@@ -529,6 +533,22 @@ export function SectionAxisViewer({
   }, [drawMode, rulerMode, gridLayout, drawingVertices, snapToNode, snapToNodePrecise, rulerStart]);
 
   const handleSvgMouseMove = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
+    // Vertex drag
+    if (vertexEditMode && draggingVertexInfo && gridLayout) {
+      const node = snapToNode(e);
+      if (!node) return;
+      const coord = colRowToCoord(node.col, node.row);
+      setPolygons(prev => prev.map(p => {
+        if (p.id !== draggingVertexInfo.polyId) return p;
+        const newVerts = p.vertices.map((v, i) =>
+          i === draggingVertexInfo.vertexIdx ? { ...v, x: coord.hIdx, y: coord.vIdx } : v
+        );
+        return { ...p, vertices: newVerts };
+      }));
+      setHoverNode(node);
+      return;
+    }
+
     if (rulerMode && gridLayout) {
       const node = snapToNodePrecise(e);
       setRulerHoverNode(node);
@@ -546,14 +566,21 @@ export function SectionAxisViewer({
     if (!drawMode || !gridLayout) { setHoverNode(null); setRulerHoverNode(null); return; }
     const node = snapToNode(e);
     setHoverNode(node);
-  }, [drawMode, rulerMode, gridLayout, snapToNode, snapToNodePrecise, draggingRulerId, draggingRulerEnd]);
+    if (vertexEditMode) setHoverNode(node);
+  }, [drawMode, rulerMode, vertexEditMode, draggingVertexInfo, gridLayout, snapToNode, snapToNodePrecise, draggingRulerId, draggingRulerEnd, colRowToCoord]);
 
   const handleSvgMouseUp = useCallback(() => {
+    if (draggingVertexInfo) {
+      // Save after vertex drag
+      onSavePolygons?.(polygons);
+      setDraggingVertexInfo(null);
+      return;
+    }
     if (draggingRulerId) {
       setDraggingRulerId(null);
       setDraggingRulerEnd(null);
     }
-  }, [draggingRulerId]);
+  }, [draggingRulerId, draggingVertexInfo, polygons, onSavePolygons]);
 
   const handleDeleteRuler = useCallback((id: string) => {
     pushUndo();
@@ -622,6 +649,44 @@ export function SectionAxisViewer({
     setDrawingHeight('');
     setHoverNode(null);
   };
+
+  // ── Vertex editing helpers ──
+  const handleInsertVertexOnEdge = useCallback((polyId: string, edgeIdx: number) => {
+    if (!vertexEditMode) return;
+    pushUndo();
+    setPolygons(prev => {
+      const updated = prev.map(p => {
+        if (p.id !== polyId) return p;
+        const verts = [...p.vertices];
+        const a = verts[edgeIdx];
+        const b = verts[(edgeIdx + 1) % verts.length];
+        const midpoint = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, z: (a.z + b.z) / 2 };
+        verts.splice(edgeIdx + 1, 0, midpoint);
+        return { ...p, vertices: verts };
+      });
+      onSavePolygons?.(updated);
+      return updated;
+    });
+    toast.success('Vértice insertado en arista');
+  }, [vertexEditMode, pushUndo, onSavePolygons]);
+
+  const handleDeleteVertex = useCallback((polyId: string, vertexIdx: number) => {
+    const poly = polygons.find(p => p.id === polyId);
+    if (!poly || poly.vertices.length <= 3) {
+      toast.error('Un polígono necesita al menos 3 vértices');
+      return;
+    }
+    pushUndo();
+    setPolygons(prev => {
+      const updated = prev.map(p => {
+        if (p.id !== polyId) return p;
+        return { ...p, vertices: p.vertices.filter((_, i) => i !== vertexIdx) };
+      });
+      onSavePolygons?.(updated);
+      return updated;
+    });
+    toast.success('Vértice eliminado');
+  }, [polygons, pushUndo, onSavePolygons]);
 
   const handleDeletePolygon = (polyId: string) => {
     pushUndo();
@@ -1109,13 +1174,44 @@ export function SectionAxisViewer({
         }
       }
 
-      // Vertex dots
+      // Vertex dots — draggable in vertex edit mode
       for (let i = 0; i < verts.length; i++) {
         const a = pxVerts[i];
+        const isDraggable = vertexEditMode;
+        const vertIdx = i;
         elements.push(
-          <circle key={`vtx-${poly.id}-${i}`} cx={a.px} cy={a.py} r={3.5}
-            fill={color} stroke="white" strokeWidth={1.5} />
+          <circle key={`vtx-${poly.id}-${i}`} cx={a.px} cy={a.py}
+            r={isDraggable ? 7 : 3.5}
+            fill={isDraggable ? 'hsl(var(--primary))' : color}
+            stroke="white" strokeWidth={isDraggable ? 2.5 : 1.5}
+            style={isDraggable ? { cursor: 'grab' } : undefined}
+            onMouseDown={isDraggable ? (e) => {
+              e.stopPropagation(); e.preventDefault();
+              pushUndo();
+              setDraggingVertexInfo({ polyId: poly.id, vertexIdx: vertIdx });
+            } : undefined}
+            onDoubleClick={isDraggable ? (e) => {
+              e.stopPropagation();
+              handleDeleteVertex(poly.id, vertIdx);
+            } : undefined}
+          />
         );
+        // In edit mode, show "+" on edges to insert vertices
+        if (isDraggable) {
+          const j = (i + 1) % verts.length;
+          const b = pxVerts[j];
+          const midPx = (a.px + b.px) / 2;
+          const midPy = (a.py + b.py) / 2;
+          elements.push(
+            <g key={`insert-${poly.id}-${i}`}
+              style={{ cursor: 'pointer' }}
+              onClick={(e) => { e.stopPropagation(); handleInsertVertexOnEdge(poly.id, i); }}>
+              <circle cx={midPx} cy={midPy} r={6}
+                fill="hsl(140, 60%, 45%)" stroke="white" strokeWidth={1.5} opacity={0.7} />
+              <text x={midPx} y={midPy + 3.5} textAnchor="middle" fontSize={9} fontWeight={900} fill="white">+</text>
+            </g>
+          );
+        }
       }
 
       // Center label
@@ -1147,7 +1243,7 @@ export function SectionAxisViewer({
     });
 
     return elements;
-  }, [polygons, gridLayout, scale, wallLabelMode, facePatterns, handleEdgeClick]);
+  }, [polygons, gridLayout, scale, wallLabelMode, facePatterns, handleEdgeClick, vertexEditMode, pushUndo, handleInsertVertexOnEdge, handleDeleteVertex]);
 
   // ── Openings visual rendering on edges ──
   const openingElements = useMemo(() => {
@@ -1406,12 +1502,14 @@ export function SectionAxisViewer({
           <div>
             <Label className="text-[10px] text-muted-foreground">Escala {hAxis} (mm)</Label>
             <Input className="h-7 w-24 text-xs font-mono" type="number" min={1}
-              value={hScaleInput} onChange={e => setHScaleInput(e.target.value)} placeholder="625" />
+              value={hScaleInput} onChange={e => setHScaleInput(e.target.value)}
+              placeholder={sectionType === 'vertical' ? '625' : '625'} />
           </div>
           <div>
             <Label className="text-[10px] text-muted-foreground">Escala {vAxis} (mm)</Label>
             <Input className="h-7 w-24 text-xs font-mono" type="number" min={1}
-              value={vScaleInput} onChange={e => setVScaleInput(e.target.value)} placeholder="625" />
+              value={vScaleInput} onChange={e => setVScaleInput(e.target.value)}
+              placeholder={sectionType === 'vertical' ? '625' : '250'} />
           </div>
           <Button size="sm" className="h-7 text-xs gap-1" onClick={handleSaveScale}
             disabled={!parseFloat(hScaleInput) || !parseFloat(vScaleInput)}>
@@ -1530,7 +1628,23 @@ export function SectionAxisViewer({
       {/* Drawing toolbar */}
       {scale && (
         <div className="px-3 py-2 border-b bg-muted/10 flex items-center gap-3 flex-wrap">
-          {!drawMode ? (
+          {vertexEditMode ? (
+            <div className="flex items-center gap-3 w-full">
+              <span className="text-xs font-semibold text-primary">
+                ✏️ Modo Modificar — Arrastra vértices · Clic en <span className="text-green-600 font-bold">+</span> para insertar · Doble clic en vértice para eliminar
+              </span>
+              <div className="ml-auto flex items-center gap-1">
+                <Button size="sm" variant="default" className="h-7 text-xs gap-1"
+                  onClick={() => { setVertexEditMode(false); onSavePolygons?.(polygons); toast.success('Cambios guardados'); }}>
+                  <Check className="h-3 w-3" /> Listo
+                </Button>
+                <Button size="sm" variant="ghost" className="h-7 text-xs gap-1"
+                  onClick={() => { setVertexEditMode(false); handleUndo(); }}>
+                  <X className="h-3 w-3" /> Cancelar
+                </Button>
+              </div>
+            </div>
+          ) : !drawMode ? (
             <>
               <div className="flex items-end gap-2">
                 <div>
@@ -1548,6 +1662,12 @@ export function SectionAxisViewer({
                   disabled={!drawingName.trim() || !drawingHeight.trim()}>
                   <PenTool className="h-3 w-3" /> Dibujar espacio
                 </Button>
+                {polygons.length > 0 && (
+                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
+                    onClick={() => { pushUndo(); setVertexEditMode(true); setRulerMode(false); setDrawMode(false); }}>
+                    <PenTool className="h-3 w-3" /> Modificar
+                  </Button>
+                )}
               </div>
               {polygons.length > 0 && (
                 <span className="text-[10px] text-muted-foreground ml-auto">
@@ -1713,7 +1833,7 @@ export function SectionAxisViewer({
         <svg
           ref={svgRef}
           width={w} height={h}
-          style={(drawMode || rulerMode) ? { cursor: rulerMode ? 'crosshair' : 'none' } : undefined}
+          style={(drawMode || rulerMode || vertexEditMode) ? { cursor: vertexEditMode ? 'default' : rulerMode ? 'crosshair' : 'none' } : undefined}
           className="block bg-background"
           onClick={handleSvgClick}
           onMouseMove={handleSvgMouseMove}

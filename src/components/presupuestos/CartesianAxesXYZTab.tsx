@@ -75,6 +75,95 @@ function normalizeWorkspaceName(value: string | null | undefined): string {
     .trim();
 }
 
+function getPolygonBounds(vertices: Array<{ x: number; y: number }>) {
+  if (!vertices || vertices.length === 0) return null;
+  const xs = vertices.map(v => v.x).filter(Number.isFinite);
+  const ys = vertices.map(v => v.y).filter(Number.isFinite);
+  if (xs.length === 0 || ys.length === 0) return null;
+
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  return {
+    minX,
+    maxX,
+    minY,
+    maxY,
+    width: maxX - minX,
+    height: maxY - minY,
+  };
+}
+
+function buildHealedPolygonFromAuto(saved: SectionPolygon, auto: SectionPolygon): SectionPolygon {
+  return {
+    ...auto,
+    name: saved.name || auto.name,
+    hasFloor: saved.hasFloor ?? auto.hasFloor,
+    hasCeiling: saved.hasCeiling ?? auto.hasCeiling,
+    faceTypes: saved.faceTypes ?? auto.faceTypes,
+  };
+}
+
+function maybeHealLegacySavedPolygon(
+  saved: SectionPolygon,
+  auto: SectionPolygon | undefined,
+  sectionType: 'vertical' | 'longitudinal' | 'transversal',
+): SectionPolygon {
+  if (!auto) return saved;
+  if (!saved.vertices || saved.vertices.length < 3) return saved;
+
+  const savedBounds = getPolygonBounds(saved.vertices);
+  const autoBounds = getPolygonBounds(auto.vertices);
+  if (!savedBounds || !autoBounds) return buildHealedPolygonFromAuto(saved, auto);
+
+  // 1) Legacy degenerate lines in X/Y (height or width collapsed)
+  const isDegenerate = savedBounds.width < 0.01 || savedBounds.height < 0.01;
+
+  // 2) Legacy outliers where Z was persisted in incompatible units (e.g. thousands)
+  const isOutlier =
+    Math.abs(savedBounds.height - autoBounds.height) > Math.max(2, autoBounds.height * 4) ||
+    Math.abs(savedBounds.minY - autoBounds.minY) > Math.max(2, autoBounds.height * 4) ||
+    Math.abs(savedBounds.maxY - autoBounds.maxY) > Math.max(2, autoBounds.height * 4);
+
+  if (isDegenerate || isOutlier) {
+    return buildHealedPolygonFromAuto(saved, auto);
+  }
+
+  // 3) Legacy mirrored X-sections: unmirror around inferred mirror constant
+  if (sectionType === 'transversal') {
+    const mirrorConst = ((autoBounds.minX + savedBounds.maxX) + (autoBounds.maxX + savedBounds.minX)) / 2;
+    const mirroredVertices = saved.vertices.map(v => ({ ...v, x: mirrorConst - v.x }));
+    const mirroredBounds = getPolygonBounds(mirroredVertices);
+
+    if (mirroredBounds) {
+      const originalDiff =
+        Math.abs(savedBounds.minX - autoBounds.minX) +
+        Math.abs(savedBounds.maxX - autoBounds.maxX) +
+        Math.abs(savedBounds.minY - autoBounds.minY) +
+        Math.abs(savedBounds.maxY - autoBounds.maxY);
+
+      const mirroredDiff =
+        Math.abs(mirroredBounds.minX - autoBounds.minX) +
+        Math.abs(mirroredBounds.maxX - autoBounds.maxX) +
+        Math.abs(mirroredBounds.minY - autoBounds.minY) +
+        Math.abs(mirroredBounds.maxY - autoBounds.maxY);
+
+      const shouldUnmirror = originalDiff > 1 && mirroredDiff + 0.05 < originalDiff * 0.45;
+      if (shouldUnmirror) {
+        return {
+          ...saved,
+          vertices: mirroredVertices,
+          zBase: auto.zBase,
+          zTop: auto.zTop,
+        };
+      }
+    }
+  }
+
+  return saved;
+}
+
 interface CartesianAxesXYZTabProps {
   budgetId: string;
   isAdmin: boolean;

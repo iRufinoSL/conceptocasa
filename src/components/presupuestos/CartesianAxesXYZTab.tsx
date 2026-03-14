@@ -111,13 +111,29 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       if (!floorPlan?.id) return [];
       const { data, error } = await supabase
         .from('budget_floor_plan_rooms')
-        .select('id, name, height, has_floor, has_ceiling, has_roof, vertical_section_id, floor_polygon')
+        .select('id, name, height, has_floor, has_ceiling, has_roof, vertical_section_id, floor_id, floor_polygon')
         .eq('floor_plan_id', floorPlan.id);
       if (error) throw error;
       return (data || []).map((r: any) => ({
         ...r,
         floor_polygon: r.floor_polygon ? (typeof r.floor_polygon === 'string' ? JSON.parse(r.floor_polygon) : r.floor_polygon) : null,
       })) as WorkspaceRoom[];
+    },
+    enabled: !!floorPlan?.id,
+  });
+
+  // ── Load floors for Z-level computation ──
+  const { data: allFloors } = useQuery({
+    queryKey: ['budget-floors-for-projection', budgetId],
+    queryFn: async () => {
+      if (!floorPlan?.id) return [];
+      const { data, error } = await supabase
+        .from('budget_floors')
+        .select('id, name, order_index, floor_plan_id')
+        .eq('floor_plan_id', floorPlan.id)
+        .order('order_index', { ascending: true });
+      if (error) throw error;
+      return (data || []) as FloorData[];
     },
     enabled: !!floorPlan?.id,
   });

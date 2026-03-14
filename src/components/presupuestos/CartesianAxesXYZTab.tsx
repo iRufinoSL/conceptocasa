@@ -169,7 +169,44 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     enabled: !!(workspaceRooms && workspaceRooms.length > 0),
   });
 
-  const allSections = useMemo<CustomSection[]>(() => {
+  // ── Load wall objects (Layer 0 surface patterns) for visual fill ──
+  const { data: wallObjectSurfaces } = useQuery({
+    queryKey: ['wall-object-surfaces-for-projection', budgetId],
+    queryFn: async () => {
+      const wallIds = (allWalls || []).map(w => w.id);
+      if (wallIds.length === 0) return [];
+      const { data, error } = await supabase
+        .from('budget_wall_objects')
+        .select('id, wall_id, layer_order, visual_pattern')
+        .in('wall_id', wallIds)
+        .eq('layer_order', 0);
+      if (error) throw error;
+      return (data || []) as Array<{ id: string; wall_id: string; layer_order: number; visual_pattern: string | null }>;
+    },
+    enabled: !!(allWalls && allWalls.length > 0),
+  });
+
+  // Build facePatterns map: roomId → { faceKey → patternId }
+  // Maps wall_index: -1=floor, -2=ceiling, 0=space, 1+=wall-N
+  const autoFacePatterns = useMemo<PolygonFacePatterns>(() => {
+    if (!allWalls || !wallObjectSurfaces) return {};
+    const patterns: PolygonFacePatterns = {};
+    for (const surface of wallObjectSurfaces) {
+      if (!surface.visual_pattern) continue;
+      const wall = allWalls.find(w => w.id === surface.wall_id);
+      if (!wall) continue;
+      const roomId = wall.room_id;
+      if (!patterns[roomId]) patterns[roomId] = {};
+      let faceKey: string;
+      if (wall.wall_index === -1) faceKey = 'floor';
+      else if (wall.wall_index === -2) faceKey = 'ceiling';
+      else faceKey = `wall-${wall.wall_index - 1}`;
+      patterns[roomId][faceKey] = surface.visual_pattern;
+    }
+    return patterns;
+  }, [allWalls, wallObjectSurfaces]);
+
+
     if (!floorPlan?.custom_corners) return [];
     try {
       const parsed = typeof floorPlan.custom_corners === 'string'

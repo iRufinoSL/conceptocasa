@@ -604,25 +604,61 @@ export function WorkspacePropertiesPanel({
 
   const handleAddObject = async () => {
     if (!objName.trim()) return;
+
+    const parsedLayerOrder = Number.parseInt(objLayerOrder, 10);
+    if (Number.isNaN(parsedLayerOrder)) {
+      toast.error('Indica un orden de capa válido');
+      return;
+    }
+    if (parsedLayerOrder === 0) {
+      toast.error('La capa 0 está reservada para Superficie automática');
+      return;
+    }
+
+    if (objType === 'hueco' && !objTargetFace.startsWith('wall-')) {
+      toast.error('Los huecos solo se pueden colocar en paredes (P1, P2, ...)');
+      return;
+    }
+
     const wallId = await ensureWallRecord(objTargetFace);
     if (!wallId) return;
-    const maxOrder = wallObjects.filter(o => o.wall_id === wallId).reduce((m, o) => Math.max(m, o.layer_order), 0);
+
+    const parseNumeric = (value: string) => {
+      if (!value.trim()) return null;
+      const parsed = Number.parseFloat(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+
+    const widthMmInput = parseNumeric(objWidthMm);
+    const heightMmInput = parseNumeric(objHeightMm);
+    const sillHeightInput = parseNumeric(objSillHeight);
+    const positionXInput = parseNumeric(objPosX);
+
     const payload: any = {
       wall_id: wallId,
-      layer_order: maxOrder + 1,
+      layer_order: parsedLayerOrder,
       name: objName.trim(),
       description: objDescription.trim() || null,
       object_type: objType,
-      thickness_mm: parseFloat(objThickness) || null,
-      width_mm: parseFloat(objWidthMm) || null,
-      height_mm: parseFloat(objHeightMm) || null,
-      position_x: parseFloat(objPosX) || null,
-      sill_height: parseFloat(objSillHeight) || null,
-      distance_to_wall: parseFloat(objDistWall) || null,
+      thickness_mm: parseNumeric(objThickness),
+      width_mm: objType === 'hueco' ? (widthMmInput ?? 1200) : widthMmInput,
+      height_mm: objType === 'hueco' ? (heightMmInput ?? 1000) : heightMmInput,
+      position_x: objType === 'hueco' ? (positionXInput ?? 300) : positionXInput,
+      sill_height: objType === 'hueco' ? (sillHeightInput ?? 900) : sillHeightInput,
+      distance_to_wall: parseNumeric(objDistWall),
+      resource_id: objResourceId === '_none' ? null : objResourceId,
     };
+
     const { data, error } = await supabase.from('budget_wall_objects').insert(payload).select().single();
-    if (error) { toast.error(`Error: ${error.message}`); return; }
-    if (data) setWallObjects(prev => [...prev, data as WallObjectRecord]);
+    if (error) {
+      toast.error(`Error: ${error.message}`);
+      return;
+    }
+
+    if (data) {
+      setWallObjects(prev => [...prev, data as WallObjectRecord]);
+    }
+
     resetForm();
     onOpeningsChange?.();
     toast.success(objType === 'hueco' ? 'Hueco añadido' : 'Objeto registrado');
@@ -630,10 +666,19 @@ export function WorkspacePropertiesPanel({
 
   const resetForm = () => {
     setShowObjectForm(false);
-    setObjName(''); setObjDescription(''); setObjThickness('');
-    setObjWidthMm(''); setObjHeightMm(''); setObjSillHeight('');
-    setObjPosX(''); setObjDistWall(''); setObjPreset('');
-    setObjType('material'); setObjTargetFace('wall-0');
+    setObjName('');
+    setObjDescription('');
+    setObjThickness('');
+    setObjWidthMm('');
+    setObjHeightMm('');
+    setObjSillHeight('');
+    setObjPosX('');
+    setObjDistWall('');
+    setObjPreset('');
+    setObjType('material');
+    setObjTargetFace('wall-0');
+    setObjLayerOrder('1');
+    setObjResourceId('_none');
   };
 
   const handleDeleteObject = async (id: string) => {

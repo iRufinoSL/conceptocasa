@@ -826,6 +826,18 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     return map;
   }, [workspaceRooms]);
 
+  const workspaceRoomsByLooseName = useMemo(() => {
+    const map = new Map<string, WorkspaceRoom[]>();
+    for (const room of (workspaceRooms || [])) {
+      const key = normalizeWorkspaceNameLoose(room.name);
+      if (!key) continue;
+      const list = map.get(key) || [];
+      list.push(room);
+      map.set(key, list);
+    }
+    return map;
+  }, [workspaceRooms]);
+
   const pickMostRecentlyUpdatedRoom = useCallback((rooms: WorkspaceRoom[]): WorkspaceRoom | null => {
     if (!rooms || rooms.length === 0) return null;
     return [...rooms].sort((a, b) => {

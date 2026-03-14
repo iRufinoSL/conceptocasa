@@ -756,8 +756,9 @@ export function WorkspacePropertiesPanel({
     toast.success(`Vinculado a: ${resource.name}`);
   };
 
-  const poly = room?.floor_polygon as Array<{ x: number; y: number }> | null;
-  const edgeCount = edgeCountProp ?? (poly ? poly.length : (room ? 4 : 0));
+  const poly = getEffectivePolygon(room);
+  const roomPolyCount = Array.isArray(room?.floor_polygon) ? room.floor_polygon.length : 0;
+  const edgeCount = edgeCountProp ?? (poly ? poly.length : roomPolyCount > 0 ? roomPolyCount : (room ? 4 : 0));
 
   let area = 0;
   if (poly && poly.length >= 3) {
@@ -765,7 +766,7 @@ export function WorkspacePropertiesPanel({
       const j = (i + 1) % poly.length;
       area += poly[i].x * poly[j].y - poly[j].x * poly[i].y;
     }
-    area = Math.abs(area) / 2;
+    area = (Math.abs(area) / 2) * cellSizeM * cellSizeM;
   }
 
   const sectionLabel = sectionType === 'vertical' ? 'Z' : sectionType === 'longitudinal' ? 'Y' : sectionType === 'transversal' ? 'X' : 'I';

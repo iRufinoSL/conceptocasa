@@ -1626,7 +1626,7 @@ export function SectionAxisViewer({
           </div>
           <span className="text-[10px] text-muted-foreground ml-2">
             {hAxis}: -{gridLimits.negH} a +{gridLimits.posH} · {vAxis}: -{gridLimits.negV} a +{gridLimits.posV}
-            {gridLayout ? ` · celda=${gridLayout.cellPx}px` : ''}
+            {gridLayout ? ` · ${gridLayout.cellPxW}×${gridLayout.cellPxH}px` : ''}
           </span>
         </div>
       )}

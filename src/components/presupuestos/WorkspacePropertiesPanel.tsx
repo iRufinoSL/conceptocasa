@@ -572,9 +572,20 @@ export function WorkspacePropertiesPanel({
       setWallObjects(prev => prev.map(o => o.id === surfObj!.id ? { ...o, visual_pattern: patternId } : o));
     } else {
       const faceLabel = faceKey === 'floor' ? 'Suelo' : faceKey === 'ceiling' ? 'Techo' : `Pared ${wallIndex}`;
+      const { surface_m2, volume_m3 } = room
+        ? getFaceMetrics(room, wallIndex, cellSizeM)
+        : { surface_m2: null as number | null, volume_m3: null as number | null };
+      const metricLabel = surface_m2 != null ? `${surface_m2} m²` : volume_m3 != null ? `${volume_m3} m³` : null;
       const { data } = await supabase.from('budget_wall_objects').insert({
-        wall_id: wallId, layer_order: 0, name: 'Superficie',
-        description: `${faceLabel}/${workspaceName}`, object_type: 'superficie', visual_pattern: patternId,
+        wall_id: wallId,
+        layer_order: 0,
+        name: 'Superficie',
+        description: `${workspaceName} / ${faceLabel}${metricLabel ? ` — ${metricLabel}` : ''}`,
+        object_type: 'material',
+        is_core: false,
+        surface_m2,
+        volume_m3,
+        visual_pattern: patternId,
       }).select().single();
       if (data) setWallObjects(prev => [...prev, data as WallObjectRecord]);
     }

@@ -68,6 +68,8 @@ interface SectionAxisViewerProps {
   /** Face patterns per polygon */
   facePatterns?: PolygonFacePatterns;
   onFacePatternChange?: (polyId: string, faceKey: string, patternId: string | null) => void;
+  /** All polygon names across ALL sections for uniqueness validation */
+  allPolygonNames?: string[];
 }
 
 const AXIS_COLORS = {

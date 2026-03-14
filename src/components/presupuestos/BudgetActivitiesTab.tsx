@@ -1026,6 +1026,12 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
 
           if (relError) throw relError;
         }
+
+        // Propagate workspaces to child activities
+        const children = activities.filter(a => a.parent_activity_id === savedActivityId);
+        for (const child of children) {
+          await handleUpdateActivityWorkspaces(child.id, normalizedWsIds);
+        }
       }
 
       setFormDialogOpen(false);
@@ -2118,7 +2124,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
               className="rounded-none border-l"
             >
               <MapPin className="h-4 w-4 mr-1" />
-              Por Área
+              Por Espacio
             </Button>
             <Button 
               variant={viewMode === 'time' ? 'default' : 'ghost'} 
@@ -3253,8 +3259,8 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
         <ActivitiesWorkAreaGroupedView
           activities={filteredActivities}
           phases={phases}
-          workAreas={workspaceRooms as any}
-          workAreaRelations={workspaceRelations as any}
+          workspaces={workspaceRooms}
+          workspaceRelations={workspaceRelations}
           measurements={measurements}
           measurementRelations={measurementRelations}
           permissions={permissions}
@@ -3264,7 +3270,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
           onDelete={handleDeleteClick}
           onManageFiles={handleManageFiles}
           onUpdateMeasurement={handleUpdateActivityMeasurement}
-          onUpdateWorkAreas={handleUpdateActivityWorkspaces as any}
+          onUpdateWorkspaces={handleUpdateActivityWorkspaces}
           generateActivityId={generateActivityId}
           getMeasurementData={getMeasurementData}
         />

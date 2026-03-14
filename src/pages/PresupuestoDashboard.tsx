@@ -115,6 +115,8 @@ export default function PresupuestoDashboard() {
       }
       // Dispatch event to refresh data in all tabs
       window.dispatchEvent(new CustomEvent('budget-recalculated'));
+      // Schedule sync to model budget
+      scheduleSyncToModel(id);
     } catch (err) {
       console.error('Error recalculating:', err);
       toast.error('Error al recalcular');

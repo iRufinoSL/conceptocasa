@@ -797,28 +797,239 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
       .map(([name, items]) => ({ name, items: items.sort((a, b) => a.name.localeCompare(b.name, 'es')) }));
   }, [templates, search]);
 
+  const syncSuperficies = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
+    if (syncingSuperficiesRef.current) return null;
+
+    syncingSuperficiesRef.current = true;
+    setIsSyncingSuperficies(true);
+
+    try {
+      const { data: floorPlan, error: floorPlanError } = await supabase
+        .from('budget_floor_plans')
+        .select('id, scale_mode, block_length_mm')
+        .eq('budget_id', budgetId)
+        .maybeSingle();
+
+      if (floorPlanError) throw floorPlanError;
+      if (!floorPlan) {
+        if (!silent) toast.info('No hay plano asociado al presupuesto');
+        return { created: 0, updated: 0 };
+      }
+
+      const cellSizeM = floorPlan.scale_mode === 'bloque'
+        ? (floorPlan.block_length_mm || 625) / 1000
+        : 1;
+
+      const { data: rooms, error: roomsError } = await supabase
+        .from('budget_floor_plan_rooms')
+        .select('id, name, length, width, height, floor_polygon, is_base')
+        .eq('floor_plan_id', floorPlan.id);
+
+      if (roomsError) throw roomsError;
+
+      const allFaces = ((rooms || []) as WorkspaceAutoFaceSource[])
+        .flatMap(room => buildAutoFacesForWorkspace(room, cellSizeM));
+
+      if (allFaces.length === 0) {
+        if (!silent) toast.info('No hay espacios de trabajo para generar superficies');
+        return { created: 0, updated: 0 };
+      }
+
+      const roomIds = [...new Set(allFaces.map(face => face.roomId))];
+
+      const { data: wallRows, error: wallsError } = await supabase
+        .from('budget_floor_plan_walls')
+        .select('id, room_id, wall_index, wall_type')
+        .in('room_id', roomIds);
+
+      if (wallsError) throw wallsError;
+
+      const wallByKey = new Map<string, { id: string; wall_type: string }>(
+        (wallRows || []).map((wall: any) => [`${wall.room_id}:${wall.wall_index}`, { id: wall.id, wall_type: wall.wall_type }]),
+      );
+
+      const missingWallsPayload = allFaces
+        .filter(face => !wallByKey.has(`${face.roomId}:${face.wallIndex}`))
+        .map(face => ({
+          room_id: face.roomId,
+          wall_index: face.wallIndex,
+          wall_type: face.wallIndex === 0
+            ? 'espacio'
+            : face.wallIndex === -1
+              ? 'suelo_basico'
+              : face.wallIndex === -2
+                ? 'techo_basico'
+                : 'exterior',
+        }));
+
+      if (missingWallsPayload.length > 0) {
+        const { data: insertedWalls, error: insertWallsError } = await supabase
+          .from('budget_floor_plan_walls')
+          .insert(missingWallsPayload)
+          .select('id, room_id, wall_index, wall_type');
+
+        if (insertWallsError) throw insertWallsError;
+
+        (insertedWalls || []).forEach((wall: any) => {
+          wallByKey.set(`${wall.room_id}:${wall.wall_index}`, { id: wall.id, wall_type: wall.wall_type });
+        });
+      }
+
+      const facesWithWall = allFaces
+        .map(face => {
+          const wall = wallByKey.get(`${face.roomId}:${face.wallIndex}`);
+          if (!wall) return null;
+          return { face, wallId: wall.id };
+        })
+        .filter((entry): entry is { face: AutoFace; wallId: string } => !!entry);
+
+      const wallIds = [...new Set(facesWithWall.map(entry => entry.wallId))];
+      if (wallIds.length === 0) {
+        if (!silent) toast.info('No se encontraron ámbitos para sincronizar');
+        return { created: 0, updated: 0 };
+      }
+
+      const { data: existingSuperficies, error: existingError } = await supabase
+        .from('budget_wall_objects')
+        .select('id, wall_id')
+        .in('wall_id', wallIds)
+        .eq('layer_order', 0)
+        .order('created_at', { ascending: true });
+
+      if (existingError) throw existingError;
+
+      const existingByWall = new Map<string, string>();
+      (existingSuperficies || []).forEach((row: any) => {
+        if (!existingByWall.has(row.wall_id)) {
+          existingByWall.set(row.wall_id, row.id);
+        }
+      });
+
+      const updates = facesWithWall
+        .filter(entry => existingByWall.has(entry.wallId))
+        .map(entry => {
+          const surfaceM2 = entry.face.m2 ?? null;
+          const volumeM3 = entry.face.m3 ?? null;
+          const metric = surfaceM2 != null ? `${surfaceM2} m²` : volumeM3 != null ? `${volumeM3} m³` : null;
+          return {
+            id: existingByWall.get(entry.wallId)!,
+            payload: {
+              name: 'Superficie',
+              description: `${entry.face.workspace} / ${entry.face.faceName}${metric ? ` — ${metric}` : ''}`,
+              object_type: 'material',
+              is_core: false,
+              layer_order: 0,
+              surface_m2: surfaceM2,
+              volume_m3: volumeM3,
+            },
+          };
+        });
+
+      const inserts = facesWithWall
+        .filter(entry => !existingByWall.has(entry.wallId))
+        .map(entry => {
+          const surfaceM2 = entry.face.m2 ?? null;
+          const volumeM3 = entry.face.m3 ?? null;
+          const metric = surfaceM2 != null ? `${surfaceM2} m²` : volumeM3 != null ? `${volumeM3} m³` : null;
+          return {
+            wall_id: entry.wallId,
+            layer_order: 0,
+            name: 'Superficie',
+            description: `${entry.face.workspace} / ${entry.face.faceName}${metric ? ` — ${metric}` : ''}`,
+            object_type: 'material',
+            is_core: false,
+            surface_m2: surfaceM2,
+            volume_m3: volumeM3,
+            visual_pattern: 'vacio',
+          };
+        });
+
+      const mutationResults = await Promise.all([
+        ...updates.map(update => supabase.from('budget_wall_objects').update(update.payload).eq('id', update.id)),
+        ...(inserts.length > 0 ? [supabase.from('budget_wall_objects').insert(inserts)] : []),
+      ]);
+
+      const mutationError = mutationResults.find(result => result.error)?.error;
+      if (mutationError) throw mutationError;
+
+      queryClient.invalidateQueries({ queryKey: ['budget-wall-objects-all', budgetId] });
+      queryClient.invalidateQueries({ queryKey: ['budget-walls-for-panel', budgetId] });
+      queryClient.invalidateQueries({ queryKey: ['wall-objects'] });
+
+      if (!silent) {
+        toast.success(`Superficies sincronizadas: ${inserts.length} nuevas, ${updates.length} actualizadas`);
+      }
+
+      return { created: inserts.length, updated: updates.length };
+    } catch (error) {
+      console.error('Error sincronizando superficies:', error);
+      if (!silent) toast.error('No se pudieron sincronizar las superficies automáticamente');
+      return null;
+    } finally {
+      syncingSuperficiesRef.current = false;
+      setIsSyncingSuperficies(false);
+    }
+  }, [budgetId, queryClient]);
+
+  useEffect(() => {
+    autoSyncSignatureRef.current = '';
+  }, [budgetId]);
+
+  useEffect(() => {
+    if (mainTab !== 'espacios' || autoFaces.length === 0) return;
+
+    const signature = autoFaces
+      .map(face => `${face.roomId}:${face.wallIndex}:${face.m2 ?? ''}:${face.m3 ?? ''}`)
+      .sort()
+      .join('|');
+
+    if (autoSyncSignatureRef.current === signature) return;
+
+    (async () => {
+      const syncResult = await syncSuperficies({ silent: true });
+      if (syncResult) {
+        autoSyncSignatureRef.current = signature;
+      }
+    })();
+  }, [autoFaces, mainTab, syncSuperficies]);
+
   const ensureSuperficieObject = async (wallId: string, face: AutoFace) => {
-    const { data: existing } = await supabase
+    const surfaceM2 = face.m2 ?? null;
+    const volumeM3 = face.m3 ?? null;
+    const metric = surfaceM2 != null ? `${surfaceM2} m²` : volumeM3 != null ? `${volumeM3} m³` : null;
+    const payload = {
+      name: 'Superficie',
+      description: `${face.workspace} / ${face.faceName}${metric ? ` — ${metric}` : ''}`,
+      object_type: 'material',
+      is_core: false,
+      layer_order: 0,
+      surface_m2: surfaceM2,
+      volume_m3: volumeM3,
+    };
+
+    const { data: existingRows, error: existingError } = await supabase
       .from('budget_wall_objects')
       .select('id')
       .eq('wall_id', wallId)
       .eq('layer_order', 0)
-      .maybeSingle();
-    if (existing) return;
+      .order('created_at', { ascending: true });
 
-    const surfaceM2 = face.m2 ?? null;
-    const volumeM3 = face.m3 ?? null;
-    const faceLabel = face.faceName;
+    if (existingError) {
+      console.error('Error verificando Superficie:', existingError);
+      return;
+    }
+
+    const existingId = existingRows?.[0]?.id;
+
+    if (existingId) {
+      await supabase.from('budget_wall_objects').update(payload).eq('id', existingId);
+      return;
+    }
 
     await supabase.from('budget_wall_objects').insert({
       wall_id: wallId,
-      layer_order: 0,
-      name: 'Superficie',
-      description: `${face.workspace} / ${faceLabel}${surfaceM2 ? ` — ${surfaceM2} m²` : ''}`,
-      object_type: 'material',
-      is_core: false,
-      surface_m2: surfaceM2,
-      volume_m3: volumeM3,
+      ...payload,
+      visual_pattern: 'vacio',
     });
   };
 

@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import heroPassivhaus from "@/assets/hero-passivhaus.jpg";
 import healthyInterior from "@/assets/healthy-home-interior.jpg";
+import hokusaiHero from "@/assets/hokusai-houses-hero.jpg";
 import HousesCarousel from "@/components/landing/HousesCarousel";
 
 

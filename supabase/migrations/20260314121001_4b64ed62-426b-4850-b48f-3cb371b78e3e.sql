@@ -1,0 +1,2 @@
+ALTER TABLE public.presupuestos DROP CONSTRAINT presupuestos_status_check;
+ALTER TABLE public.presupuestos ADD CONSTRAINT presupuestos_status_check CHECK (status = ANY (ARRAY['activo'::text, 'en_ejecucion'::text, 'archivado'::text, 'modelo'::text]));

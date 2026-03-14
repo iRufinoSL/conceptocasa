@@ -1264,50 +1264,13 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
               variant="outline"
               size="sm"
               className="h-7 text-xs gap-1"
-              onClick={async () => {
-                if (autoFaces.length === 0) { toast.info('No hay espacios definidos'); return; }
-                let created = 0;
-                let updated = 0;
-                for (const face of autoFaces) {
-                  let wall = allWalls.find((w: any) => w.room_id === face.roomId && w.wall_index === face.wallIndex);
-                  if (!wall) {
-                    const wallType = face.wallIndex === 0 ? 'espacio' : face.wallIndex === -1 ? 'suelo_basico' : face.wallIndex === -2 ? 'techo_basico' : 'exterior';
-                    const { data: newWall } = await supabase
-                      .from('budget_floor_plan_walls')
-                      .insert({ room_id: face.roomId, wall_index: face.wallIndex, wall_type: wallType })
-                      .select()
-                      .single();
-                    if (!newWall) continue;
-                    wall = newWall;
-                  }
-                  const surfaceM2 = face.m2 ?? null;
-                  const volumeM3 = face.m3 ?? null;
-                  const desc = `${face.workspace} / ${face.faceName}${surfaceM2 ? ` — ${surfaceM2} m²` : volumeM3 ? ` — ${volumeM3} m³` : ''}`;
-                  const { data: existing } = await supabase
-                    .from('budget_wall_objects')
-                    .select('id')
-                    .eq('wall_id', wall.id)
-                    .eq('layer_order', 0)
-                    .maybeSingle();
-                  if (existing) {
-                    await supabase.from('budget_wall_objects').update({
-                      name: 'Superficie', description: desc, surface_m2: surfaceM2, volume_m3: volumeM3,
-                    }).eq('id', existing.id);
-                    updated++;
-                  } else {
-                    await supabase.from('budget_wall_objects').insert({
-                      wall_id: wall.id, layer_order: 0, name: 'Superficie', description: desc,
-                      object_type: 'material', is_core: false, surface_m2: surfaceM2, volume_m3: volumeM3, visual_pattern: 'vacio',
-                    });
-                    created++;
-                  }
-                }
-                toast.success(`Superficies generadas: ${created} nuevas, ${updated} actualizadas`);
-                queryClient.invalidateQueries({ queryKey: ['budget-wall-objects-all', budgetId] });
-                queryClient.invalidateQueries({ queryKey: ['budget-walls-for-panel', budgetId] });
+              disabled={isSyncingSuperficies}
+              onClick={() => {
+                void syncSuperficies({ silent: false });
               }}
             >
-              <Layers className="h-3 w-3" /> Generar todas las superficies
+              <Layers className="h-3 w-3" />
+              {isSyncingSuperficies ? 'Sincronizando superficies...' : 'Generar todas las superficies'}
             </Button>
           </div>
 

@@ -41,18 +41,7 @@ import { format, addDays, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useBudgetBroadcast } from '@/hooks/useBudgetBroadcast';
 import { SnapshotRestoreButton } from './SnapshotRestoreButton';
-interface WorkArea {
-  id: string;
-  name: string;
-  level: string;
-  work_area: string;
-  area_id: string;
-}
-
-interface WorkAreaRelation {
-  activity_id: string;
-  work_area_id: string;
-}
+// WorkspaceRoom and WorkspaceRelation imported from WorkspaceInlineSelect
 
 interface BudgetPhase {
   id: string;

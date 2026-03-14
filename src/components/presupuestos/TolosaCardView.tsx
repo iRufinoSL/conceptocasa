@@ -96,6 +96,8 @@ export function TolosaCardView({
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [drillRootId, setDrillRootId] = useState<string | null>(null);
+  const [dragItemId, setDragItemId] = useState<string | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
 
   // Inline editing state
   const [editingCardId, setEditingCardId] = useState<string | null>(null);

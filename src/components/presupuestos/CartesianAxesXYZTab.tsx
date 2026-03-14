@@ -757,16 +757,18 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     };
   }, [workspaceRoomMap, resolveRoomZBase]);
 
-  // Collect ALL polygon names across ALL sections for uniqueness check
+  // Collect canonical workspace names from vertical sections only.
+  // This avoids stale X/Y ghost polygons from blocking legitimate workspace creation in Z.
   const allPolygonNames = useMemo(() => {
-    const names: string[] = [];
-    for (const section of allSections) {
+    const names = new Set<string>();
+    for (const section of verticalSections) {
       for (const poly of (section.polygons || [])) {
-        if (poly.name) names.push(poly.name);
+        if (!poly.vertices || poly.vertices.length < 3) continue;
+        if (poly.name?.trim()) names.add(poly.name.trim());
       }
     }
-    return names;
-  }, [allSections]);
+    return Array.from(names);
+  }, [verticalSections]);
 
   // Set of room IDs that exist in any vertical (Z) section — used to filter auto-projection
   const validRoomIds = useMemo(() => {

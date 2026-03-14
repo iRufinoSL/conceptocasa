@@ -388,7 +388,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
   // Fetch activities and phases
   const fetchData = async () => {
     try {
-      const [activitiesRes, phasesRes, resourcesRes, measurementsRes, measurementRelationsRes, workAreasRes, workAreaRelationsRes] = await Promise.all([
+      const [activitiesRes, phasesRes, resourcesRes, measurementsRes, measurementRelationsRes, workspaceRoomsRes, workspaceRelationsRes] = await Promise.all([
         supabase
           .from('budget_activities')
           .select('*')
@@ -410,16 +410,24 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
         supabase
           .from('budget_measurement_relations')
           .select('measurement_id, related_measurement_id'),
+        // Load workspace rooms (Espacios de trabajo) from the floor plan
+        (async () => {
+          const { data: fp } = await supabase
+            .from('budget_floor_plans')
+            .select('id')
+            .eq('budget_id', budgetId)
+            .maybeSingle();
+          if (!fp) return { data: [], error: null };
+          return supabase
+            .from('budget_floor_plan_rooms')
+            .select('id, name, floor_id')
+            .eq('floor_plan_id', fp.id)
+            .order('name');
+        })(),
+        // Load activity-workspace relations
         supabase
-          .from('budget_work_areas')
-          .select('id, name, level, work_area, area_id')
-          .eq('budget_id', budgetId)
-          .order('area_id', { ascending: true }),
-        // IMPORTANT: Filter by budget at query level to avoid the 1000-row default limit
-        // and ensure QUÉ? matches DÓNDE? (source of truth).
-        supabase
-          .from('budget_work_area_activities')
-          .select('activity_id, work_area_id, budget_activities!inner(budget_id)')
+          .from('budget_activity_workspaces')
+          .select('activity_id, workspace_id, budget_activities!inner(budget_id)')
           .eq('budget_activities.budget_id', budgetId)
       ]);
 

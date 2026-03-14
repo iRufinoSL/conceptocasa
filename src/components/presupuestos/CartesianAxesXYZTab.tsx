@@ -579,11 +579,17 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     const byName = verticalZBaseMap.get(`name:${room.name}`);
     if (byName !== undefined) return byName;
 
-    // 4) Direct match by vertical_section_id
+    // 4) Direct match by current vertical_section_id
     const direct = verticalSections.find(s => s.id === room.vertical_section_id);
     if (direct) return direct.axisValue;
 
-    // 5) Legacy fallback: normalized name matching (e.g. "Atico1" -> "Atico")
+    // 5) Legacy match by stale vertical_section_id values (majority-vote inferred)
+    if (room.vertical_section_id) {
+      const byLegacySection = legacyVerticalSectionZBaseMap.get(room.vertical_section_id);
+      if (byLegacySection !== undefined) return byLegacySection;
+    }
+
+    // 6) Legacy fallback: normalized name matching (e.g. "Atico1" -> "Atico")
     const normalizedRoomName = normalizeWorkspaceName(room.name);
     if (normalizedRoomName) {
       const directAxes = verticalNameAxisMap.get(normalizedRoomName);
@@ -603,7 +609,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     }
 
     return 0;
-  }, [floorZBaseMap, verticalZBaseMap, verticalSections, verticalNameAxisMap, verticalNameAxisEntries]);
+  }, [floorZBaseMap, verticalZBaseMap, verticalSections, legacyVerticalSectionZBaseMap, verticalNameAxisMap, verticalNameAxisEntries]);
 
   const rebaseSavedPolygonToRoomLevel = useCallback((polygon: SectionPolygon): SectionPolygon => {
     const room = workspaceRoomMap.get(polygon.id);

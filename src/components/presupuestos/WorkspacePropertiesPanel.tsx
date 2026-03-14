@@ -157,48 +157,228 @@ export function WorkspacePropertiesPanel({
   // Active tab: 'faces' | 'objects'
   const [activeTab, setActiveTab] = useState<'faces' | 'objects'>('faces');
 
+  const getFaceLabel = useCallback((wallIndex: number) => {
+    if (wallIndex === -1) return 'Suelo';
+    if (wallIndex === -2) return 'Techo';
+    if (wallIndex === 0) return 'Espacio';
+    return `Pared ${wallIndex}`;
+  }, []);
+
+  const getFaceMetrics = useCallback((roomData: any, wallIndex: number) => {
+    const polygon = Array.isArray(roomData?.floor_polygon) && roomData.floor_polygon.length >= 3
+      ? roomData.floor_polygon as Array<{ x: number; y: number }>
+      : null;
+
+    const floorAreaRaw = (() => {
+      if (!polygon) return (roomData?.length || 0) * (roomData?.width || 0);
+      let area = 0;
+      for (let i = 0; i < polygon.length; i++) {
+        const j = (i + 1) % polygon.length;
+        area += polygon[i].x * polygon[j].y - polygon[j].x * polygon[i].y;
+      }
+      return Math.abs(area) / 2;
+    })();
+
+    const floorArea = Math.round(floorAreaRaw * 100) / 100;
+    const heightM = roomData?.height || 2.5;
+
+    if (wallIndex === 0) {
+      return {
+        surface_m2: null as number | null,
+        volume_m3: Math.round(floorAreaRaw * heightM * 1000) / 1000,
+      };
+    }
+
+    if (wallIndex === -1 || wallIndex === -2) {
+      return {
+        surface_m2: floorArea,
+        volume_m3: null as number | null,
+      };
+    }
+
+    let wallLengthM = 0;
+    if (polygon) {
+      const edgeCount = polygon.length;
+      const edgeIndex = ((wallIndex - 1) % edgeCount + edgeCount) % edgeCount;
+      const a = polygon[edgeIndex];
+      const b = polygon[(edgeIndex + 1) % edgeCount];
+      wallLengthM = Math.hypot(b.x - a.x, b.y - a.y);
+    } else {
+      wallLengthM = wallIndex % 2 === 1 ? (roomData?.length || 0) : (roomData?.width || 0);
+    }
+
+    return {
+      surface_m2: Math.round(wallLengthM * heightM * 100) / 100,
+      volume_m3: null as number | null,
+    };
+  }, []);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const [roomRes, wallsRes] = await Promise.all([
-      supabase.from('budget_floor_plan_rooms').select('*').eq('id', workspaceId).maybeSingle(),
-      supabase.from('budget_floor_plan_walls').select('*').eq('room_id', workspaceId).order('wall_index'),
-    ]);
-    const roomData = roomRes.data;
-    const wallData = (wallsRes.data || []) as WallRecord[];
+    try {
+      const [roomRes, wallsRes] = await Promise.all([
+        supabase.from('budget_floor_plan_rooms').select('*').eq('id', workspaceId).maybeSingle(),
+        supabase.from('budget_floor_plan_walls').select('*').eq('room_id', workspaceId).order('wall_index'),
+      ]);
 
-    // Sync room flags from wall records if they disagree
-    if (roomData && wallData.length > 0) {
-      const floorWall = wallData.find(w => w.wall_index === -1);
-      const ceilingWall = wallData.find(w => w.wall_index === -2);
-      const updates: Record<string, boolean> = {};
-      if (floorWall) {
-        const wallSaysInvisible = floorWall.wall_type === 'invisible';
-        if (roomData.has_floor === wallSaysInvisible) {
-          updates.has_floor = !wallSaysInvisible;
+      const roomData = roomRes.data;
+      if (!roomData) {
+        setRoom(null);
+        setWalls([]);
+        setWallObjects([]);
+        return;
+      }
+
+      let nextWalls = (wallsRes.data || []) as WallRecord[];
+
+      // Sync room flags from wall records if they disagree
+      if (nextWalls.length > 0) {
+        const floorWall = nextWalls.find(w => w.wall_index === -1);
+        const ceilingWall = nextWalls.find(w => w.wall_index === -2);
+        const updates: Record<string, boolean> = {};
+
+        if (floorWall) {
+          const wallSaysInvisible = floorWall.wall_type === 'invisible';
+          if (roomData.has_floor === wallSaysInvisible) {
+            updates.has_floor = !wallSaysInvisible;
+          }
+        }
+
+        if (ceilingWall) {
+          const wallSaysInvisible = ceilingWall.wall_type === 'invisible';
+          if (roomData.has_ceiling === wallSaysInvisible) {
+            updates.has_ceiling = !wallSaysInvisible;
+          }
+        }
+
+        if (Object.keys(updates).length > 0) {
+          await supabase.from('budget_floor_plan_rooms').update(updates).eq('id', workspaceId);
+          Object.assign(roomData, updates);
         }
       }
-      if (ceilingWall) {
-        const wallSaysInvisible = ceilingWall.wall_type === 'invisible';
-        if (roomData.has_ceiling === wallSaysInvisible) {
-          updates.has_ceiling = !wallSaysInvisible;
+
+      // Ensure all face records exist (walls + suelo + techo + espacio)
+      const expectedStructuralCount = edgeCountProp ?? (Array.isArray(roomData.floor_polygon) ? roomData.floor_polygon.length : 0);
+      const missingWallPayloads: Array<{ room_id: string; wall_index: number; wall_type: string }> = [];
+
+      for (let i = 1; i <= expectedStructuralCount; i++) {
+        if (!nextWalls.some(w => w.wall_index === i)) {
+          missingWallPayloads.push({ room_id: workspaceId, wall_index: i, wall_type: 'exterior' });
         }
       }
-      if (Object.keys(updates).length > 0) {
-        await supabase.from('budget_floor_plan_rooms').update(updates).eq('id', workspaceId);
-        Object.assign(roomData, updates);
+
+      const defaultFaceWalls = [
+        { wall_index: -1, wall_type: roomData.has_floor === false ? 'invisible' : 'suelo_basico' },
+        { wall_index: -2, wall_type: roomData.has_ceiling === false ? 'invisible' : 'techo_basico' },
+        { wall_index: 0, wall_type: 'espacio' },
+      ];
+
+      for (const face of defaultFaceWalls) {
+        if (!nextWalls.some(w => w.wall_index === face.wall_index)) {
+          missingWallPayloads.push({ room_id: workspaceId, wall_index: face.wall_index, wall_type: face.wall_type });
+        }
       }
-    }
 
-    setRoom(roomData);
-    setWalls(wallData);
+      if (missingWallPayloads.length > 0) {
+        const { data: insertedWalls, error: insertedWallsError } = await supabase
+          .from('budget_floor_plan_walls')
+          .insert(missingWallPayloads)
+          .select('*');
 
-    if (wallData.length > 0) {
-      const wallIds = wallData.map(w => w.id);
-      const { data: objData } = await supabase.from('budget_wall_objects').select('*').in('wall_id', wallIds);
-      setWallObjects((objData || []) as WallObjectRecord[]);
+        if (insertedWallsError) {
+          console.error('Error creando caras faltantes:', insertedWallsError);
+        }
+
+        if (insertedWalls?.length) {
+          nextWalls = [...nextWalls, ...(insertedWalls as WallRecord[])];
+        }
+      }
+
+      nextWalls = [...nextWalls].sort((a, b) => a.wall_index - b.wall_index);
+
+      // Ensure automatic Superficie (layer 0) exists and is synced for every face
+      if (nextWalls.length > 0) {
+        const wallIds = nextWalls.map(w => w.id);
+
+        const { data: existingSuperficies, error: existingSuperficiesError } = await supabase
+          .from('budget_wall_objects')
+          .select('id, wall_id')
+          .in('wall_id', wallIds)
+          .eq('layer_order', 0);
+
+        if (existingSuperficiesError) {
+          console.error('Error consultando capas Superficie:', existingSuperficiesError);
+        }
+
+        const existingByWall = new Map<string, string>(
+          (existingSuperficies || []).map((row: any) => [row.wall_id as string, row.id as string])
+        );
+
+        const updates = nextWalls
+          .filter(w => existingByWall.has(w.id))
+          .map(w => {
+            const { surface_m2, volume_m3 } = getFaceMetrics(roomData, w.wall_index);
+            const metricLabel = surface_m2 != null ? `${surface_m2} m²` : volume_m3 != null ? `${volume_m3} m³` : null;
+            return {
+              id: existingByWall.get(w.id)!,
+              payload: {
+                name: 'Superficie',
+                description: `${workspaceName} / ${getFaceLabel(w.wall_index)}${metricLabel ? ` — ${metricLabel}` : ''}`,
+                object_type: 'material',
+                is_core: false,
+                layer_order: 0,
+                surface_m2,
+                volume_m3,
+              },
+            };
+          });
+
+        const inserts = nextWalls
+          .filter(w => !existingByWall.has(w.id))
+          .map(w => {
+            const { surface_m2, volume_m3 } = getFaceMetrics(roomData, w.wall_index);
+            const metricLabel = surface_m2 != null ? `${surface_m2} m²` : volume_m3 != null ? `${volume_m3} m³` : null;
+            return {
+              wall_id: w.id,
+              layer_order: 0,
+              name: 'Superficie',
+              description: `${workspaceName} / ${getFaceLabel(w.wall_index)}${metricLabel ? ` — ${metricLabel}` : ''}`,
+              object_type: 'material',
+              is_core: false,
+              surface_m2,
+              volume_m3,
+              visual_pattern: 'vacio',
+            };
+          });
+
+        const mutationResults = await Promise.all([
+          ...updates.map(u => supabase.from('budget_wall_objects').update(u.payload).eq('id', u.id)),
+          ...(inserts.length > 0 ? [supabase.from('budget_wall_objects').insert(inserts)] : []),
+        ]);
+
+        mutationResults.forEach((res) => {
+          if (res.error) {
+            console.error('Error sincronizando Superficie automática:', res.error);
+          }
+        });
+
+        const { data: objData } = await supabase
+          .from('budget_wall_objects')
+          .select('*')
+          .in('wall_id', wallIds)
+          .order('layer_order', { ascending: true });
+
+        setWallObjects((objData || []) as WallObjectRecord[]);
+      } else {
+        setWallObjects([]);
+      }
+
+      setRoom(roomData);
+      setWalls(nextWalls);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  }, [workspaceId]);
+  }, [edgeCountProp, getFaceLabel, getFaceMetrics, workspaceId, workspaceName]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
   useEffect(() => { if (focusFace) setExpandedFace(focusFace); }, [focusFace]);

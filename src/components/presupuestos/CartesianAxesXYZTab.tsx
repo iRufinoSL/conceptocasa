@@ -475,6 +475,28 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     return map;
   }, [verticalSections]);
 
+  // Build normalized-name → axis set mapping for legacy projects where IDs changed
+  const verticalNameAxisMap = useMemo(() => {
+    const map = new Map<string, Set<number>>();
+    for (const vs of verticalSections) {
+      const polys = vs.polygons;
+      if (!polys) continue;
+      for (const p of polys) {
+        const normalized = normalizeWorkspaceName(p.name);
+        if (!normalized) continue;
+        const axes = map.get(normalized) || new Set<number>();
+        axes.add(vs.axisValue);
+        map.set(normalized, axes);
+      }
+    }
+    return map;
+  }, [verticalSections]);
+
+  const verticalNameAxisEntries = useMemo(
+    () => Array.from(verticalNameAxisMap.entries()),
+    [verticalNameAxisMap],
+  );
+
   // Build floor_id → Z base mapping from vertical sections sorted by axisValue
   // Each floor's Z base = the vertical section axisValue at that floor's order_index
   const floorZBaseMap = useMemo(() => {
@@ -510,8 +532,27 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     const direct = verticalSections.find(s => s.id === room.vertical_section_id);
     if (direct) return direct.axisValue;
 
+    // 5) Legacy fallback: normalized name matching (e.g. "Atico1" -> "Atico")
+    const normalizedRoomName = normalizeWorkspaceName(room.name);
+    if (normalizedRoomName) {
+      const directAxes = verticalNameAxisMap.get(normalizedRoomName);
+      if (directAxes && directAxes.size === 1) {
+        return Array.from(directAxes)[0];
+      }
+
+      const partialAxes = new Set<number>();
+      for (const [nameKey, axes] of verticalNameAxisEntries) {
+        if (nameKey.includes(normalizedRoomName) || normalizedRoomName.includes(nameKey)) {
+          for (const axis of axes) partialAxes.add(axis);
+        }
+      }
+      if (partialAxes.size === 1) {
+        return Array.from(partialAxes)[0];
+      }
+    }
+
     return 0;
-  }, [floorZBaseMap, verticalZBaseMap, verticalSections]);
+  }, [floorZBaseMap, verticalZBaseMap, verticalSections, verticalNameAxisMap, verticalNameAxisEntries]);
 
   const rebaseSavedPolygonToRoomLevel = useCallback((polygon: SectionPolygon): SectionPolygon => {
     const room = workspaceRoomMap.get(polygon.id);

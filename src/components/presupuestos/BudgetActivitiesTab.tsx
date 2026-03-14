@@ -193,8 +193,8 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
   const [expandedOptions, setExpandedOptions] = useState<Set<string>>(new Set());
   const [activitySortOrder, setActivitySortOrder] = useState<'asc' | 'desc'>('asc');
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set());
-  const [workAreas, setWorkAreas] = useState<WorkArea[]>([]);
-  const [workAreaRelations, setWorkAreaRelations] = useState<WorkAreaRelation[]>([]);
+  const [workspaceRooms, setWorkspaceRooms] = useState<WorkspaceRoom[]>([]);
+  const [workspaceRelations, setWorkspaceRelations] = useState<WorkspaceRelation[]>([]);
   const [unassignedResourcesSubtotal, setUnassignedResourcesSubtotal] = useState(0);
   const [selectedPhasesForPrint, setSelectedPhasesForPrint] = useState<Set<string>>(new Set());
   

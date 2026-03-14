@@ -800,7 +800,7 @@ export function SectionAxisViewer({
     const axisRefs: JSX.Element[] = [];
 
     for (let c = 0; c <= totalCols; c++) {
-      const x = ox + c * cellPx;
+      const x = ox + c * cellPxW;
       const isOrigin = c === originCol;
       gridLines.push(
         <line key={`gv${c}`} x1={x} y1={oy} x2={x} y2={oy + gridH}
@@ -808,7 +808,7 @@ export function SectionAxisViewer({
       );
     }
     for (let r = 0; r <= totalRows; r++) {
-      const y = oy + r * cellPx;
+      const y = oy + r * cellPxH;
       const isOrigin = r === originRow;
       gridLines.push(
         <line key={`gh${r}`} x1={ox} y1={y} x2={ox + gridW} y2={y}
@@ -817,7 +817,7 @@ export function SectionAxisViewer({
     }
 
     for (let c = 0; c <= totalCols; c++) {
-      const x = ox + c * cellPx;
+      const x = ox + c * cellPxW;
       const idx = c - originCol;
       axisRefs.push(
         <text key={`ht${c}`} x={x} y={oy + gridH + 16}
@@ -827,7 +827,7 @@ export function SectionAxisViewer({
       );
     }
     for (let r = 0; r <= totalRows; r++) {
-      const y = oy + r * cellPx;
+      const y = oy + r * cellPxH;
       const idx = originRow - r;
       axisRefs.push(
         <text key={`vt${r}`} x={ox - 6} y={y + 4}
@@ -876,20 +876,20 @@ export function SectionAxisViewer({
     // Ridge line
     if (sectionType === 'vertical' && ridgeLine) {
       const RIDGE_COLOR = 'hsl(0, 0%, 45%)';
-      const rx1 = originX + ridgeLine.x1 * cellPx;
-      const ry1 = originY - ridgeLine.y1 * cellPx;
-      const rx2 = originX + ridgeLine.x2 * cellPx;
-      const ry2 = originY - ridgeLine.y2 * cellPx;
+      const rx1 = originX + ridgeLine.x1 * cellPxW;
+      const ry1 = originY - ridgeLine.y1 * cellPxH;
+      const rx2 = originX + ridgeLine.x2 * cellPxW;
+      const ry2 = originY - ridgeLine.y2 * cellPxH;
       const dx = ridgeLine.x2 - ridgeLine.x1;
       const dy = ridgeLine.y2 - ridgeLine.y1;
       const len = Math.sqrt(dx * dx + dy * dy);
       const ext = len > 0 ? 3 : 0;
       const ux = len > 0 ? dx / len : 0;
       const uy = len > 0 ? dy / len : 0;
-      const ex1 = originX + (ridgeLine.x1 - ux * ext) * cellPx;
-      const ey1 = originY - (ridgeLine.y1 - uy * ext) * cellPx;
-      const ex2 = originX + (ridgeLine.x2 + ux * ext) * cellPx;
-      const ey2 = originY - (ridgeLine.y2 + uy * ext) * cellPx;
+      const ex1 = originX + (ridgeLine.x1 - ux * ext) * cellPxW;
+      const ey1 = originY - (ridgeLine.y1 - uy * ext) * cellPxH;
+      const ex2 = originX + (ridgeLine.x2 + ux * ext) * cellPxW;
+      const ey2 = originY - (ridgeLine.y2 + uy * ext) * cellPxH;
       axisRefs.push(
         <line key="ridgeExt" x1={ex1} y1={ey1} x2={ex2} y2={ey2}
           stroke={RIDGE_COLOR} strokeWidth={2} strokeDasharray="8 4" opacity={0.7} />
@@ -912,12 +912,12 @@ export function SectionAxisViewer({
 
     // Dimension lines — separated for PDF layer control
     const dimensions: JSX.Element[] = [];
-    const dimOffset = cellPx;
+    const dimOffsetH = cellPxW;
     const dimColor = 'hsl(0, 70%, 50%)';
     const dimFontSize = 9;
     const tickLen = 5;
 
-    const bottomY = oy + gridH + dimOffset;
+    const bottomY = oy + gridH + dimOffsetH;
     const totalWidthMm = totalCols * scale.hScale;
     dimensions.push(
       <line key="dim-bottom" x1={ox} y1={bottomY} x2={ox + gridW} y2={bottomY}
@@ -932,7 +932,8 @@ export function SectionAxisViewer({
       </text>
     );
 
-    const rightX = ox + gridW + dimOffset;
+    const dimOffsetV = cellPxH;
+    const rightX = ox + gridW + dimOffsetV;
     const totalHeightMm = totalRows * scale.vScale;
     dimensions.push(
       <line key="dim-right" x1={rightX} y1={oy} x2={rightX} y2={oy + gridH}
@@ -949,8 +950,8 @@ export function SectionAxisViewer({
     );
 
     for (let c = 0; c < totalCols; c++) {
-      const x1 = ox + c * cellPx;
-      const x2 = ox + (c + 1) * cellPx;
+      const x1 = ox + c * cellPxW;
+      const x2 = ox + (c + 1) * cellPxW;
       const midX = (x1 + x2) / 2;
       if (totalCols <= 20) {
         dimensions.push(
@@ -967,8 +968,8 @@ export function SectionAxisViewer({
     }
 
     for (let r = 0; r < totalRows; r++) {
-      const y1 = oy + r * cellPx;
-      const y2 = oy + (r + 1) * cellPx;
+      const y1 = oy + r * cellPxH;
+      const y2 = oy + (r + 1) * cellPxH;
       const midY = (y1 + y2) / 2;
       if (totalRows <= 20) {
         dimensions.push(

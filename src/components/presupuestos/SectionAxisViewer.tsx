@@ -1451,14 +1451,14 @@ export function SectionAxisViewer({
   // Node interaction dots
   const nodeInteractionDots = useMemo(() => {
     if (!drawMode || !gridLayout) return null;
-    const { totalCols, totalRows, ox, oy, cellPx } = gridLayout;
+    const { totalCols, totalRows, ox, oy, cellPxW, cellPxH } = gridLayout;
     const elements: JSX.Element[] = [];
     for (let c = 0; c <= totalCols * 2; c++) {
       for (let r = 0; r <= totalRows * 2; r++) {
         const col = c / 2;
         const row = r / 2;
-        const x = ox + col * cellPx;
-        const y = oy + row * cellPx;
+        const x = ox + col * cellPxW;
+        const y = oy + row * cellPxH;
         const isHalf = (c % 2 !== 0) || (r % 2 !== 0);
         const isHovered = hoverNode && hoverNode.col === col && hoverNode.row === row;
         elements.push(

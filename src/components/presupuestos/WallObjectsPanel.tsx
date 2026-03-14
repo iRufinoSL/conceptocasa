@@ -475,7 +475,15 @@ export function WallObjectsPanel({
                   </div>
                   <div>
                     <Label className="text-[10px]">Orden capa</Label>
-                    <Input className="h-7 text-xs" type="number" min={1} value={formLayerOrder} onChange={e => setFormLayerOrder(parseInt(e.target.value) || 1)} />
+                    <Input
+                      className="h-7 text-xs"
+                      type="number"
+                      value={formLayerOrder}
+                      onChange={e => {
+                        const parsed = Number.parseInt(e.target.value, 10);
+                        setFormLayerOrder(Number.isNaN(parsed) ? 1 : parsed);
+                      }}
+                    />
                   </div>
                   <div>
                     <Label className="text-[10px]">Espesor (mm)</Label>

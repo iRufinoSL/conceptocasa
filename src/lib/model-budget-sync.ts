@@ -71,6 +71,17 @@ export async function createModelBudget(sourceBudgetId: string): Promise<{ succe
       return { success: false, error: createErr?.message || "Error al crear presupuesto modelo" };
     }
 
+    // Grant the current user access to the model budget
+    const { data: sessionData } = await supabase.auth.getSession();
+    const currentUserId = sessionData?.session?.user?.id;
+    if (currentUserId) {
+      await supabase.from("user_presupuestos").insert({
+        user_id: currentUserId,
+        presupuesto_id: modelBudget.id,
+        role: "administrador",
+      } as any);
+    }
+
     // Clone full content from source to model
     const cloneResult = await cloneContentToExistingBudget(sourceBudgetId, modelBudget.id, {
       preserveMeasurementValues: true,

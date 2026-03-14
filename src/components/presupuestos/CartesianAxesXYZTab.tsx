@@ -598,6 +598,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
           onSavePolygons={(polys) => handleSavePolygons(liveSection.id, polys)}
           savedRulerLines={(liveSection as any).rulerLines || []}
           onSaveRulerLines={(lines) => handleSaveRulerLines(liveSection.id, lines)}
+          allPolygonNames={allPolygonNames}
         />
       </div>
     );

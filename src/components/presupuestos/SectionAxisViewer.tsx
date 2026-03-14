@@ -142,10 +142,16 @@ export function SectionAxisViewer({
   const vColor = AXIS_COLORS[vAxis];
   const fixedColor = AXIS_COLORS[fixedAxis];
 
+  // Default scale: vertical sections use 625/625, X/Y sections use 625/250
+  const defaultScale: SectionScale = sectionType === 'vertical'
+    ? { hScale: 625, vScale: 625 }
+    : { hScale: 625, vScale: 250 };
+  const initialScale = savedScale || defaultScale;
+
   // Scale inputs
-  const [hScaleInput, setHScaleInput] = useState(String(savedScale?.hScale || ''));
-  const [vScaleInput, setVScaleInput] = useState(String(savedScale?.vScale || ''));
-  const [scale, setScale] = useState<SectionScale | null>(savedScale || null);
+  const [hScaleInput, setHScaleInput] = useState(String(initialScale.hScale));
+  const [vScaleInput, setVScaleInput] = useState(String(initialScale.vScale));
+  const [scale, setScale] = useState<SectionScale | null>(initialScale);
 
   // Grid limits
   const [negHInput, setNegHInput] = useState(String(savedNegLimits?.negH ?? 3));

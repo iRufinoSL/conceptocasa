@@ -58,6 +58,7 @@ interface TolosaCardViewProps {
   onAddChild?: (parentId: string, name: string) => void;
   onDeleteItem?: (itemId: string) => void;
   onDuplicate?: (item: TolosItem, asSub: boolean) => void;
+  onReparentItem?: (itemId: string, newParentId: string) => void;
   initialFocusId?: string | null;
 }
 
@@ -88,12 +89,15 @@ export function TolosaCardView({
   onAddChild,
   onDeleteItem,
   onDuplicate,
+  onReparentItem,
   initialFocusId,
 }: TolosaCardViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [drillRootId, setDrillRootId] = useState<string | null>(null);
+  const [dragItemId, setDragItemId] = useState<string | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
 
   // Inline editing state
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
@@ -279,9 +283,12 @@ export function TolosaCardView({
       >
         {/* The card itself */}
         <div
-          className={`rounded-xl border-2 ${palette.border} ${palette.bg} min-w-[200px] max-w-[280px] cursor-pointer hover:shadow-lg transition-all relative select-none group/card ${isFocused ? 'ring-2 ring-primary shadow-lg' : ''}`}
+          className={`rounded-xl border-2 ${palette.border} ${palette.bg} min-w-[200px] max-w-[280px] cursor-pointer hover:shadow-lg transition-all relative select-none group/card ${isFocused ? 'ring-2 ring-primary shadow-lg' : ''} ${dropTargetId === item.id ? 'ring-2 ring-primary bg-primary/10 scale-105' : ''}`}
           onClick={(e) => { if (!isEditing) handleCardClick(e, item); }}
           onDoubleClick={(e) => { if (!isEditing && hasChildren) { e.stopPropagation(); setDrillRootId(item.id); setFocusedId(item.id); } }}
+          onDragOver={(e) => { e.preventDefault(); if (dragItemId && dragItemId !== item.id) setDropTargetId(item.id); }}
+          onDragLeave={() => { if (dropTargetId === item.id) setDropTargetId(null); }}
+          onDrop={(e) => { e.preventDefault(); if (dragItemId && dragItemId !== item.id) { onReparentItem?.(dragItemId, item.id); } setDragItemId(null); setDropTargetId(null); }}
         >
           {/* Header */}
           <div className={`flex items-center justify-between gap-1 px-2.5 py-1.5 rounded-t-[10px] ${palette.header}`}>
@@ -293,7 +300,13 @@ export function TolosaCardView({
                 onClick={e => e.stopPropagation()}
               />
             ) : (
-              <Badge variant="outline" className={`font-mono text-[10px] shrink-0 px-1.5 ${isEst ? 'bg-amber-200 text-amber-800 border-amber-400 dark:bg-amber-900/60 dark:text-amber-300 dark:border-amber-700' : 'bg-background/50'}`}>
+              <Badge
+                variant="outline"
+                className={`font-mono text-[10px] shrink-0 px-1.5 cursor-grab active:cursor-grabbing ${isEst ? 'bg-amber-200 text-amber-800 border-amber-400 dark:bg-amber-900/60 dark:text-amber-300 dark:border-amber-700' : 'bg-background/50'}`}
+                draggable
+                onDragStart={(e) => { e.stopPropagation(); e.dataTransfer.effectAllowed = 'move'; setDragItemId(item.id); }}
+                onDragEnd={() => { setDragItemId(null); setDropTargetId(null); }}
+              >
                 {isEst && <span className="mr-0.5">Est.</span>}{item.code}
               </Badge>
             )}

@@ -173,6 +173,8 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
   const [deleteConfirm, setDeleteConfirm] = useState<{ item: TolosItem; descendants: TolosItem[] } | null>(null);
   const [graphAddName, setGraphAddName] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [dragItemId, setDragItemId] = useState<string | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const [cuandoListOpen, setCuandoListOpen] = useState(false);
   const [cuandoFilter, setCuandoFilter] = useState<'all' | 'normal' | 'estimacion'>('all');
 
@@ -1019,6 +1021,36 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
     await recalculateAllCodes();
     toast.success(`"${item.name}" movido al nivel de "${parent.name}"`);
   };
+
+  // Reparent item: move an item to become a child of another item (drag-and-drop)
+  const reparentItem = useCallback(async (itemId: string, newParentId: string | null) => {
+    if (itemId === newParentId) return;
+    const item = items.find(i => i.id === itemId);
+    if (!item) return;
+    // Prevent circular: newParent cannot be a descendant of item
+    if (newParentId) {
+      const descendants = getAllDescendants(itemId);
+      if (descendants.some(d => d.id === newParentId)) {
+        toast.error('No se puede mover a un descendiente propio');
+        return;
+      }
+      if (item.parent_id === newParentId) {
+        toast.info('Ya es hijo de ese elemento');
+        return;
+      }
+    }
+    const newSiblings = newParentId ? getChildren(newParentId) : rootItems;
+    await supabase.from('tolosa_items').update({
+      parent_id: newParentId,
+      order_index: newSiblings.length,
+    }).eq('id', itemId);
+    if (newParentId) {
+      setExpandedIds(prev => new Set(prev).add(newParentId));
+    }
+    await recalculateAllCodes();
+    const targetName = newParentId ? items.find(i => i.id === newParentId)?.name || '' : 'Raíz';
+    toast.success(`"${item.name}" movido dentro de "${targetName}"`);
+  }, [items, getAllDescendants, getChildren, rootItems, recalculateAllCodes]);
 
   const getDepthColor = (depth: number) => {
     const colors = [
@@ -1927,8 +1959,11 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
     return (
       <div key={item.id} className="group/item">
         <div
-          className={`flex items-start gap-2 p-3 rounded-lg border-l-4 ${isEst ? 'border-l-amber-500 bg-amber-50/50 dark:bg-amber-950/20' : getDepthColor(depth) + ' bg-card'} hover:bg-accent/30 transition-colors`}
+          className={`flex items-start gap-2 p-3 rounded-lg border-l-4 ${isEst ? 'border-l-amber-500 bg-amber-50/50 dark:bg-amber-950/20' : getDepthColor(depth) + ' bg-card'} hover:bg-accent/30 transition-colors ${dropTargetId === item.id ? 'ring-2 ring-primary bg-primary/10' : ''}`}
           style={{ marginLeft: depth * 24 }}
+          onDragOver={(e) => { e.preventDefault(); if (dragItemId && dragItemId !== item.id) setDropTargetId(item.id); }}
+          onDragLeave={() => { if (dropTargetId === item.id) setDropTargetId(null); }}
+          onDrop={(e) => { e.preventDefault(); if (dragItemId && dragItemId !== item.id) { reparentItem(dragItemId, item.id); } setDragItemId(null); setDropTargetId(null); }}
         >
           {/* Expand/collapse chevron - toggles children tree only, NOT the detail form */}
           <button
@@ -1968,7 +2003,13 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
             ) : (
               <>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <Badge variant="outline" className={`font-mono text-xs shrink-0 ${isEst ? 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-700' : ''}`}>{isEst ? 'Est.' : ''}{item.code}</Badge>
+                  <Badge
+                    variant="outline"
+                    className={`font-mono text-xs shrink-0 cursor-grab active:cursor-grabbing ${isEst ? 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-700' : ''}`}
+                    draggable
+                    onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; setDragItemId(item.id); }}
+                    onDragEnd={() => { setDragItemId(null); setDropTargetId(null); }}
+                  >{isEst ? 'Est.' : ''}{item.code}</Badge>
                   <button
                     onClick={() => {
                       toggleDetail(item.id);
@@ -2674,9 +2715,10 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
           }}
           onDeleteItem={handleDeleteById}
           onDuplicate={(item, asSub) => openDuplicateDialog(item as any, asSub)}
+          onReparentItem={(itemId, newParentId) => reparentItem(itemId, newParentId)}
         />
       ) : (
-        <div className="space-y-1">
+        <div className="space-y-1" onDragOver={(e) => e.preventDefault()} onDrop={() => { setDragItemId(null); setDropTargetId(null); }}>
           {rootItems.map(item => renderItem(item, 0))}
         </div>
       )}

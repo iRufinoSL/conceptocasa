@@ -70,6 +70,7 @@ interface WallObjectRecord {
   description: string | null;
   visual_pattern: string | null;
   surface_m2: number | null;
+  volume_m3: number | null;
   object_type: string;
   thickness_mm: number | null;
   width_mm: number | null;

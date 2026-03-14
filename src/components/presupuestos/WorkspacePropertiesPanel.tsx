@@ -387,9 +387,35 @@ export function WorkspacePropertiesPanel({
   useEffect(() => { if (focusFace) setExpandedFace(focusFace); }, [focusFace]);
 
   const fetchResources = async () => {
-    const { data } = await supabase.from('external_resources').select('id, name, resource_type, unit_cost, unit_measure').order('name').limit(200);
+    const { data } = await supabase
+      .from('external_resources')
+      .select('id, name, resource_type, unit_cost, unit_measure')
+      .order('name')
+      .limit(200);
     setResources((data || []) as ExternalResourceOption[]);
   };
+
+  const getNextLayerOrder = useCallback((faceKey: string) => {
+    let wallIndex: number;
+    if (faceKey === 'floor') wallIndex = -1;
+    else if (faceKey === 'ceiling') wallIndex = -2;
+    else if (faceKey === 'space') wallIndex = 0;
+    else wallIndex = parseInt(faceKey.replace('wall-', ''), 10) + 1;
+
+    const wall = walls.find(w => w.wall_index === wallIndex);
+    if (!wall) return 1;
+
+    const maxOrder = wallObjects
+      .filter(o => o.wall_id === wall.id)
+      .reduce((max, o) => Math.max(max, o.layer_order), 0);
+
+    return Math.max(1, maxOrder + 1);
+  }, [wallObjects, walls]);
+
+  useEffect(() => {
+    if (!showObjectForm) return;
+    if (resources.length === 0) fetchResources();
+  }, [resources.length, showObjectForm]);
 
   const getFloorType = () => {
     if (!room) return 'normal';

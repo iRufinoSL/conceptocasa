@@ -7,6 +7,8 @@ import { ArrowLeft, ArrowRight, Layers, Shield, Zap, Clock, Leaf, Hammer, Thermo
 import sistemaMasSeccion from "@/assets/sistema-mas-seccion.jpg";
 import casaSip from "@/assets/casa-sip.jpg";
 import casaLsf from "@/assets/casa-lsf.jpg";
+import hokusaiHero from "@/assets/hokusai-houses-hero.jpg";
+import hokusaiSection from "@/assets/hokusai-houses-section.jpg";
 
 import casaSystem3e from "@/assets/casa-system3e.jpg";
 import casaHormigonCelular from "@/assets/casa-hormigon-celular.jpg";

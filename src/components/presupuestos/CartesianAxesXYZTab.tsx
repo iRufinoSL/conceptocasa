@@ -1138,11 +1138,14 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
           if (!poly.vertices || poly.vertices.length === 0) return true;
           if (autoPolysById.has(poly.id)) return true;
 
+          // Keep explicit face-assignment polygons (wall / ceiling) created from workspace bindings
+          if (/_wall\d+$/.test(poly.id) || /_ceiling$/.test(poly.id)) return true;
+
           const key = normalizeWorkspaceName(poly.name);
-          if (!key) return true;
+          if (!key) return false;
 
           const canonicalId = autoNameToId.get(key);
-          if (!canonicalId) return true;
+          if (!canonicalId) return false;
 
           // Remove stale duplicates with same normalized name but obsolete IDs
           return canonicalId === poly.id;

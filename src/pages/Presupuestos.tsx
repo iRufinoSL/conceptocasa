@@ -85,13 +85,15 @@ const calculateDurationDays = (startDate: string, endDate: string): number | nul
 const STATUS_LABELS: Record<PresupuestoStatus, string> = {
   activo: 'Activo',
   en_ejecucion: 'En Ejecución',
-  archivado: 'Archivado'
+  archivado: 'Archivado',
+  modelo: 'Modelo',
 };
 
 const STATUS_COLORS: Record<PresupuestoStatus, string> = {
   activo: 'bg-primary/10 text-primary',
   en_ejecucion: 'bg-amber-500/10 text-amber-600',
-  archivado: 'bg-muted text-muted-foreground'
+  archivado: 'bg-muted text-muted-foreground',
+  modelo: 'bg-violet-500/10 text-violet-600',
 };
 
 // Subcomponent for Card view

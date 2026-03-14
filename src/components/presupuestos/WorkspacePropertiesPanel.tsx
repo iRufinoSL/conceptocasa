@@ -160,6 +160,7 @@ export function WorkspacePropertiesPanel({
 
   // Active tab: 'faces' | 'objects'
   const [activeTab, setActiveTab] = useState<'faces' | 'objects'>('faces');
+  const [isRegeneratingSuperficies, setIsRegeneratingSuperficies] = useState(false);
 
   const getFaceLabel = useCallback((wallIndex: number) => {
     if (wallIndex === -1) return 'Suelo';
@@ -425,6 +426,20 @@ export function WorkspacePropertiesPanel({
 
   useEffect(() => { fetchData(); }, [fetchData]);
   useEffect(() => { if (focusFace) setExpandedFace(focusFace); }, [focusFace]);
+
+  const handleRegenerateSuperficies = async () => {
+    if (isRegeneratingSuperficies) return;
+    setIsRegeneratingSuperficies(true);
+    try {
+      await fetchData();
+      toast.success('Superficies regeneradas y sincronizadas');
+    } catch (error) {
+      console.error('Error regenerando superficies:', error);
+      toast.error('No se pudieron regenerar las superficies');
+    } finally {
+      setIsRegeneratingSuperficies(false);
+    }
+  };
 
   const fetchResources = async () => {
     const { data } = await supabase
@@ -1032,23 +1047,37 @@ export function WorkspacePropertiesPanel({
       {/* ══ OBJECTS TAB (unified: objects + huecos) ══ */}
       {activeTab === 'objects' && !loading && (
         <div className="px-2 py-2 max-h-[50vh] overflow-y-auto space-y-2">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <p className="text-[9px] text-muted-foreground font-medium uppercase tracking-wider px-1">Objetos y huecos</p>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-6 text-[10px] gap-1"
-              onClick={() => {
-                setShowObjectForm(!showObjectForm);
-                if (!showObjectForm) {
-                  setObjTargetFace('wall-0');
-                  setObjLayerOrder(String(getNextLayerOrder('wall-0')));
-                  setObjResourceId('_none');
-                }
-              }}
-            >
-              <Plus className="h-3 w-3" /> Nuevo
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-6 text-[10px] gap-1"
+                disabled={isRegeneratingSuperficies}
+                onClick={() => {
+                  void handleRegenerateSuperficies();
+                }}
+              >
+                <Layers className="h-3 w-3" />
+                {isRegeneratingSuperficies ? 'Sincronizando...' : 'Generar superficies'}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-6 text-[10px] gap-1"
+                onClick={() => {
+                  setShowObjectForm(!showObjectForm);
+                  if (!showObjectForm) {
+                    setObjTargetFace('wall-0');
+                    setObjLayerOrder(String(getNextLayerOrder('wall-0')));
+                    setObjResourceId('_none');
+                  }
+                }}
+              >
+                <Plus className="h-3 w-3" /> Nuevo
+              </Button>
+            </div>
           </div>
 
           {/* Add object form */}

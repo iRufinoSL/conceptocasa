@@ -855,6 +855,9 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
       }
 
       const roomIds = [...new Set(allFaces.map(face => face.roomId))];
+      const roomById = new Map<string, WorkspaceAutoFaceSource>(
+        ((rooms || []) as WorkspaceAutoFaceSource[]).map(room => [room.id, room]),
+      );
 
       const { data: wallRows, error: wallsError } = await supabase
         .from('budget_floor_plan_walls')
@@ -869,17 +872,20 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
 
       const missingWallsPayload = allFaces
         .filter(face => !wallByKey.has(`${face.roomId}:${face.wallIndex}`))
-        .map(face => ({
-          room_id: face.roomId,
-          wall_index: face.wallIndex,
-          wall_type: face.wallIndex === 0
-            ? 'espacio'
-            : face.wallIndex === -1
-              ? 'suelo_basico'
-              : face.wallIndex === -2
-                ? 'techo_basico'
-                : 'exterior',
-        }));
+        .map(face => {
+          const room = roomById.get(face.roomId);
+          return {
+            room_id: face.roomId,
+            wall_index: face.wallIndex,
+            wall_type: face.wallIndex === 0
+              ? 'espacio'
+              : face.wallIndex === -1
+                ? (room?.has_floor === false ? 'invisible' : 'suelo_basico')
+                : face.wallIndex === -2
+                  ? (room?.has_ceiling === false ? 'invisible' : 'techo_basico')
+                  : 'exterior',
+          };
+        });
 
       if (missingWallsPayload.length > 0) {
         const { data: insertedWalls, error: insertWallsError } = await supabase

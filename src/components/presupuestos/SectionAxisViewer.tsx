@@ -509,6 +509,12 @@ export function SectionAxisViewer({
 
   /** Handle edge double-click to open face properties */
   const handleEdgeClick = useCallback((polyId: string, edgeIdx: number) => {
+    if (vertexEditMode) {
+      setSelectedPolygonId(polyId);
+      lastClickRef.current = null;
+      return;
+    }
+
     const now = Date.now();
     const last = lastClickRef.current;
     if (last && last.polyId === polyId && last.edgeIdx === edgeIdx && (now - last.time) < 400) {
@@ -522,7 +528,7 @@ export function SectionAxisViewer({
     } else {
       lastClickRef.current = { time: now, polyId, edgeIdx };
     }
-  }, [polygons]);
+  }, [polygons, vertexEditMode]);
 
   const handleSvgClick = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
     if (!gridLayout) return;

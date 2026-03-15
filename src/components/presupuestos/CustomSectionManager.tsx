@@ -353,13 +353,14 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
           // Compute normalized edge direction from base room's polygon
           const poly = roomPolyById.get(roomId);
           const edgeIdx = wallIndex - 1;
-          let edgeDx = 1, edgeDy = 0;
+          let edgeDx = 1, edgeDy = 0, edgeLen = 1;
           if (poly && edgeIdx >= 0 && edgeIdx < poly.length) {
             const p1 = poly[edgeIdx];
             const p2 = poly[(edgeIdx + 1) % poly.length];
             const dx = p2.x - p1.x;
             const dy = p2.y - p1.y;
             const len = Math.hypot(dx, dy);
+            edgeLen = len;
             if (len > 0) { edgeDx = dx / len; edgeDy = dy / len; }
           }
 
@@ -372,6 +373,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
             objectType: h.object_type || 'hueco',
             edgeDx,
             edgeDy,
+            edgeLen,
           });
           huecosByName.set(rName, list);
         }

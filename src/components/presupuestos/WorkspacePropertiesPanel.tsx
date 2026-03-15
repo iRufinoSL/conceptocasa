@@ -1208,8 +1208,9 @@ export function WorkspacePropertiesPanel({
                   const wallObjs = getObjectsForWall(i + 1);
                   const wallHuecos = wallObjs.filter(o => o.object_type === 'hueco');
 
-                  // Determine label: T (techo) / S (suelo) for cross-sections
-                  let wallLabel = `P${i + 1}`;
+                  // Determine label: T (techo/tejado) / S (suelo) for cross-sections
+                  const wallRec = walls.find(ww => ww.wall_index === i + 1);
+                  let wallLabel = wallRec?.wall_type === 'tejado' ? `T${i + 1}` : `P${i + 1}`;
                   if (isCrossSection && diagramVerts.length >= 3) {
                     const eMinY = Math.min(diagramVerts[i].y, diagramVerts[j].y);
                     const eMaxY = Math.max(diagramVerts[i].y, diagramVerts[j].y);

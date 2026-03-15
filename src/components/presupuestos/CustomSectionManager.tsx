@@ -314,9 +314,11 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
           .not('visual_pattern', 'is', null) : { data: [] },
         supabase
           .from('budget_wall_objects')
-          .select('wall_id, name, object_type, position_x, width_mm')
+          .select('wall_id, name, object_type, position_x, width_mm, height_mm, shown_in_section')
           .in('wall_id', allWallIds)
-          .eq('object_type', 'hueco'),
+          .not('width_mm', 'is', null)
+          .not('height_mm', 'is', null)
+          .or('object_type.eq.hueco,shown_in_section.eq.true'),
       ]);
 
       // Patterns
@@ -379,7 +381,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
         }
       }
 
-      console.log('[HUECOS DEBUG] huecosByName:', [...huecosByName.entries()].map(([k,v]) => `${k}:${v.length}`));
+      
       
       // Map huecos back to displayed room IDs by name matching
       const hMap = new Map<string, HuecoEntry[]>();
@@ -390,7 +392,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
           hMap.set(r.id, huecos);
         }
       }
-      console.log('[HUECOS DEBUG] Final hMap size:', hMap.size);
+      
       setWallHuecos(hMap);
     })();
   }, [rooms]);
@@ -2256,14 +2258,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                     {/* Wall objects (huecos) — small rectangles on wall edges */}
                     {(() => {
                        const roomHuecos = wallHuecos.get(room.id);
-                       if (!roomHuecos?.length) {
-                         // Debug: log rooms that have no huecos
-                         if (room.name.toLowerCase().includes('hab')) {
-                           console.log('[HUECOS RENDER] Room', room.name, room.id.slice(0,8), 'has NO huecos. wallHuecos keys:', [...wallHuecos.keys()].map(k => k.slice(0,8)));
-                         }
-                         return null;
-                       }
-                       console.log('[HUECOS RENDER] Room', room.name, room.id.slice(0,8), 'has', roomHuecos.length, 'huecos:', roomHuecos);
+                       if (!roomHuecos?.length) return null;
                       const poly = room.floorPolygon!;
                       const svgPtsH = poly.map(p => ({
                         x: margin.left + getHIndex(p.x) * cellSize,

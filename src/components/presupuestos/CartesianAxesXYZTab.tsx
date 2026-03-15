@@ -1051,7 +1051,10 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     const eligibleRooms = (() => {
       const byName = new Map<string, WorkspaceRoom[]>();
       for (const room of allEligible) {
-        const key = normalizeWorkspaceName(room.name);
+        // Use canonical name from Z section if available (prevents collisions when
+        // a room was renamed in the rooms table but not in the section polygon)
+        const effectiveName = canonicalNameMap.get(room.id) || room.name;
+        const key = normalizeWorkspaceName(effectiveName);
         if (!key) continue;
         const list = byName.get(key) || [];
         list.push(room);

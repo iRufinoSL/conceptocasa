@@ -884,7 +884,16 @@ export function WorkspacePropertiesPanel({
       return;
     }
 
-    const faceLabel = getWallLabelForObject(sup.wall_id);
+    const faceWall = walls.find(w => w.id === sup.wall_id);
+    const faceLabel = !faceWall
+      ? '—'
+      : faceWall.wall_index === -1
+        ? 'Suelo'
+        : faceWall.wall_index === -2
+          ? 'Techo'
+          : faceWall.wall_index === 0
+            ? 'Espacio'
+            : `P${faceWall.wall_index}`;
     const baseDescription = stripMetricFromDescription(sup.description, `${workspaceName} / ${faceLabel}`);
     const metricLabel = nextSurface != null
       ? `${nextSurface} m²`

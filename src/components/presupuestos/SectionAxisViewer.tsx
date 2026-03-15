@@ -1280,13 +1280,17 @@ export function SectionAxisViewer({
       for (let i = 0; i < verts.length; i++) {
         const a = pxVerts[i];
         const isDraggable = vertexEditMode && selectedPolygonId === poly.id;
+        const isNonSelectedVertex = vertexEditMode && selectedPolygonId !== poly.id;
         const vertIdx = i;
         elements.push(
           <circle key={`vtx-${poly.id}-${i}`} cx={a.px} cy={a.py}
             r={isDraggable ? 7 : 3.5}
             fill={isDraggable ? 'hsl(var(--primary))' : color}
             stroke="white" strokeWidth={isDraggable ? 2.5 : 1.5}
-            style={isDraggable ? { cursor: 'grab' } : undefined}
+            style={{
+              cursor: isDraggable ? 'grab' : undefined,
+              pointerEvents: isNonSelectedVertex ? 'none' : undefined,
+            }}
             onMouseDown={isDraggable ? (e) => {
               e.stopPropagation(); e.preventDefault();
               pushUndo();

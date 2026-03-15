@@ -96,6 +96,10 @@ export function WallObjectsPanel({
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingObj, setEditingObj] = useState<string | null>(null);
   const [editingSuperficiePattern, setEditingSuperficiePattern] = useState<string | null>(null);
+  const [editingSuperficieMetrics, setEditingSuperficieMetrics] = useState<string | null>(null);
+  const [manualSurfaceM2, setManualSurfaceM2] = useState('');
+  const [manualVolumeM3, setManualVolumeM3] = useState('');
+  const [savingSuperficieMetrics, setSavingSuperficieMetrics] = useState(false);
   // Quick "Superficie" layer form
   const [showSuperficieForm, setShowSuperficieForm] = useState(false);
   const [supName, setSupName] = useState('');
@@ -173,6 +177,15 @@ export function WallObjectsPanel({
       queryClient.invalidateQueries({ queryKey: ['wall-objects', wallId] });
     })();
   }, [open, wallId, isLoading, objects, wallLabel, wallIndex, roomName, queryClient]);
+
+  useEffect(() => {
+    if (!open) {
+      setEditingSuperficiePattern(null);
+      setEditingSuperficieMetrics(null);
+      setManualSurfaceM2('');
+      setManualVolumeM3('');
+    }
+  }, [open, wallId]);
 
   const resetForm = () => {
     setFormName('');
@@ -256,6 +269,64 @@ export function WallObjectsPanel({
     if (error) { toast.error('Error al eliminar'); return; }
     toast.success('Objeto eliminado');
     queryClient.invalidateQueries({ queryKey: ['wall-objects', wallId] });
+  };
+
+  const stripMetricFromDescription = (description: string | null) => {
+    if (!description) return `${roomName} / ${wallLabel}`;
+    return description.replace(/\s+—\s+[-\d.,]+\s*(m²|m³|ml)\s*$/u, '').trim();
+  };
+
+  const openSuperficieMetricsEditor = (obj: WallObject) => {
+    setEditingSuperficieMetrics(obj.id);
+    setManualSurfaceM2(obj.surface_m2 != null ? String(obj.surface_m2) : '');
+    setManualVolumeM3(obj.volume_m3 != null ? String(obj.volume_m3) : '');
+  };
+
+  const saveSuperficieMetrics = async (obj: WallObject) => {
+    const parseMaybeNumber = (value: string) => {
+      const trimmed = value.trim();
+      if (!trimmed) return null;
+      const parsed = Number.parseFloat(trimmed.replace(',', '.'));
+      return Number.isFinite(parsed) ? parsed : NaN;
+    };
+
+    const parsedM2 = parseMaybeNumber(manualSurfaceM2);
+    const parsedM3 = parseMaybeNumber(manualVolumeM3);
+
+    if (Number.isNaN(parsedM2) || Number.isNaN(parsedM3)) {
+      toast.error('Introduce valores numéricos válidos');
+      return;
+    }
+
+    const metricLabel = parsedM2 != null
+      ? `${parsedM2} m²`
+      : parsedM3 != null
+        ? `${parsedM3} m³`
+        : null;
+
+    const baseDescription = stripMetricFromDescription(obj.description);
+    const nextDescription = metricLabel ? `${baseDescription} — ${metricLabel}` : baseDescription;
+
+    setSavingSuperficieMetrics(true);
+    const { error } = await supabase
+      .from('budget_wall_objects')
+      .update({
+        surface_m2: parsedM2,
+        volume_m3: parsedM3,
+        description: nextDescription,
+      })
+      .eq('id', obj.id);
+    setSavingSuperficieMetrics(false);
+
+    if (error) {
+      toast.error('No se pudo guardar la medida manual');
+      return;
+    }
+
+    setEditingSuperficieMetrics(null);
+    toast.success('Medida de superficie actualizada');
+    queryClient.invalidateQueries({ queryKey: ['wall-objects', wallId] });
+    queryClient.invalidateQueries({ queryKey: ['budget-wall-objects-all'] });
   };
 
   const isExterior = wallType.startsWith('exterior');
@@ -447,6 +518,62 @@ export function WallObjectsPanel({
                             ? `Patrón: ${getPatternById(obj.visual_pattern)!.label}`
                             : 'Clic para asignar patrón visual'}
                         </p>
+                      )}
+
+                      {isAutoSuperficie && (
+                        <div className="mt-1" onClick={e => e.stopPropagation()}>
+                          {editingSuperficieMetrics === obj.id ? (
+                            <div className="space-y-1.5 border rounded p-1.5 bg-background">
+                              <div className="flex items-center gap-1 flex-wrap">
+                                <Label className="text-[9px]">m² manual</Label>
+                                <Input
+                                  className="h-6 w-24 text-[10px]"
+                                  type="number"
+                                  step="0.01"
+                                  value={manualSurfaceM2}
+                                  onChange={e => setManualSurfaceM2(e.target.value)}
+                                  placeholder="Ej: 0"
+                                />
+                                <Label className="text-[9px]">m³</Label>
+                                <Input
+                                  className="h-6 w-24 text-[10px]"
+                                  type="number"
+                                  step="0.001"
+                                  value={manualVolumeM3}
+                                  onChange={e => setManualVolumeM3(e.target.value)}
+                                  placeholder="Opcional"
+                                />
+                              </div>
+                              <div className="flex gap-1">
+                                <Button
+                                  size="sm"
+                                  className="h-6 text-[10px] px-2"
+                                  disabled={savingSuperficieMetrics}
+                                  onClick={() => void saveSuperficieMetrics(obj)}
+                                >
+                                  {savingSuperficieMetrics ? 'Guardando...' : 'Guardar medida'}
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 text-[10px] px-2"
+                                  onClick={() => setEditingSuperficieMetrics(null)}
+                                >
+                                  Cancelar
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-6 text-[10px] px-2"
+                              onClick={() => openSuperficieMetricsEditor(obj)}
+                            >
+                              Editar medida manual
+                            </Button>
+                          )}
+                        </div>
                       )}
                     </div>
                     {!isAutoSuperficie && (

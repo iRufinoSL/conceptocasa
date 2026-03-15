@@ -1166,6 +1166,22 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
     setPanelOpen(true);
   };
 
+  const handlePlacedObjectClick = (obj: any) => {
+    if (!obj?.wall_id) return;
+
+    const wall = allWalls.find(w => w.id === obj.wall_id);
+    const wallIndex = wall?.wall_index ?? 0;
+    const wallType = wall?.wall_type ?? 'exterior';
+    const wallLabel = obj.faceName || (wallIndex === 0 ? 'Espacio' : wallIndex === -1 ? 'Suelo' : wallIndex === -2 ? 'Techo' : `Pared ${wallIndex}`);
+
+    setPanelWallId(obj.wall_id);
+    setPanelWallIndex(wallIndex);
+    setPanelWallType(wallType);
+    setPanelWallLabel(wallLabel);
+    setPanelRoomName(obj.workspace || '');
+    setPanelOpen(true);
+  };
+
   const handleDeleteTemplate = async (id: string) => {
     const { error } = await supabase.from('budget_object_templates').delete().eq('id', id);
     if (error) { toast.error('Error eliminando'); return; }
@@ -1215,7 +1231,7 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
   });
 
   const placedRow = (o: any) => ({
-    face: { workspace: o.workspace, roomId: '', faceName: o.faceName, m2: o.surface_m2, m3: o.volume_m3, sortKey: 0, wallIndex: 0 } as AutoFace,
+    face: o,
     cells: {
       name: o.layer_order === 0 ? `Superficie=${o.faceName}` : o.name,
       workspace: o.workspace,
@@ -1391,7 +1407,11 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
           {filteredObjects.length === 0 ? (
             <p className="text-sm text-muted-foreground py-4 text-center">No hay objetos colocados en espacios</p>
           ) : placedView === 'alpha' ? (
-            <ResizableTable columns={placedColumns} rows={objectsAlpha.map(placedRow)} onRowClick={() => {}} />
+            <ResizableTable
+              columns={placedColumns}
+              rows={objectsAlpha.map(placedRow)}
+              onRowClick={(row) => handlePlacedObjectClick(row.face as any)}
+            />
           ) : (
             <div className="space-y-1.5">
               {objectsByWorkspace.map(group => {
@@ -1410,7 +1430,7 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
                           ...placedRow(o),
                           cells: { ...placedRow(o).cells },
                         }))}
-                        onRowClick={() => {}}
+                        onRowClick={(row) => handlePlacedObjectClick(row.face as any)}
                         className="ml-6 mt-1"
                       />
                     </CollapsibleContent>

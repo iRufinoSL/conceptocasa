@@ -698,12 +698,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
 
   const handleSaveRulerLines = async (sectionId: string, rulerLines: import('./SectionAxisViewer').RulerLine[]) => {
     if (!floorPlan?.id) return;
-    let parsedCorners: Record<string, unknown> = {};
-    try {
-      parsedCorners = typeof floorPlan.custom_corners === 'string'
-        ? JSON.parse(floorPlan.custom_corners)
-        : (floorPlan.custom_corners || {});
-    } catch { parsedCorners = {}; }
+    const parsedCorners = await readFreshCustomCorners();
 
     const sections = Array.isArray(parsedCorners.customSections)
       ? (parsedCorners.customSections as CustomSection[])

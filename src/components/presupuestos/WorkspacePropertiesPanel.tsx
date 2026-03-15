@@ -400,17 +400,20 @@ export function WorkspacePropertiesPanel({
           ...(inserts.length > 0 ? [supabase.from('budget_wall_objects').insert(inserts)] : []),
         ]);
 
-        mutationResults.forEach((res, idx) => {
-          if (res.error) {
-            console.error(`Error sincronizando Superficie automática [${idx}]:`, res.error);
-          }
-        });
+        const mutationError = mutationResults.find(result => result.error)?.error;
+        if (mutationError) {
+          throw mutationError;
+        }
 
-        const { data: objData } = await supabase
+        const { data: objData, error: objError } = await supabase
           .from('budget_wall_objects')
           .select('*')
           .in('wall_id', wallIds)
           .order('layer_order', { ascending: true });
+
+        if (objError) {
+          throw objError;
+        }
 
         setWallObjects((objData || []) as WallObjectRecord[]);
       } else {
@@ -431,8 +434,42 @@ export function WorkspacePropertiesPanel({
     if (isRegeneratingSuperficies) return;
     setIsRegeneratingSuperficies(true);
     try {
+      if (!room) {
+        const roomReady = await ensureRoomRecord();
+        if (!roomReady) {
+          throw new Error('No se pudo preparar el espacio de trabajo');
+        }
+      }
+
       await fetchData();
-      toast.success('Superficies regeneradas y sincronizadas');
+
+      const { data: wallRows, error: wallsError } = await supabase
+        .from('budget_floor_plan_walls')
+        .select('id')
+        .eq('room_id', workspaceId);
+
+      if (wallsError) throw wallsError;
+
+      const wallIds = (wallRows || []).map(w => w.id);
+      if (wallIds.length === 0) {
+        toast.error('No se encontraron caras para generar superficies');
+        return;
+      }
+
+      const { count: superficieCount, error: superficieCountError } = await supabase
+        .from('budget_wall_objects')
+        .select('id', { count: 'exact', head: true })
+        .in('wall_id', wallIds)
+        .eq('layer_order', 0);
+
+      if (superficieCountError) throw superficieCountError;
+
+      if (!superficieCount || superficieCount === 0) {
+        toast.error('No se generó ninguna superficie en este espacio');
+        return;
+      }
+
+      toast.success(`Superficies regeneradas y sincronizadas (${superficieCount})`);
     } catch (error) {
       console.error('Error regenerando superficies:', error);
       toast.error('No se pudieron regenerar las superficies');
@@ -626,15 +663,42 @@ export function WorkspacePropertiesPanel({
       toast.error('No se encontró el plano asociado');
       return false;
     }
-    const { data, error } = await supabase.from('budget_floor_plan_rooms')
-      .insert({ id: workspaceId, floor_plan_id: floorPlanId, name: workspaceName, width: 1, length: 1 })
-      .select().single();
+
+    const sourceVertices = Array.isArray(verticesProp) && verticesProp.length >= 3 ? verticesProp : null;
+    const xValues = sourceVertices?.map(v => v.x) || [];
+    const yValues = sourceVertices?.map(v => v.y) || [];
+    const derivedWidth = xValues.length > 0 ? Math.max(0.1, Math.max(...xValues) - Math.min(...xValues)) : 1;
+    const derivedLength = yValues.length > 0 ? Math.max(0.1, Math.max(...yValues) - Math.min(...yValues)) : 1;
+
+    const { data, error } = await supabase
+      .from('budget_floor_plan_rooms')
+      .insert({
+        id: workspaceId,
+        floor_plan_id: floorPlanId,
+        name: workspaceName,
+        width: derivedWidth,
+        length: derivedLength,
+        floor_polygon: sourceVertices,
+      })
+      .select()
+      .single();
+
     if (error) {
-      const { data: existing } = await supabase.from('budget_floor_plan_rooms').select('*').eq('id', workspaceId).maybeSingle();
-      if (existing) { setRoom(existing); return true; }
+      const { data: existing } = await supabase
+        .from('budget_floor_plan_rooms')
+        .select('*')
+        .eq('id', workspaceId)
+        .maybeSingle();
+
+      if (existing) {
+        setRoom(existing);
+        return true;
+      }
+
       toast.error('Error creando registro de espacio');
       return false;
     }
+
     setRoom(data);
     return true;
   };

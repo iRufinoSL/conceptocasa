@@ -77,6 +77,7 @@ const WALL_TYPES = [
 
 function getWallColor(wallType?: string): string {
   if (!wallType) return FACE_COLORS.pared_default;
+  if (wallType === 'suelo') return '#a0522d';
   if (wallType === 'tejado') return FACE_COLORS.tejado;
   if (wallType.includes('exterior')) return FACE_COLORS.pared_exterior;
   if (wallType.includes('interior')) return FACE_COLORS.pared_interior;

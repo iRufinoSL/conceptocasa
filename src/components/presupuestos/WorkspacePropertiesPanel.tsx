@@ -181,7 +181,7 @@ export function WorkspacePropertiesPanel({
     return null;
   }, [verticesProp]);
 
-  const getFaceMetrics = useCallback((roomData: any, wallIndex: number, cellSize: number) => {
+  const getFaceMetrics = useCallback((roomData: any, wallIndex: number, cellSize: number, wallType?: string) => {
     const polygon = getEffectivePolygon(roomData);
 
     const floorAreaRaw = (() => {
@@ -205,19 +205,21 @@ export function WorkspacePropertiesPanel({
     }
 
     if (wallIndex === -1) {
-      // Floor: return 0 if workspace has no floor
+      // Floor: return 0 if workspace has no floor or wall is invisible
       const hasFloor = roomData?.has_floor !== false;
+      const floorVisible = wallType !== 'invisible';
       return {
-        surface_m2: hasFloor ? floorArea : 0,
+        surface_m2: hasFloor && floorVisible ? floorArea : 0,
         volume_m3: null as number | null,
       };
     }
 
     if (wallIndex === -2) {
-      // Ceiling: return 0 if workspace has no ceiling
+      // Ceiling: return 0 if workspace has no ceiling or wall is invisible
       const hasCeiling = roomData?.has_ceiling !== false;
+      const ceilingVisible = wallType !== 'invisible';
       return {
-        surface_m2: hasCeiling ? floorArea : 0,
+        surface_m2: hasCeiling && ceilingVisible ? floorArea : 0,
         volume_m3: null as number | null,
       };
     }
@@ -370,7 +372,7 @@ export function WorkspacePropertiesPanel({
         const updates = nextWalls
           .filter(w => existingByWall.has(w.id))
           .map(w => {
-            const { surface_m2, volume_m3 } = getFaceMetrics(roomData, w.wall_index, nextCellSizeM);
+            const { surface_m2, volume_m3 } = getFaceMetrics(roomData, w.wall_index, nextCellSizeM, w.wall_type);
             const metricLabel = surface_m2 != null ? `${surface_m2} m²` : volume_m3 != null ? `${volume_m3} m³` : null;
             return {
               id: existingByWall.get(w.id)!,
@@ -389,7 +391,7 @@ export function WorkspacePropertiesPanel({
         const inserts = nextWalls
           .filter(w => !existingByWall.has(w.id))
           .map(w => {
-            const { surface_m2, volume_m3 } = getFaceMetrics(roomData, w.wall_index, nextCellSizeM);
+            const { surface_m2, volume_m3 } = getFaceMetrics(roomData, w.wall_index, nextCellSizeM, w.wall_type);
             const metricLabel = surface_m2 != null ? `${surface_m2} m²` : volume_m3 != null ? `${volume_m3} m³` : null;
             return {
               wall_id: w.id,
@@ -636,7 +638,7 @@ export function WorkspacePropertiesPanel({
     } else {
       const faceLabel = faceKey === 'floor' ? 'Suelo' : faceKey === 'ceiling' ? 'Techo' : `Pared ${wallIndex}`;
       const { surface_m2, volume_m3 } = room
-        ? getFaceMetrics(room, wallIndex, cellSizeM)
+        ? getFaceMetrics(room, wallIndex, cellSizeM, existingWall?.wall_type)
         : { surface_m2: null as number | null, volume_m3: null as number | null };
       const metricLabel = surface_m2 != null ? `${surface_m2} m²` : volume_m3 != null ? `${volume_m3} m³` : null;
       const { data } = await supabase.from('budget_wall_objects').insert({

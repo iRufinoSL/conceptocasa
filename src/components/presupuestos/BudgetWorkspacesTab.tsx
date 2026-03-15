@@ -2494,7 +2494,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
         floor_polygon: formVertices,
         is_base: payload.is_base,
       };
-      await Promise.all((editedWalls || []).map((w: any) => ensureSuperficieLayer(w.id, roomForMetrics, w.wall_index)));
+      await Promise.all((editedWalls || []).map((w: any) => ensureSuperficieLayer(w.id, roomForMetrics, w.wall_index, w.wall_type)));
 
       toast.success('Espacio actualizado');
     } else {
@@ -2537,7 +2537,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
         floor_polygon: formVertices,
         is_base: payload.is_base,
       };
-      await Promise.all((insertedWalls || []).map((w: any) => ensureSuperficieLayer(w.id, roomForMetrics, w.wall_index)));
+      await Promise.all((insertedWalls || []).map((w: any) => ensureSuperficieLayer(w.id, roomForMetrics, w.wall_index, w.wall_type)));
 
       toast.success(`Espacio creado con ${formVertices.length} paredes`);
     }
@@ -2697,7 +2697,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
     return `Pared ${wallDbIndex}`;
   }, []);
 
-  const getFaceMetrics = useCallback((room: Workspace, wallDbIndex: number) => {
+  const getFaceMetrics = useCallback((room: Workspace, wallDbIndex: number, wallType?: string) => {
     const polygon = Array.isArray(room.floor_polygon) && room.floor_polygon.length >= 3
       ? room.floor_polygon
       : null;
@@ -2718,16 +2718,18 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
 
     if (wallDbIndex === -1) {
       const hasFloor = room.has_floor !== false;
+      const floorVisible = wallType !== 'invisible';
       return {
-        surface_m2: hasFloor ? floorArea : 0,
+        surface_m2: hasFloor && floorVisible ? floorArea : 0,
         volume_m3: null as number | null,
       };
     }
 
     if (wallDbIndex === -2) {
       const hasCeiling = room.has_ceiling !== false;
+      const ceilingVisible = wallType !== 'invisible';
       return {
-        surface_m2: hasCeiling ? floorArea : 0,
+        surface_m2: hasCeiling && ceilingVisible ? floorArea : 0,
         volume_m3: null as number | null,
       };
     }
@@ -2749,9 +2751,9 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
     };
   }, [cellSizeM, floorPlan?.default_height]);
 
-  const ensureSuperficieLayer = useCallback(async (wallId: string, room: Workspace, wallDbIndex: number) => {
+  const ensureSuperficieLayer = useCallback(async (wallId: string, room: Workspace, wallDbIndex: number, wallType?: string) => {
     const faceLabel = getFaceLabel(wallDbIndex);
-    const { surface_m2, volume_m3 } = getFaceMetrics(room, wallDbIndex);
+    const { surface_m2, volume_m3 } = getFaceMetrics(room, wallDbIndex, wallType);
     const metricLabel = surface_m2 != null
       ? `${surface_m2} m²`
       : volume_m3 != null
@@ -2890,7 +2892,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
         for (const room of rooms) {
           const roomWalls = wallsByRoom.get(room.id) || [];
           for (const wall of roomWalls) {
-            syncJobs.push(ensureSuperficieLayer(wall.id, room, wall.wall_index));
+            syncJobs.push(ensureSuperficieLayer(wall.id, room, wall.wall_index, wall.wall_type));
           }
         }
 
@@ -2927,7 +2929,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
       wall = newWall as WallData;
     }
 
-    await ensureSuperficieLayer(wall.id, room, wallDbIndex);
+    await ensureSuperficieLayer(wall.id, room, wallDbIndex, wall.wall_type);
 
     setWallPanelWallId(wall.id);
     setWallPanelWallIndex(wallDbIndex);
@@ -2964,7 +2966,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
       wall = newWall as WallData;
     }
 
-    await ensureSuperficieLayer(wall.id, room, 0);
+    await ensureSuperficieLayer(wall.id, room, 0, wall.wall_type);
 
     setWallPanelWallId(wall.id);
     setWallPanelWallIndex(0);

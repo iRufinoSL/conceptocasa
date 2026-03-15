@@ -855,6 +855,9 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
       }
 
       const roomIds = [...new Set(allFaces.map(face => face.roomId))];
+      const roomById = new Map<string, WorkspaceAutoFaceSource>(
+        ((rooms || []) as WorkspaceAutoFaceSource[]).map(room => [room.id, room]),
+      );
 
       const { data: wallRows, error: wallsError } = await supabase
         .from('budget_floor_plan_walls')
@@ -869,17 +872,20 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
 
       const missingWallsPayload = allFaces
         .filter(face => !wallByKey.has(`${face.roomId}:${face.wallIndex}`))
-        .map(face => ({
-          room_id: face.roomId,
-          wall_index: face.wallIndex,
-          wall_type: face.wallIndex === 0
-            ? 'espacio'
-            : face.wallIndex === -1
-              ? 'suelo_basico'
-              : face.wallIndex === -2
-                ? 'techo_basico'
-                : 'exterior',
-        }));
+        .map(face => {
+          const room = roomById.get(face.roomId);
+          return {
+            room_id: face.roomId,
+            wall_index: face.wallIndex,
+            wall_type: face.wallIndex === 0
+              ? 'espacio'
+              : face.wallIndex === -1
+                ? (room?.has_floor === false ? 'invisible' : 'suelo_basico')
+                : face.wallIndex === -2
+                  ? (room?.has_ceiling === false ? 'invisible' : 'techo_basico')
+                  : 'exterior',
+          };
+        });
 
       if (missingWallsPayload.length > 0) {
         const { data: insertedWalls, error: insertWallsError } = await supabase
@@ -898,9 +904,9 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
         .map(face => {
           const wall = wallByKey.get(`${face.roomId}:${face.wallIndex}`);
           if (!wall) return null;
-          return { face, wallId: wall.id };
+          return { face, wallId: wall.id, wallType: wall.wall_type };
         })
-        .filter((entry): entry is { face: AutoFace; wallId: string } => !!entry);
+        .filter((entry): entry is { face: AutoFace; wallId: string; wallType: string } => !!entry);
 
       const wallIds = [...new Set(facesWithWall.map(entry => entry.wallId))];
       if (wallIds.length === 0) {
@@ -924,11 +930,23 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
         }
       });
 
+      const resolveMetrics = (entry: { face: AutoFace; wallType: string }) => {
+        const room = roomById.get(entry.face.roomId);
+        const missingFloor = entry.face.wallIndex === -1 && ((room?.has_floor === false) || entry.wallType === 'invisible');
+        const missingCeiling = entry.face.wallIndex === -2 && ((room?.has_ceiling === false) || entry.wallType === 'invisible');
+
+        const surfaceM2 = missingFloor || missingCeiling
+          ? 0
+          : (entry.face.m2 ?? null);
+
+        const volumeM3 = entry.face.m3 ?? null;
+        return { surfaceM2, volumeM3 };
+      };
+
       const updates = facesWithWall
         .filter(entry => existingByWall.has(entry.wallId))
         .map(entry => {
-          const surfaceM2 = entry.face.m2 ?? null;
-          const volumeM3 = entry.face.m3 ?? null;
+          const { surfaceM2, volumeM3 } = resolveMetrics(entry);
           const metric = surfaceM2 != null ? `${surfaceM2} m²` : volumeM3 != null ? `${volumeM3} m³` : null;
           return {
             id: existingByWall.get(entry.wallId)!,
@@ -947,8 +965,7 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
       const inserts = facesWithWall
         .filter(entry => !existingByWall.has(entry.wallId))
         .map(entry => {
-          const surfaceM2 = entry.face.m2 ?? null;
-          const volumeM3 = entry.face.m3 ?? null;
+          const { surfaceM2, volumeM3 } = resolveMetrics(entry);
           const metric = surfaceM2 != null ? `${surfaceM2} m²` : volumeM3 != null ? `${volumeM3} m³` : null;
           return {
             wall_id: entry.wallId,

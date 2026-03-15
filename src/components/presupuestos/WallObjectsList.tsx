@@ -1407,7 +1407,11 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
           {filteredObjects.length === 0 ? (
             <p className="text-sm text-muted-foreground py-4 text-center">No hay objetos colocados en espacios</p>
           ) : placedView === 'alpha' ? (
-            <ResizableTable columns={placedColumns} rows={objectsAlpha.map(placedRow)} onRowClick={() => {}} />
+            <ResizableTable
+              columns={placedColumns}
+              rows={objectsAlpha.map(placedRow)}
+              onRowClick={(row) => handlePlacedObjectClick(row.face as any)}
+            />
           ) : (
             <div className="space-y-1.5">
               {objectsByWorkspace.map(group => {

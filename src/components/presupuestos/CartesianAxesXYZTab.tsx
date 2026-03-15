@@ -1460,8 +1460,10 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
             const currentSection = sections.find(s => s.id === liveSection.id);
             const existingPolygons = currentSection?.polygons || [];
 
-            // Remove stale duplicates that only differ by old IDs but collide by normalized auto name
+            // Remove stale duplicates that only differ by old IDs but collide by normalized auto name.
+            // Keep hidden markers (vertices:[]) so user-deleted spaces do not reappear.
             const cleanedExisting = existingPolygons.filter((p: SectionPolygon) => {
+              if (!p.vertices || p.vertices.length === 0) return true;
               if (autoById.has(p.id)) return true;
               if (/_wall\d+$/.test(p.id) || /_ceiling$/.test(p.id)) return true;
               const key = normalizeWorkspaceName(p.name);
@@ -1485,8 +1487,19 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
               };
             });
 
+            const hiddenNameKeys = new Set(
+              updatedExisting
+                .filter((p: SectionPolygon) => !p.vertices || p.vertices.length === 0)
+                .map((p: SectionPolygon) => normalizeWorkspaceName(p.name))
+                .filter(Boolean),
+            );
+
             const existingIds = new Set(updatedExisting.map((p: SectionPolygon) => p.id));
-            const newPolys = autoPolys.filter(ap => !existingIds.has(ap.id));
+            const newPolys = autoPolys.filter(ap => {
+              if (existingIds.has(ap.id)) return false;
+              const key = normalizeWorkspaceName(ap.name);
+              return !(key && hiddenNameKeys.has(key));
+            });
 
             const mergedPolygons = [...updatedExisting, ...newPolys];
             const removedStale = existingPolygons.length - cleanedExisting.length;

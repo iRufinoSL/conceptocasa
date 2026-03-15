@@ -1367,7 +1367,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
           return canonicalId === poly.id;
         });
 
-    const healedSavedPolys = liveSection.sectionType === 'vertical'
+    const healedSavedPolys = (liveSection.sectionType === 'vertical' || liveSection.sectionType === 'inclined')
       ? filteredSavedPolys
       : filteredSavedPolys.map(p => maybeHealLegacySavedPolygon(
           p,

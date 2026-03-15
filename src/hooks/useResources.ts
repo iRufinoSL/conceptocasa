@@ -172,6 +172,9 @@ export function useResources() {
           supplier_id: resourceData.supplierId || null,
           trade_id: resourceData.tradeId || null,
           vat_included_percent: resourceData.vatIncludedPercent ?? null,
+          width_mm: resourceData.widthMm ?? null,
+          height_mm: resourceData.heightMm ?? null,
+          depth_mm: resourceData.depthMm ?? null,
         })
         .select()
         .single();

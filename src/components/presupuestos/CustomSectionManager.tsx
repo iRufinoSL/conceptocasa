@@ -295,11 +295,11 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
         for (const h of huecoRes.data) {
           const roomId = wallRoomMap.get(h.wall_id);
           const wallIndex = wallIndexMap.get(h.wall_id);
-          if (!roomId || wallIndex == null || wallIndex < 1 || wallIndex > 4) continue;
+          if (!roomId || wallIndex == null || wallIndex < 1) continue;
           const list = hMap.get(roomId) || [];
           list.push({
             wallIndex,
-            positionX: h.position_x ?? 0.5,
+            positionXmm: h.position_x ?? 0, // stored in mm
             widthMm: h.width_mm ?? 800,
             name: h.name || '',
             objectType: h.object_type || 'hueco',

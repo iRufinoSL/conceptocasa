@@ -1634,14 +1634,14 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
               invalidateSectionQueries();
             }}
           />
-          {totalSections > 0 && isAdmin && (
+          {isAdmin && (
             <Button
               variant="destructive"
               size="sm"
               className="h-7 text-xs gap-1"
               onClick={handleDeleteAllSections}
             >
-              <Trash2 className="h-3 w-3" /> Eliminar todas
+              <Trash2 className="h-3 w-3" /> Limpieza Total
             </Button>
           )}
         </div>

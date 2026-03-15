@@ -963,6 +963,18 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     return ids;
   }, [verticalSections]);
 
+  // Map from room ID → canonical polygon name from Z sections (authoritative name)
+  const canonicalNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const vs of verticalSections) {
+      for (const p of (vs.polygons || [])) {
+        if (!p.vertices || p.vertices.length < 3) continue;
+        if (p.name) map.set(p.id, p.name);
+      }
+    }
+    return map;
+  }, [verticalSections]);
+
   // Flatten all vertical polygons as fallback projection source (for legacy/manual Z drawings)
   const verticalPolygonSources = useMemo(() => {
     const sources: Array<{ sectionId: string; axisValue: number; polygon: SectionPolygon }> = [];

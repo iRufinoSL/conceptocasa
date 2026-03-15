@@ -86,6 +86,8 @@ interface SectionAxisViewerProps {
   onFacePatternChange?: (polyId: string, faceKey: string, patternId: string | null) => void;
   /** All polygon names across ALL sections for uniqueness validation */
   allPolygonNames?: string[];
+  /** Callback to regenerate projected workspaces */
+  onRegenerate?: () => void;
 }
 
 const AXIS_COLORS = {

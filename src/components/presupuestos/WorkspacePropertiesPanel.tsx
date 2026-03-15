@@ -54,6 +54,11 @@ function normalizeWallType(type?: string | null): string {
   }
 }
 
+function isInvisibleWallType(type?: string | null): boolean {
+  const normalized = (type || '').toLowerCase();
+  return normalized.includes('invisible');
+}
+
 interface WallRecord {
   id: string;
   room_id: string;

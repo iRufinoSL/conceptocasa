@@ -169,9 +169,12 @@ const buildAutoFacesForWorkspace = (room: WorkspaceAutoFaceSource, cellSizeM: nu
     : (room.length || 0) * (room.width || 0);
   const floorArea = Math.round(floorAreaRaw * 100) / 100;
 
-  const faces: AutoFace[] = [
-    { workspace: room.name, roomId: room.id, faceName: 'Suelo', m2: floorArea, m3: null, sortKey: 0, wallIndex: -1 },
-  ];
+  const faces: AutoFace[] = [];
+
+  // Only add floor face if workspace has floor
+  if (room.has_floor !== false) {
+    faces.push({ workspace: room.name, roomId: room.id, faceName: 'Suelo', m2: floorArea, m3: null, sortKey: 0, wallIndex: -1 });
+  }
 
   const edgeCount = poly && poly.length >= 3 ? poly.length : 4;
 

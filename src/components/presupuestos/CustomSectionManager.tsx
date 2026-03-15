@@ -259,11 +259,19 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
     const sampleRoomIds = roomIds.slice(0, 5); // just need to find the floor_plan_id
 
     (async () => {
-      // Fetch walls for displayed rooms (for patterns)
-      const { data: walls } = await supabase
-        .from('budget_floor_plan_walls')
-        .select('id, room_id, wall_index')
-        .in('room_id', roomIds);
+      // Fetch walls for displayed rooms (for patterns) AND get floor_plan_ids
+      const [{ data: walls }, { data: sampleRoomRows }] = await Promise.all([
+        supabase
+          .from('budget_floor_plan_walls')
+          .select('id, room_id, wall_index')
+          .in('room_id', roomIds),
+        supabase
+          .from('budget_floor_plan_rooms')
+          .select('floor_plan_id')
+          .in('id', sampleRoomIds),
+      ]);
+
+      const floorPlanIds = [...new Set((sampleRoomRows || []).map(r => r.floor_plan_id).filter(Boolean))];
 
       // Also fetch ALL rooms in the same floor plans to find base rooms with huecos
       let allFloorPlanRooms: Array<{ id: string; name: string; floor_plan_id: string }> = [];

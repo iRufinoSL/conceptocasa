@@ -438,7 +438,7 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
       const zTopNext = Math.round(topVerts3D[next].y / zScaleBlocks);
 
       result.push({
-        type: 'pared', index: i + 1, label: `P${i + 1}`,
+        type: wall?.wall_type === 'tejado' ? 'tejado' : 'pared', index: i + 1, label: wall?.wall_type === 'tejado' ? `T${i + 1}` : `P${i + 1}`,
         vertices: wallVerts, labelPos: wallCenter,
         color: getWallColor(wall?.wall_type),
         realVertices: [

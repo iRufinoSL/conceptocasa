@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { X, Box, Layers, Paintbrush, Plus, Move, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Link2, Search, Star } from 'lucide-react';
+import { X, Box, Layers, Paintbrush, Plus, Move, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Link2, Search, Star, Pencil, Save } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { VISUAL_PATTERNS, PATTERN_CATEGORIES, getPatternById, patternPreviewDataUri, type VisualPattern } from '@/lib/visual-patterns';
@@ -112,6 +112,10 @@ interface WorkspacePropertiesPanelProps {
   onOpeningsChange?: () => void;
   localFaceTypes?: Record<string, string>;
   onLocalFaceTypeChange?: (faceKey: string, wallType: string) => void;
+  /** If set, auto-open objects tab and load this object for editing */
+  initialEditObjectId?: string;
+  /** Force initial tab */
+  initialTab?: 'faces' | 'objects';
 }
 
 interface ExternalResourceOption {
@@ -139,6 +143,8 @@ export function WorkspacePropertiesPanel({
   onOpeningsChange,
   localFaceTypes,
   onLocalFaceTypeChange,
+  initialEditObjectId,
+  initialTab,
 }: WorkspacePropertiesPanelProps) {
   const [walls, setWalls] = useState<WallRecord[]>([]);
   const [room, setRoom] = useState<any>(null);
@@ -184,12 +190,15 @@ export function WorkspacePropertiesPanel({
   const [positioningObjId, setPositioningObjId] = useState<string | null>(null);
 
   // Active tab: 'faces' | 'objects'
-  const [activeTab, setActiveTab] = useState<'faces' | 'objects'>('faces');
+  const [activeTab, setActiveTab] = useState<'faces' | 'objects'>(initialTab || (initialEditObjectId ? 'objects' : 'faces'));
   const [isRegeneratingSuperficies, setIsRegeneratingSuperficies] = useState(false);
   const [editingSuperficieId, setEditingSuperficieId] = useState<string | null>(null);
   const [manualSurfaceValue, setManualSurfaceValue] = useState('');
   const [manualVolumeValue, setManualVolumeValue] = useState('');
   const [savingManualSuperficie, setSavingManualSuperficie] = useState(false);
+
+  // Editing existing object
+  const [editingObjId, setEditingObjId] = useState<string | null>(null);
 
   const getFaceLabel = useCallback((wallIndex: number, wallType?: string) => {
     if (wallIndex === -1) return 'Suelo';
@@ -537,6 +546,7 @@ export function WorkspacePropertiesPanel({
 
   useEffect(() => { fetchData(); }, [fetchData]);
   useEffect(() => { if (focusFace) setExpandedFace(focusFace); }, [focusFace]);
+  useEffect(() => { fetchResources(); fetchTemplates(); }, []);
 
   const handleRegenerateSuperficies = async () => {
     if (isRegeneratingSuperficies) return;
@@ -1037,6 +1047,7 @@ export function WorkspacePropertiesPanel({
 
   const resetForm = () => {
     setShowObjectForm(false);
+    setEditingObjId(null);
     setObjName('');
     setObjDescription('');
     setObjThickness('');
@@ -1055,6 +1066,97 @@ export function WorkspacePropertiesPanel({
     setObjCoordZ('');
     setObjShownInSection(false);
   };
+
+  /** Populate the form with an existing object for editing */
+  const handleEditObject = (obj: WallObjectRecord) => {
+    setEditingObjId(obj.id);
+    setShowObjectForm(true);
+    setObjName(obj.name);
+    setObjDescription(obj.description || '');
+    setObjType(obj.object_type);
+    setObjLayerOrder(String(obj.layer_order));
+    setObjThickness(obj.thickness_mm != null ? String(obj.thickness_mm) : '');
+    setObjWidthMm(obj.width_mm != null ? String(obj.width_mm) : '');
+    setObjHeightMm(obj.height_mm != null ? String(obj.height_mm) : '');
+    setObjSillHeight(obj.sill_height != null ? String(obj.sill_height) : '');
+    setObjPosX(obj.position_x != null ? String(obj.position_x) : '');
+    setObjDistWall(obj.distance_to_wall != null ? String(obj.distance_to_wall) : '');
+    setObjResourceId(obj.resource_id || '_none');
+    setObjCoordX(obj.coord_x != null ? String(obj.coord_x) : '');
+    setObjCoordY(obj.coord_y != null ? String(obj.coord_y) : '');
+    setObjCoordZ(obj.coord_z != null ? String(obj.coord_z) : '');
+    setObjShownInSection(obj.shown_in_section || false);
+    // Determine target face from wall_id
+    const wall = walls.find(w => w.id === obj.wall_id);
+    if (wall) {
+      if (wall.wall_index === -1) setObjTargetFace('floor');
+      else if (wall.wall_index === -2) setObjTargetFace('ceiling');
+      else if (wall.wall_index === 0) setObjTargetFace('space');
+      else setObjTargetFace(`wall-${wall.wall_index - 1}`);
+    }
+    setActiveTab('objects');
+  };
+
+  /** Save changes to an existing object */
+  const handleUpdateObject = async () => {
+    if (!editingObjId || !objName.trim()) return;
+
+    const parseNumeric = (value: string) => {
+      if (!value.trim()) return null;
+      const parsed = Number.parseFloat(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+
+    const coordXInput = parseNumeric(objCoordX);
+    const coordYInput = parseNumeric(objCoordY);
+    const coordZInput = parseNumeric(objCoordZ);
+    let computedSill = parseNumeric(objSillHeight);
+    let computedDistWall = parseNumeric(objDistWall);
+    if (coordZInput != null) computedSill = coordZInput;
+    if (coordXInput != null) computedDistWall = coordXInput;
+
+    const wallId = await ensureWallRecord(objTargetFace);
+    if (!wallId) return;
+
+    const payload: any = {
+      wall_id: wallId,
+      layer_order: Number.parseInt(objLayerOrder, 10) || 1,
+      name: objName.trim(),
+      description: objDescription.trim() || null,
+      object_type: objType,
+      thickness_mm: parseNumeric(objThickness),
+      width_mm: parseNumeric(objWidthMm),
+      height_mm: parseNumeric(objHeightMm),
+      position_x: parseNumeric(objPosX),
+      sill_height: computedSill,
+      distance_to_wall: computedDistWall,
+      resource_id: objResourceId === '_none' ? null : objResourceId,
+      coord_x: coordXInput,
+      coord_y: coordYInput,
+      coord_z: coordZInput,
+      shown_in_section: objShownInSection,
+    };
+
+    const { data, error } = await supabase.from('budget_wall_objects').update(payload).eq('id', editingObjId).select().single();
+    if (error) {
+      toast.error(`Error: ${error.message}`);
+      return;
+    }
+    if (data) {
+      setWallObjects(prev => prev.map(o => o.id === editingObjId ? (data as WallObjectRecord) : o));
+    }
+    resetForm();
+    onOpeningsChange?.();
+    toast.success('Objeto actualizado');
+  };
+
+  // Auto-open edit form for initialEditObjectId
+  useEffect(() => {
+    if (initialEditObjectId && wallObjects.length > 0 && !editingObjId) {
+      const obj = wallObjects.find(o => o.id === initialEditObjectId);
+      if (obj) handleEditObject(obj);
+    }
+  }, [initialEditObjectId, wallObjects]);
 
   const handleDeleteObject = async (id: string) => {
     await supabase.from('budget_wall_objects').delete().eq('id', id);
@@ -1458,11 +1560,14 @@ export function WorkspacePropertiesPanel({
                 variant="outline"
                 className="h-6 text-[10px] gap-1"
                 onClick={() => {
-                  setShowObjectForm(!showObjectForm);
-                  if (!showObjectForm) {
+                  if (showObjectForm) {
+                    resetForm();
+                  } else {
+                    setEditingObjId(null);
                     setObjTargetFace('wall-0');
                     setObjLayerOrder(String(getNextLayerOrder('wall-0')));
                     setObjResourceId('_none');
+                    setShowObjectForm(true);
                   }
                 }}
               >
@@ -1471,10 +1576,46 @@ export function WorkspacePropertiesPanel({
             </div>
           </div>
 
+          {/* Workspace minimap for object placement reference */}
+          {verticesProp && verticesProp.length >= 3 && (
+            <div className="border rounded p-1.5 bg-muted/10">
+              <p className="text-[8px] text-muted-foreground uppercase mb-1">Minimapa del espacio</p>
+              <svg viewBox={(() => {
+                const xs = verticesProp.map(v => v.x);
+                const ys = verticesProp.map(v => v.y);
+                const minX = Math.min(...xs) - 0.5;
+                const minY = Math.min(...ys) - 0.5;
+                const maxX = Math.max(...xs) + 0.5;
+                const maxY = Math.max(...ys) + 0.5;
+                return `${minX} ${minY} ${maxX - minX} ${maxY - minY}`;
+              })()} className="w-full h-16 bg-background rounded border">
+                <polygon
+                  points={verticesProp.map(v => `${v.x},${v.y}`).join(' ')}
+                  fill="hsl(var(--primary) / 0.1)"
+                  stroke="hsl(var(--primary))"
+                  strokeWidth={0.08}
+                />
+                {verticesProp.map((v, i) => {
+                  const wall = walls.find(w => w.wall_index === i + 1);
+                  const prefix = wall?.wall_type === 'tejado' ? 'T' : 'P';
+                  const next = verticesProp[(i + 1) % verticesProp.length];
+                  const mx = (v.x + next.x) / 2;
+                  const my = (v.y + next.y) / 2;
+                  return (
+                    <text key={i} x={mx} y={my} textAnchor="middle" dominantBaseline="central"
+                      fontSize={0.35} fill="hsl(var(--foreground))" fontFamily="sans-serif" fontWeight={600}>
+                      {prefix}{i + 1}
+                    </text>
+                  );
+                })}
+              </svg>
+            </div>
+          )}
+
           {/* Add object form */}
           {showObjectForm && (
             <div className="border rounded p-2 bg-muted/20 space-y-1.5">
-              <p className="text-[10px] font-semibold">Nuevo objeto / hueco</p>
+              <p className="text-[10px] font-semibold">{editingObjId ? '✏️ Editar objeto' : 'Nuevo objeto / hueco'}</p>
 
               {/* Presets for huecos + DB templates */}
               <div>
@@ -1642,19 +1783,27 @@ export function WorkspacePropertiesPanel({
                 </div>
               </div>
               <div className="flex gap-1">
-                <Button size="sm" className="h-6 text-[10px] gap-1 flex-1" onClick={handleAddObject} disabled={!objName.trim()}>
-                  <Plus className="h-3 w-3" /> {objType === 'hueco' ? 'Añadir hueco' : 'Registrar'}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-6 text-[10px] gap-1"
-                  disabled={!objName.trim() || savingAsTemplate}
-                  onClick={handleSaveAsTemplate}
-                  title="Guardar como plantilla predefinida"
-                >
-                  <Star className="h-3 w-3" /> {savingAsTemplate ? '...' : 'Predefinir'}
-                </Button>
+                {editingObjId ? (
+                  <Button size="sm" className="h-6 text-[10px] gap-1 flex-1" onClick={handleUpdateObject} disabled={!objName.trim()}>
+                    <Save className="h-3 w-3" /> Guardar cambios
+                  </Button>
+                ) : (
+                  <>
+                    <Button size="sm" className="h-6 text-[10px] gap-1 flex-1" onClick={handleAddObject} disabled={!objName.trim()}>
+                      <Plus className="h-3 w-3" /> {objType === 'hueco' ? 'Añadir hueco' : 'Registrar'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-6 text-[10px] gap-1"
+                      disabled={!objName.trim() || savingAsTemplate}
+                      onClick={handleSaveAsTemplate}
+                      title="Guardar como plantilla predefinida"
+                    >
+                      <Star className="h-3 w-3" /> {savingAsTemplate ? '...' : 'Predefinir'}
+                    </Button>
+                  </>
+                )}
                 <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={resetForm}>
                   <X className="h-3 w-3" />
                 </Button>
@@ -1793,6 +1942,7 @@ export function WorkspacePropertiesPanel({
                               setShowResourcePicker(obj.id as any);
                               setResourceSearch('');
                             }}
+                            onEdit={() => handleEditObject(obj)}
                           />
                         ))}
                       </div>
@@ -1856,13 +2006,14 @@ export function WorkspacePropertiesPanel({
 }
 
 // ── Object row with positioning controls ──
-function ObjectRow({ obj, isPositioning, onTogglePosition, onMove, onDelete, onLinkResource }: {
+function ObjectRow({ obj, isPositioning, onTogglePosition, onMove, onDelete, onLinkResource, onEdit }: {
   obj: WallObjectRecord;
   isPositioning: boolean;
   onTogglePosition: () => void;
   onMove: (field: 'position_x' | 'sill_height', delta: number) => void;
   onDelete: () => void;
   onLinkResource: () => void;
+  onEdit: () => void;
 }) {
   const isHueco = obj.object_type === 'hueco';
   const icon = isHueco ? '🚪' : '📦';
@@ -1913,6 +2064,9 @@ function ObjectRow({ obj, isPositioning, onTogglePosition, onMove, onDelete, onL
           </>
         ) : (
           <>
+            <Button variant="ghost" size="icon" className="h-5 w-5" title="Editar" onClick={onEdit}>
+              <Pencil className="h-3 w-3" />
+            </Button>
             <Button variant="ghost" size="icon" className="h-5 w-5" title="Mover" onClick={onTogglePosition}>
               <Move className="h-3 w-3" />
             </Button>

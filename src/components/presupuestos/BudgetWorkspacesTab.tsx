@@ -2218,6 +2218,19 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
     }
   }, [autoShow3D, onAutoShow3DHandled]);
 
+  const { data: budgetData } = useQuery({
+    queryKey: ['budget-name-for-workspaces', budgetId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('presupuestos')
+        .select('nombre')
+        .eq('id', budgetId)
+        .maybeSingle();
+      return data;
+    },
+  });
+  const budgetName = budgetData?.nombre || 'Presupuesto';
+
   const { data: floorPlan } = useQuery({
     queryKey: ['floor-plan-for-workspaces', budgetId],
     queryFn: async () => {
@@ -4020,8 +4033,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
                    onOtherPolygonRename={handleOtherPolygonRename}
                    onSelectOtherWorkspace={setSelectedOtherWorkspaceId}
                    perimeterPolygon={getSectionPerimeter(r.vertical_section_id)}
-                   pdfTitle="Espacio de trabajo"
-                   pdfSubtitle={r.name}
+                    pdfTitle={budgetName}
+                    pdfSubtitle={`Sección Z — ${r.name}`}
                    onWallClick={(idx) => {
                      setSelectedWallMap(prev => ({ ...prev, [r.id]: idx }));
                      if (!expandedIds.has(r.id)) {
@@ -4169,8 +4182,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
                     onOtherPolygonChange={(otherId, newVerts) => handleOtherPolygonChangeSection(otherId, newVerts, view.sectionId)}
                      onOtherPolygonRename={handleOtherPolygonRename}
                      onSelectOtherWorkspace={setSelectedOtherWorkspaceId}
-                     pdfTitle={`${section.name} — ${r.name}`}
-                     pdfSubtitle={`${section.axis}=${section.axisValue}`}
+                      pdfTitle={budgetName}
+                      pdfSubtitle={`${section.name} — ${r.name} (${section.axis}=${section.axisValue})`}
                      hAxisLabel={hLabel}
                      vAxisLabel={vLabel}
                      hScaleMm={scaleH}
@@ -4588,8 +4601,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
                   onSwitchRoom={editingId ? switchGridEditRoom : undefined}
                   onOtherPolygonChange={handleOtherPolygonChangeZ}
                   onOtherPolygonRename={handleOtherPolygonRename}
-                  pdfTitle="Espacio de trabajo"
-                   pdfSubtitle={formName || 'Nuevo espacio'}
+                   pdfTitle={budgetName}
+                    pdfSubtitle={`Sección Z — ${formName || 'Nuevo espacio'}`}
                    ridgeLine={ridgeLine}
                    sectionType="vertical"
                  />

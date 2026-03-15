@@ -178,6 +178,15 @@ export function WallObjectsPanel({
     })();
   }, [open, wallId, isLoading, objects, wallLabel, wallIndex, roomName, queryClient]);
 
+  useEffect(() => {
+    if (!open) {
+      setEditingSuperficiePattern(null);
+      setEditingSuperficieMetrics(null);
+      setManualSurfaceM2('');
+      setManualVolumeM3('');
+    }
+  }, [open, wallId]);
+
   const resetForm = () => {
     setFormName('');
     setFormDescription('');

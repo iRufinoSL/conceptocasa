@@ -164,6 +164,10 @@ export function WorkspacePropertiesPanel({
   const [objTargetFace, setObjTargetFace] = useState('wall-0');
   const [objPreset, setObjPreset] = useState('');
   const [objResourceId, setObjResourceId] = useState('_none');
+  const [objCoordX, setObjCoordX] = useState('');
+  const [objCoordY, setObjCoordY] = useState('');
+  const [objCoordZ, setObjCoordZ] = useState('');
+  const [objShownInSection, setObjShownInSection] = useState(false);
 
   // Resource linking
   const [showResourcePicker, setShowResourcePicker] = useState(false);

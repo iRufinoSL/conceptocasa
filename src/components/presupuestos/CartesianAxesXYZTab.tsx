@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ChevronRight, Plus, Trash2, ArrowLeft, Eye, Pencil, Check, X } from 'lucide-react';
+import { ChevronRight, Plus, Trash2, ArrowLeft, Eye, Pencil, Check, X, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { CustomSection, SectionPolygon } from './CustomSectionManager';
 import { SectionAxisViewer } from './SectionAxisViewer';

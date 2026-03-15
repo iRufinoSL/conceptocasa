@@ -546,6 +546,7 @@ export function WorkspacePropertiesPanel({
 
   useEffect(() => { fetchData(); }, [fetchData]);
   useEffect(() => { if (focusFace) setExpandedFace(focusFace); }, [focusFace]);
+  useEffect(() => { fetchResources(); fetchTemplates(); }, []);
 
   const handleRegenerateSuperficies = async () => {
     if (isRegeneratingSuperficies) return;

@@ -204,9 +204,20 @@ export function WorkspacePropertiesPanel({
       };
     }
 
-    if (wallIndex === -1 || wallIndex === -2) {
+    if (wallIndex === -1) {
+      // Floor: return 0 if workspace has no floor
+      const hasFloor = roomData?.has_floor !== false;
       return {
-        surface_m2: floorArea,
+        surface_m2: hasFloor ? floorArea : 0,
+        volume_m3: null as number | null,
+      };
+    }
+
+    if (wallIndex === -2) {
+      // Ceiling: return 0 if workspace has no ceiling
+      const hasCeiling = roomData?.has_ceiling !== false;
+      return {
+        surface_m2: hasCeiling ? floorArea : 0,
         volume_m3: null as number | null,
       };
     }

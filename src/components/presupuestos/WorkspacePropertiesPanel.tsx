@@ -1965,13 +1965,14 @@ export function WorkspacePropertiesPanel({
 }
 
 // ── Object row with positioning controls ──
-function ObjectRow({ obj, isPositioning, onTogglePosition, onMove, onDelete, onLinkResource }: {
+function ObjectRow({ obj, isPositioning, onTogglePosition, onMove, onDelete, onLinkResource, onEdit }: {
   obj: WallObjectRecord;
   isPositioning: boolean;
   onTogglePosition: () => void;
   onMove: (field: 'position_x' | 'sill_height', delta: number) => void;
   onDelete: () => void;
   onLinkResource: () => void;
+  onEdit: () => void;
 }) {
   const isHueco = obj.object_type === 'hueco';
   const icon = isHueco ? '🚪' : '📦';

@@ -134,6 +134,68 @@ function edgeLength(a: PolygonVertex, b: PolygonVertex): number {
   return Math.sqrt((b.x - a.x) ** 2 + (b.y - a.y) ** 2);
 }
 
+function normalizeWorkspaceKey(value: string | null | undefined): string {
+  if (!value) return '';
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[._-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function extractVerticalWorkspaceRefs(customCorners: unknown): {
+  hasRefs: boolean;
+  validIds: Set<string>;
+  validNames: Set<string>;
+} {
+  const validIds = new Set<string>();
+  const validNames = new Set<string>();
+
+  try {
+    const parsed = typeof customCorners === 'string' ? JSON.parse(customCorners) : customCorners;
+    const sections = Array.isArray((parsed as any)?.customSections) ? (parsed as any).customSections : [];
+
+    for (const section of sections) {
+      if (section?.sectionType !== 'vertical') continue;
+      const polygons = Array.isArray(section?.polygons) ? section.polygons : [];
+      for (const polygon of polygons) {
+        const vertices = Array.isArray(polygon?.vertices) ? polygon.vertices : [];
+        if (vertices.length < 3) continue;
+
+        if (typeof polygon?.id === 'string' && polygon.id) {
+          validIds.add(polygon.id);
+        }
+
+        const normalizedName = normalizeWorkspaceKey(polygon?.name);
+        if (normalizedName) {
+          validNames.add(normalizedName);
+        }
+      }
+    }
+  } catch {
+    // noop
+  }
+
+  return {
+    hasRefs: validIds.size > 0 || validNames.size > 0,
+    validIds,
+    validNames,
+  };
+}
+
+function isRoomEligibleByVerticalRefs(
+  room: Pick<WorkspaceAutoFaceSource, 'id' | 'name' | 'floor_polygon'>,
+  refs: { hasRefs: boolean; validIds: Set<string>; validNames: Set<string> },
+): boolean {
+  if (!room.floor_polygon || !Array.isArray(room.floor_polygon) || room.floor_polygon.length < 3) return false;
+  if (!refs.hasRefs) return true;
+  if (refs.validIds.has(room.id)) return true;
+  const normalizedName = normalizeWorkspaceKey(room.name);
+  return !!(normalizedName && refs.validNames.has(normalizedName));
+}
+
 interface AutoFace {
   workspace: string;
   roomId: string;
@@ -674,12 +736,13 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
     queryFn: async () => {
       const { data: fp } = await supabase
         .from('budget_floor_plans')
-        .select('id, scale_mode, block_length_mm')
+        .select('id, scale_mode, block_length_mm, custom_corners')
         .eq('budget_id', budgetId)
         .maybeSingle();
       if (!fp) return [];
 
       const cellSizeM = fp.scale_mode === 'bloque' ? (fp.block_length_mm || 625) / 1000 : 1;
+      const verticalRefs = extractVerticalWorkspaceRefs(fp.custom_corners);
 
       const { data: rooms } = await supabase
         .from('budget_floor_plan_rooms')
@@ -688,7 +751,10 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
         .order('name', { ascending: true });
       if (!rooms) return [];
 
-      return (rooms as WorkspaceAutoFaceSource[]).flatMap(room => buildAutoFacesForWorkspace(room, cellSizeM));
+      const eligibleRooms = (rooms as WorkspaceAutoFaceSource[])
+        .filter(room => isRoomEligibleByVerticalRefs(room, verticalRefs));
+
+      return eligibleRooms.flatMap(room => buildAutoFacesForWorkspace(room, cellSizeM));
     },
   });
 
@@ -698,19 +764,27 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
     queryFn: async () => {
       const { data: fp } = await supabase
         .from('budget_floor_plans')
-        .select('id')
+        .select('id, custom_corners')
         .eq('budget_id', budgetId)
         .maybeSingle();
       if (!fp) return [];
+
+      const verticalRefs = extractVerticalWorkspaceRefs(fp.custom_corners);
       const { data: rooms } = await supabase
         .from('budget_floor_plan_rooms')
-        .select('id')
+        .select('id, name, floor_polygon')
         .eq('floor_plan_id', fp.id);
       if (!rooms?.length) return [];
+
+      const eligibleRoomIds = rooms
+        .filter(room => isRoomEligibleByVerticalRefs(room as any, verticalRefs))
+        .map(room => room.id);
+      if (eligibleRoomIds.length === 0) return [];
+
       const { data: walls } = await supabase
         .from('budget_floor_plan_walls')
         .select('id, room_id, wall_index, wall_type')
-        .in('room_id', rooms.map(r => r.id));
+        .in('room_id', eligibleRoomIds);
       return walls || [];
     },
   });
@@ -721,20 +795,26 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
     queryFn: async () => {
       const { data: fp } = await supabase
         .from('budget_floor_plans')
-        .select('id')
+        .select('id, custom_corners')
         .eq('budget_id', budgetId)
         .maybeSingle();
       if (!fp) return [];
+
+      const verticalRefs = extractVerticalWorkspaceRefs(fp.custom_corners);
       const { data: rooms } = await supabase
         .from('budget_floor_plan_rooms')
-        .select('id, name')
+        .select('id, name, floor_polygon')
         .eq('floor_plan_id', fp.id);
       if (!rooms?.length) return [];
-      const roomMap = new Map(rooms.map(r => [r.id, r.name]));
+
+      const eligibleRooms = rooms.filter(room => isRoomEligibleByVerticalRefs(room as any, verticalRefs));
+      if (!eligibleRooms.length) return [];
+
+      const roomMap = new Map(eligibleRooms.map(r => [r.id, r.name]));
       const { data: walls } = await supabase
         .from('budget_floor_plan_walls')
         .select('id, room_id, wall_index')
-        .in('room_id', rooms.map(r => r.id));
+        .in('room_id', eligibleRooms.map(r => r.id));
       if (!walls?.length) return [];
       const wallRoomMap = new Map(walls.map(w => [w.id, { roomId: w.room_id, wallIndex: w.wall_index }]));
       const { data: objects } = await supabase
@@ -825,7 +905,7 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
     try {
       const { data: floorPlan, error: floorPlanError } = await supabase
         .from('budget_floor_plans')
-        .select('id, scale_mode, block_length_mm')
+        .select('id, scale_mode, block_length_mm, custom_corners')
         .eq('budget_id', budgetId)
         .maybeSingle();
 
@@ -838,6 +918,7 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
       const cellSizeM = floorPlan.scale_mode === 'bloque'
         ? (floorPlan.block_length_mm || 625) / 1000
         : 1;
+      const verticalRefs = extractVerticalWorkspaceRefs(floorPlan.custom_corners);
 
       const { data: rooms, error: roomsError } = await supabase
         .from('budget_floor_plan_rooms')
@@ -846,7 +927,10 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
 
       if (roomsError) throw roomsError;
 
-      const allFaces = ((rooms || []) as WorkspaceAutoFaceSource[])
+      const eligibleRooms = ((rooms || []) as WorkspaceAutoFaceSource[])
+        .filter(room => isRoomEligibleByVerticalRefs(room, verticalRefs));
+
+      const allFaces = eligibleRooms
         .flatMap(room => buildAutoFacesForWorkspace(room, cellSizeM));
 
       if (allFaces.length === 0) {
@@ -856,7 +940,7 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
 
       const roomIds = [...new Set(allFaces.map(face => face.roomId))];
       const roomById = new Map<string, WorkspaceAutoFaceSource>(
-        ((rooms || []) as WorkspaceAutoFaceSource[]).map(room => [room.id, room]),
+        eligibleRooms.map(room => [room.id, room]),
       );
 
       const { data: wallRows, error: wallsError } = await supabase

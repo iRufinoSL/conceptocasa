@@ -55,6 +55,7 @@ interface Workspace3DViewerProps {
 const FACE_COLORS: Record<string, string> = {
   suelo: '#d4a574',
   techo: '#7ab8e0',
+  tejado: '#c45c5c',
   pared_exterior: '#8bc48b',
   pared_interior: '#e0c87a',
   pared_invisible: '#cccccc',
@@ -65,6 +66,7 @@ const FACE_COLORS: Record<string, string> = {
 const WALL_TYPES = [
   { value: 'exterior', label: 'Exterior' },
   { value: 'interior', label: 'Interior' },
+  { value: 'tejado', label: 'Tejado' },
   { value: 'exterior_invisible', label: 'Ext. invisible' },
   { value: 'exterior_compartida', label: 'Ext. compartida' },
   { value: 'interior_compartida', label: 'Int. compartida' },
@@ -75,6 +77,7 @@ const WALL_TYPES = [
 
 function getWallColor(wallType?: string): string {
   if (!wallType) return FACE_COLORS.pared_default;
+  if (wallType === 'tejado') return FACE_COLORS.tejado;
   if (wallType.includes('exterior')) return FACE_COLORS.pared_exterior;
   if (wallType.includes('interior')) return FACE_COLORS.pared_interior;
   if (wallType.includes('invisible')) return FACE_COLORS.pared_invisible;

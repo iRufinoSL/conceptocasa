@@ -2359,6 +2359,9 @@ export type Database = {
       }
       budget_wall_objects: {
         Row: {
+          coord_x: number | null
+          coord_y: number | null
+          coord_z: number | null
           created_at: string
           description: string | null
           distance_to_wall: number | null
@@ -2371,6 +2374,7 @@ export type Database = {
           object_type: string
           position_x: number | null
           resource_id: string | null
+          shown_in_section: boolean
           sill_height: number | null
           surface_m2: number | null
           template_id: string | null
@@ -2382,6 +2386,9 @@ export type Database = {
           width_mm: number | null
         }
         Insert: {
+          coord_x?: number | null
+          coord_y?: number | null
+          coord_z?: number | null
           created_at?: string
           description?: string | null
           distance_to_wall?: number | null
@@ -2394,6 +2401,7 @@ export type Database = {
           object_type?: string
           position_x?: number | null
           resource_id?: string | null
+          shown_in_section?: boolean
           sill_height?: number | null
           surface_m2?: number | null
           template_id?: string | null
@@ -2405,6 +2413,9 @@ export type Database = {
           width_mm?: number | null
         }
         Update: {
+          coord_x?: number | null
+          coord_y?: number | null
+          coord_z?: number | null
           created_at?: string
           description?: string | null
           distance_to_wall?: number | null
@@ -2417,6 +2428,7 @@ export type Database = {
           object_type?: string
           position_x?: number | null
           resource_id?: string | null
+          shown_in_section?: boolean
           sill_height?: number | null
           surface_m2?: number | null
           template_id?: string | null
@@ -3833,7 +3845,9 @@ export type Database = {
       external_resources: {
         Row: {
           created_at: string | null
+          depth_mm: number | null
           description: string | null
+          height_mm: number | null
           id: string
           image_url: string | null
           name: string
@@ -3846,10 +3860,13 @@ export type Database = {
           updated_at: string | null
           vat_included_percent: number | null
           website: string | null
+          width_mm: number | null
         }
         Insert: {
           created_at?: string | null
+          depth_mm?: number | null
           description?: string | null
+          height_mm?: number | null
           id?: string
           image_url?: string | null
           name: string
@@ -3862,10 +3879,13 @@ export type Database = {
           updated_at?: string | null
           vat_included_percent?: number | null
           website?: string | null
+          width_mm?: number | null
         }
         Update: {
           created_at?: string | null
+          depth_mm?: number | null
           description?: string | null
+          height_mm?: number | null
           id?: string
           image_url?: string | null
           name?: string
@@ -3878,6 +3898,7 @@ export type Database = {
           updated_at?: string | null
           vat_included_percent?: number | null
           website?: string | null
+          width_mm?: number | null
         }
         Relationships: [
           {

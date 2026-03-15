@@ -1711,6 +1711,7 @@ export function SectionAxisViewer({
   }, []);
 
 
+  const sectionObjectElements = useMemo(() => {
     if (!gridLayout || !scale || sectionObjects.length === 0) return null;
     const { originX, originY, cellPxW, cellPxH } = gridLayout;
     const elements: JSX.Element[] = [];

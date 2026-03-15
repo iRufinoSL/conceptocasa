@@ -255,8 +255,8 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
     const roomIds = rooms.map(r => r.id);
     if (!roomIds.length) return;
 
-    // Collect all floor_plan_ids so we can also fetch huecos from base rooms (no vertical_section_id)
-    const floorPlanIds = [...new Set(rooms.map(r => r.floorPlanId).filter(Boolean))];
+    // Get floor_plan_ids from the rooms via DB lookup to also fetch huecos from base rooms
+    const sampleRoomIds = roomIds.slice(0, 5); // just need to find the floor_plan_id
 
     (async () => {
       // Fetch walls for displayed rooms (for patterns)

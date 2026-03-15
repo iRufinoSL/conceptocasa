@@ -242,6 +242,9 @@ export function useResources() {
       if (updates.supplierId !== undefined) updateData.supplier_id = updates.supplierId || null;
       if (updates.tradeId !== undefined) updateData.trade_id = updates.tradeId || null;
       if (updates.vatIncludedPercent !== undefined) updateData.vat_included_percent = updates.vatIncludedPercent ?? null;
+      if (updates.widthMm !== undefined) updateData.width_mm = updates.widthMm ?? null;
+      if (updates.heightMm !== undefined) updateData.height_mm = updates.heightMm ?? null;
+      if (updates.depthMm !== undefined) updateData.depth_mm = updates.depthMm ?? null;
 
       const { error } = await supabase
         .from('external_resources')

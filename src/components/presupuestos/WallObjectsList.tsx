@@ -904,9 +904,9 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
         .map(face => {
           const wall = wallByKey.get(`${face.roomId}:${face.wallIndex}`);
           if (!wall) return null;
-          return { face, wallId: wall.id };
+          return { face, wallId: wall.id, wallType: wall.wall_type };
         })
-        .filter((entry): entry is { face: AutoFace; wallId: string } => !!entry);
+        .filter((entry): entry is { face: AutoFace; wallId: string; wallType: string } => !!entry);
 
       const wallIds = [...new Set(facesWithWall.map(entry => entry.wallId))];
       if (wallIds.length === 0) {
@@ -930,11 +930,23 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
         }
       });
 
+      const resolveMetrics = (entry: { face: AutoFace; wallType: string }) => {
+        const room = roomById.get(entry.face.roomId);
+        const missingFloor = entry.face.wallIndex === -1 && ((room?.has_floor === false) || entry.wallType === 'invisible');
+        const missingCeiling = entry.face.wallIndex === -2 && ((room?.has_ceiling === false) || entry.wallType === 'invisible');
+
+        const surfaceM2 = missingFloor || missingCeiling
+          ? 0
+          : (entry.face.m2 ?? null);
+
+        const volumeM3 = entry.face.m3 ?? null;
+        return { surfaceM2, volumeM3 };
+      };
+
       const updates = facesWithWall
         .filter(entry => existingByWall.has(entry.wallId))
         .map(entry => {
-          const surfaceM2 = entry.face.m2 ?? null;
-          const volumeM3 = entry.face.m3 ?? null;
+          const { surfaceM2, volumeM3 } = resolveMetrics(entry);
           const metric = surfaceM2 != null ? `${surfaceM2} m²` : volumeM3 != null ? `${volumeM3} m³` : null;
           return {
             id: existingByWall.get(entry.wallId)!,
@@ -953,8 +965,7 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
       const inserts = facesWithWall
         .filter(entry => !existingByWall.has(entry.wallId))
         .map(entry => {
-          const surfaceM2 = entry.face.m2 ?? null;
-          const volumeM3 = entry.face.m3 ?? null;
+          const { surfaceM2, volumeM3 } = resolveMetrics(entry);
           const metric = surfaceM2 != null ? `${surfaceM2} m²` : volumeM3 != null ? `${volumeM3} m³` : null;
           return {
             wall_id: entry.wallId,

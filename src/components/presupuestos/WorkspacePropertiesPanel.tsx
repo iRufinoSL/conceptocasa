@@ -434,8 +434,42 @@ export function WorkspacePropertiesPanel({
     if (isRegeneratingSuperficies) return;
     setIsRegeneratingSuperficies(true);
     try {
+      if (!room) {
+        const roomReady = await ensureRoomRecord();
+        if (!roomReady) {
+          throw new Error('No se pudo preparar el espacio de trabajo');
+        }
+      }
+
       await fetchData();
-      toast.success('Superficies regeneradas y sincronizadas');
+
+      const { data: wallRows, error: wallsError } = await supabase
+        .from('budget_floor_plan_walls')
+        .select('id')
+        .eq('room_id', workspaceId);
+
+      if (wallsError) throw wallsError;
+
+      const wallIds = (wallRows || []).map(w => w.id);
+      if (wallIds.length === 0) {
+        toast.error('No se encontraron caras para generar superficies');
+        return;
+      }
+
+      const { count: superficieCount, error: superficieCountError } = await supabase
+        .from('budget_wall_objects')
+        .select('id', { count: 'exact', head: true })
+        .in('wall_id', wallIds)
+        .eq('layer_order', 0);
+
+      if (superficieCountError) throw superficieCountError;
+
+      if (!superficieCount || superficieCount === 0) {
+        toast.error('No se generó ninguna superficie en este espacio');
+        return;
+      }
+
+      toast.success(`Superficies regeneradas y sincronizadas (${superficieCount})`);
     } catch (error) {
       console.error('Error regenerando superficies:', error);
       toast.error('No se pudieron regenerar las superficies');

@@ -1019,8 +1019,10 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     // Z unit = 250mm (block_height_mm)
     const zUnitMm = 250;
 
-    // Filter: only project rooms that exist in a Z section (by id or by normalized name)
+    // Filter: project rooms that exist in a Z section OR have a floor_id (assigned to a level)
     const eligibleRooms = (workspaceRooms || []).filter(room => {
+      // Always include rooms assigned to a floor/level
+      if (room.floor_id) return true;
       if (validRoomIds.size > 0) return validRoomIds.has(room.id);
       if (verticalRoomNameSet.size > 0) {
         const normalized = normalizeWorkspaceName(room.name);

@@ -1765,15 +1765,20 @@ export function SectionAxisViewer({
           {vertexEditMode ? (
             <div className="flex items-center gap-3 w-full">
               <span className="text-xs font-semibold text-primary">
-                ✏️ Modo Modificar — Arrastra vértices · Clic en <span className="text-green-600 font-bold">+</span> para insertar · Doble clic en vértice para eliminar
+                ✏️ Modo Modificar — Primero selecciona un espacio con clic · Luego arrastra vértices · Clic en + para insertar · Doble clic en vértice para eliminar
+              </span>
+              <span className="text-[10px] text-muted-foreground">
+                {selectedPolygonId
+                  ? `Seleccionado: ${polygons.find(p => p.id === selectedPolygonId)?.name || '—'}`
+                  : 'Sin espacio seleccionado'}
               </span>
               <div className="ml-auto flex items-center gap-1">
                 <Button size="sm" variant="default" className="h-7 text-xs gap-1"
-                  onClick={() => { setVertexEditMode(false); onSavePolygons?.(polygons); toast.success('Cambios guardados'); }}>
+                  onClick={() => { setVertexEditMode(false); setSelectedPolygonId(null); onSavePolygons?.(polygons); toast.success('Cambios guardados'); }}>
                   <Check className="h-3 w-3" /> Listo
                 </Button>
                 <Button size="sm" variant="ghost" className="h-7 text-xs gap-1"
-                  onClick={() => { setVertexEditMode(false); handleUndo(); }}>
+                  onClick={() => { setVertexEditMode(false); setSelectedPolygonId(null); handleUndo(); }}>
                   <X className="h-3 w-3" /> Cancelar
                 </Button>
               </div>
@@ -1796,9 +1801,9 @@ export function SectionAxisViewer({
                   disabled={!drawingName.trim() || !drawingHeight.trim()}>
                   <PenTool className="h-3 w-3" /> Dibujar espacio
                 </Button>
-                {polygons.length > 0 && (
+                {visiblePolygons.length > 0 && (
                   <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
-                    onClick={() => { pushUndo(); setVertexEditMode(true); setRulerMode(false); setDrawMode(false); }}>
+                    onClick={() => { pushUndo(); setSelectedPolygonId(null); setVertexEditMode(true); setRulerMode(false); setDrawMode(false); }}>
                     <PenTool className="h-3 w-3" /> Modificar
                   </Button>
                 )}
@@ -1809,9 +1814,9 @@ export function SectionAxisViewer({
                   </Button>
                 )}
               </div>
-              {polygons.length > 0 && (
+              {visiblePolygons.length > 0 && (
                 <span className="text-[10px] text-muted-foreground ml-auto">
-                  {polygons.length} espacio(s) — doble clic en arista para propiedades
+                  {visiblePolygons.length} espacio(s) — clic para seleccionar en Modificar
                 </span>
               )}
             </>

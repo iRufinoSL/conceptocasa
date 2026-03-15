@@ -376,6 +376,7 @@ export function SectionAxisViewer({
 
     // Build section objects array with room_id resolved
     const wallToRoom = new Map(walls.map(w => [w.id, w.room_id]));
+    const wallToIndex = new Map(walls.map(w => [w.id, w.wall_index]));
     const secObjs: SectionObjectData[] = (sectionObjRes.data || [])
       .filter((o: any) => o.object_type !== 'hueco')
       .filter((o: any) => belongsToCurrentSection(o))
@@ -392,6 +393,7 @@ export function SectionAxisViewer({
         coord_x: o.coord_x,
         coord_y: o.coord_y,
         coord_z: o.coord_z,
+        wall_index: wallToIndex.get(o.wall_id) || 0,
       }));
     setSectionObjects(secObjs);
   }, [polygons, sectionType, axisValue]);

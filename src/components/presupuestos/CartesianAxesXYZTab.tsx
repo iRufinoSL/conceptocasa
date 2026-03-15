@@ -1057,6 +1057,9 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       const hMax = Math.round(Math.max(...intersections) * 2) / 2;
       if (Math.abs(hMax - hMin) < 0.01) return;
 
+      // Defensive dedupe (main+fallback sources)
+      if (projectedKeys.has(key)) return;
+
       // Resolve effective height: room height → max wall height → default
       // Sanitize: if height > 50, assume it's in mm and convert to metres
       let effectiveHeightM = roomHeightM && roomHeightM > 0

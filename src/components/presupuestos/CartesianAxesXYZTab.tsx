@@ -548,7 +548,34 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     await invalidateSectionQueries();
   };
 
-  const handleDeleteAllSections = async () => {
+  const handleRenameSection = async (sectionId: string) => {
+    if (!isAdmin || !floorPlan?.id || !editSectionName.trim()) return;
+
+    const parsedCorners = parseCustomCorners();
+    const existingSections = Array.isArray(parsedCorners.customSections)
+      ? parsedCorners.customSections as CustomSection[]
+      : [];
+
+    const newAxisVal = parseFloat(editSectionAxisValue) || 0;
+    const nextCustomCorners = {
+      ...parsedCorners,
+      customSections: existingSections.map(s =>
+        s.id === sectionId ? { ...s, name: editSectionName.trim(), axisValue: newAxisVal } : s
+      ),
+    };
+
+    const { error } = await supabase
+      .from('budget_floor_plans')
+      .update({ custom_corners: nextCustomCorners as any })
+      .eq('id', floorPlan.id);
+
+    if (error) { toast.error('Error al renombrar sección'); return; }
+
+    toast.success('Sección renombrada');
+    setEditingSectionId(null);
+    await invalidateSectionQueries();
+  };
+
     if (!isAdmin || !floorPlan?.id) return;
 
     const confirmed = window.confirm('Se eliminarán todas las secciones y todos los espacios para dejar el sistema en blanco. ¿Continuar?');

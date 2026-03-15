@@ -1058,7 +1058,10 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       if (Math.abs(hMax - hMin) < 0.01) return;
 
       // Resolve effective height: room height → max wall height → default
-      let effectiveHeightM = roomHeightM && roomHeightM > 0 ? roomHeightM : null;
+      // Sanitize: if height > 50, assume it's in mm and convert to metres
+      let effectiveHeightM = roomHeightM && roomHeightM > 0
+        ? (roomHeightM > 50 ? roomHeightM / 1000 : roomHeightM)
+        : null;
 
       // If room height is missing/zero, compute from individual wall heights (prisma with per-face heights)
       if (!effectiveHeightM && wallRoomId) {

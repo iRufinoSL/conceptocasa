@@ -1781,15 +1781,33 @@ export function WorkspacePropertiesPanel({
                 </div>
                 {/* XYZ Coordinates */}
                 <div className="col-span-2 border-t border-border/30 pt-1 mt-0.5">
-                  <label className="text-[9px] text-muted-foreground font-semibold">Coordenadas XYZ (esquina inf. izq.)</label>
+                  <label className="text-[9px] text-muted-foreground font-semibold">
+                    Coordenadas XYZ (esquina inf. izq.)
+                    {sectionType === 'transversal' && <span className="ml-1 text-primary font-normal">— Sección X{sectionAxisValue ?? ''}</span>}
+                    {sectionType === 'longitudinal' && <span className="ml-1 text-primary font-normal">— Sección Y{sectionAxisValue ?? ''}</span>}
+                  </label>
                 </div>
                 <div>
-                  <label className="text-[9px] text-muted-foreground">X (mm)</label>
-                  <Input className="h-6 text-[10px] font-mono" type="number" value={objCoordX} onChange={e => setObjCoordX(e.target.value)} placeholder="—" />
+                  <label className="text-[9px] text-muted-foreground">X (mm){sectionType === 'transversal' && !editingObjId ? ' ✓' : ''}</label>
+                  <Input
+                    className={`h-6 text-[10px] font-mono ${sectionType === 'transversal' && !editingObjId ? 'bg-muted text-muted-foreground' : ''}`}
+                    type="number"
+                    value={objCoordX}
+                    onChange={e => setObjCoordX(e.target.value)}
+                    placeholder="—"
+                    readOnly={sectionType === 'transversal' && !editingObjId}
+                  />
                 </div>
                 <div>
-                  <label className="text-[9px] text-muted-foreground">Y (mm)</label>
-                  <Input className="h-6 text-[10px] font-mono" type="number" value={objCoordY} onChange={e => setObjCoordY(e.target.value)} placeholder="—" />
+                  <label className="text-[9px] text-muted-foreground">Y (mm){sectionType === 'longitudinal' && !editingObjId ? ' ✓' : ''}</label>
+                  <Input
+                    className={`h-6 text-[10px] font-mono ${sectionType === 'longitudinal' && !editingObjId ? 'bg-muted text-muted-foreground' : ''}`}
+                    type="number"
+                    value={objCoordY}
+                    onChange={e => setObjCoordY(e.target.value)}
+                    placeholder="—"
+                    readOnly={sectionType === 'longitudinal' && !editingObjId}
+                  />
                 </div>
                 <div>
                   <label className="text-[9px] text-muted-foreground">Z (mm)</label>

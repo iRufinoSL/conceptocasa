@@ -831,7 +831,7 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
 
       const { data: rooms, error: roomsError } = await supabase
         .from('budget_floor_plan_rooms')
-        .select('id, name, length, width, height, floor_polygon, is_base')
+        .select('id, name, length, width, height, floor_polygon, is_base, has_floor, has_ceiling')
         .eq('floor_plan_id', floorPlan.id);
 
       if (roomsError) throw roomsError;

@@ -1126,31 +1126,23 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       const polyMinAxis = Math.min(...axisCoords);
       const polyMaxAxis = Math.max(...axisCoords);
 
-      // Include polygon only if the section's axis value strictly cuts through the polygon interior.
-      // Boundary-only touches (axis == polyMin or axis == polyMax) are excluded to prevent
-      // "ghost" spaces from adjacent rooms bleeding into sections they only touch at an edge.
+      // Include polygon if the section's axis value falls within or on the boundary of the polygon's range.
+      const belongsToSection =
+        axisVal >= polyMinAxis - AXIS_EPS && axisVal <= polyMaxAxis + AXIS_EPS;
+      if (!belongsToSection) return;
+
+      // Anti-ghost filter: if the polygon only TOUCHES this section at one edge
+      // (not cutting through its interior), AND a neighbouring section cuts through
+      // the polygon's interior, skip it here to avoid duplicate/ghost labels.
       const isAtMinEdge = Math.abs(axisVal - polyMinAxis) < 0.01;
       const isAtMaxEdge = Math.abs(axisVal - polyMaxAxis) < 0.01;
-      const isStrictlyInside = axisVal > polyMinAxis + 0.01 && axisVal < polyMaxAxis - 0.01;
-      
-      // Only include if the axis cuts through the interior of the polygon
-      if (!isStrictlyInside && !isAtMinEdge && !isAtMaxEdge) return;
-      
-      // For boundary touches: only include if this polygon has NO extent beyond the touch point
-      // (i.e., the polygon's entire range on this axis is essentially zero — degenerate line)
-      // Otherwise, the polygon merely touches this section at its edge → ghost
-      if ((isAtMinEdge || isAtMaxEdge) && Math.abs(polyMaxAxis - polyMinAxis) > 0.05) {
-        // The polygon has real extent on this axis but only touches at the edge — skip it
-        // UNLESS this section is the ONLY section for this polygon (no interior section exists)
-        const polyMidAxis = (polyMinAxis + polyMaxAxis) / 2;
+      const polySpan = polyMaxAxis - polyMinAxis;
+      if ((isAtMinEdge !== isAtMaxEdge) && polySpan > 0.05) {
+        // This polygon only touches at one edge — check if an interior section exists
         const hasInteriorSection = sameTypeAxisValues.some(
           sv => sv > polyMinAxis + 0.01 && sv < polyMaxAxis - 0.01
         );
-        // If there's an interior section that will show this polygon, skip the boundary ghost
         if (hasInteriorSection) return;
-        // If no interior section exists, this boundary section is the only chance to show it
-        // — but only if we're at the max edge (convention: show at the "far" boundary)
-        if (isAtMinEdge && !isAtMaxEdge) return;
       }
 
       const intersections = findPolyIntersections(poly, cutAxis, axisVal);

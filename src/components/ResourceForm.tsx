@@ -78,6 +78,9 @@ export function ResourceForm({
         supplierId: resource.supplierId || null,
         tradeId: resource.tradeId || null,
         vatIncludedPercent: resource.vatIncludedPercent ?? null,
+        widthMm: resource.widthMm ?? null,
+        heightMm: resource.heightMm ?? null,
+        depthMm: resource.depthMm ?? null,
       });
     } else {
       setFormData({

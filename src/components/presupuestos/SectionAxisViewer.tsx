@@ -2196,8 +2196,9 @@ export function SectionAxisViewer({
           style={(drawMode || rulerMode || vertexEditMode) ? { cursor: vertexEditMode ? 'default' : rulerMode ? 'crosshair' : 'none' } : undefined}
           className="block bg-background"
           onClick={handleSvgClick}
-          onMouseMove={handleSvgMouseMove}
-          onMouseUp={handleSvgMouseUp}
+          onMouseMove={(e) => { handleSvgMouseMove(e); handleObjectMouseMove(e); }}
+          onMouseUp={(e) => { handleSvgMouseUp(e); handleObjectMouseUp(); }}
+          onMouseLeave={() => { handleObjectMouseUp(); }}
         >
           {/* Pattern definitions */}
           <defs>
@@ -2210,6 +2211,7 @@ export function SectionAxisViewer({
           {nodeInteractionDots}
           {polygonElements}
           {openingElements}
+          {sectionObjectElements}
           {drawingOverlay}
 
           {/* Ruler lines rendering */}

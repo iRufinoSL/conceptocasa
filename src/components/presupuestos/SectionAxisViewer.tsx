@@ -298,6 +298,7 @@ export function SectionAxisViewer({
     coord_x: number | null;
     coord_y: number | null;
     coord_z: number | null;
+    wall_index: number;
   }
   const [sectionObjects, setSectionObjects] = useState<SectionObjectData[]>([]);
   const [draggingObjectId, setDraggingObjectId] = useState<string | null>(null);
@@ -376,6 +377,7 @@ export function SectionAxisViewer({
 
     // Build section objects array with room_id resolved
     const wallToRoom = new Map(walls.map(w => [w.id, w.room_id]));
+    const wallToIndex = new Map(walls.map(w => [w.id, w.wall_index]));
     const secObjs: SectionObjectData[] = (sectionObjRes.data || [])
       .filter((o: any) => o.object_type !== 'hueco')
       .filter((o: any) => belongsToCurrentSection(o))
@@ -392,6 +394,7 @@ export function SectionAxisViewer({
         coord_x: o.coord_x,
         coord_y: o.coord_y,
         coord_z: o.coord_z,
+        wall_index: wallToIndex.get(o.wall_id) || 0,
       }));
     setSectionObjects(secObjs);
   }, [polygons, sectionType, axisValue]);
@@ -1538,41 +1541,10 @@ export function SectionAxisViewer({
         const pxPerMm = edgeLen / edgeMm;
 
         if (sectionType === 'vertical') {
-          // Z sections: openings appear as rectangles ON the wall line (horizontal)
-          for (const op of entry.openings) {
-            const posXmm = op.position_x || 0;
-            const wMm = op.width;
-            const color = op.opening_type === 'puerta' ? DOOR_COLOR : OPENING_COLOR;
-            // Position along edge
-            const startPx = posXmm * pxPerMm;
-            const widthPx = wMm * pxPerMm;
-            const thickness = 8; // px thickness perpendicular to edge
-
-            const x1 = a.px + ux * startPx;
-            const y1 = a.py + uy * startPx;
-            const x2 = a.px + ux * (startPx + widthPx);
-            const y2 = a.py + uy * (startPx + widthPx);
-
-            // Rectangle perpendicular to edge
-            const p1 = `${x1 + nx * thickness / 2},${y1 + ny * thickness / 2}`;
-            const p2 = `${x2 + nx * thickness / 2},${y2 + ny * thickness / 2}`;
-            const p3 = `${x2 - nx * thickness / 2},${y2 - ny * thickness / 2}`;
-            const p4 = `${x1 - nx * thickness / 2},${y1 - ny * thickness / 2}`;
-
-            elements.push(
-              <g key={`opening-${op.id}`}>
-                <polygon points={`${p1} ${p2} ${p3} ${p4}`}
-                  fill={color} fillOpacity={0.5} stroke={color} strokeWidth={1.5} />
-                {op.name && (
-                  <text x={(x1 + x2) / 2 + nx * 14} y={(y1 + y2) / 2 + ny * 14}
-                    textAnchor="middle" fontSize={7} fontWeight={600} fill={color} fontFamily="sans-serif"
-                    stroke="white" strokeWidth={1.5} paintOrder="stroke">
-                    {op.name}
-                  </text>
-                )}
-              </g>
-            );
-          }
+          // Z sections (floor plan view): Do NOT render openings (ventanas/puertas) as rectangles.
+          // Windows and doors are vertical elements that don't appear in a top-down floor plan view.
+          // Skip all openings in vertical/Z sections.
+          continue;
         } else {
           // X/Y sections: openings appear as vertical rectangles on the wall.
           // Here polygon Y-values are in grid units, so convert with current vertical scale (mm per unit).
@@ -1776,29 +1748,69 @@ export function SectionAxisViewer({
       const selWidth = isSelected ? 2.5 : 1.5;
 
       if (sectionType === 'vertical') {
-        const polyMinX = Math.min(...poly.vertices.map(v => v.x));
+        // Z sections (floor plan view): show objects as a rectangle ON the wall edge
+        // proportional to the object's width (base), NOT as a free-standing rectangle.
+        // Skip hueco-like objects (windows/doors) — they are vertical and don't belong in floor plans.
+        const nameLC = (obj.name || '').toLowerCase();
+        const isOpeningLike = nameLC.includes('ventana') || nameLC.includes('puerta') ||
+          nameLC.includes('balcon') || nameLC.includes('window') || nameLC.includes('door');
+        if (isOpeningLike) continue;
+
+        // Find the wall edge this object sits on
+        const wallIndex = obj.wall_index;
+        const verts = poly.vertices;
+        if (wallIndex < 1 || wallIndex > verts.length) continue;
+
+        const vi = wallIndex - 1;
+        const vj = (vi + 1) % verts.length;
+        const ax = originX + verts[vi].x * cellPxW;
+        const ay = originY - verts[vi].y * cellPxH;
+        const bx = originX + verts[vj].x * cellPxW;
+        const by = originY - verts[vj].y * cellPxH;
+        const edgeDx = bx - ax;
+        const edgeDy = by - ay;
+        const edgeLen = Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy);
+        if (edgeLen === 0) continue;
+
+        const eUx = edgeDx / edgeLen;
+        const eUy = edgeDy / edgeLen;
+        const eNx = -eUy;
+        const eNy = eUx;
+
+        // Edge length in mm
+        const dxGrid = Math.abs(verts[vj].x - verts[vi].x);
+        const dyGrid = Math.abs(verts[vj].y - verts[vi].y);
+        const edgeMm = Math.sqrt((dxGrid * scale.hScale) ** 2 + (dyGrid * scale.vScale) ** 2);
+        const pxPerMm = edgeLen / edgeMm;
+
         const posXmm = obj.position_x;
         const wMm = obj.width_mm;
-        const pxPerMmH = cellPxW / scale.hScale;
-        const x = originX + polyMinX * cellPxW + posXmm * pxPerMmH;
-        const w = wMm * pxPerMmH;
-        const hMm = obj.height_mm;
-        const h = hMm * pxPerMmH;
-        const y = originY - (polyMinY * cellPxH) - h;
+        const startPx = posXmm * pxPerMm;
+        const widthPx = wMm * pxPerMm;
+        const thickness = 8;
+
+        const x1 = ax + eUx * startPx;
+        const y1 = ay + eUy * startPx;
+        const x2 = ax + eUx * (startPx + widthPx);
+        const y2 = ay + eUy * (startPx + widthPx);
+
+        const p1 = `${x1 + eNx * thickness / 2},${y1 + eNy * thickness / 2}`;
+        const p2 = `${x2 + eNx * thickness / 2},${y2 + eNy * thickness / 2}`;
+        const p3 = `${x2 - eNx * thickness / 2},${y2 - eNy * thickness / 2}`;
+        const p4 = `${x1 - eNx * thickness / 2},${y1 - eNy * thickness / 2}`;
 
         elements.push(
           <g key={`secobj-${obj.id}`} style={{ cursor: 'move' }}
             onMouseDown={e => handleObjectMouseDown(e, obj.id, obj)}>
-            {isSelected && <rect x={x - 2} y={y - 2} width={w + 4} height={h + 4}
-              fill="none" stroke="hsl(45, 100%, 50%)" strokeWidth={1} strokeDasharray="4 2" rx={3} />}
-            <rect x={x} y={y} width={w} height={h}
-              fill={OBJECT_COLOR} fillOpacity={isSelected ? 0.45 : 0.3} stroke={selStroke} strokeWidth={selWidth} rx={2} />
-            <text x={x + w / 2} y={y + h / 2 + 3} textAnchor="middle" fontSize={7} fontWeight={600}
-              fill={OBJECT_COLOR} fontFamily="sans-serif" stroke="white" strokeWidth={1.5} paintOrder="stroke">
+            {isSelected && <polygon points={`${p1} ${p2} ${p3} ${p4}`}
+              fill="none" stroke="hsl(45, 100%, 50%)" strokeWidth={1} strokeDasharray="4 2" />}
+            <polygon points={`${p1} ${p2} ${p3} ${p4}`}
+              fill={OBJECT_COLOR} fillOpacity={isSelected ? 0.45 : 0.3} stroke={selStroke} strokeWidth={selWidth} />
+            <text x={(x1 + x2) / 2 + eNx * 14} y={(y1 + y2) / 2 + eNy * 14}
+              textAnchor="middle" fontSize={7} fontWeight={600} fill={OBJECT_COLOR} fontFamily="sans-serif"
+              stroke="white" strokeWidth={1.5} paintOrder="stroke">
               {obj.name}
             </text>
-            {isSelected && <text x={x + w / 2} y={y - 4} textAnchor="middle" fontSize={5}
-              fill="hsl(45, 90%, 40%)" fontFamily="sans-serif" fontWeight={700}>⇦⇧⇩⇨</text>}
           </g>
         );
       } else {

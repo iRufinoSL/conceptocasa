@@ -1015,7 +1015,9 @@ export function WorkspacePropertiesPanel({
           ? 'Techo'
           : faceWall.wall_index === 0
             ? 'Espacio'
-            : `P${faceWall.wall_index}`;
+            : faceWall.wall_type === 'tejado'
+              ? `T${faceWall.wall_index}`
+              : `P${faceWall.wall_index}`;
     const baseDescription = stripMetricFromDescription(sup.description, `${workspaceName} / ${faceLabel}`);
     const metricLabel = nextSurface != null
       ? `${nextSurface} m²`

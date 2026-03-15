@@ -1050,6 +1050,10 @@ export function WorkspacePropertiesPanel({
     setObjTargetFace('wall-0');
     setObjLayerOrder('1');
     setObjResourceId('_none');
+    setObjCoordX('');
+    setObjCoordY('');
+    setObjCoordZ('');
+    setObjShownInSection(false);
   };
 
   const handleDeleteObject = async (id: string) => {

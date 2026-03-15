@@ -103,6 +103,22 @@ const Landing = () => {
   const { honeypotProps, validateSubmission, recordSubmission, isBlocked } = useBotProtection();
   const { trackButtonClick, trackFormStart, trackFormSubmit } = useWebsiteTracking();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  
+  // Hero carousel
+  const heroImages = [
+    { src: heroPassivhaus, alt: "Casa pasiva rodeada de naturaleza" },
+    { src: homeModern, alt: "Casa moderna cúbica" },
+    { src: homeRustic, alt: "Casa rústica" },
+    { src: homeMediterranean, alt: "Casa mediterránea" },
+    { src: homeClassic, alt: "Casa clásica" },
+    { src: homeEco, alt: "Casa eco compacta" },
+    { src: homeWood, alt: "Casa de madera" },
+  ];
+  const [heroIdx, setHeroIdx] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setHeroIdx(prev => (prev + 1) % heroImages.length), 5000);
+    return () => clearInterval(timer);
+  }, [heroImages.length]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showHousingForm, setShowHousingForm] = useState(false);
   const [attachments, setAttachments] = useState<File[]>([]);

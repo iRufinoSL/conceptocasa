@@ -1000,17 +1000,28 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
 
       const { data: existingSuperficies, error: existingError } = await supabase
         .from('budget_wall_objects')
-        .select('id, wall_id')
+        .select('id, wall_id, surface_m2, volume_m3, description')
         .in('wall_id', wallIds)
         .eq('layer_order', 0)
         .order('created_at', { ascending: true });
 
       if (existingError) throw existingError;
 
-      const existingByWall = new Map<string, string>();
+      const existingByWall = new Map<string, {
+        id: string;
+        surface_m2: number | null;
+        volume_m3: number | null;
+        description: string | null;
+      }>();
+
       (existingSuperficies || []).forEach((row: any) => {
         if (!existingByWall.has(row.wall_id)) {
-          existingByWall.set(row.wall_id, row.id);
+          existingByWall.set(row.wall_id, {
+            id: row.id,
+            surface_m2: row.surface_m2 ?? null,
+            volume_m3: row.volume_m3 ?? null,
+            description: row.description ?? null,
+          });
         }
       });
 
@@ -1019,22 +1030,36 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
         const isInvisibleFace = (entry.wallType || '').toLowerCase().includes('invisible');
         const missingFloor = entry.face.wallIndex === -1 && ((room?.has_floor === false) || isInvisibleFace);
         const missingCeiling = entry.face.wallIndex === -2 && ((room?.has_ceiling === false) || isInvisibleFace);
+        const forceZero = missingFloor || missingCeiling;
 
-        const surfaceM2 = missingFloor || missingCeiling
+        const surfaceM2 = forceZero
           ? 0
           : (entry.face.m2 ?? null);
 
         const volumeM3 = entry.face.m3 ?? null;
-        return { surfaceM2, volumeM3 };
+        return { surfaceM2, volumeM3, forceZero };
       };
 
       const updates = facesWithWall
-        .filter(entry => existingByWall.has(entry.wallId))
         .map(entry => {
-          const { surfaceM2, volumeM3 } = resolveMetrics(entry);
+          const existing = existingByWall.get(entry.wallId);
+          if (!existing) return null;
+
+          const { surfaceM2, volumeM3, forceZero } = resolveMetrics(entry);
+          if (!forceZero) return null;
+
+          const alreadyZero = existing.surface_m2 !== null
+            && Math.abs(existing.surface_m2) < 0.0001
+            && existing.volume_m3 === null;
+          const alreadyLabeledAsZero = (existing.description || '').includes('— 0 m²');
+
+          if (alreadyZero && alreadyLabeledAsZero) {
+            return null;
+          }
+
           const metric = surfaceM2 != null ? `${surfaceM2} m²` : volumeM3 != null ? `${volumeM3} m³` : null;
           return {
-            id: existingByWall.get(entry.wallId)!,
+            id: existing.id,
             payload: {
               name: 'Superficie',
               description: `${entry.face.workspace} / ${entry.face.faceName}${metric ? ` — ${metric}` : ''}`,
@@ -1045,7 +1070,19 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
               volume_m3: volumeM3,
             },
           };
-        });
+        })
+        .filter((update): update is {
+          id: string;
+          payload: {
+            name: string;
+            description: string;
+            object_type: string;
+            is_core: boolean;
+            layer_order: number;
+            surface_m2: number | null;
+            volume_m3: number | null;
+          };
+        } => update !== null);
 
       const inserts = facesWithWall
         .filter(entry => !existingByWall.has(entry.wallId))

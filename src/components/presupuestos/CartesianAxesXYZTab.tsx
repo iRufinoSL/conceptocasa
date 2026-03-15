@@ -1019,22 +1019,17 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     // Z unit = 250mm (block_height_mm)
     const zUnitMm = 250;
 
-    // Project only workspaces that still exist in vertical (Z) sections.
-    // This prevents ghost/deleted rooms from being reintroduced in X/Y regeneration.
-    // CRITICAL: Deduplicate rooms by normalized name — prefer canonical IDs from vertical sections.
+    // Project only canonical workspaces from vertical (Z) sections.
+    // This blocks stale duplicates/ghosts from re-entering X/Y during regeneration.
     const hasVerticalReference = validRoomIds.size > 0 || verticalRoomNameSet.size > 0;
     const allEligible = (workspaceRooms || []).filter(room => {
       if (!room.floor_polygon || room.floor_polygon.length < 3) return false;
       if (!hasVerticalReference) return true;
-      if (validRoomIds.has(room.id)) return true;
-      const normalized = normalizeWorkspaceName(room.name);
-      return !!(normalized && verticalRoomNameSet.has(normalized));
+      return validRoomIds.has(room.id);
     });
 
-    // Deduplicate: group by normalized name, keep only the canonical room per name.
-    // A canonical room is one whose ID exists in a vertical section polygon.
-    // If multiple canonical rooms share the same name (e.g. same name at different floors),
-    // keep all canonical ones but discard non-canonical duplicates.
+    // Deduplicate by normalized name while keeping canonical IDs.
+    // If there is no vertical reference at all, fallback to most recently updated by name.
     const eligibleRooms = (() => {
       const byName = new Map<string, WorkspaceRoom[]>();
       for (const room of allEligible) {
@@ -1049,18 +1044,20 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       for (const [, rooms] of byName) {
         const canonical = rooms.filter(r => validRoomIds.has(r.id));
         if (canonical.length > 0) {
-          // Only keep rooms whose IDs are in vertical sections (canonical)
           result.push(...canonical);
-        } else {
-          // No canonical match — pick the most recently updated one only
-          const sorted = [...rooms].sort((a, b) => {
+          continue;
+        }
+
+        if (!hasVerticalReference) {
+          const recent = [...rooms].sort((a, b) => {
             const aTime = a.updated_at ? new Date(a.updated_at).getTime() : 0;
             const bTime = b.updated_at ? new Date(b.updated_at).getTime() : 0;
             return bTime - aTime;
-          });
-          if (sorted[0]) result.push(sorted[0]);
+          })[0];
+          if (recent) result.push(recent);
         }
       }
+
       return result;
     })();
 
@@ -1232,17 +1229,8 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
         }
       }
 
-      if (!matchedRoom && normalized) {
-        const partialCandidates = (workspaceRooms || []).filter(room => {
-          const roomName = normalizeWorkspaceName(room.name);
-          if (!roomName) return false;
-          return roomName.includes(normalized) || normalized.includes(roomName);
-        });
-        if (partialCandidates.length > 0) {
-          const compatible = partialCandidates.filter(room => isRoofLikeName(room.name) === sourceIsRoofLike);
-          matchedRoom = pickMostRecentlyUpdatedRoom(compatible.length > 0 ? compatible : partialCandidates);
-        }
-      }
+      // Avoid permissive partial-name matching here: it can inject wrong rooms in X/Y (ghost projections).
+      // Keep fallback strict to direct ID / exact normalized match / loose legacy match only.
 
       const fallbackId = matchedRoom?.id || src.polygon.id;
       if (projectedKeys.has(fallbackId)) continue;
@@ -1326,10 +1314,21 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
           liveSection.sectionType as 'vertical' | 'longitudinal' | 'transversal',
         ));
 
+    const hiddenNameKeys = new Set(
+      healedSavedPolys
+        .filter(p => !p.vertices || p.vertices.length === 0)
+        .map(p => normalizeWorkspaceName(p.name))
+        .filter(Boolean),
+    );
+
     const savedIds = new Set(healedSavedPolys.map(p => p.id));
     const mergedPolygons = [
       ...healedSavedPolys,
-      ...autoPolys.filter(ap => !savedIds.has(ap.id)),
+      ...autoPolys.filter(ap => {
+        if (savedIds.has(ap.id)) return false;
+        const key = normalizeWorkspaceName(ap.name);
+        return !(key && hiddenNameKeys.has(key));
+      }),
     ];
 
     // X/Y sections always referenced from (0,0,0) at bottom-left.
@@ -1452,8 +1451,10 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
             const currentSection = sections.find(s => s.id === liveSection.id);
             const existingPolygons = currentSection?.polygons || [];
 
-            // Remove stale duplicates that only differ by old IDs but collide by normalized auto name
+            // Remove stale duplicates that only differ by old IDs but collide by normalized auto name.
+            // Keep hidden markers (vertices:[]) so user-deleted spaces do not reappear.
             const cleanedExisting = existingPolygons.filter((p: SectionPolygon) => {
+              if (!p.vertices || p.vertices.length === 0) return true;
               if (autoById.has(p.id)) return true;
               if (/_wall\d+$/.test(p.id) || /_ceiling$/.test(p.id)) return true;
               const key = normalizeWorkspaceName(p.name);
@@ -1477,8 +1478,19 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
               };
             });
 
+            const hiddenNameKeys = new Set(
+              updatedExisting
+                .filter((p: SectionPolygon) => !p.vertices || p.vertices.length === 0)
+                .map((p: SectionPolygon) => normalizeWorkspaceName(p.name))
+                .filter(Boolean),
+            );
+
             const existingIds = new Set(updatedExisting.map((p: SectionPolygon) => p.id));
-            const newPolys = autoPolys.filter(ap => !existingIds.has(ap.id));
+            const newPolys = autoPolys.filter(ap => {
+              if (existingIds.has(ap.id)) return false;
+              const key = normalizeWorkspaceName(ap.name);
+              return !(key && hiddenNameKeys.has(key));
+            });
 
             const mergedPolygons = [...updatedExisting, ...newPolys];
             const removedStale = existingPolygons.length - cleanedExisting.length;

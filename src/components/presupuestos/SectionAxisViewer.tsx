@@ -188,6 +188,7 @@ export function SectionAxisViewer({
 
   // Vertex editing mode (drag vertices, add new ones)
   const [vertexEditMode, setVertexEditMode] = useState(false);
+  const [selectedPolygonId, setSelectedPolygonId] = useState<string | null>(null);
   const [draggingVertexInfo, setDraggingVertexInfo] = useState<{ polyId: string; vertexIdx: number } | null>(null);
 
   // Polygons
@@ -508,6 +509,12 @@ export function SectionAxisViewer({
 
   /** Handle edge double-click to open face properties */
   const handleEdgeClick = useCallback((polyId: string, edgeIdx: number) => {
+    if (vertexEditMode) {
+      setSelectedPolygonId(polyId);
+      lastClickRef.current = null;
+      return;
+    }
+
     const now = Date.now();
     const last = lastClickRef.current;
     if (last && last.polyId === polyId && last.edgeIdx === edgeIdx && (now - last.time) < 400) {
@@ -521,7 +528,7 @@ export function SectionAxisViewer({
     } else {
       lastClickRef.current = { time: now, polyId, edgeIdx };
     }
-  }, [polygons]);
+  }, [polygons, vertexEditMode]);
 
   const handleSvgClick = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
     if (!gridLayout) return;
@@ -543,6 +550,11 @@ export function SectionAxisViewer({
       return;
     }
 
+    if (vertexEditMode && !drawMode) {
+      setSelectedPolygonId(null);
+      return;
+    }
+
     if (!drawMode) return;
     const node = snapToNode(e);
     if (!node) return;
@@ -557,7 +569,7 @@ export function SectionAxisViewer({
     if (last && last.col === node.col && last.row === node.row) return;
 
     setDrawingVertices(prev => [...prev, node]);
-  }, [drawMode, rulerMode, gridLayout, drawingVertices, snapToNode, snapToNodePrecise, rulerStart]);
+  }, [drawMode, rulerMode, gridLayout, drawingVertices, snapToNode, snapToNodePrecise, rulerStart, vertexEditMode]);
 
   const handleSvgMouseMove = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
     // Vertex drag
@@ -677,6 +689,21 @@ export function SectionAxisViewer({
     setHoverNode(null);
   };
 
+  const visiblePolygons = useMemo(
+    () => polygons.filter(p => Array.isArray(p.vertices) && p.vertices.length >= 3),
+    [polygons],
+  );
+
+  useEffect(() => {
+    if (!selectedPolygonId) return;
+    if (!vertexEditMode) {
+      setSelectedPolygonId(null);
+      return;
+    }
+    const exists = polygons.some(p => p.id === selectedPolygonId && p.vertices.length >= 3);
+    if (!exists) setSelectedPolygonId(null);
+  }, [polygons, selectedPolygonId, vertexEditMode]);
+
   // ── Vertex editing helpers ──
   const handleInsertVertexOnEdge = useCallback((polyId: string, edgeIdx: number) => {
     if (!vertexEditMode) return;
@@ -716,10 +743,31 @@ export function SectionAxisViewer({
   }, [polygons, pushUndo, onSavePolygons]);
 
   const handleDeletePolygon = (polyId: string) => {
+    const target = polygons.find(p => p.id === polyId);
+    if (!target) return;
+
     pushUndo();
+
+    // In X/Y sections, keep a hidden marker (vertices=[]) so regen does not reintroduce this workspace.
+    if (sectionType !== 'vertical' && target.vertices.length >= 3) {
+      const hidden = polygons.map(p => (
+        p.id === polyId
+          ? { ...p, vertices: [] }
+          : p
+      ));
+      setPolygons(hidden);
+      onSavePolygons?.(hidden);
+      if (editingPolyId === polyId) setEditingPolyId(null);
+      if (selectedPolygonId === polyId) setSelectedPolygonId(null);
+      toast.success('Espacio ocultado en esta sección');
+      return;
+    }
+
     const updated = polygons.filter(p => p.id !== polyId);
     setPolygons(updated);
     onSavePolygons?.(updated);
+    if (editingPolyId === polyId) setEditingPolyId(null);
+    if (selectedPolygonId === polyId) setSelectedPolygonId(null);
   };
 
   const startEditPolygon = (poly: SectionPolygon) => {
@@ -1037,6 +1085,8 @@ export function SectionAxisViewer({
       const verts = poly.vertices;
       if (verts.length < 3) return;
 
+      const isSelectedInEdit = !vertexEditMode || selectedPolygonId === poly.id;
+
       const pxVerts = verts.map(v => ({
         px: originX + v.x * cellPxW,
         py: originY - v.y * cellPxH,
@@ -1053,6 +1103,12 @@ export function SectionAxisViewer({
       // Double-click handler for polygon fill area
       const handlePolyFillClick = (e: React.MouseEvent) => {
         e.stopPropagation();
+
+        if (vertexEditMode) {
+          setSelectedPolygonId(poly.id);
+          return;
+        }
+
         const now = Date.now();
         const last = lastPolyClickRef.current;
         if (last && last.polyId === poly.id && (now - last.time) < 400) {
@@ -1068,20 +1124,24 @@ export function SectionAxisViewer({
       if (fillPatternObj) {
         elements.push(
           <polygon key={`poly-fill-${poly.id}`} points={pointsStr}
-            fill={`url(#section-pat-${fillPatternId})`} fillOpacity={0.6}
-            stroke="none" style={{ cursor: 'pointer', pointerEvents: 'fill' }}
+            fill={`url(#section-pat-${fillPatternId})`}
+            fillOpacity={isSelectedInEdit ? 0.6 : 0.35}
+            stroke="none"
+            style={{ cursor: 'pointer', pointerEvents: 'fill', opacity: isSelectedInEdit ? 1 : 0.5 }}
             onClick={handlePolyFillClick} />
         );
         // Border on top
         elements.push(
           <polygon key={`poly-border-${poly.id}`} points={pointsStr}
-            fill="none" stroke={color} strokeWidth={2.5} pointerEvents="none" />
+            fill="none" stroke={color} strokeWidth={isSelectedInEdit ? 2.5 : 1.5} pointerEvents="none" opacity={isSelectedInEdit ? 1 : 0.5} />
         );
       } else {
         elements.push(
           <polygon key={`poly-${poly.id}`} points={pointsStr}
-            fill={color} fillOpacity={0.15} stroke={color} strokeWidth={2.5}
-            style={{ cursor: 'pointer', pointerEvents: 'fill' }}
+            fill={color} fillOpacity={isSelectedInEdit ? 0.15 : 0.1}
+            stroke={color}
+            strokeWidth={isSelectedInEdit ? 2.5 : 1.5}
+            style={{ cursor: 'pointer', pointerEvents: 'fill', opacity: isSelectedInEdit ? 1 : 0.45 }}
             onClick={handlePolyFillClick} />
         );
       }
@@ -1176,7 +1236,10 @@ export function SectionAxisViewer({
 
           elements.push(
             <g key={`edge-label-${poly.id}-${i}`} data-pdf-layer="wall-labels"
-              style={{ cursor: vertexEditMode ? 'default' : 'pointer', pointerEvents: vertexEditMode ? 'none' : 'auto' }}
+              style={{
+                cursor: vertexEditMode ? (isSelectedInEdit ? 'pointer' : 'default') : 'pointer',
+                pointerEvents: vertexEditMode ? (isSelectedInEdit ? 'auto' : 'none') : 'auto',
+              }}
               onClick={(e) => { e.stopPropagation(); handleEdgeClick(poly.id, i); }}>
               <rect
                 x={edgeMidX + nx * offset - boxW / 2}
@@ -1205,7 +1268,7 @@ export function SectionAxisViewer({
       // Vertex dots — draggable in vertex edit mode
       for (let i = 0; i < verts.length; i++) {
         const a = pxVerts[i];
-        const isDraggable = vertexEditMode;
+        const isDraggable = vertexEditMode && selectedPolygonId === poly.id;
         const vertIdx = i;
         elements.push(
           <circle key={`vtx-${poly.id}-${i}`} cx={a.px} cy={a.py}
@@ -1302,9 +1365,13 @@ export function SectionAxisViewer({
 
       elements.push(
         <g key={`center-${poly.id}`} data-pdf-layer="center-labels"
-          style={{ cursor: vertexEditMode ? 'default' : 'pointer', pointerEvents: vertexEditMode ? 'none' : 'auto' }}
+          style={{ cursor: vertexEditMode ? 'pointer' : 'pointer', pointerEvents: 'auto', opacity: isSelectedInEdit ? 1 : 0.72 }}
           onClick={(e) => {
             e.stopPropagation();
+            if (vertexEditMode) {
+              setSelectedPolygonId(poly.id);
+              return;
+            }
             setFacePanel({ polyId: poly.id, polyName: poly.name, faceKey: 'floor', edgeCount: poly.vertices.length, vertices: poly.vertices.map(v => ({ x: v.x, y: v.y })) });
           }}>
           <rect
@@ -1323,7 +1390,7 @@ export function SectionAxisViewer({
     });
 
     return elements;
-  }, [polygons, gridLayout, scale, wallLabelMode, facePatterns, handleEdgeClick, vertexEditMode, pushUndo, handleInsertVertexOnEdge, handleDeleteVertex]);
+  }, [polygons, gridLayout, scale, wallLabelMode, facePatterns, handleEdgeClick, vertexEditMode, selectedPolygonId, pushUndo, handleInsertVertexOnEdge, handleDeleteVertex]);
 
   // ── Openings visual rendering on edges ──
   const openingElements = useMemo(() => {
@@ -1717,15 +1784,20 @@ export function SectionAxisViewer({
           {vertexEditMode ? (
             <div className="flex items-center gap-3 w-full">
               <span className="text-xs font-semibold text-primary">
-                ✏️ Modo Modificar — Arrastra vértices · Clic en <span className="text-green-600 font-bold">+</span> para insertar · Doble clic en vértice para eliminar
+                ✏️ Modo Modificar — Primero selecciona un espacio con clic · Luego arrastra vértices · Clic en + para insertar · Doble clic en vértice para eliminar
+              </span>
+              <span className="text-[10px] text-muted-foreground">
+                {selectedPolygonId
+                  ? `Seleccionado: ${polygons.find(p => p.id === selectedPolygonId)?.name || '—'}`
+                  : 'Sin espacio seleccionado'}
               </span>
               <div className="ml-auto flex items-center gap-1">
                 <Button size="sm" variant="default" className="h-7 text-xs gap-1"
-                  onClick={() => { setVertexEditMode(false); onSavePolygons?.(polygons); toast.success('Cambios guardados'); }}>
+                  onClick={() => { setVertexEditMode(false); setSelectedPolygonId(null); onSavePolygons?.(polygons); toast.success('Cambios guardados'); }}>
                   <Check className="h-3 w-3" /> Listo
                 </Button>
                 <Button size="sm" variant="ghost" className="h-7 text-xs gap-1"
-                  onClick={() => { setVertexEditMode(false); handleUndo(); }}>
+                  onClick={() => { setVertexEditMode(false); setSelectedPolygonId(null); handleUndo(); }}>
                   <X className="h-3 w-3" /> Cancelar
                 </Button>
               </div>
@@ -1748,9 +1820,9 @@ export function SectionAxisViewer({
                   disabled={!drawingName.trim() || !drawingHeight.trim()}>
                   <PenTool className="h-3 w-3" /> Dibujar espacio
                 </Button>
-                {polygons.length > 0 && (
+                {visiblePolygons.length > 0 && (
                   <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
-                    onClick={() => { pushUndo(); setVertexEditMode(true); setRulerMode(false); setDrawMode(false); }}>
+                    onClick={() => { pushUndo(); setSelectedPolygonId(null); setVertexEditMode(true); setRulerMode(false); setDrawMode(false); }}>
                     <PenTool className="h-3 w-3" /> Modificar
                   </Button>
                 )}
@@ -1761,9 +1833,9 @@ export function SectionAxisViewer({
                   </Button>
                 )}
               </div>
-              {polygons.length > 0 && (
+              {visiblePolygons.length > 0 && (
                 <span className="text-[10px] text-muted-foreground ml-auto">
-                  {polygons.length} espacio(s) — doble clic en arista para propiedades
+                  {visiblePolygons.length} espacio(s) — clic para seleccionar en Modificar
                 </span>
               )}
             </>
@@ -1791,18 +1863,33 @@ export function SectionAxisViewer({
       )}
 
       {/* Polygon list */}
-      {polygons.length > 0 && !drawMode && (
+      {visiblePolygons.length > 0 && !drawMode && (
         <div className="px-3 py-1.5 border-b bg-muted/5 flex flex-wrap gap-1.5">
-          {polygons.map((poly, idx) => {
+          {visiblePolygons.map((poly, idx) => {
             const color = WORKSPACE_COLORS[idx % WORKSPACE_COLORS.length];
             const areaGrid = polygonAreaGrid(poly.vertices.map(v => ({ x: v.x, y: v.y })));
             const areaM2 = scale ? areaGrid * (scale.hScale / 1000) * (scale.vScale / 1000) : 0;
             const heightMm = poly.zTop || 0;
+            const isSelectedForVertexEdit = vertexEditMode && selectedPolygonId === poly.id;
             return (
               <span key={poly.id}
                 className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border cursor-pointer hover:opacity-80 transition-opacity"
-                style={{ borderColor: color, color, backgroundColor: editingPolyId === poly.id ? `${color}15` : undefined }}
-                onClick={() => startEditPolygon(poly)}>
+                style={{
+                  borderColor: color,
+                  color,
+                  backgroundColor: isSelectedForVertexEdit
+                    ? `${color}22`
+                    : editingPolyId === poly.id
+                      ? `${color}15`
+                      : undefined,
+                }}
+                onClick={() => {
+                  if (vertexEditMode) {
+                    setSelectedPolygonId(poly.id);
+                    return;
+                  }
+                  startEditPolygon(poly);
+                }}>
                 <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
                 {poly.name} ({areaM2.toFixed(2)} m²{heightMm ? ` · h=${heightMm}mm` : ''})
                 <button onClick={(e) => { e.stopPropagation(); handleDeletePolygon(poly.id); }}

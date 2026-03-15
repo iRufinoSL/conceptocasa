@@ -971,7 +971,14 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
     }
   }, [budgetId, queryClient]);
 
-  // Auto-sync removed: surfaces are now created only manually via "Generar todas las superficies"
+  // Auto-sync: regenerate surfaces when workspace data changes
+  useEffect(() => {
+    if (!autoFaces || autoFaces.length === 0) return;
+    const signature = autoFaces.map(f => `${f.roomId}:${f.wallIndex}:${f.m2}:${f.m3}`).join('|');
+    if (signature === autoSyncSignatureRef.current) return;
+    autoSyncSignatureRef.current = signature;
+    syncSuperficies({ silent: true });
+  }, [autoFaces, syncSuperficies]);
 
   const ensureSuperficieObject = async (wallId: string, face: AutoFace) => {
     const surfaceM2 = face.m2 ?? null;

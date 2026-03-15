@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ChevronRight, Plus, Trash2, ArrowLeft, Eye, Pencil, Check, X } from 'lucide-react';
+import { ChevronRight, Plus, Trash2, ArrowLeft, Eye, Pencil, Check, X, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { CustomSection, SectionPolygon } from './CustomSectionManager';
 import { SectionAxisViewer } from './SectionAxisViewer';
@@ -1019,8 +1019,10 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     // Z unit = 250mm (block_height_mm)
     const zUnitMm = 250;
 
-    // Filter: only project rooms that exist in a Z section (by id or by normalized name)
+    // Filter: project rooms that exist in a Z section OR have a floor_id (assigned to a level)
     const eligibleRooms = (workspaceRooms || []).filter(room => {
+      // Always include rooms assigned to a floor/level
+      if (room.floor_id) return true;
       if (validRoomIds.size > 0) return validRoomIds.has(room.id);
       if (verticalRoomNameSet.size > 0) {
         const normalized = normalizeWorkspaceName(room.name);
@@ -1056,12 +1058,17 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       if (Math.abs(hMax - hMin) < 0.01) return;
 
       // Resolve effective height: room height → max wall height → default
-      let effectiveHeightM = roomHeightM && roomHeightM > 0 ? roomHeightM : null;
+      // Sanitize: if height > 50, assume it's in mm and convert to metres
+      let effectiveHeightM = roomHeightM && roomHeightM > 0
+        ? (roomHeightM > 50 ? roomHeightM / 1000 : roomHeightM)
+        : null;
 
       // If room height is missing/zero, compute from individual wall heights (prisma with per-face heights)
       if (!effectiveHeightM && wallRoomId) {
         const roomWalls = (allWalls || []).filter(w => w.room_id === wallRoomId);
-        const wallHeights = roomWalls.filter(w => w.height != null && w.height > 0).map(w => w.height!);
+        const wallHeights = roomWalls
+          .filter(w => w.height != null && w.height > 0)
+          .map(w => w.height! > 50 ? w.height! / 1000 : w.height!);
         if (wallHeights.length > 0) {
           effectiveHeightM = Math.max(...wallHeights);
         }
@@ -1358,7 +1365,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
 
     return (
       <div className="space-y-3">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Button variant="ghost" size="sm" className="h-7 text-xs gap-1"
             onClick={() => setActiveSection(null)}>
             <ArrowLeft className="h-3 w-3" /> Volver a ejes
@@ -1367,6 +1374,30 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
           <Badge variant="secondary" className="text-[10px] h-5 font-mono">
             {liveSection.axis}={liveSection.axisValue}
           </Badge>
+          {liveSection.sectionType !== 'vertical' && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs gap-1 ml-auto"
+              onClick={async () => {
+                // Force re-project: clear saved polygons for this section so auto-projection recalculates
+                const parsedCorners = parseCustomCorners();
+                const sections = Array.isArray(parsedCorners.customSections)
+                  ? (parsedCorners.customSections as CustomSection[])
+                  : [];
+                const updated = sections.map(s =>
+                  s.id === liveSection.id ? { ...s, polygons: [] } : s
+                );
+                await supabase.from('budget_floor_plans')
+                  .update({ custom_corners: { ...parsedCorners, customSections: updated } as any })
+                  .eq('id', floorPlan!.id);
+                await invalidateSectionQueries();
+                toast.success('Espacios regenerados');
+              }}
+            >
+              <RefreshCw className="h-3 w-3" /> Regenerar espacios
+            </Button>
+          )}
         </div>
         <SectionAxisViewer
           key={liveSection.id}

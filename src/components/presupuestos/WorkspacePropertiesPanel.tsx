@@ -172,10 +172,11 @@ export function WorkspacePropertiesPanel({
   const [manualVolumeValue, setManualVolumeValue] = useState('');
   const [savingManualSuperficie, setSavingManualSuperficie] = useState(false);
 
-  const getFaceLabel = useCallback((wallIndex: number) => {
+  const getFaceLabel = useCallback((wallIndex: number, wallType?: string) => {
     if (wallIndex === -1) return 'Suelo';
     if (wallIndex === -2) return 'Techo';
     if (wallIndex === 0) return 'Espacio';
+    if (wallType === 'tejado') return `T${wallIndex}`;
     return `Pared ${wallIndex}`;
   }, []);
 

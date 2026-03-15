@@ -1179,6 +1179,13 @@ export function WorkspacePropertiesPanel({
     }
   }, [initialEditObjectId, wallObjects]);
 
+  // Auto-prefill the fixed-axis coordinate when opening form for a new object
+  useEffect(() => {
+    if (showObjectForm && !editingObjId) {
+      prefillSectionCoord();
+    }
+  }, [showObjectForm, editingObjId, sectionType, sectionAxisValue]);
+
   const handleDeleteObject = async (id: string) => {
     await supabase.from('budget_wall_objects').delete().eq('id', id);
     setWallObjects(prev => prev.filter(o => o.id !== id));

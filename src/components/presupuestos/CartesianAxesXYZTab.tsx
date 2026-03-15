@@ -1019,16 +1019,11 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     // Z unit = 250mm (block_height_mm)
     const zUnitMm = 250;
 
-    // Filter: project rooms that exist in a Z section OR have a floor_id (assigned to a level)
+    // Include ALL workspace rooms that have a valid floor polygon.
+    // The intersection test (findPolyIntersections) will naturally filter out
+    // rooms that don't cross the cut plane. This ensures rooms from all Z levels appear.
     const eligibleRooms = (workspaceRooms || []).filter(room => {
-      // Always include rooms assigned to a floor/level
-      if (room.floor_id) return true;
-      if (validRoomIds.size > 0) return validRoomIds.has(room.id);
-      if (verticalRoomNameSet.size > 0) {
-        const normalized = normalizeWorkspaceName(room.name);
-        return normalized ? verticalRoomNameSet.has(normalized) : false;
-      }
-      return true;
+      return room.floor_polygon && room.floor_polygon.length >= 3;
     });
 
     // For transversal sections (X cut), keep Y orientation tied to the immutable origin.
@@ -1400,24 +1395,40 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
           onFacePatternChange={handleFacePatternChange}
           allPolygonNames={allPolygonNames}
           onRegenerate={liveSection.sectionType !== 'vertical' ? async () => {
-            // Regenerate: keep existing polygons that have custom data, only add missing projected ones
+            // Regenerate: recompute auto-projected polygons and merge with existing ones
+            const autoPolys = computeProjectedPolygons(liveSection);
             const parsedCorners = parseCustomCorners();
             const sections = Array.isArray(parsedCorners.customSections)
               ? (parsedCorners.customSections as CustomSection[])
               : [];
-            // Mark section for re-projection without clearing existing polygons
-            // We set a flag so the projection logic adds missing spaces without overwriting
             const currentSection = sections.find(s => s.id === liveSection.id);
             const existingPolygons = currentSection?.polygons || [];
-            // Keep existing polygon IDs so projection only adds new ones
+            
+            // Keep existing polygons that have custom edits, add new auto-projected ones
+            const existingIds = new Set(existingPolygons.map((p: SectionPolygon) => p.id));
+            const newPolys = autoPolys.filter(ap => !existingIds.has(ap.id));
+            
+            // Also update dimensions of existing polygons from auto-projection
+            const autoById = new Map(autoPolys.map(p => [p.id, p]));
+            const updatedExisting = existingPolygons.map((p: SectionPolygon) => {
+              const auto = autoById.get(p.id);
+              if (!auto) return p;
+              // Only update if existing polygon has same vertex count (no manual edits)
+              if (p.vertices.length === auto.vertices.length && p.vertices.length === 4) {
+                return { ...p, vertices: auto.vertices, zBase: auto.zBase, zTop: auto.zTop };
+              }
+              return p;
+            });
+            
+            const mergedPolygons = [...updatedExisting, ...newPolys];
             const updated = sections.map(s =>
-              s.id === liveSection.id ? { ...s, polygons: existingPolygons, _regenerate: true } : s
+              s.id === liveSection.id ? { ...s, polygons: mergedPolygons } : s
             );
             await supabase.from('budget_floor_plans')
               .update({ custom_corners: { ...parsedCorners, customSections: updated } as any })
               .eq('id', floorPlan!.id);
             await invalidateSectionQueries();
-            toast.success('Espacios regenerados');
+            toast.success(`Espacios regenerados: ${newPolys.length} nuevos, ${updatedExisting.length} actualizados`);
           } : undefined}
         />
       </div>

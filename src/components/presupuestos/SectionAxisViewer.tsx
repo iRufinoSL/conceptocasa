@@ -226,7 +226,7 @@ export function SectionAxisViewer({
   });
 
   // Face properties panel state
-  const [facePanel, setFacePanel] = useState<{ polyId: string; polyName: string; faceKey: string; edgeCount: number; vertices: Array<{ x: number; y: number }> } | null>(null);
+  const [facePanel, setFacePanel] = useState<{ polyId: string; polyName: string; faceKey: string; edgeCount: number; vertices: Array<{ x: number; y: number }>; initialEditObjectId?: string; initialTab?: 'faces' | 'objects' } | null>(null);
 
   // Double-click timer for polygon fill
   const lastPolyClickRef = useRef<{ time: number; polyId: string } | null>(null);

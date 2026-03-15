@@ -905,7 +905,7 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
     try {
       const { data: floorPlan, error: floorPlanError } = await supabase
         .from('budget_floor_plans')
-        .select('id, scale_mode, block_length_mm')
+        .select('id, scale_mode, block_length_mm, custom_corners')
         .eq('budget_id', budgetId)
         .maybeSingle();
 
@@ -918,6 +918,7 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
       const cellSizeM = floorPlan.scale_mode === 'bloque'
         ? (floorPlan.block_length_mm || 625) / 1000
         : 1;
+      const verticalRefs = extractVerticalWorkspaceRefs(floorPlan.custom_corners);
 
       const { data: rooms, error: roomsError } = await supabase
         .from('budget_floor_plan_rooms')
@@ -926,7 +927,10 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
 
       if (roomsError) throw roomsError;
 
-      const allFaces = ((rooms || []) as WorkspaceAutoFaceSource[])
+      const eligibleRooms = ((rooms || []) as WorkspaceAutoFaceSource[])
+        .filter(room => isRoomEligibleByVerticalRefs(room, verticalRefs));
+
+      const allFaces = eligibleRooms
         .flatMap(room => buildAutoFacesForWorkspace(room, cellSizeM));
 
       if (allFaces.length === 0) {

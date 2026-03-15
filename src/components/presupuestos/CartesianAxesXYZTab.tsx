@@ -1030,8 +1030,23 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
   }, []);
 
   /** Compute auto-projected polygons for Y/X sections from workspace rooms */
-  const computeProjectedPolygons = useCallback((section: CustomSection): SectionPolygon[] => {
+  const computeProjectedPolygons = useCallback((section: CustomSection, otherSectionsOfSameType?: CustomSection[]): SectionPolygon[] => {
     if (section.sectionType === 'vertical') return [];
+
+    // Build a set of room IDs that are already explicitly saved in OTHER sections
+    // of the same type (e.g., other X sections). This prevents a workspace that was
+    // manually placed/saved in X20 from auto-projecting into X17.
+    const idsClaimedByOtherSections = new Set<string>();
+    if (otherSectionsOfSameType) {
+      for (const other of otherSectionsOfSameType) {
+        if (other.id === section.id) continue;
+        for (const poly of (other.polygons || [])) {
+          if (poly.vertices && poly.vertices.length > 0) {
+            idsClaimedByOtherSections.add(poly.id);
+          }
+        }
+      }
+    }
 
     const defaultHeight = 2.5; // fallback metres
     // Z unit = 250mm (block_height_mm)
@@ -1098,6 +1113,8 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       wallRoomId?: string,
     ) => {
       if (!poly || poly.length < 3) return;
+      // Skip rooms already saved in another section of the same type
+      if (idsClaimedByOtherSections.has(key)) return;
       const cutAxis = section.sectionType === 'longitudinal' ? 'y' : 'x';
       const axisVal = section.axisValue;
 
@@ -1303,7 +1320,8 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       ? savedPolys
       : savedPolys.map(rebaseSavedPolygonToRoomLevel);
 
-    const autoPolys = computeProjectedPolygons(liveSection);
+    const siblingSections = allSections.filter(s => s.sectionType === liveSection.sectionType);
+    const autoPolys = computeProjectedPolygons(liveSection, siblingSections);
     const autoPolysById = new Map(autoPolys.map(p => [p.id, p]));
     const autoNameToId = new Map<string, string>();
     for (const poly of autoPolys) {
@@ -1460,7 +1478,8 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
           allPolygonNames={allPolygonNames}
           onRegenerate={liveSection.sectionType !== 'vertical' ? async () => {
             // Regenerate: recompute auto-projected polygons and merge with existing ones
-            const autoPolys = computeProjectedPolygons(liveSection);
+            const siblingSections = allSections.filter(s => s.sectionType === liveSection.sectionType);
+            const autoPolys = computeProjectedPolygons(liveSection, siblingSections);
             const autoById = new Map(autoPolys.map(p => [p.id, p]));
             const autoNameToId = new Map<string, string>();
             for (const poly of autoPolys) {

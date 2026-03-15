@@ -194,9 +194,9 @@ const SECTION_CONFIG: Record<SectionType, { title: string; axis: 'X' | 'Y' | 'Z'
 };
 
 const INITIAL_DRAFTS: Record<SectionType, SectionDraft> = {
-  vertical: { name: 'Sección Z=0', axisValue: '0' },
-  longitudinal: { name: 'Sección Y=0', axisValue: '0' },
-  transversal: { name: 'Sección X=0', axisValue: '0' },
+  vertical: { name: '', axisValue: '0' },
+  longitudinal: { name: '', axisValue: '0' },
+  transversal: { name: '', axisValue: '0' },
 };
 
 export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabProps) {

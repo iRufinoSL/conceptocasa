@@ -1193,7 +1193,10 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
         return defaultZTop;
       };
 
-      const getTopAtIntersection = (hVal: number): number => {
+      // Determine if this section is at the boundary (edge) of the polygon, not cutting through its interior
+      const isBoundarySection = Math.abs(axisVal - polyMinAxis) < 0.01 || Math.abs(axisVal - polyMaxAxis) < 0.01;
+
+      const getTopAtIntersection = (hVal: number): number | null => {
         const otherAxis = cutAxis === 'y' ? 'x' : 'y';
         for (let i = 0; i < poly.length; i++) {
           const j = (i + 1) % poly.length;
@@ -1215,18 +1218,31 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
             }
           }
         }
-        return defaultZTop;
+        return null; // No match found — don't assume defaultZTop blindly
       };
 
-      const zTopLeft = getTopAtIntersection(hMin);
-      const zTopRight = getTopAtIntersection(hMax);
+      const zTopLeftRaw = getTopAtIntersection(hMin);
+      const zTopRightRaw = getTopAtIntersection(hMax);
 
-      // Guard against degenerate polygons (collapsed to a line)
-      const maxZTop = Math.max(zTopLeft, zTopRight);
-      const finalZTop = maxZTop <= zBase ? zBase + Math.max(1, Math.round((defaultHeight * 1000) / zUnitMm)) : maxZTop;
-      const finalZTopLeft = zTopLeft <= zBase ? finalZTop : zTopLeft;
-      const finalZTopRight = zTopRight <= zBase ? finalZTop : zTopRight;
+      // For boundary sections: use the actual resolved heights (may equal zBase → line/thin strip)
+      // For interior sections: fall back to defaultZTop if resolution failed, and apply degenerate guard
+      let finalZTopLeft: number;
+      let finalZTopRight: number;
 
+      if (isBoundarySection) {
+        // At the boundary edge, trust the actual wall heights — if they equal zBase, it's a line
+        finalZTopLeft = zTopLeftRaw ?? zBase;
+        finalZTopRight = zTopRightRaw ?? zBase;
+      } else {
+        const zTopLeft = zTopLeftRaw ?? defaultZTop;
+        const zTopRight = zTopRightRaw ?? defaultZTop;
+        const maxZTop = Math.max(zTopLeft, zTopRight);
+        const guardedZTop = maxZTop <= zBase ? zBase + Math.max(1, Math.round((defaultHeight * 1000) / zUnitMm)) : maxZTop;
+        finalZTopLeft = zTopLeft <= zBase ? guardedZTop : zTopLeft;
+        finalZTopRight = zTopRight <= zBase ? guardedZTop : zTopRight;
+      }
+
+      // If both tops equal zBase at boundary, still push as a line polygon (height=0)
       projected.push({
         id: key,
         name: roomName,
@@ -1237,7 +1253,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
           { x: hMin, y: finalZTopLeft, z: 0 },
         ],
         zBase,
-        zTop: Math.max(finalZTopLeft, finalZTopRight),
+        zTop: Math.max(finalZTopLeft, finalZTopRight, zBase),
         hasFloor,
         hasCeiling,
       });

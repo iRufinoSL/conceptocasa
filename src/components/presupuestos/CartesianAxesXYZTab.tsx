@@ -1068,19 +1068,19 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       const result: WorkspaceRoom[] = [];
       for (const [, rooms] of byName) {
         const canonical = rooms.filter(r => validRoomIds.has(r.id));
-        if (canonical.length > 0) {
-          result.push(...canonical);
-          continue;
-        }
+        const pool = canonical.length > 0
+          ? canonical
+          : (hasVerticalReference ? [] : rooms);
 
-        if (!hasVerticalReference) {
-          const recent = [...rooms].sort((a, b) => {
-            const aTime = a.updated_at ? new Date(a.updated_at).getTime() : 0;
-            const bTime = b.updated_at ? new Date(b.updated_at).getTime() : 0;
-            return bTime - aTime;
-          })[0];
-          if (recent) result.push(recent);
-        }
+        if (pool.length === 0) continue;
+
+        const winner = [...pool].sort((a, b) => {
+          const aTime = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+          const bTime = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+          return bTime - aTime;
+        })[0];
+
+        if (winner) result.push(winner);
       }
 
       return result;
@@ -1090,6 +1090,11 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     // No mirroring by point of view: Y=0 must remain the same reference side.
     const projected: SectionPolygon[] = [];
     const projectedKeys = new Set<string>();
+    const sameTypeAxisValues = (otherSectionsOfSameType || [])
+      .filter(s => s.sectionType === section.sectionType)
+      .map(s => s.axisValue);
+    const minSectionAxis = sameTypeAxisValues.length > 0 ? Math.min(...sameTypeAxisValues) : section.axisValue;
+    const AXIS_EPS = 1e-6;
 
     const pushProjectedRoom = (
       key: string,
@@ -1104,6 +1109,19 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       if (!poly || poly.length < 3) return;
       const cutAxis = section.sectionType === 'longitudinal' ? 'y' : 'x';
       const axisVal = section.axisValue;
+
+      // Prevent sibling bleed between adjacent sections:
+      // only include polygons that cross this axis interval, not those that merely start here.
+      const axisCoords = poly.map(v => v[cutAxis]).filter(Number.isFinite);
+      if (axisCoords.length < 2) return;
+      const polyMinAxis = Math.min(...axisCoords);
+      const polyMaxAxis = Math.max(...axisCoords);
+      const onMinBoundary = Math.abs(axisVal - polyMinAxis) <= AXIS_EPS;
+      const isFirstSectionAxis = Math.abs(axisVal - minSectionAxis) <= AXIS_EPS;
+      const belongsToSection =
+        (axisVal > polyMinAxis + AXIS_EPS && axisVal <= polyMaxAxis + AXIS_EPS) ||
+        (onMinBoundary && isFirstSectionAxis);
+      if (!belongsToSection) return;
 
       const intersections = findPolyIntersections(poly, cutAxis, axisVal);
       if (intersections.length < 2) return;
@@ -1327,17 +1345,16 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
           // Keep explicit face-assignment polygons (wall / ceiling) created from workspace bindings
           if (/_wall\d+$/.test(poly.id) || /_ceiling$/.test(poly.id)) return true;
 
-          // Always keep manually drawn polygons that were explicitly saved in this section
-          // (they may not match any auto-projection, e.g. drawn from scratch)
-          // We identify them as having vertices but no auto-projection match — keep them.
+          // If this polygon belongs to a real workspace room but no longer projects here,
+          // treat it as stale carry-over from another sibling section and drop it.
+          if (workspaceRoomMap.has(poly.id)) return false;
+
+          // For truly manual polygons (non-workspace IDs), keep them unless they collide by name
+          // with a canonical auto-projection in this section.
           const key = normalizeWorkspaceName(poly.name);
-          if (!key) return true; // no name → keep (manually drawn)
-
+          if (!key) return true;
           const canonicalId = autoNameToId.get(key);
-          // If no auto-projection exists for this name, keep the manually saved polygon
           if (!canonicalId) return true;
-
-          // Remove stale duplicates with same normalized name but obsolete IDs
           return canonicalId === poly.id;
         });
 
@@ -1487,12 +1504,16 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
             const currentSection = sections.find(s => s.id === liveSection.id);
             const existingPolygons = currentSection?.polygons || [];
 
-            // Remove stale duplicates that only differ by old IDs but collide by normalized auto name.
-            // Keep hidden markers (vertices:[]) so user-deleted spaces do not reappear.
+            // Remove stale section carry-over while preserving hidden markers and face polygons.
             const cleanedExisting = existingPolygons.filter((p: SectionPolygon) => {
               if (!p.vertices || p.vertices.length === 0) return true;
               if (autoById.has(p.id)) return true;
               if (/_wall\d+$/.test(p.id) || /_ceiling$/.test(p.id)) return true;
+
+              // Real workspace polygons that no longer auto-project in this section are stale.
+              if (workspaceRoomMap.has(p.id)) return false;
+
+              // Keep manual non-workspace polygons unless they collide with a canonical auto name.
               const key = normalizeWorkspaceName(p.name);
               if (!key) return true;
               return !autoNameToId.has(key);

@@ -1021,14 +1021,48 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
 
     // Project only workspaces that still exist in vertical (Z) sections.
     // This prevents ghost/deleted rooms from being reintroduced in X/Y regeneration.
+    // CRITICAL: Deduplicate rooms by normalized name — prefer canonical IDs from vertical sections.
     const hasVerticalReference = validRoomIds.size > 0 || verticalRoomNameSet.size > 0;
-    const eligibleRooms = (workspaceRooms || []).filter(room => {
+    const allEligible = (workspaceRooms || []).filter(room => {
       if (!room.floor_polygon || room.floor_polygon.length < 3) return false;
       if (!hasVerticalReference) return true;
       if (validRoomIds.has(room.id)) return true;
       const normalized = normalizeWorkspaceName(room.name);
       return !!(normalized && verticalRoomNameSet.has(normalized));
     });
+
+    // Deduplicate: group by normalized name, keep only the canonical room per name.
+    // A canonical room is one whose ID exists in a vertical section polygon.
+    // If multiple canonical rooms share the same name (e.g. same name at different floors),
+    // keep all canonical ones but discard non-canonical duplicates.
+    const eligibleRooms = (() => {
+      const byName = new Map<string, WorkspaceRoom[]>();
+      for (const room of allEligible) {
+        const key = normalizeWorkspaceName(room.name);
+        if (!key) continue;
+        const list = byName.get(key) || [];
+        list.push(room);
+        byName.set(key, list);
+      }
+
+      const result: WorkspaceRoom[] = [];
+      for (const [, rooms] of byName) {
+        const canonical = rooms.filter(r => validRoomIds.has(r.id));
+        if (canonical.length > 0) {
+          // Only keep rooms whose IDs are in vertical sections (canonical)
+          result.push(...canonical);
+        } else {
+          // No canonical match — pick the most recently updated one only
+          const sorted = [...rooms].sort((a, b) => {
+            const aTime = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+            const bTime = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+            return bTime - aTime;
+          });
+          if (sorted[0]) result.push(sorted[0]);
+        }
+      }
+      return result;
+    })();
 
     // For transversal sections (X cut), keep Y orientation tied to the immutable origin.
     // No mirroring by point of view: Y=0 must remain the same reference side.

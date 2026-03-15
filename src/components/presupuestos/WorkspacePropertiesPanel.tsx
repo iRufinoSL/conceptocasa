@@ -103,6 +103,8 @@ interface WorkspacePropertiesPanelProps {
   workspaceName: string;
   sectionType: string;
   sectionName: string;
+  /** Axis value of the section (e.g. 0 for X0, 5 for Y5) */
+  sectionAxisValue?: number;
   floorPlanId?: string;
   onClose: () => void;
   focusFace?: string;

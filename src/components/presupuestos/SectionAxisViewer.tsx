@@ -2358,6 +2358,7 @@ export function SectionAxisViewer({
           workspaceName={facePanel.polyName}
           sectionType={sectionType}
           sectionName={sectionName}
+          sectionAxisValue={axisValue}
           floorPlanId={floorPlanId}
           focusFace={facePanel.faceKey}
           edgeCount={facePanel.edgeCount}

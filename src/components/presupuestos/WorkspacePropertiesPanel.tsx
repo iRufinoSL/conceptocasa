@@ -160,6 +160,7 @@ export function WorkspacePropertiesPanel({
   const [cellSizeM, setCellSizeM] = useState(1);
 
   // Object form state
+  const objectFormRef = useRef<HTMLDivElement>(null);
   const [showObjectForm, setShowObjectForm] = useState(false);
   const [objName, setObjName] = useState('');
   const [objType, setObjType] = useState('material');
@@ -1117,6 +1118,10 @@ export function WorkspacePropertiesPanel({
       else setObjTargetFace(`wall-${wall.wall_index - 1}`);
     }
     setActiveTab('objects');
+    // Scroll form into view after render
+    setTimeout(() => {
+      objectFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
   };
 
   /** Save changes to an existing object */
@@ -1643,7 +1648,7 @@ export function WorkspacePropertiesPanel({
 
           {/* Add object form */}
           {showObjectForm && (
-            <div className="border rounded p-2 bg-muted/20 space-y-1.5">
+            <div ref={objectFormRef} className="border rounded p-2 bg-muted/20 space-y-1.5">
               <p className="text-[10px] font-semibold">{editingObjId ? '✏️ Editar objeto' : 'Nuevo objeto / hueco'}</p>
 
               {/* Presets for huecos + DB templates */}

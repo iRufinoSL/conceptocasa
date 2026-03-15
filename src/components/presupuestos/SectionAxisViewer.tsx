@@ -1265,7 +1265,7 @@ export function SectionAxisViewer({
 
       elements.push(
         <g key={`center-${poly.id}`} data-pdf-layer="center-labels"
-          style={{ cursor: 'pointer' }}
+          style={{ cursor: vertexEditMode ? 'default' : 'pointer', pointerEvents: vertexEditMode ? 'none' : 'auto' }}
           onClick={(e) => {
             e.stopPropagation();
             setFacePanel({ polyId: poly.id, polyName: poly.name, faceKey: 'floor', edgeCount: poly.vertices.length, vertices: poly.vertices.map(v => ({ x: v.x, y: v.y })) });

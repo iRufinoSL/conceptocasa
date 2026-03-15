@@ -673,7 +673,7 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
 
       const { data: rooms } = await supabase
         .from('budget_floor_plan_rooms')
-        .select('id, name, length, width, height, floor_polygon, is_base')
+        .select('id, name, length, width, height, floor_polygon, is_base, has_floor, has_ceiling')
         .eq('floor_plan_id', fp.id)
         .order('name', { ascending: true });
       if (!rooms) return [];

@@ -923,8 +923,24 @@ export function WorkspacePropertiesPanel({
     return data.id;
   };
 
-  const applyPreset = (idx: number) => {
+  const applyPreset = (val: string) => {
+    // Check if it's a DB template (prefixed with 'db-')
+    if (val.startsWith('db-')) {
+      const tplId = val.replace('db-', '');
+      const tpl = dbTemplates.find(t => t.id === tplId);
+      if (tpl) {
+        setObjType(tpl.object_type || 'material');
+        setObjWidthMm(tpl.width_mm ? String(tpl.width_mm) : '');
+        setObjHeightMm(tpl.height_mm ? String(tpl.height_mm) : '');
+        setObjThickness(tpl.thickness_mm ? String(tpl.thickness_mm) : '');
+        setObjName(tpl.name);
+        setObjSillHeight('');
+      }
+      return;
+    }
+    const idx = parseInt(val, 10);
     const p = OBJECT_PRESETS[idx];
+    if (!p) return;
     setObjType(p.type);
     setObjWidthMm(String(p.width));
     setObjHeightMm(String(p.height));

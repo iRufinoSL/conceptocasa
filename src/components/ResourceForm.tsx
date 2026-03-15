@@ -39,6 +39,9 @@ const initialFormState = {
   supplierId: null as string | null,
   tradeId: null as string | null,
   vatIncludedPercent: null as number | null,
+  widthMm: null as number | null,
+  heightMm: null as number | null,
+  depthMm: null as number | null,
 };
 
 export function ResourceForm({ 

@@ -392,7 +392,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
           hMap.set(r.id, huecos);
         }
       }
-      console.log('[HUECOS DEBUG] Final hMap size:', hMap.size);
+      
       setWallHuecos(hMap);
     })();
   }, [rooms]);

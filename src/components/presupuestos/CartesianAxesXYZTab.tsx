@@ -1068,19 +1068,19 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       const result: WorkspaceRoom[] = [];
       for (const [, rooms] of byName) {
         const canonical = rooms.filter(r => validRoomIds.has(r.id));
-        if (canonical.length > 0) {
-          result.push(...canonical);
-          continue;
-        }
+        const pool = canonical.length > 0
+          ? canonical
+          : (hasVerticalReference ? [] : rooms);
 
-        if (!hasVerticalReference) {
-          const recent = [...rooms].sort((a, b) => {
-            const aTime = a.updated_at ? new Date(a.updated_at).getTime() : 0;
-            const bTime = b.updated_at ? new Date(b.updated_at).getTime() : 0;
-            return bTime - aTime;
-          })[0];
-          if (recent) result.push(recent);
-        }
+        if (pool.length === 0) continue;
+
+        const winner = [...pool].sort((a, b) => {
+          const aTime = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+          const bTime = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+          return bTime - aTime;
+        })[0];
+
+        if (winner) result.push(winner);
       }
 
       return result;

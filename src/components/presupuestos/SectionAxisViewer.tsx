@@ -298,7 +298,7 @@ export function SectionAxisViewer({
     coord_x: number | null;
     coord_y: number | null;
     coord_z: number | null;
-  }
+    wall_index: number;
   const [sectionObjects, setSectionObjects] = useState<SectionObjectData[]>([]);
   const [draggingObjectId, setDraggingObjectId] = useState<string | null>(null);
   const [dragStart, setDragStart] = useState<{ x: number; y: number; posX: number; sill: number } | null>(null);

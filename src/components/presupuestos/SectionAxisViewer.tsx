@@ -1124,14 +1124,16 @@ export function SectionAxisViewer({
       if (fillPatternObj) {
         elements.push(
           <polygon key={`poly-fill-${poly.id}`} points={pointsStr}
-            fill={`url(#section-pat-${fillPatternId})`} fillOpacity={0.6}
-            stroke="none" style={{ cursor: 'pointer', pointerEvents: 'fill' }}
+            fill={`url(#section-pat-${fillPatternId})`}
+            fillOpacity={isSelectedInEdit ? 0.6 : 0.35}
+            stroke="none"
+            style={{ cursor: 'pointer', pointerEvents: 'fill', opacity: isSelectedInEdit ? 1 : 0.5 }}
             onClick={handlePolyFillClick} />
         );
         // Border on top
         elements.push(
           <polygon key={`poly-border-${poly.id}`} points={pointsStr}
-            fill="none" stroke={color} strokeWidth={2.5} pointerEvents="none" />
+            fill="none" stroke={color} strokeWidth={isSelectedInEdit ? 2.5 : 1.5} pointerEvents="none" opacity={isSelectedInEdit ? 1 : 0.5} />
         );
       } else {
         elements.push(

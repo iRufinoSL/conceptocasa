@@ -248,8 +248,8 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
   const [selectedExistingWorkspace, setSelectedExistingWorkspace] = useState('');
   // ── Wall visual patterns: roomId → patternId (from Superficie layer 0) ──
   const [wallPatterns, setWallPatterns] = useState<Map<string, string>>(new Map());
-  // ── Wall huecos for Z section rendering: roomId → [{wallIndex, positionX, widthMm, name, objectType}] ──
-  const [wallHuecos, setWallHuecos] = useState<Map<string, Array<{ wallIndex: number; positionXmm: number; widthMm: number; name: string; objectType: string }>>>(new Map());
+  // ── Wall huecos for Z section rendering ──
+  const [wallHuecos, setWallHuecos] = useState<Map<string, Array<{ wallIndex: number; positionXmm: number; widthMm: number; name: string; objectType: string; edgeDx: number; edgeDy: number; edgeLen: number }>>>(new Map());
   useEffect(() => {
     if (!rooms?.length) return;
     const roomIds = rooms.map(r => r.id);
@@ -331,15 +331,39 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
       setWallPatterns(pMap);
 
       // Huecos — index by normalized room name so section copies can inherit
-      type HuecoEntry = { wallIndex: number; positionXmm: number; widthMm: number; name: string; objectType: string };
+      // Store edge direction from base room polygon to correctly match edges in section copies
+      type HuecoEntry = { wallIndex: number; positionXmm: number; widthMm: number; name: string; objectType: string; edgeDx: number; edgeDy: number; edgeLen: number };
       const huecosByName = new Map<string, HuecoEntry[]>();
       if (huecoRes.data?.length) {
+        // Build a lookup from roomId -> polygon (from rooms prop)
+        const roomPolyById = new Map<string, Array<{x: number; y: number}>>();
+        for (const r of rooms) {
+          if (r.floorPolygon && r.floorPolygon.length >= 3) {
+            roomPolyById.set(r.id, r.floorPolygon);
+          }
+        }
+
         for (const h of huecoRes.data) {
           const roomId = wallRoomMap.get(h.wall_id);
           const wallIndex = wallIndexMap.get(h.wall_id);
           if (!roomId || wallIndex == null || wallIndex < 1) continue;
           const rName = roomNameById.get(roomId) || '';
           if (!rName) continue;
+
+          // Compute normalized edge direction from base room's polygon
+          const poly = roomPolyById.get(roomId);
+          const edgeIdx = wallIndex - 1;
+          let edgeDx = 1, edgeDy = 0, edgeLen = 1;
+          if (poly && edgeIdx >= 0 && edgeIdx < poly.length) {
+            const p1 = poly[edgeIdx];
+            const p2 = poly[(edgeIdx + 1) % poly.length];
+            const dx = p2.x - p1.x;
+            const dy = p2.y - p1.y;
+            const len = Math.hypot(dx, dy);
+            edgeLen = len;
+            if (len > 0) { edgeDx = dx / len; edgeDy = dy / len; }
+          }
+
           const list = huecosByName.get(rName) || [];
           list.push({
             wallIndex,
@@ -347,11 +371,16 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
             widthMm: h.width_mm ?? 800,
             name: h.name || '',
             objectType: h.object_type || 'hueco',
+            edgeDx,
+            edgeDy,
+            edgeLen,
           });
           huecosByName.set(rName, list);
         }
       }
 
+      console.log('[HUECOS DEBUG] huecosByName:', [...huecosByName.entries()].map(([k,v]) => `${k}:${v.length}`));
+      
       // Map huecos back to displayed room IDs by name matching
       const hMap = new Map<string, HuecoEntry[]>();
       for (const r of rooms) {
@@ -361,6 +390,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
           hMap.set(r.id, huecos);
         }
       }
+      console.log('[HUECOS DEBUG] Final hMap size:', hMap.size);
       setWallHuecos(hMap);
     })();
   }, [rooms]);
@@ -2225,21 +2255,55 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
 
                     {/* Wall objects (huecos) — small rectangles on wall edges */}
                     {(() => {
-                      const roomHuecos = wallHuecos.get(room.id);
-                      if (!roomHuecos?.length) return null;
+                       const roomHuecos = wallHuecos.get(room.id);
+                       if (!roomHuecos?.length) {
+                         // Debug: log rooms that have no huecos
+                         if (room.name.toLowerCase().includes('hab')) {
+                           console.log('[HUECOS RENDER] Room', room.name, room.id.slice(0,8), 'has NO huecos. wallHuecos keys:', [...wallHuecos.keys()].map(k => k.slice(0,8)));
+                         }
+                         return null;
+                       }
+                       console.log('[HUECOS RENDER] Room', room.name, room.id.slice(0,8), 'has', roomHuecos.length, 'huecos:', roomHuecos);
                       const poly = room.floorPolygon!;
                       const svgPtsH = poly.map(p => ({
                         x: margin.left + getHIndex(p.x) * cellSize,
                         y: margin.top + getVIndex(p.y) * cellSize,
                       }));
-                      // Map wallIndex (1-4) to polygon edge index
-                      // wallIndex 1=top (edge from vertex 0→1 in typical rect), etc.
-                      // For arbitrary polygons, map wall indices to edges by proximity
+                      // Match hueco edges by direction vector (handles different polygon vertex orderings)
                       const edgeCount = svgPtsH.length;
+                      // Pre-compute normalized edge directions for this room's polygon
+                      const polyEdgeDirs: Array<{dx: number; dy: number}> = [];
+                      for (let ei = 0; ei < edgeCount; ei++) {
+                        const ep1 = poly[ei];
+                        const ep2 = poly[(ei + 1) % poly.length];
+                        const edx = ep2.x - ep1.x;
+                        const edy = ep2.y - ep1.y;
+                        const elen = Math.hypot(edx, edy);
+                        polyEdgeDirs.push(elen > 0 ? { dx: edx / elen, dy: edy / elen } : { dx: 1, dy: 0 });
+                      }
+
                       return roomHuecos.map((hueco, hi) => {
-                        // Find the edge corresponding to this wallIndex
-                        // For rectangular rooms: wallIndex 1→edge0(top), 2→edge1(right), 3→edge2(bottom), 4→edge3(left)
-                        const edgeIdx = Math.min(hueco.wallIndex - 1, edgeCount - 1);
+                        // Find best matching edge by direction similarity (dot product)
+                        let bestEdgeIdx = Math.min(hueco.wallIndex - 1, edgeCount - 1);
+                        let bestScore = -999;
+                        for (let ei = 0; ei < edgeCount; ei++) {
+                          // Direction match (0..1, where 1 = perfect match)
+                          const dot = Math.abs(hueco.edgeDx * polyEdgeDirs[ei].dx + hueco.edgeDy * polyEdgeDirs[ei].dy);
+                          // Edge length match (use grid units)
+                          const ep1 = poly[ei];
+                          const ep2 = poly[(ei + 1) % poly.length];
+                          const thisEdgeLen = Math.hypot(ep2.x - ep1.x, ep2.y - ep1.y);
+                          const lenRatio = hueco.edgeLen > 0 && thisEdgeLen > 0
+                            ? 1 - Math.abs(thisEdgeLen - hueco.edgeLen) / Math.max(thisEdgeLen, hueco.edgeLen)
+                            : 0;
+                          // Combined score: direction is primary, length is tiebreaker
+                          const score = dot * 10 + lenRatio;
+                          if (score > bestScore) {
+                            bestScore = score;
+                            bestEdgeIdx = ei;
+                          }
+                        }
+                        const edgeIdx = bestEdgeIdx;
                         if (edgeIdx < 0 || edgeIdx >= edgeCount) return null;
                         const p1 = svgPtsH[edgeIdx];
                         const p2 = svgPtsH[(edgeIdx + 1) % edgeCount];

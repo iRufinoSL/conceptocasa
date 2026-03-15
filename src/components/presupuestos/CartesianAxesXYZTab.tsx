@@ -337,6 +337,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     vertical: allSections.filter(s => s.sectionType === 'vertical').sort((a, b) => a.axisValue - b.axisValue),
     longitudinal: allSections.filter(s => s.sectionType === 'longitudinal').sort((a, b) => a.axisValue - b.axisValue),
     transversal: allSections.filter(s => s.sectionType === 'transversal').sort((a, b) => a.axisValue - b.axisValue),
+    inclined: allSections.filter(s => s.sectionType === 'inclined').sort((a, b) => a.name.localeCompare(b.name, 'es')),
   }), [allSections]);
 
   const updateDraft = (type: SectionType, patch: Partial<SectionDraft>) => {

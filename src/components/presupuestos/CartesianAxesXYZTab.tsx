@@ -1019,16 +1019,11 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     // Z unit = 250mm (block_height_mm)
     const zUnitMm = 250;
 
-    // Filter: project rooms that exist in a Z section OR have a floor_id (assigned to a level)
+    // Include ALL workspace rooms that have a valid floor polygon.
+    // The intersection test (findPolyIntersections) will naturally filter out
+    // rooms that don't cross the cut plane. This ensures rooms from all Z levels appear.
     const eligibleRooms = (workspaceRooms || []).filter(room => {
-      // Always include rooms assigned to a floor/level
-      if (room.floor_id) return true;
-      if (validRoomIds.size > 0) return validRoomIds.has(room.id);
-      if (verticalRoomNameSet.size > 0) {
-        const normalized = normalizeWorkspaceName(room.name);
-        return normalized ? verticalRoomNameSet.has(normalized) : false;
-      }
-      return true;
+      return room.floor_polygon && room.floor_polygon.length >= 3;
     });
 
     // For transversal sections (X cut), keep Y orientation tied to the immutable origin.

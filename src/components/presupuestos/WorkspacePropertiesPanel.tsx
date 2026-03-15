@@ -1560,11 +1560,14 @@ export function WorkspacePropertiesPanel({
                 variant="outline"
                 className="h-6 text-[10px] gap-1"
                 onClick={() => {
-                  setShowObjectForm(!showObjectForm);
-                  if (!showObjectForm) {
+                  if (showObjectForm) {
+                    resetForm();
+                  } else {
+                    setEditingObjId(null);
                     setObjTargetFace('wall-0');
                     setObjLayerOrder(String(getNextLayerOrder('wall-0')));
                     setObjResourceId('_none');
+                    setShowObjectForm(true);
                   }
                 }}
               >

@@ -112,6 +112,10 @@ interface WorkspacePropertiesPanelProps {
   onOpeningsChange?: () => void;
   localFaceTypes?: Record<string, string>;
   onLocalFaceTypeChange?: (faceKey: string, wallType: string) => void;
+  /** If set, auto-open objects tab and load this object for editing */
+  initialEditObjectId?: string;
+  /** Force initial tab */
+  initialTab?: 'faces' | 'objects';
 }
 
 interface ExternalResourceOption {

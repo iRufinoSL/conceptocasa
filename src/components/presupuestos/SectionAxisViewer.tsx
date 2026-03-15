@@ -1538,41 +1538,10 @@ export function SectionAxisViewer({
         const pxPerMm = edgeLen / edgeMm;
 
         if (sectionType === 'vertical') {
-          // Z sections: openings appear as rectangles ON the wall line (horizontal)
-          for (const op of entry.openings) {
-            const posXmm = op.position_x || 0;
-            const wMm = op.width;
-            const color = op.opening_type === 'puerta' ? DOOR_COLOR : OPENING_COLOR;
-            // Position along edge
-            const startPx = posXmm * pxPerMm;
-            const widthPx = wMm * pxPerMm;
-            const thickness = 8; // px thickness perpendicular to edge
-
-            const x1 = a.px + ux * startPx;
-            const y1 = a.py + uy * startPx;
-            const x2 = a.px + ux * (startPx + widthPx);
-            const y2 = a.py + uy * (startPx + widthPx);
-
-            // Rectangle perpendicular to edge
-            const p1 = `${x1 + nx * thickness / 2},${y1 + ny * thickness / 2}`;
-            const p2 = `${x2 + nx * thickness / 2},${y2 + ny * thickness / 2}`;
-            const p3 = `${x2 - nx * thickness / 2},${y2 - ny * thickness / 2}`;
-            const p4 = `${x1 - nx * thickness / 2},${y1 - ny * thickness / 2}`;
-
-            elements.push(
-              <g key={`opening-${op.id}`}>
-                <polygon points={`${p1} ${p2} ${p3} ${p4}`}
-                  fill={color} fillOpacity={0.5} stroke={color} strokeWidth={1.5} />
-                {op.name && (
-                  <text x={(x1 + x2) / 2 + nx * 14} y={(y1 + y2) / 2 + ny * 14}
-                    textAnchor="middle" fontSize={7} fontWeight={600} fill={color} fontFamily="sans-serif"
-                    stroke="white" strokeWidth={1.5} paintOrder="stroke">
-                    {op.name}
-                  </text>
-                )}
-              </g>
-            );
-          }
+          // Z sections (floor plan view): Do NOT render openings (ventanas/puertas) as rectangles.
+          // Windows and doors are vertical elements that don't appear in a top-down floor plan view.
+          // Skip all openings in vertical/Z sections.
+          continue;
         } else {
           // X/Y sections: openings appear as vertical rectangles on the wall.
           // Here polygon Y-values are in grid units, so convert with current vertical scale (mm per unit).

@@ -795,20 +795,26 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
     queryFn: async () => {
       const { data: fp } = await supabase
         .from('budget_floor_plans')
-        .select('id')
+        .select('id, custom_corners')
         .eq('budget_id', budgetId)
         .maybeSingle();
       if (!fp) return [];
+
+      const verticalRefs = extractVerticalWorkspaceRefs(fp.custom_corners);
       const { data: rooms } = await supabase
         .from('budget_floor_plan_rooms')
-        .select('id, name')
+        .select('id, name, floor_polygon')
         .eq('floor_plan_id', fp.id);
       if (!rooms?.length) return [];
-      const roomMap = new Map(rooms.map(r => [r.id, r.name]));
+
+      const eligibleRooms = rooms.filter(room => isRoomEligibleByVerticalRefs(room as any, verticalRefs));
+      if (!eligibleRooms.length) return [];
+
+      const roomMap = new Map(eligibleRooms.map(r => [r.id, r.name]));
       const { data: walls } = await supabase
         .from('budget_floor_plan_walls')
         .select('id, room_id, wall_index')
-        .in('room_id', rooms.map(r => r.id));
+        .in('room_id', eligibleRooms.map(r => r.id));
       if (!walls?.length) return [];
       const wallRoomMap = new Map(walls.map(w => [w.id, { roomId: w.room_id, wallIndex: w.wall_index }]));
       const { data: objects } = await supabase

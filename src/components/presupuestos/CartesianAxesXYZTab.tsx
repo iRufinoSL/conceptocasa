@@ -1033,20 +1033,9 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
   const computeProjectedPolygons = useCallback((section: CustomSection, otherSectionsOfSameType?: CustomSection[]): SectionPolygon[] => {
     if (section.sectionType === 'vertical') return [];
 
-    // Build a set of room IDs that are already explicitly saved in OTHER sections
-    // of the same type (e.g., other X sections). This prevents a workspace that was
-    // manually placed/saved in X20 from auto-projecting into X17.
-    const idsClaimedByOtherSections = new Set<string>();
-    if (otherSectionsOfSameType) {
-      for (const other of otherSectionsOfSameType) {
-        if (other.id === section.id) continue;
-        for (const poly of (other.polygons || [])) {
-          if (poly.vertices && poly.vertices.length > 0) {
-            idsClaimedByOtherSections.add(poly.id);
-          }
-        }
-      }
-    }
+    // NOTE: We no longer exclude rooms just because they appear in sibling sections.
+    // A workspace can legitimately intersect multiple X (or Y) planes.
+    // The geometric intersection check (findPolyIntersections) is the authoritative filter.
 
     const defaultHeight = 2.5; // fallback metres
     // Z unit = 250mm (block_height_mm)
@@ -1113,8 +1102,6 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       wallRoomId?: string,
     ) => {
       if (!poly || poly.length < 3) return;
-      // Skip rooms already saved in another section of the same type
-      if (idsClaimedByOtherSections.has(key)) return;
       const cutAxis = section.sectionType === 'longitudinal' ? 'y' : 'x';
       const axisVal = section.axisValue;
 
@@ -1332,17 +1319,23 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     const filteredSavedPolys = liveSection.sectionType === 'vertical'
       ? normalizedSavedPolys
       : normalizedSavedPolys.filter(poly => {
+          // Always keep hidden markers (empty vertices = user explicitly hid this space)
           if (!poly.vertices || poly.vertices.length === 0) return true;
+          // Always keep if it matches an auto-projected polygon
           if (autoPolysById.has(poly.id)) return true;
 
           // Keep explicit face-assignment polygons (wall / ceiling) created from workspace bindings
           if (/_wall\d+$/.test(poly.id) || /_ceiling$/.test(poly.id)) return true;
 
+          // Always keep manually drawn polygons that were explicitly saved in this section
+          // (they may not match any auto-projection, e.g. drawn from scratch)
+          // We identify them as having vertices but no auto-projection match — keep them.
           const key = normalizeWorkspaceName(poly.name);
-          if (!key) return false;
+          if (!key) return true; // no name → keep (manually drawn)
 
           const canonicalId = autoNameToId.get(key);
-          if (!canonicalId) return false;
+          // If no auto-projection exists for this name, keep the manually saved polygon
+          if (!canonicalId) return true;
 
           // Remove stale duplicates with same normalized name but obsolete IDs
           return canonicalId === poly.id;

@@ -1129,17 +1129,18 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
         }
       }
 
-      // Also check vertical section polygons for this room's actual drawn height
+      // Also check vertical section polygons for this room's actual height (zTop/zBase)
       if (!effectiveHeightM) {
         for (const src of verticalPolygonSources) {
           if (src.polygon.id === key || src.polygon.name === roomName) {
-            const verts = src.polygon.vertices;
-            if (verts && verts.length >= 3) {
-              const minY = Math.min(...verts.map(v => v.y));
-              const maxY = Math.max(...verts.map(v => v.y));
-              const drawnHeightUnits = maxY - minY;
-              if (drawnHeightUnits > 0.01) {
-                effectiveHeightM = (drawnHeightUnits * zUnitMm) / 1000;
+            // Use zTop/zBase which store the actual height in mm or grid units
+            if (typeof src.polygon.zTop === 'number' && typeof src.polygon.zBase === 'number') {
+              const rawDelta = src.polygon.zTop - src.polygon.zBase;
+              if (rawDelta > 0.01) {
+                // If > 50 assume mm, otherwise grid units
+                effectiveHeightM = rawDelta > 50
+                  ? rawDelta / 1000
+                  : Math.max(0.25, (rawDelta * zUnitMm) / 1000);
                 break;
               }
             }

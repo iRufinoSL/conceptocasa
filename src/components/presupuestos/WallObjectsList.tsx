@@ -1430,7 +1430,7 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
                           ...placedRow(o),
                           cells: { ...placedRow(o).cells },
                         }))}
-                        onRowClick={() => {}}
+                        onRowClick={(row) => handlePlacedObjectClick(row.face as any)}
                         className="ml-6 mt-1"
                       />
                     </CollapsibleContent>

@@ -1320,7 +1320,8 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       ? savedPolys
       : savedPolys.map(rebaseSavedPolygonToRoomLevel);
 
-    const autoPolys = computeProjectedPolygons(liveSection);
+    const siblingSections = allSections.filter(s => s.sectionType === liveSection.sectionType);
+    const autoPolys = computeProjectedPolygons(liveSection, siblingSections);
     const autoPolysById = new Map(autoPolys.map(p => [p.id, p]));
     const autoNameToId = new Map<string, string>();
     for (const poly of autoPolys) {

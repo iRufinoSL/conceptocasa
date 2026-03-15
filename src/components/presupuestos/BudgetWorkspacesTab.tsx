@@ -2718,7 +2718,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
 
     if (wallDbIndex === -1) {
       const hasFloor = room.has_floor !== false;
-      const floorVisible = wallType !== 'invisible';
+      const floorVisible = !(wallType || '').toLowerCase().includes('invisible');
       return {
         surface_m2: hasFloor && floorVisible ? floorArea : 0,
         volume_m3: null as number | null,
@@ -2727,7 +2727,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
 
     if (wallDbIndex === -2) {
       const hasCeiling = room.has_ceiling !== false;
-      const ceilingVisible = wallType !== 'invisible';
+      const ceilingVisible = !(wallType || '').toLowerCase().includes('invisible');
       return {
         surface_m2: hasCeiling && ceilingVisible ? floorArea : 0,
         volume_m3: null as number | null,

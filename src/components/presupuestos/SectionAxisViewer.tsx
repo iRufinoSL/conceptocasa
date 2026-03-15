@@ -1702,14 +1702,15 @@ export function SectionAxisViewer({
     }, 300);
   }, [sectionObjects, selectedObjectId]);
 
-  // Deselect object when clicking on empty area
-  const handleSvgClick = useCallback((e: React.MouseEvent) => {
-    // Only deselect if clicking directly on the SVG background
-    if ((e.target as Element).tagName === 'svg' || (e.target as Element).tagName === 'rect') {
-      setSelectedObjectId(null);
-    }
-  }, []);
-
+  // Deselect object when pressing Escape
+  useEffect(() => {
+    if (!selectedObjectId) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSelectedObjectId(null);
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [selectedObjectId]);
 
   const sectionObjectElements = useMemo(() => {
     if (!gridLayout || !scale || sectionObjects.length === 0) return null;

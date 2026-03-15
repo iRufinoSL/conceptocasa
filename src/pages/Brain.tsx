@@ -44,11 +44,9 @@ export default function Brain() {
           .eq('id', user.id)
           .single();
 
-        if (data?.last_route && data.last_route !== '/brain') {
-          // If last route was a budget, navigate directly there
-          if (data.last_route.startsWith('/presupuestos/')) {
-            navigate(data.last_route, { replace: true });
-          }
+        if (data?.last_route && data.last_route !== '/brain' && data.last_route !== '/') {
+          // Restore last working route (any protected route)
+          navigate(data.last_route, { replace: true });
         }
       } catch {
         // Silent fail - stay on Brain

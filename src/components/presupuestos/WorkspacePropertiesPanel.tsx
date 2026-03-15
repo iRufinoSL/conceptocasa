@@ -14,6 +14,7 @@ const WALL_TYPES = [
   { value: 'exterior', label: 'Exterior' },
   { value: 'interior', label: 'Interior' },
   { value: 'tejado', label: 'Tejado' },
+  { value: 'suelo', label: 'Suelo' },
   { value: 'exterior_invisible', label: 'Ext. invisible' },
   { value: 'exterior_compartida', label: 'Ext. compartida' },
   { value: 'interior_compartida', label: 'Int. compartida' },

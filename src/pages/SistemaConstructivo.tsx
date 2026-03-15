@@ -221,7 +221,7 @@ const SistemaConstructivo = () => {
                   loading="lazy"
                 />
                 <div className="absolute bottom-4 left-4 bg-background/90 backdrop-blur-sm rounded-xl px-4 py-2 border border-orange/20">
-                  <span className="text-sm font-semibold text-orange">Sección técnica MA'S EC</span>
+                  <span className="text-sm font-semibold text-orange">Sección técnica MA'S ETC</span>
                 </div>
               </div>
             </div>

@@ -1019,11 +1019,15 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     // Z unit = 250mm (block_height_mm)
     const zUnitMm = 250;
 
-    // Include ALL workspace rooms that have a valid floor polygon.
-    // The intersection test (findPolyIntersections) will naturally filter out
-    // rooms that don't cross the cut plane. This ensures rooms from all Z levels appear.
+    // Project only workspaces that still exist in vertical (Z) sections.
+    // This prevents ghost/deleted rooms from being reintroduced in X/Y regeneration.
+    const hasVerticalReference = validRoomIds.size > 0 || verticalRoomNameSet.size > 0;
     const eligibleRooms = (workspaceRooms || []).filter(room => {
-      return room.floor_polygon && room.floor_polygon.length >= 3;
+      if (!room.floor_polygon || room.floor_polygon.length < 3) return false;
+      if (!hasVerticalReference) return true;
+      if (validRoomIds.has(room.id)) return true;
+      const normalized = normalizeWorkspaceName(room.name);
+      return !!(normalized && verticalRoomNameSet.has(normalized));
     });
 
     // For transversal sections (X cut), keep Y orientation tied to the immutable origin.

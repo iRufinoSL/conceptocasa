@@ -1085,6 +1085,8 @@ export function SectionAxisViewer({
       const verts = poly.vertices;
       if (verts.length < 3) return;
 
+      const isSelectedInEdit = !vertexEditMode || selectedPolygonId === poly.id;
+
       const pxVerts = verts.map(v => ({
         px: originX + v.x * cellPxW,
         py: originY - v.y * cellPxH,

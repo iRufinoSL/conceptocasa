@@ -4182,8 +4182,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
                     onOtherPolygonChange={(otherId, newVerts) => handleOtherPolygonChangeSection(otherId, newVerts, view.sectionId)}
                      onOtherPolygonRename={handleOtherPolygonRename}
                      onSelectOtherWorkspace={setSelectedOtherWorkspaceId}
-                     pdfTitle={`${section.name} — ${r.name}`}
-                     pdfSubtitle={`${section.axis}=${section.axisValue}`}
+                      pdfTitle={budgetName}
+                      pdfSubtitle={`${section.name} — ${r.name} (${section.axis}=${section.axisValue})`}
                      hAxisLabel={hLabel}
                      vAxisLabel={vLabel}
                      hScaleMm={scaleH}

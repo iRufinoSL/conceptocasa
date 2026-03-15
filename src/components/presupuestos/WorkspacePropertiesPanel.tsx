@@ -1385,6 +1385,60 @@ export function WorkspacePropertiesPanel({
                         {sup.description && (
                           <p className="text-[9px] text-muted-foreground mt-0.5 truncate">{sup.description}</p>
                         )}
+
+                        {editingSuperficieId === sup.id ? (
+                          <div className="mt-1.5 border rounded p-1.5 bg-background space-y-1">
+                            <div className="flex items-center gap-1 flex-wrap">
+                              <span className="text-[9px] text-muted-foreground">m²</span>
+                              <Input
+                                className="h-6 w-20 text-[10px]"
+                                type="number"
+                                step="0.01"
+                                value={manualSurfaceValue}
+                                onChange={e => setManualSurfaceValue(e.target.value)}
+                                placeholder="0"
+                              />
+                              <span className="text-[9px] text-muted-foreground">m³</span>
+                              <Input
+                                className="h-6 w-20 text-[10px]"
+                                type="number"
+                                step="0.001"
+                                value={manualVolumeValue}
+                                onChange={e => setManualVolumeValue(e.target.value)}
+                                placeholder="—"
+                              />
+                            </div>
+                            <div className="flex gap-1">
+                              <Button
+                                size="sm"
+                                className="h-6 text-[10px] px-2"
+                                disabled={savingManualSuperficie}
+                                onClick={() => void saveSuperficieManualValues(sup)}
+                              >
+                                {savingManualSuperficie ? 'Guardando…' : 'Guardar'}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 text-[10px] px-2"
+                                onClick={() => setEditingSuperficieId(null)}
+                              >
+                                Cancelar
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="mt-1.5 flex justify-end">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-6 text-[10px] px-2"
+                              onClick={() => openSuperficieManualEditor(sup)}
+                            >
+                              Editar valor
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     );
                   })}

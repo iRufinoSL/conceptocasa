@@ -1,12 +1,14 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { X, Box, Layers, Paintbrush, Plus, Move, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Link2 } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { X, Box, Layers, Paintbrush, Plus, Move, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Link2, Search, Star } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { VISUAL_PATTERNS, PATTERN_CATEGORIES, getPatternById, patternPreviewDataUri, type VisualPattern } from '@/lib/visual-patterns';
+import { normalizeSearchText } from '@/lib/search-utils';
 
 const WALL_TYPES = [
   { value: 'exterior', label: 'Exterior' },

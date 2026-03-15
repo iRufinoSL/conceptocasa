@@ -1737,6 +1737,66 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
           </Collapsible>
         );
       })}
+
+      {/* Inclined sections - auto-generated, read-only listing */}
+      <Collapsible
+        open={openCreator === ('inclined' as any)}
+        onOpenChange={() => setOpenCreator(prev => prev === ('inclined' as any) ? null : 'inclined' as any)}
+      >
+        <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-lg border bg-card px-3 py-2 text-left hover:bg-accent/50 transition-colors">
+          <ChevronRight
+            className={cn(
+              'h-4 w-4 text-muted-foreground transition-transform duration-200',
+              openCreator === ('inclined' as any) && 'rotate-90',
+            )}
+          />
+          <span className="text-sm font-medium">Secciones Inclinadas</span>
+          <Badge variant="secondary" className="ml-auto h-5 text-[10px]">{sectionsByType.inclined.length}</Badge>
+        </CollapsibleTrigger>
+
+        <CollapsibleContent className="pt-2">
+          <div className="rounded-lg border bg-card p-3 space-y-3">
+            <p className="text-[11px] text-muted-foreground">
+              Se generan automáticamente al definir alturas diferentes en las paredes de un Espacio (panel "Caras del volumen").
+            </p>
+            {sectionsByType.inclined.length > 0 ? (
+              <div className="space-y-1">
+                <p className="text-[11px] font-medium text-muted-foreground">Secciones existentes — clic para entrar</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {sectionsByType.inclined.map((section) => (
+                    <Badge
+                      key={section.id}
+                      variant="outline"
+                      className="text-[10px] h-6 gap-1 pr-1 cursor-pointer hover:bg-accent/60 transition-colors"
+                      onClick={() => setActiveSection(section)}
+                    >
+                      <Eye className="h-2.5 w-2.5 text-muted-foreground" />
+                      {section.name}
+                      {section.inclinedMeta?.slopeAngleDeg != null && (
+                        <span className="text-muted-foreground ml-0.5">
+                          {section.inclinedMeta.slopeAngleDeg.toFixed(1)}°
+                        </span>
+                      )}
+                      {isAdmin && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDeleteSection(section); }}
+                          className="ml-0.5 hover:text-destructive transition-colors"
+                        >
+                          <Trash2 className="h-2.5 w-2.5" />
+                        </button>
+                      )}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="text-[11px] text-muted-foreground italic">
+                No hay secciones inclinadas. Define alturas diferentes en paredes adyacentes de un Espacio para generarlas.
+              </p>
+            )}
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
     </div>
   );
 }

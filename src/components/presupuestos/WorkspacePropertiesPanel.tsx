@@ -1547,7 +1547,15 @@ export function WorkspacePropertiesPanel({
                           <button
                             key={r.id}
                             className={`w-full text-left text-[10px] px-1.5 py-1 rounded hover:bg-accent/40 flex items-center gap-1 ${objResourceId === r.id ? 'bg-accent/30 font-medium' : ''}`}
-                            onClick={() => { setObjResourceId(r.id); setFormResourceOpen(false); setFormResourceSearch(''); }}
+                            onClick={() => {
+                              setObjResourceId(r.id);
+                              setObjName(r.name);
+                              if (r.width_mm) setObjWidthMm(String(r.width_mm));
+                              if (r.height_mm) setObjHeightMm(String(r.height_mm));
+                              if (r.depth_mm) setObjThickness(String(r.depth_mm));
+                              setFormResourceOpen(false);
+                              setFormResourceSearch('');
+                            }}
                           >
                             <span className="truncate flex-1">{r.name}</span>
                             <Badge variant="outline" className="text-[8px] h-3.5 px-1 shrink-0">{r.resource_type || '—'}</Badge>

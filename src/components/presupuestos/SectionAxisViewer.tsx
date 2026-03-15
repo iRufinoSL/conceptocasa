@@ -1236,7 +1236,10 @@ export function SectionAxisViewer({
 
           elements.push(
             <g key={`edge-label-${poly.id}-${i}`} data-pdf-layer="wall-labels"
-              style={{ cursor: vertexEditMode ? 'default' : 'pointer', pointerEvents: vertexEditMode ? 'none' : 'auto' }}
+              style={{
+                cursor: vertexEditMode ? (isSelectedInEdit ? 'pointer' : 'default') : 'pointer',
+                pointerEvents: vertexEditMode ? (isSelectedInEdit ? 'auto' : 'none') : 'auto',
+              }}
               onClick={(e) => { e.stopPropagation(); handleEdgeClick(poly.id, i); }}>
               <rect
                 x={edgeMidX + nx * offset - boxW / 2}

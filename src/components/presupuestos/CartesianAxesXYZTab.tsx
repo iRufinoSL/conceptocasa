@@ -1363,7 +1363,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
 
     return (
       <div className="space-y-3">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Button variant="ghost" size="sm" className="h-7 text-xs gap-1"
             onClick={() => setActiveSection(null)}>
             <ArrowLeft className="h-3 w-3" /> Volver a ejes
@@ -1372,6 +1372,30 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
           <Badge variant="secondary" className="text-[10px] h-5 font-mono">
             {liveSection.axis}={liveSection.axisValue}
           </Badge>
+          {liveSection.sectionType !== 'vertical' && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs gap-1 ml-auto"
+              onClick={async () => {
+                // Force re-project: clear saved polygons for this section so auto-projection recalculates
+                const parsedCorners = parseCustomCorners();
+                const sections = Array.isArray(parsedCorners.customSections)
+                  ? (parsedCorners.customSections as CustomSection[])
+                  : [];
+                const updated = sections.map(s =>
+                  s.id === liveSection.id ? { ...s, polygons: [] } : s
+                );
+                await supabase.from('budget_floor_plans')
+                  .update({ custom_corners: { ...parsedCorners, customSections: updated } as any })
+                  .eq('id', floorPlan!.id);
+                await invalidateSectionQueries();
+                toast.success('Espacios regenerados');
+              }}
+            >
+              <RefreshCw className="h-3 w-3" /> Regenerar espacios
+            </Button>
+          )}
         </div>
         <SectionAxisViewer
           key={liveSection.id}

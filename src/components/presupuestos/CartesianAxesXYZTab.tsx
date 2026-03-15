@@ -1504,12 +1504,16 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
             const currentSection = sections.find(s => s.id === liveSection.id);
             const existingPolygons = currentSection?.polygons || [];
 
-            // Remove stale duplicates that only differ by old IDs but collide by normalized auto name.
-            // Keep hidden markers (vertices:[]) so user-deleted spaces do not reappear.
+            // Remove stale section carry-over while preserving hidden markers and face polygons.
             const cleanedExisting = existingPolygons.filter((p: SectionPolygon) => {
               if (!p.vertices || p.vertices.length === 0) return true;
               if (autoById.has(p.id)) return true;
               if (/_wall\d+$/.test(p.id) || /_ceiling$/.test(p.id)) return true;
+
+              // Real workspace polygons that no longer auto-project in this section are stale.
+              if (workspaceRoomMap.has(p.id)) return false;
+
+              // Keep manual non-workspace polygons unless they collide with a canonical auto name.
               const key = normalizeWorkspaceName(p.name);
               if (!key) return true;
               return !autoNameToId.has(key);

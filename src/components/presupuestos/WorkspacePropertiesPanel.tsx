@@ -400,17 +400,20 @@ export function WorkspacePropertiesPanel({
           ...(inserts.length > 0 ? [supabase.from('budget_wall_objects').insert(inserts)] : []),
         ]);
 
-        mutationResults.forEach((res, idx) => {
-          if (res.error) {
-            console.error(`Error sincronizando Superficie automática [${idx}]:`, res.error);
-          }
-        });
+        const mutationError = mutationResults.find(result => result.error)?.error;
+        if (mutationError) {
+          throw mutationError;
+        }
 
-        const { data: objData } = await supabase
+        const { data: objData, error: objError } = await supabase
           .from('budget_wall_objects')
           .select('*')
           .in('wall_id', wallIds)
           .order('layer_order', { ascending: true });
+
+        if (objError) {
+          throw objError;
+        }
 
         setWallObjects((objData || []) as WallObjectRecord[]);
       } else {

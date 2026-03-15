@@ -332,7 +332,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
 
       // Huecos — index by normalized room name so section copies can inherit
       // Store edge direction from base room polygon to correctly match edges in section copies
-      type HuecoEntry = { wallIndex: number; positionXmm: number; widthMm: number; name: string; objectType: string; edgeDx: number; edgeDy: number };
+      type HuecoEntry = { wallIndex: number; positionXmm: number; widthMm: number; name: string; objectType: string; edgeDx: number; edgeDy: number; edgeLen: number };
       const huecosByName = new Map<string, HuecoEntry[]>();
       if (huecoRes.data?.length) {
         // Build a lookup from roomId -> polygon (from rooms prop)

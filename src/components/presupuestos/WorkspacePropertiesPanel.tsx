@@ -2024,6 +2024,9 @@ function ObjectRow({ obj, isPositioning, onTogglePosition, onMove, onDelete, onL
           </>
         ) : (
           <>
+            <Button variant="ghost" size="icon" className="h-5 w-5" title="Editar" onClick={onEdit}>
+              <Pencil className="h-3 w-3" />
+            </Button>
             <Button variant="ghost" size="icon" className="h-5 w-5" title="Mover" onClick={onTogglePosition}>
               <Move className="h-3 w-3" />
             </Button>

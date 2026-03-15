@@ -2197,7 +2197,7 @@ export function SectionAxisViewer({
           className="block bg-background"
           onClick={handleSvgClick}
           onMouseMove={(e) => { handleSvgMouseMove(e); handleObjectMouseMove(e); }}
-          onMouseUp={(e) => { handleSvgMouseUp(e as any); handleObjectMouseUp(); }}
+          onMouseUp={() => { handleSvgMouseUp(); handleObjectMouseUp(); }}
           onMouseLeave={() => { handleObjectMouseUp(); }}
         >
           {/* Pattern definitions */}

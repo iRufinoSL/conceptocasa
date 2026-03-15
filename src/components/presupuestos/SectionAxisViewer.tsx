@@ -1578,9 +1578,34 @@ export function SectionAxisViewer({
   // ── Section objects rendering (shown_in_section=true) ──
   const OBJECT_COLOR = 'hsl(270, 60%, 55%)';
 
+  const lastObjClickRef = useRef<{ time: number; objId: string } | null>(null);
+
   const handleObjectMouseDown = useCallback((e: React.MouseEvent, objId: string, obj: SectionObjectData) => {
     e.stopPropagation();
     e.preventDefault();
+
+    // Double-click detection → open edit panel
+    const now = Date.now();
+    const last = lastObjClickRef.current;
+    if (last && last.objId === objId && (now - last.time) < 400) {
+      lastObjClickRef.current = null;
+      // Find polygon for this object
+      const poly = polygons.find(p => p.id === obj.room_id);
+      if (poly) {
+        setFacePanel({
+          polyId: poly.id,
+          polyName: poly.name,
+          faceKey: 'floor',
+          edgeCount: poly.vertices.length,
+          vertices: poly.vertices.map(v => ({ x: v.x, y: v.y })),
+          initialEditObjectId: objId,
+          initialTab: 'objects',
+        });
+      }
+      return;
+    }
+    lastObjClickRef.current = { time: now, objId };
+
     const svg = svgRef.current;
     if (!svg) return;
     let pt = svg.createSVGPoint();
@@ -1590,7 +1615,7 @@ export function SectionAxisViewer({
     if (ctm) pt = pt.matrixTransform(ctm.inverse());
     setDraggingObjectId(objId);
     setDragStart({ x: pt.x, y: pt.y, posX: obj.position_x, sill: obj.sill_height });
-  }, []);
+  }, [polygons]);
 
   const handleObjectMouseMove = useCallback((e: React.MouseEvent) => {
     if (!draggingObjectId || !dragStart || !gridLayout || !scale) return;

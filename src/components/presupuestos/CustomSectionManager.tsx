@@ -2285,20 +2285,21 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                       return roomHuecos.map((hueco, hi) => {
                         // Find best matching edge by direction similarity (dot product)
                         let bestEdgeIdx = Math.min(hueco.wallIndex - 1, edgeCount - 1);
-                        let bestDot = -2;
+                        let bestScore = -999;
                         for (let ei = 0; ei < edgeCount; ei++) {
-                          // Match both same direction and opposite direction (|dot product|)
+                          // Direction match (0..1, where 1 = perfect match)
                           const dot = Math.abs(hueco.edgeDx * polyEdgeDirs[ei].dx + hueco.edgeDy * polyEdgeDirs[ei].dy);
-                          // Also check edge length similarity as tiebreaker
+                          // Edge length match (use grid units)
                           const ep1 = poly[ei];
                           const ep2 = poly[(ei + 1) % poly.length];
-                          const baseEdgeLen = Math.hypot(
-                            (ep2.x - ep1.x),
-                            (ep2.y - ep1.y)
-                          );
-                          // Weighted score: direction match is primary
-                          if (dot > bestDot + 0.01) {
-                            bestDot = dot;
+                          const thisEdgeLen = Math.hypot(ep2.x - ep1.x, ep2.y - ep1.y);
+                          const lenRatio = hueco.edgeLen > 0 && thisEdgeLen > 0
+                            ? 1 - Math.abs(thisEdgeLen - hueco.edgeLen) / Math.max(thisEdgeLen, hueco.edgeLen)
+                            : 0;
+                          // Combined score: direction is primary, length is tiebreaker
+                          const score = dot * 10 + lenRatio;
+                          if (score > bestScore) {
+                            bestScore = score;
                             bestEdgeIdx = ei;
                           }
                         }

@@ -54,6 +54,11 @@ function normalizeWallType(type?: string | null): string {
   }
 }
 
+function isInvisibleWallType(type?: string | null): boolean {
+  const normalized = (type || '').toLowerCase();
+  return normalized.includes('invisible');
+}
+
 interface WallRecord {
   id: string;
   room_id: string;
@@ -161,6 +166,10 @@ export function WorkspacePropertiesPanel({
   // Active tab: 'faces' | 'objects'
   const [activeTab, setActiveTab] = useState<'faces' | 'objects'>('faces');
   const [isRegeneratingSuperficies, setIsRegeneratingSuperficies] = useState(false);
+  const [editingSuperficieId, setEditingSuperficieId] = useState<string | null>(null);
+  const [manualSurfaceValue, setManualSurfaceValue] = useState('');
+  const [manualVolumeValue, setManualVolumeValue] = useState('');
+  const [savingManualSuperficie, setSavingManualSuperficie] = useState(false);
 
   const getFaceLabel = useCallback((wallIndex: number) => {
     if (wallIndex === -1) return 'Suelo';
@@ -207,7 +216,7 @@ export function WorkspacePropertiesPanel({
     if (wallIndex === -1) {
       // Floor: return 0 if workspace has no floor or wall is invisible
       const hasFloor = roomData?.has_floor !== false;
-      const floorVisible = wallType !== 'invisible';
+      const floorVisible = !isInvisibleWallType(wallType);
       return {
         surface_m2: hasFloor && floorVisible ? floorArea : 0,
         volume_m3: null as number | null,
@@ -217,7 +226,7 @@ export function WorkspacePropertiesPanel({
     if (wallIndex === -2) {
       // Ceiling: return 0 if workspace has no ceiling or wall is invisible
       const hasCeiling = roomData?.has_ceiling !== false;
-      const ceilingVisible = wallType !== 'invisible';
+      const ceilingVisible = !isInvisibleWallType(wallType);
       return {
         surface_m2: hasCeiling && ceilingVisible ? floorArea : 0,
         volume_m3: null as number | null,
@@ -266,14 +275,14 @@ export function WorkspacePropertiesPanel({
         const updates: Record<string, boolean> = {};
 
         if (floorWall) {
-          const wallSaysInvisible = floorWall.wall_type === 'invisible';
+          const wallSaysInvisible = isInvisibleWallType(floorWall.wall_type);
           if (roomData.has_floor === wallSaysInvisible) {
             updates.has_floor = !wallSaysInvisible;
           }
         }
 
         if (ceilingWall) {
-          const wallSaysInvisible = ceilingWall.wall_type === 'invisible';
+          const wallSaysInvisible = isInvisibleWallType(ceilingWall.wall_type);
           if (roomData.has_ceiling === wallSaysInvisible) {
             updates.has_ceiling = !wallSaysInvisible;
           }
@@ -848,6 +857,79 @@ export function WorkspacePropertiesPanel({
     toast.success(`Vinculado a: ${resource.name}`);
   };
 
+  const stripMetricFromDescription = (description: string | null, fallback: string) => {
+    if (!description) return fallback;
+    return description.replace(/\s+—\s+[-\d.,]+\s*(m²|m³|ml)\s*$/u, '').trim();
+  };
+
+  const openSuperficieManualEditor = (sup: WallObjectRecord) => {
+    setEditingSuperficieId(sup.id);
+    setManualSurfaceValue(sup.surface_m2 != null ? String(sup.surface_m2) : '');
+    setManualVolumeValue(sup.volume_m3 != null ? String(sup.volume_m3) : '');
+  };
+
+  const saveSuperficieManualValues = async (sup: WallObjectRecord) => {
+    const parseMaybeNumber = (value: string) => {
+      const trimmed = value.trim();
+      if (!trimmed) return null;
+      const parsed = Number.parseFloat(trimmed.replace(',', '.'));
+      return Number.isFinite(parsed) ? parsed : NaN;
+    };
+
+    const nextSurface = parseMaybeNumber(manualSurfaceValue);
+    const nextVolume = parseMaybeNumber(manualVolumeValue);
+
+    if (Number.isNaN(nextSurface) || Number.isNaN(nextVolume)) {
+      toast.error('Introduce valores numéricos válidos');
+      return;
+    }
+
+    const faceWall = walls.find(w => w.id === sup.wall_id);
+    const faceLabel = !faceWall
+      ? '—'
+      : faceWall.wall_index === -1
+        ? 'Suelo'
+        : faceWall.wall_index === -2
+          ? 'Techo'
+          : faceWall.wall_index === 0
+            ? 'Espacio'
+            : `P${faceWall.wall_index}`;
+    const baseDescription = stripMetricFromDescription(sup.description, `${workspaceName} / ${faceLabel}`);
+    const metricLabel = nextSurface != null
+      ? `${nextSurface} m²`
+      : nextVolume != null
+        ? `${nextVolume} m³`
+        : null;
+
+    setSavingManualSuperficie(true);
+    const { error } = await supabase
+      .from('budget_wall_objects')
+      .update({
+        surface_m2: nextSurface,
+        volume_m3: nextVolume,
+        description: metricLabel ? `${baseDescription} — ${metricLabel}` : baseDescription,
+      })
+      .eq('id', sup.id);
+    setSavingManualSuperficie(false);
+
+    if (error) {
+      toast.error('No se pudo guardar el valor manual');
+      return;
+    }
+
+    setWallObjects(prev => prev.map(o => o.id === sup.id
+      ? {
+          ...o,
+          surface_m2: nextSurface,
+          volume_m3: nextVolume,
+          description: metricLabel ? `${baseDescription} — ${metricLabel}` : baseDescription,
+        }
+      : o
+    ));
+    setEditingSuperficieId(null);
+    toast.success('Valor manual guardado');
+  };
+
   const poly = getEffectivePolygon(room);
   const roomPolyCount = Array.isArray(room?.floor_polygon) ? room.floor_polygon.length : 0;
   const edgeCount = edgeCountProp ?? (poly ? poly.length : roomPolyCount > 0 ? roomPolyCount : (room ? 4 : 0));
@@ -1311,6 +1393,60 @@ export function WorkspacePropertiesPanel({
                         </div>
                         {sup.description && (
                           <p className="text-[9px] text-muted-foreground mt-0.5 truncate">{sup.description}</p>
+                        )}
+
+                        {editingSuperficieId === sup.id ? (
+                          <div className="mt-1.5 border rounded p-1.5 bg-background space-y-1">
+                            <div className="flex items-center gap-1 flex-wrap">
+                              <span className="text-[9px] text-muted-foreground">m²</span>
+                              <Input
+                                className="h-6 w-20 text-[10px]"
+                                type="number"
+                                step="0.01"
+                                value={manualSurfaceValue}
+                                onChange={e => setManualSurfaceValue(e.target.value)}
+                                placeholder="0"
+                              />
+                              <span className="text-[9px] text-muted-foreground">m³</span>
+                              <Input
+                                className="h-6 w-20 text-[10px]"
+                                type="number"
+                                step="0.001"
+                                value={manualVolumeValue}
+                                onChange={e => setManualVolumeValue(e.target.value)}
+                                placeholder="—"
+                              />
+                            </div>
+                            <div className="flex gap-1">
+                              <Button
+                                size="sm"
+                                className="h-6 text-[10px] px-2"
+                                disabled={savingManualSuperficie}
+                                onClick={() => void saveSuperficieManualValues(sup)}
+                              >
+                                {savingManualSuperficie ? 'Guardando…' : 'Guardar'}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 text-[10px] px-2"
+                                onClick={() => setEditingSuperficieId(null)}
+                              >
+                                Cancelar
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="mt-1.5 flex justify-end">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-6 text-[10px] px-2"
+                              onClick={() => openSuperficieManualEditor(sup)}
+                            >
+                              Editar valor
+                            </Button>
+                          </div>
                         )}
                       </div>
                     );

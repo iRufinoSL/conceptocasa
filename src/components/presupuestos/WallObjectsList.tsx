@@ -1016,8 +1016,9 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
 
       const resolveMetrics = (entry: { face: AutoFace; wallType: string }) => {
         const room = roomById.get(entry.face.roomId);
-        const missingFloor = entry.face.wallIndex === -1 && ((room?.has_floor === false) || entry.wallType === 'invisible');
-        const missingCeiling = entry.face.wallIndex === -2 && ((room?.has_ceiling === false) || entry.wallType === 'invisible');
+        const isInvisibleFace = (entry.wallType || '').toLowerCase().includes('invisible');
+        const missingFloor = entry.face.wallIndex === -1 && ((room?.has_floor === false) || isInvisibleFace);
+        const missingCeiling = entry.face.wallIndex === -2 && ((room?.has_ceiling === false) || isInvisibleFace);
 
         const surfaceM2 = missingFloor || missingCeiling
           ? 0

@@ -569,7 +569,7 @@ export function SectionAxisViewer({
     if (last && last.col === node.col && last.row === node.row) return;
 
     setDrawingVertices(prev => [...prev, node]);
-  }, [drawMode, rulerMode, gridLayout, drawingVertices, snapToNode, snapToNodePrecise, rulerStart]);
+  }, [drawMode, rulerMode, gridLayout, drawingVertices, snapToNode, snapToNodePrecise, rulerStart, vertexEditMode]);
 
   const handleSvgMouseMove = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
     // Vertex drag

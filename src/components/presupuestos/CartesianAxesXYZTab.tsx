@@ -1090,6 +1090,11 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     // No mirroring by point of view: Y=0 must remain the same reference side.
     const projected: SectionPolygon[] = [];
     const projectedKeys = new Set<string>();
+    const sameTypeAxisValues = (otherSectionsOfSameType || [])
+      .filter(s => s.sectionType === section.sectionType)
+      .map(s => s.axisValue);
+    const minSectionAxis = sameTypeAxisValues.length > 0 ? Math.min(...sameTypeAxisValues) : section.axisValue;
+    const AXIS_EPS = 1e-6;
 
     const pushProjectedRoom = (
       key: string,
@@ -1104,6 +1109,19 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       if (!poly || poly.length < 3) return;
       const cutAxis = section.sectionType === 'longitudinal' ? 'y' : 'x';
       const axisVal = section.axisValue;
+
+      // Prevent sibling bleed between adjacent sections:
+      // only include polygons that cross this axis interval, not those that merely start here.
+      const axisCoords = poly.map(v => v[cutAxis]).filter(Number.isFinite);
+      if (axisCoords.length < 2) return;
+      const polyMinAxis = Math.min(...axisCoords);
+      const polyMaxAxis = Math.max(...axisCoords);
+      const onMinBoundary = Math.abs(axisVal - polyMinAxis) <= AXIS_EPS;
+      const isFirstSectionAxis = Math.abs(axisVal - minSectionAxis) <= AXIS_EPS;
+      const belongsToSection =
+        (axisVal > polyMinAxis + AXIS_EPS && axisVal <= polyMaxAxis + AXIS_EPS) ||
+        (onMinBoundary && isFirstSectionAxis);
+      if (!belongsToSection) return;
 
       const intersections = findPolyIntersections(poly, cutAxis, axisVal);
       if (intersections.length < 2) return;

@@ -270,16 +270,36 @@ export function SectionAxisViewer({
   const [openingsMap, setOpeningsMap] = useState<Record<string, { wallIndex: number; openings: OpeningData[] }>>({});
   const [openingsVersion, setOpeningsVersion] = useState(0);
 
+  // ── Section objects (shown_in_section=true) ──
+  interface SectionObjectData {
+    id: string;
+    wall_id: string;
+    room_id: string;
+    name: string;
+    width_mm: number;
+    height_mm: number;
+    position_x: number;
+    sill_height: number;
+    object_type: string;
+    coord_x: number | null;
+    coord_y: number | null;
+    coord_z: number | null;
+  }
+  const [sectionObjects, setSectionObjects] = useState<SectionObjectData[]>([]);
+  const [draggingObjectId, setDraggingObjectId] = useState<string | null>(null);
+  const [dragStart, setDragStart] = useState<{ x: number; y: number; posX: number; sill: number } | null>(null);
+
   const loadOpenings = useCallback(async () => {
     if (polygons.length === 0) return;
     const polyIds = polygons.map(p => p.id);
     const { data: walls } = await supabase.from('budget_floor_plan_walls').select('id, room_id, wall_index').in('room_id', polyIds);
-    if (!walls || walls.length === 0) { setOpeningsMap({}); return; }
+    if (!walls || walls.length === 0) { setOpeningsMap({}); setSectionObjects([]); return; }
     const wallIds = walls.map(w => w.id);
     // Read from both legacy openings table AND wall_objects with type 'hueco'
-    const [legacyRes, huecoRes] = await Promise.all([
+    const [legacyRes, huecoRes, sectionObjRes] = await Promise.all([
       supabase.from('budget_floor_plan_openings').select('*').in('wall_id', wallIds),
       supabase.from('budget_wall_objects').select('*').in('wall_id', wallIds).eq('object_type', 'hueco'),
+      supabase.from('budget_wall_objects').select('*').in('wall_id', wallIds).eq('shown_in_section', true),
     ]);
     // Normalize hueco objects to OpeningData format
     const huecoOpenings: OpeningData[] = (huecoRes.data || []).map((h: any) => ({
@@ -305,6 +325,26 @@ export function SectionAxisViewer({
       }
     }
     setOpeningsMap(map);
+
+    // Build section objects array with room_id resolved
+    const wallToRoom = new Map(walls.map(w => [w.id, w.room_id]));
+    const secObjs: SectionObjectData[] = (sectionObjRes.data || [])
+      .filter((o: any) => o.object_type !== 'hueco') // huecos already rendered
+      .map((o: any) => ({
+        id: o.id,
+        wall_id: o.wall_id,
+        room_id: wallToRoom.get(o.wall_id) || '',
+        name: o.name || '',
+        width_mm: o.width_mm || 200,
+        height_mm: o.height_mm || 200,
+        position_x: o.position_x || 0,
+        sill_height: o.sill_height || 0,
+        object_type: o.object_type || 'material',
+        coord_x: o.coord_x,
+        coord_y: o.coord_y,
+        coord_z: o.coord_z,
+      }));
+    setSectionObjects(secObjs);
   }, [polygons]);
 
   useEffect(() => { loadOpenings(); }, [loadOpenings, openingsVersion]);
@@ -1535,7 +1575,133 @@ export function SectionAxisViewer({
     return elements.length > 0 ? elements : null;
   }, [polygons, gridLayout, scale, openingsMap, sectionType]);
 
-  // Drawing overlay
+  // ── Section objects rendering (shown_in_section=true) ──
+  const OBJECT_COLOR = 'hsl(270, 60%, 55%)';
+
+  const handleObjectMouseDown = useCallback((e: React.MouseEvent, objId: string, obj: SectionObjectData) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const svg = svgRef.current;
+    if (!svg) return;
+    let pt = svg.createSVGPoint();
+    pt.x = e.clientX;
+    pt.y = e.clientY;
+    const ctm = svg.getScreenCTM();
+    if (ctm) pt = pt.matrixTransform(ctm.inverse());
+    setDraggingObjectId(objId);
+    setDragStart({ x: pt.x, y: pt.y, posX: obj.position_x, sill: obj.sill_height });
+  }, []);
+
+  const handleObjectMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!draggingObjectId || !dragStart || !gridLayout || !scale) return;
+    const svg = svgRef.current;
+    if (!svg) return;
+    let pt = svg.createSVGPoint();
+    pt.x = e.clientX;
+    pt.y = e.clientY;
+    const ctm = svg.getScreenCTM();
+    if (ctm) pt = pt.matrixTransform(ctm.inverse());
+    
+    const dxPx = pt.x - dragStart.x;
+    const dyPx = pt.y - dragStart.y;
+    
+    // Convert pixel delta to mm
+    const pxPerMmH = gridLayout.cellPxW / scale.hScale;
+    const pxPerMmV = gridLayout.cellPxH / scale.vScale;
+    const dxMm = Math.round(dxPx / pxPerMmH);
+    const dyMm = Math.round(-dyPx / pxPerMmV); // y axis is inverted in SVG
+    
+    const newPosX = Math.max(0, dragStart.posX + dxMm);
+    const newSill = Math.max(0, dragStart.sill + dyMm);
+    
+    setSectionObjects(prev => prev.map(o => o.id === draggingObjectId ? { ...o, position_x: newPosX, sill_height: newSill } : o));
+  }, [draggingObjectId, dragStart, gridLayout, scale]);
+
+  const handleObjectMouseUp = useCallback(async () => {
+    if (!draggingObjectId) return;
+    const obj = sectionObjects.find(o => o.id === draggingObjectId);
+    if (obj) {
+      await supabase.from('budget_wall_objects').update({
+        position_x: obj.position_x,
+        sill_height: obj.sill_height,
+      }).eq('id', draggingObjectId);
+    }
+    setDraggingObjectId(null);
+    setDragStart(null);
+  }, [draggingObjectId, sectionObjects]);
+
+  const sectionObjectElements = useMemo(() => {
+    if (!gridLayout || !scale || sectionObjects.length === 0) return null;
+    const { originX, originY, cellPxW, cellPxH } = gridLayout;
+    const elements: JSX.Element[] = [];
+
+    for (const obj of sectionObjects) {
+      // Find the polygon this object belongs to
+      const poly = polygons.find(p => p.id === obj.room_id);
+      if (!poly) continue;
+
+      const polyMinY = Math.min(...poly.vertices.map(v => v.y));
+
+      if (sectionType === 'vertical') {
+        // Z section: object appears as rectangle on floor plan
+        const polyMinX = Math.min(...poly.vertices.map(v => v.x));
+        const posXmm = obj.position_x;
+        const wMm = obj.width_mm;
+        const pxPerMmH = cellPxW / scale.hScale;
+        const x = originX + polyMinX * cellPxW + posXmm * pxPerMmH;
+        const w = wMm * pxPerMmH;
+        const hMm = obj.height_mm;
+        const h = hMm * pxPerMmH; // use same scale for plan view
+        const y = originY - (polyMinY * cellPxH) - h;
+
+        elements.push(
+          <g key={`secobj-${obj.id}`} style={{ cursor: 'move' }}
+            onMouseDown={e => handleObjectMouseDown(e, obj.id, obj)}>
+            <rect x={x} y={y} width={w} height={h}
+              fill={OBJECT_COLOR} fillOpacity={0.3} stroke={OBJECT_COLOR} strokeWidth={1.5} rx={2} />
+            <text x={x + w / 2} y={y + h / 2 + 3} textAnchor="middle" fontSize={7} fontWeight={600}
+              fill={OBJECT_COLOR} fontFamily="sans-serif" stroke="white" strokeWidth={1.5} paintOrder="stroke">
+              {obj.name}
+            </text>
+          </g>
+        );
+      } else {
+        // X/Y section: object rendered vertically in elevation
+        const polyMinX = Math.min(...poly.vertices.map(v => v.x));
+        const pxPerMmH = cellPxW / scale.hScale;
+        const pxPerMmV = cellPxH / scale.vScale;
+
+        const basePxY = originY - polyMinY * cellPxH;
+        const sillPx = obj.sill_height * pxPerMmV;
+        const heightPx = obj.height_mm * pxPerMmV;
+        const widthPx = obj.width_mm * pxPerMmH;
+        const posXPx = obj.position_x * pxPerMmH;
+
+        const rx = originX + polyMinX * cellPxW + posXPx;
+        const ry = basePxY - sillPx - heightPx;
+
+        elements.push(
+          <g key={`secobj-${obj.id}`} style={{ cursor: 'move' }}
+            onMouseDown={e => handleObjectMouseDown(e, obj.id, obj)}>
+            <rect x={rx} y={ry} width={widthPx} height={heightPx}
+              fill={OBJECT_COLOR} fillOpacity={0.3} stroke={OBJECT_COLOR} strokeWidth={1.5} rx={2} />
+            <text x={rx + widthPx / 2} y={ry + heightPx / 2 + 3} textAnchor="middle" fontSize={6} fontWeight={600}
+              fill={OBJECT_COLOR} fontFamily="sans-serif" stroke="white" strokeWidth={1.5} paintOrder="stroke">
+              {obj.name}
+            </text>
+            <text x={rx + widthPx / 2} y={ry - 3} textAnchor="middle" fontSize={5} fill={OBJECT_COLOR}
+              fontFamily="sans-serif" stroke="white" strokeWidth={1} paintOrder="stroke">
+              {obj.width_mm}×{obj.height_mm}mm
+            </text>
+          </g>
+        );
+      }
+    }
+
+    return elements.length > 0 ? elements : null;
+  }, [sectionObjects, polygons, gridLayout, scale, sectionType, handleObjectMouseDown]);
+
+
   const drawingOverlay = useMemo(() => {
     if (!drawMode || !gridLayout || drawingVertices.length === 0) return null;
     const { ox, oy, cellPxW, cellPxH } = gridLayout;
@@ -2030,8 +2196,9 @@ export function SectionAxisViewer({
           style={(drawMode || rulerMode || vertexEditMode) ? { cursor: vertexEditMode ? 'default' : rulerMode ? 'crosshair' : 'none' } : undefined}
           className="block bg-background"
           onClick={handleSvgClick}
-          onMouseMove={handleSvgMouseMove}
-          onMouseUp={handleSvgMouseUp}
+          onMouseMove={(e) => { handleSvgMouseMove(e); handleObjectMouseMove(e); }}
+          onMouseUp={() => { handleSvgMouseUp(); handleObjectMouseUp(); }}
+          onMouseLeave={() => { handleObjectMouseUp(); }}
         >
           {/* Pattern definitions */}
           <defs>
@@ -2044,6 +2211,7 @@ export function SectionAxisViewer({
           {nodeInteractionDots}
           {polygonElements}
           {openingElements}
+          {sectionObjectElements}
           {drawingOverlay}
 
           {/* Ruler lines rendering */}

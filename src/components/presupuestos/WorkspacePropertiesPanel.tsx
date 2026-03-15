@@ -88,6 +88,10 @@ interface WallObjectRecord {
   distance_to_wall: number | null;
   resource_id: string | null;
   template_id: string | null;
+  coord_x: number | null;
+  coord_y: number | null;
+  coord_z: number | null;
+  shown_in_section: boolean;
 }
 
 export interface FacePatterns {
@@ -116,6 +120,9 @@ interface ExternalResourceOption {
   resource_type: string | null;
   unit_cost: number;
   unit_measure: string | null;
+  width_mm: number | null;
+  height_mm: number | null;
+  depth_mm: number | null;
 }
 
 export function WorkspacePropertiesPanel({
@@ -157,6 +164,10 @@ export function WorkspacePropertiesPanel({
   const [objTargetFace, setObjTargetFace] = useState('wall-0');
   const [objPreset, setObjPreset] = useState('');
   const [objResourceId, setObjResourceId] = useState('_none');
+  const [objCoordX, setObjCoordX] = useState('');
+  const [objCoordY, setObjCoordY] = useState('');
+  const [objCoordZ, setObjCoordZ] = useState('');
+  const [objShownInSection, setObjShownInSection] = useState(false);
 
   // Resource linking
   const [showResourcePicker, setShowResourcePicker] = useState(false);
@@ -578,7 +589,7 @@ export function WorkspacePropertiesPanel({
   const fetchResources = async () => {
     const { data } = await supabase
       .from('external_resources')
-      .select('id, name, resource_type, unit_cost, unit_measure')
+      .select('id, name, resource_type, unit_cost, unit_measure, width_mm, height_mm, depth_mm')
       .order('name')
       .limit(200);
     setResources((data || []) as ExternalResourceOption[]);
@@ -980,6 +991,16 @@ export function WorkspacePropertiesPanel({
     const sillHeightInput = parseNumeric(objSillHeight);
     const positionXInput = parseNumeric(objPosX);
 
+    const coordXInput = parseNumeric(objCoordX);
+    const coordYInput = parseNumeric(objCoordY);
+    const coordZInput = parseNumeric(objCoordZ);
+
+    // If all 3 coordinates are set, auto-compute sill_height and distance_to_wall
+    let computedSill = objType === 'hueco' ? (sillHeightInput ?? 900) : sillHeightInput;
+    let computedDistWall = parseNumeric(objDistWall);
+    if (coordZInput != null) computedSill = coordZInput;
+    if (coordXInput != null) computedDistWall = coordXInput;
+
     const payload: any = {
       wall_id: wallId,
       layer_order: parsedLayerOrder,
@@ -990,9 +1011,13 @@ export function WorkspacePropertiesPanel({
       width_mm: objType === 'hueco' ? (widthMmInput ?? 1200) : widthMmInput,
       height_mm: objType === 'hueco' ? (heightMmInput ?? 1000) : heightMmInput,
       position_x: objType === 'hueco' ? (positionXInput ?? 300) : positionXInput,
-      sill_height: objType === 'hueco' ? (sillHeightInput ?? 900) : sillHeightInput,
-      distance_to_wall: parseNumeric(objDistWall),
+      sill_height: computedSill,
+      distance_to_wall: computedDistWall,
       resource_id: objResourceId === '_none' ? null : objResourceId,
+      coord_x: coordXInput,
+      coord_y: coordYInput,
+      coord_z: coordZInput,
+      shown_in_section: objShownInSection,
     };
 
     const { data, error } = await supabase.from('budget_wall_objects').insert(payload).select().single();
@@ -1025,6 +1050,10 @@ export function WorkspacePropertiesPanel({
     setObjTargetFace('wall-0');
     setObjLayerOrder('1');
     setObjResourceId('_none');
+    setObjCoordX('');
+    setObjCoordY('');
+    setObjCoordZ('');
+    setObjShownInSection(false);
   };
 
   const handleDeleteObject = async (id: string) => {
@@ -1536,7 +1565,15 @@ export function WorkspacePropertiesPanel({
                           <button
                             key={r.id}
                             className={`w-full text-left text-[10px] px-1.5 py-1 rounded hover:bg-accent/40 flex items-center gap-1 ${objResourceId === r.id ? 'bg-accent/30 font-medium' : ''}`}
-                            onClick={() => { setObjResourceId(r.id); setFormResourceOpen(false); setFormResourceSearch(''); }}
+                            onClick={() => {
+                              setObjResourceId(r.id);
+                              setObjName(r.name);
+                              if (r.width_mm) setObjWidthMm(String(r.width_mm));
+                              if (r.height_mm) setObjHeightMm(String(r.height_mm));
+                              if (r.depth_mm) setObjThickness(String(r.depth_mm));
+                              setFormResourceOpen(false);
+                              setFormResourceSearch('');
+                            }}
                           >
                             <span className="truncate flex-1">{r.name}</span>
                             <Badge variant="outline" className="text-[8px] h-3.5 px-1 shrink-0">{r.resource_type || '—'}</Badge>
@@ -1572,6 +1609,32 @@ export function WorkspacePropertiesPanel({
                 <div>
                   <label className="text-[9px] text-muted-foreground">Dist. pared (mm)</label>
                   <Input className="h-6 text-[10px] font-mono" type="number" value={objDistWall} onChange={e => setObjDistWall(e.target.value)} />
+                </div>
+                {/* XYZ Coordinates */}
+                <div className="col-span-2 border-t border-border/30 pt-1 mt-0.5">
+                  <label className="text-[9px] text-muted-foreground font-semibold">Coordenadas XYZ (esquina inf. izq.)</label>
+                </div>
+                <div>
+                  <label className="text-[9px] text-muted-foreground">X (mm)</label>
+                  <Input className="h-6 text-[10px] font-mono" type="number" value={objCoordX} onChange={e => setObjCoordX(e.target.value)} placeholder="—" />
+                </div>
+                <div>
+                  <label className="text-[9px] text-muted-foreground">Y (mm)</label>
+                  <Input className="h-6 text-[10px] font-mono" type="number" value={objCoordY} onChange={e => setObjCoordY(e.target.value)} placeholder="—" />
+                </div>
+                <div>
+                  <label className="text-[9px] text-muted-foreground">Z (mm)</label>
+                  <Input className="h-6 text-[10px] font-mono" type="number" value={objCoordZ} onChange={e => setObjCoordZ(e.target.value)} placeholder="—" />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="checkbox"
+                    id="shownInSection"
+                    checked={objShownInSection}
+                    onChange={e => setObjShownInSection(e.target.checked)}
+                    className="h-3.5 w-3.5 rounded border-border"
+                  />
+                  <label htmlFor="shownInSection" className="text-[9px] text-muted-foreground cursor-pointer">¿Representado en sección?</label>
                 </div>
                 <div className="col-span-2">
                   <label className="text-[9px] text-muted-foreground">Descripción</label>
@@ -1816,6 +1879,7 @@ function ObjectRow({ obj, isPositioning, onTogglePosition, onMove, onDelete, onL
         <Badge variant="outline" className="text-[8px] h-4 px-1 shrink-0">Capa {obj.layer_order}</Badge>
         <Badge variant="outline" className="text-[8px] h-4 px-1 shrink-0">{obj.object_type}</Badge>
         {obj.resource_id && <Link2 className="h-3 w-3 text-primary shrink-0" />}
+        {obj.shown_in_section && <Badge variant="secondary" className="text-[7px] h-3.5 px-0.5 shrink-0">SEC</Badge>}
       </div>
       <div className="flex items-center gap-1 flex-wrap text-muted-foreground">
         {dims && <span className="font-mono">{dims}mm</span>}
@@ -1823,6 +1887,9 @@ function ObjectRow({ obj, isPositioning, onTogglePosition, onMove, onDelete, onL
         {obj.sill_height != null && <span>↑{obj.sill_height}</span>}
         {obj.position_x != null && <span>→{obj.position_x}</span>}
         {obj.distance_to_wall != null && <span>↔{obj.distance_to_wall}</span>}
+        {(obj.coord_x != null || obj.coord_y != null || obj.coord_z != null) && (
+          <span className="font-mono text-[8px]">XYZ({obj.coord_x ?? '—'},{obj.coord_y ?? '—'},{obj.coord_z ?? '—'})</span>
+        )}
       </div>
       {/* Action buttons */}
       <div className="flex items-center gap-0.5">

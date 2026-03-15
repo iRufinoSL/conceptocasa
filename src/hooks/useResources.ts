@@ -57,6 +57,9 @@ function mapDBToResource(dbResource: DBResource, relations: DBRelation[], files:
     tradeId: dbResource.trade_id,
     trade: dbResource.trade || null,
     vatIncludedPercent: dbResource.vat_included_percent,
+    widthMm: (dbResource as any).width_mm ?? null,
+    heightMm: (dbResource as any).height_mm ?? null,
+    depthMm: (dbResource as any).depth_mm ?? null,
     relatedResources: relations
       .filter(r => r.resource_id === dbResource.id)
       .map(r => ({ resourceId: r.related_resource_id, quantity: Number(r.quantity) || 1 })),
@@ -169,6 +172,9 @@ export function useResources() {
           supplier_id: resourceData.supplierId || null,
           trade_id: resourceData.tradeId || null,
           vat_included_percent: resourceData.vatIncludedPercent ?? null,
+          width_mm: resourceData.widthMm ?? null,
+          height_mm: resourceData.heightMm ?? null,
+          depth_mm: resourceData.depthMm ?? null,
         })
         .select()
         .single();
@@ -236,6 +242,9 @@ export function useResources() {
       if (updates.supplierId !== undefined) updateData.supplier_id = updates.supplierId || null;
       if (updates.tradeId !== undefined) updateData.trade_id = updates.tradeId || null;
       if (updates.vatIncludedPercent !== undefined) updateData.vat_included_percent = updates.vatIncludedPercent ?? null;
+      if (updates.widthMm !== undefined) updateData.width_mm = updates.widthMm ?? null;
+      if (updates.heightMm !== undefined) updateData.height_mm = updates.heightMm ?? null;
+      if (updates.depthMm !== undefined) updateData.depth_mm = updates.depthMm ?? null;
 
       const { error } = await supabase
         .from('external_resources')

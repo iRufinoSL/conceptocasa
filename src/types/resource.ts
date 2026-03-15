@@ -43,6 +43,9 @@ export interface ExternalResource {
     city?: string | null;
   } | null;
   files?: ResourceFile[];
+  widthMm?: number | null;
+  heightMm?: number | null;
+  depthMm?: number | null;
   tradeId?: string | null;
   trade?: {
     id: string;

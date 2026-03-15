@@ -39,6 +39,9 @@ const initialFormState = {
   supplierId: null as string | null,
   tradeId: null as string | null,
   vatIncludedPercent: null as number | null,
+  widthMm: null as number | null,
+  heightMm: null as number | null,
+  depthMm: null as number | null,
 };
 
 export function ResourceForm({ 
@@ -75,6 +78,9 @@ export function ResourceForm({
         supplierId: resource.supplierId || null,
         tradeId: resource.tradeId || null,
         vatIncludedPercent: resource.vatIncludedPercent ?? null,
+        widthMm: resource.widthMm ?? null,
+        heightMm: resource.heightMm ?? null,
+        depthMm: resource.depthMm ?? null,
       });
     } else {
       setFormData({
@@ -251,6 +257,49 @@ export function ResourceForm({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          {/* Dimensions Section */}
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="widthMm">Ancho (mm)</Label>
+              <InputAddon addon="mm">
+                <NumericInput
+                  id="widthMm"
+                  value={formData.widthMm ?? 0}
+                  onChange={(value) => setFormData({ ...formData, widthMm: value || null })}
+                  placeholder="0"
+                  decimals={0}
+                />
+              </InputAddon>
+              <p className="text-xs text-muted-foreground">Horizontal</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="heightMm">Alto (mm)</Label>
+              <InputAddon addon="mm">
+                <NumericInput
+                  id="heightMm"
+                  value={formData.heightMm ?? 0}
+                  onChange={(value) => setFormData({ ...formData, heightMm: value || null })}
+                  placeholder="0"
+                  decimals={0}
+                />
+              </InputAddon>
+              <p className="text-xs text-muted-foreground">Vertical</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="depthMm">Profundidad (mm)</Label>
+              <InputAddon addon="mm">
+                <NumericInput
+                  id="depthMm"
+                  value={formData.depthMm ?? 0}
+                  onChange={(value) => setFormData({ ...formData, depthMm: value || null })}
+                  placeholder="0"
+                  decimals={0}
+                />
+              </InputAddon>
+              <p className="text-xs text-muted-foreground">Espesor</p>
+            </div>
           </div>
 
           {/* Trade/Sector Section */}

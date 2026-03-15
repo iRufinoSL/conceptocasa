@@ -1902,6 +1902,7 @@ export function WorkspacePropertiesPanel({
                               setShowResourcePicker(obj.id as any);
                               setResourceSearch('');
                             }}
+                            onEdit={() => handleEditObject(obj)}
                           />
                         ))}
                       </div>

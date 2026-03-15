@@ -2761,9 +2761,13 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
         : null;
     const description = `${room.name} / ${faceLabel}${metricLabel ? ` — ${metricLabel}` : ''}`;
 
+    const forceZeroForMissingFace =
+      (wallDbIndex === -1 && (room.has_floor === false || (wallType || '').toLowerCase().includes('invisible')))
+      || (wallDbIndex === -2 && (room.has_ceiling === false || (wallType || '').toLowerCase().includes('invisible')));
+
     const { data: existing, error: existingError } = await supabase
       .from('budget_wall_objects')
-      .select('id')
+      .select('id, surface_m2, volume_m3, description')
       .eq('wall_id', wallId)
       .eq('layer_order', 0)
       .maybeSingle();
@@ -2774,6 +2778,19 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
     }
 
     if (existing?.id) {
+      if (!forceZeroForMissingFace) {
+        return;
+      }
+
+      const alreadyZero = existing.surface_m2 !== null
+        && Math.abs(existing.surface_m2) < 0.0001
+        && existing.volume_m3 === null;
+      const alreadyLabeledAsZero = (existing.description || '').includes('— 0 m²');
+
+      if (alreadyZero && alreadyLabeledAsZero) {
+        return;
+      }
+
       const { error: updateError } = await supabase
         .from('budget_wall_objects')
         .update({

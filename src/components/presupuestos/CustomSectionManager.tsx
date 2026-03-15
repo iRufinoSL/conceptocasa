@@ -249,7 +249,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
   // ── Wall visual patterns: roomId → patternId (from Superficie layer 0) ──
   const [wallPatterns, setWallPatterns] = useState<Map<string, string>>(new Map());
   // ── Wall huecos for Z section rendering: roomId → [{wallIndex, positionX, widthMm, name, objectType}] ──
-  const [wallHuecos, setWallHuecos] = useState<Map<string, Array<{ wallIndex: number; positionX: number; widthMm: number; name: string; objectType: string }>>>(new Map());
+  const [wallHuecos, setWallHuecos] = useState<Map<string, Array<{ wallIndex: number; positionXmm: number; widthMm: number; name: string; objectType: string }>>>(new Map());
   useEffect(() => {
     if (!rooms?.length) return;
     const roomIds = rooms.map(r => r.id);

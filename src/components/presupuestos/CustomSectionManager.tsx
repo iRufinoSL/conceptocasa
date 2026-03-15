@@ -2205,10 +2205,10 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                         const objFrac = hueco.widthMm / wallLenMm;
                         const objLenPx = Math.max(objFrac * edgeLenPx, 4);
 
-                        // Position along edge
-                        const posX = Math.max(0, Math.min(1, hueco.positionX));
+                        // Position along edge: positionXmm is in mm from wall start
+                        const posFrac = wallLenMm > 0 ? Math.max(0, Math.min(1, hueco.positionXmm / wallLenMm)) : 0.5;
                         const halfFrac = objFrac / 2;
-                        const clampedPos = Math.max(halfFrac, Math.min(1 - halfFrac, posX));
+                        const clampedPos = Math.max(halfFrac, Math.min(1 - halfFrac, posFrac));
                         const centerFrac = clampedPos;
 
                         // Center point on edge

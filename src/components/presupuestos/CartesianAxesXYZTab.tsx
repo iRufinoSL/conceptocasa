@@ -1345,17 +1345,16 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
           // Keep explicit face-assignment polygons (wall / ceiling) created from workspace bindings
           if (/_wall\d+$/.test(poly.id) || /_ceiling$/.test(poly.id)) return true;
 
-          // Always keep manually drawn polygons that were explicitly saved in this section
-          // (they may not match any auto-projection, e.g. drawn from scratch)
-          // We identify them as having vertices but no auto-projection match — keep them.
+          // If this polygon belongs to a real workspace room but no longer projects here,
+          // treat it as stale carry-over from another sibling section and drop it.
+          if (workspaceRoomMap.has(poly.id)) return false;
+
+          // For truly manual polygons (non-workspace IDs), keep them unless they collide by name
+          // with a canonical auto-projection in this section.
           const key = normalizeWorkspaceName(poly.name);
-          if (!key) return true; // no name → keep (manually drawn)
-
+          if (!key) return true;
           const canonicalId = autoNameToId.get(key);
-          // If no auto-projection exists for this name, keep the manually saved polygon
           if (!canonicalId) return true;
-
-          // Remove stale duplicates with same normalized name but obsolete IDs
           return canonicalId === poly.id;
         });
 

@@ -1474,7 +1474,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
         </div>
         <SectionAxisViewer
           key={liveSection.id}
-          sectionType={liveSection.sectionType as 'vertical' | 'longitudinal' | 'transversal'}
+          sectionType={liveSection.sectionType as 'vertical' | 'longitudinal' | 'transversal' | 'inclined'}
           axisValue={liveSection.axisValue}
           sectionName={liveSection.name}
           floorPlanId={floorPlan?.id}

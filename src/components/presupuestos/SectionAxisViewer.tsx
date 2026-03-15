@@ -1720,6 +1720,12 @@ export function SectionAxisViewer({
                     <PenTool className="h-3 w-3" /> Modificar
                   </Button>
                 )}
+                {onRegenerate && (
+                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
+                    onClick={onRegenerate}>
+                    <RefreshCw className="h-3 w-3" /> Regenerar espacios
+                  </Button>
+                )}
               </div>
               {polygons.length > 0 && (
                 <span className="text-[10px] text-muted-foreground ml-auto">

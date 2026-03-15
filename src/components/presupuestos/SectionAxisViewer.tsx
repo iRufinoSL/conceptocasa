@@ -154,6 +154,7 @@ export function SectionAxisViewer({
   facePatterns: savedFacePatterns,
   onFacePatternChange,
   allPolygonNames,
+  onRegenerate,
 }: SectionAxisViewerProps) {
   const { fixedAxis, hAxis, vAxis } = getConfig(sectionType);
   const hColor = AXIS_COLORS[hAxis];

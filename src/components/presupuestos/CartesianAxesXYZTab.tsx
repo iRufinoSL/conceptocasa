@@ -1071,8 +1071,11 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       }
 
       const result: WorkspaceRoom[] = [];
-      for (const [, rooms] of byName) {
-        const canonical = rooms.filter(r => validRoomIds.has(r.id));
+      for (const [normKey, rooms] of byName) {
+        // A room is "canonical" if its ID appears in a Z polygon OR its name matches one
+        const canonical = rooms.filter(r =>
+          validRoomIds.has(r.id) || (normKey && verticalRoomNameSet.has(normKey))
+        );
         const pool = canonical.length > 0
           ? canonical
           : (hasVerticalReference ? [] : rooms);

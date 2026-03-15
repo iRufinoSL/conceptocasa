@@ -1153,9 +1153,13 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
       volume_m3: volumeM3,
     };
 
+    const forceZero = (face.faceName === 'Suelo' || face.faceName === 'Techo')
+      && surfaceM2 === 0
+      && volumeM3 === null;
+
     const { data: existingRows, error: existingError } = await supabase
       .from('budget_wall_objects')
-      .select('id')
+      .select('id, surface_m2, volume_m3, description')
       .eq('wall_id', wallId)
       .eq('layer_order', 0)
       .order('created_at', { ascending: true });
@@ -1165,10 +1169,23 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
       return;
     }
 
-    const existingId = existingRows?.[0]?.id;
+    const existing = existingRows?.[0];
 
-    if (existingId) {
-      await supabase.from('budget_wall_objects').update(payload).eq('id', existingId);
+    if (existing?.id) {
+      if (!forceZero) {
+        return;
+      }
+
+      const alreadyZero = existing.surface_m2 !== null
+        && Math.abs(existing.surface_m2) < 0.0001
+        && existing.volume_m3 === null;
+      const alreadyLabeledAsZero = (existing.description || '').includes('— 0 m²');
+
+      if (alreadyZero && alreadyLabeledAsZero) {
+        return;
+      }
+
+      await supabase.from('budget_wall_objects').update(payload).eq('id', existing.id);
       return;
     }
 

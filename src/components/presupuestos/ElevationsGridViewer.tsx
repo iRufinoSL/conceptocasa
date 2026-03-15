@@ -8082,6 +8082,7 @@ const WALL_TYPE_OPTIONS: Array<{ value: WallType; label: string; description: st
   { value: 'interior', label: 'Interior', description: 'Pared interior normal' },
   { value: 'interior_compartida', label: 'Int. compartida', description: 'Interior compartida con espacio adyacente' },
   { value: 'interior_invisible', label: 'Invisible', description: 'Sin pared física (espacio abierto)' },
+  { value: 'suelo', label: 'Suelo', description: 'Cara de suelo del espacio' },
 ];
 
 function WallEditDialog({ open, onOpenChange, card, currentWallType, liveRooms, onAddOpening, onUpdateOpening, onDeleteOpening, onUpdateWall, saving }: {

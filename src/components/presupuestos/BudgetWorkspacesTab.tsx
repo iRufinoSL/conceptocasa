@@ -87,6 +87,7 @@ const WALL_EDGE_STYLES: Record<string, { color: string; width: number; dash: str
   interior:             { color: 'hsl(30 85% 50%)',   width: 2,   dash: 'none' },
   interior_compartida:  { color: 'hsl(30 85% 50%)',   width: 2,   dash: 'none' },
   interior_invisible:   { color: 'hsl(0 0% 65%)',     width: 1.5, dash: '3 2' },
+  suelo:                { color: 'hsl(20 60% 40%)',   width: 3.5, dash: 'none' },
 };
 const WALL_EDGE_DEFAULT = { color: 'hsl(200 80% 50%)', width: 2, dash: 'none' };
 

@@ -41,6 +41,7 @@ const WALL_TYPE_OPTIONS: { value: WallType; label: string }[] = [
   { value: 'interior_compartida', label: 'Int. compartida' },
   { value: 'exterior_invisible', label: 'Ext. invisible' },
   { value: 'interior_invisible', label: 'Int. invisible' },
+  { value: 'suelo', label: 'Suelo' },
 ];
 
 export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRow, coordZ, floorName, onUpdateRoom, onUpdateWall, onUpdateWallSegmentType, onAddOpening, onDeleteOpening, onDuplicateRoom, onChangeCoordinate, onUngroupRoom, onDeleteRoom, onNavigateToElevation, saving }: FloorPlanSpaceFormProps) {

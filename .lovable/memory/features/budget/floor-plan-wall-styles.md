@@ -9,11 +9,13 @@ Las caras de los Espacios de trabajo muestran visualmente su tipo mediante color
 3. **Paredes Invisibles** (Gris discontinuo)
 4. **Ext. compartida** (Azul, 5px)
 5. **Int. compartida** (Verde, 2.5px)
-6. **Tejado** (Rojo #c45c5c, 4px) — Nuevo tipo para caras de tejado. Usa prefijo **T** (T1, T2, etc.) en lugar de **P**
+6. **Tejado** (Rojo #c45c5c, 4px) — Usa prefijo **T** (T1, T2, etc.)
+7. **Suelo** (Marrón #a0522d / hsl(20,60%,40%), 4px) — Nuevo tipo para caras de suelo
 
 ### Etiquetas
 - Las paredes normales usan prefijo `P` (P1, P2, P3...)
 - Las paredes tipo **Tejado** usan prefijo `T` (T1, T2, T3...)
+- Las paredes tipo **Suelo** se etiquetan como `S` en secciones
 - En secciones transversales/longitudinales, las caras se etiquetan automáticamente como `S` (Suelo) o `T` (Techo) según su posición vertical
 - En el CustomSectionManager, el ciclo de etiquetas incluye: P# → Suelo → Techo → T# (Tejado)
 

@@ -130,11 +130,12 @@ export interface WallLayerData {
   name?: string;
 }
 
-// 6 wall types: exterior/interior × normal/compartida/invisible
-export type WallType = 'exterior' | 'exterior_compartida' | 'exterior_invisible' | 'interior' | 'interior_compartida' | 'interior_invisible' | 'tejado';
+// 7 wall types: exterior/interior × normal/compartida/invisible + tejado + suelo
+export type WallType = 'exterior' | 'exterior_compartida' | 'exterior_invisible' | 'interior' | 'interior_compartida' | 'interior_invisible' | 'tejado' | 'suelo';
 
 export function isExteriorType(t: string): boolean { return t.startsWith('exterior'); }
 export function isTejadoType(t: string): boolean { return t === 'tejado'; }
+export function isSueloType(t: string): boolean { return t === 'suelo'; }
 export function isInvisibleType(t: string): boolean { return t.endsWith('_invisible'); }
 export function isCompartidaType(t: string): boolean { return t.endsWith('_compartida'); }
 export function isVisibleWall(t: string): boolean { return !isInvisibleType(t); }

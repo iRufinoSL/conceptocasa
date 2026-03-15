@@ -331,8 +331,22 @@ export function SectionAxisViewer({
 
     // Build section objects array with room_id resolved
     const wallToRoom = new Map(walls.map(w => [w.id, w.room_id]));
+    const AXIS_EPS = 50; // 50mm tolerance for axis matching
     const secObjs: SectionObjectData[] = (sectionObjRes.data || [])
-      .filter((o: any) => o.object_type !== 'hueco') // huecos already rendered
+      .filter((o: any) => {
+        if (o.object_type === 'hueco') return false; // huecos already rendered
+        // Filter objects by section axis coordinate — only show objects that belong to THIS section plane
+        if (sectionType === 'longitudinal' && o.coord_y != null) {
+          if (Math.abs(o.coord_y - axisValue) > AXIS_EPS) return false;
+        }
+        if (sectionType === 'transversal' && o.coord_x != null) {
+          if (Math.abs(o.coord_x - axisValue) > AXIS_EPS) return false;
+        }
+        if (sectionType === 'vertical' && o.coord_z != null) {
+          if (Math.abs(o.coord_z - axisValue) > AXIS_EPS) return false;
+        }
+        return true;
+      })
       .map((o: any) => ({
         id: o.id,
         wall_id: o.wall_id,
@@ -348,7 +362,7 @@ export function SectionAxisViewer({
         coord_z: o.coord_z,
       }));
     setSectionObjects(secObjs);
-  }, [polygons]);
+  }, [polygons, sectionType, axisValue]);
 
   useEffect(() => { loadOpenings(); }, [loadOpenings, openingsVersion]);
 

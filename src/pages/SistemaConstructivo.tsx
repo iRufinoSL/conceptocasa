@@ -216,7 +216,7 @@ const SistemaConstructivo = () => {
               <div className="relative">
                 <img
                   src={sistemaMasSeccion}
-                  alt="Sección técnica del sistema MA'S EC: paneles antifuego exterior e interior, relleno de PolitermBlu gris y estructura interior de madera, acero o hierro"
+                  alt="Sección técnica del sistema MA'S ETC: paneles antifuego exterior e interior, relleno de PolitermBlu gris y estructura interior de madera, acero o hierro"
                   className="rounded-2xl shadow-xl w-full object-cover"
                   loading="lazy"
                 />

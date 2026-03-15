@@ -1043,11 +1043,16 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
 
     // Project only canonical workspaces from vertical (Z) sections.
     // This blocks stale duplicates/ghosts from re-entering X/Y during regeneration.
+    // Match by ID OR by normalized name so rooms whose IDs differ from Z-polygon IDs still project.
     const hasVerticalReference = validRoomIds.size > 0 || verticalRoomNameSet.size > 0;
     const allEligible = (workspaceRooms || []).filter(room => {
       if (!room.floor_polygon || room.floor_polygon.length < 3) return false;
       if (!hasVerticalReference) return true;
-      return validRoomIds.has(room.id);
+      if (validRoomIds.has(room.id)) return true;
+      // Also accept rooms whose name matches a vertical section polygon name
+      const effectiveName = canonicalNameMap.get(room.id) || room.name;
+      const normName = normalizeWorkspaceName(effectiveName);
+      return normName ? verticalRoomNameSet.has(normName) : false;
     });
 
     // Deduplicate by normalized name while keeping canonical IDs.

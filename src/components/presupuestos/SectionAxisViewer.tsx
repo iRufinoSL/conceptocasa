@@ -1844,18 +1844,33 @@ export function SectionAxisViewer({
       )}
 
       {/* Polygon list */}
-      {polygons.length > 0 && !drawMode && (
+      {visiblePolygons.length > 0 && !drawMode && (
         <div className="px-3 py-1.5 border-b bg-muted/5 flex flex-wrap gap-1.5">
-          {polygons.map((poly, idx) => {
+          {visiblePolygons.map((poly, idx) => {
             const color = WORKSPACE_COLORS[idx % WORKSPACE_COLORS.length];
             const areaGrid = polygonAreaGrid(poly.vertices.map(v => ({ x: v.x, y: v.y })));
             const areaM2 = scale ? areaGrid * (scale.hScale / 1000) * (scale.vScale / 1000) : 0;
             const heightMm = poly.zTop || 0;
+            const isSelectedForVertexEdit = vertexEditMode && selectedPolygonId === poly.id;
             return (
               <span key={poly.id}
                 className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border cursor-pointer hover:opacity-80 transition-opacity"
-                style={{ borderColor: color, color, backgroundColor: editingPolyId === poly.id ? `${color}15` : undefined }}
-                onClick={() => startEditPolygon(poly)}>
+                style={{
+                  borderColor: color,
+                  color,
+                  backgroundColor: isSelectedForVertexEdit
+                    ? `${color}22`
+                    : editingPolyId === poly.id
+                      ? `${color}15`
+                      : undefined,
+                }}
+                onClick={() => {
+                  if (vertexEditMode) {
+                    setSelectedPolygonId(poly.id);
+                    return;
+                  }
+                  startEditPolygon(poly);
+                }}>
                 <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
                 {poly.name} ({areaM2.toFixed(2)} m²{heightMm ? ` · h=${heightMm}mm` : ''})
                 <button onClick={(e) => { e.stopPropagation(); handleDeletePolygon(poly.id); }}

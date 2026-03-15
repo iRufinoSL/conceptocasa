@@ -190,12 +190,15 @@ export function WorkspacePropertiesPanel({
   const [positioningObjId, setPositioningObjId] = useState<string | null>(null);
 
   // Active tab: 'faces' | 'objects'
-  const [activeTab, setActiveTab] = useState<'faces' | 'objects'>('faces');
+  const [activeTab, setActiveTab] = useState<'faces' | 'objects'>(initialTab || (initialEditObjectId ? 'objects' : 'faces'));
   const [isRegeneratingSuperficies, setIsRegeneratingSuperficies] = useState(false);
   const [editingSuperficieId, setEditingSuperficieId] = useState<string | null>(null);
   const [manualSurfaceValue, setManualSurfaceValue] = useState('');
   const [manualVolumeValue, setManualVolumeValue] = useState('');
   const [savingManualSuperficie, setSavingManualSuperficie] = useState(false);
+
+  // Editing existing object
+  const [editingObjId, setEditingObjId] = useState<string | null>(null);
 
   const getFaceLabel = useCallback((wallIndex: number, wallType?: string) => {
     if (wallIndex === -1) return 'Suelo';

@@ -1136,8 +1136,10 @@ export function SectionAxisViewer({
       } else {
         elements.push(
           <polygon key={`poly-${poly.id}`} points={pointsStr}
-            fill={color} fillOpacity={0.15} stroke={color} strokeWidth={2.5}
-            style={{ cursor: 'pointer', pointerEvents: 'fill' }}
+            fill={color} fillOpacity={isSelectedInEdit ? 0.15 : 0.1}
+            stroke={color}
+            strokeWidth={isSelectedInEdit ? 2.5 : 1.5}
+            style={{ cursor: 'pointer', pointerEvents: 'fill', opacity: isSelectedInEdit ? 1 : 0.45 }}
             onClick={handlePolyFillClick} />
         );
       }

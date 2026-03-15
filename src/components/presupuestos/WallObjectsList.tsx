@@ -1258,16 +1258,13 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
             <Button variant={placedView === 'workspace' ? 'default' : 'outline'} size="sm" className="h-7 text-xs gap-1" onClick={() => setPlacedView('workspace')}>
               <Layers className="h-3 w-3" /> Por espacio
             </Button>
-            <Button variant={placedView === 'type' ? 'default' : 'outline'} size="sm" className="h-7 text-xs gap-1" onClick={() => setPlacedView('type')}>
-              <Package className="h-3 w-3" /> Por tipo
-            </Button>
           </div>
 
           {filteredObjects.length === 0 ? (
             <p className="text-sm text-muted-foreground py-4 text-center">No hay objetos colocados en espacios</p>
           ) : placedView === 'alpha' ? (
             <ResizableTable columns={placedColumns} rows={objectsAlpha.map(placedRow)} onRowClick={() => {}} />
-          ) : placedView === 'workspace' ? (
+          ) : (
             <div className="space-y-1.5">
               {objectsByWorkspace.map(group => {
                 const isOpen = resourceOpenGroups.has(`ws-${group.name}`);
@@ -1281,33 +1278,6 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
                     <CollapsibleContent>
                       <ResizableTable
                         columns={placedColumns.filter(c => c.key !== 'workspace')}
-                        rows={group.objects.map((o: any) => ({
-                          ...placedRow(o),
-                          cells: { ...placedRow(o).cells },
-                        }))}
-                        onRowClick={() => {}}
-                        className="ml-6 mt-1"
-                      />
-                    </CollapsibleContent>
-                  </Collapsible>
-                );
-              })}
-            </div>
-          ) : (
-            /* By type */
-            <div className="space-y-1.5">
-              {objectsByType.map(group => {
-                const isOpen = resourceOpenGroups.has(`tp-${group.name}`);
-                return (
-                  <Collapsible key={group.name} open={isOpen} onOpenChange={() => toggleResourceGroup(`tp-${group.name}`)}>
-                    <CollapsibleTrigger className="flex items-center gap-2 w-full rounded-md px-2 py-1.5 bg-accent/30 hover:bg-accent/50 transition-colors text-left">
-                      <ChevronRight className={cn('h-4 w-4 text-muted-foreground transition-transform duration-200', isOpen && 'rotate-90')} />
-                      <span className="text-sm font-semibold flex-1">{group.name}</span>
-                      <Badge variant="outline" className="text-[10px] h-5">{group.objects.length}</Badge>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <ResizableTable
-                        columns={placedColumns.filter(c => c.key !== 'type')}
                         rows={group.objects.map((o: any) => ({
                           ...placedRow(o),
                           cells: { ...placedRow(o).cells },

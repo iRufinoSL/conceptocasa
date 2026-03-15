@@ -1055,14 +1055,12 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
     name === 'Espacio' ? '🔷' : name === 'Suelo' ? '⬛' : name === 'Techo' ? '⬜' : '🧱';
 
   const placedColumns: ColDef[] = [
-    { key: 'order', header: '#', defaultWidth: 36, minWidth: 30 },
-    { key: 'name', header: 'Objeto', defaultWidth: 150, minWidth: 80 },
-    { key: 'face', header: 'Cara', defaultWidth: 80, minWidth: 50 },
-    { key: 'workspace', header: 'Espacio', defaultWidth: 110, minWidth: 60 },
+    { key: 'name', header: 'Objeto', defaultWidth: 180, minWidth: 100 },
+    { key: 'workspace', header: 'Ubicación', defaultWidth: 120, minWidth: 60 },
+    { key: 'm2', header: 'm²', defaultWidth: 70, minWidth: 45 },
+    { key: 'm3', header: 'm³', defaultWidth: 70, minWidth: 45 },
     { key: 'type', header: 'Tipo', defaultWidth: 80, minWidth: 50 },
     { key: 'thickness', header: 'Espesor', defaultWidth: 65, minWidth: 45 },
-    { key: 'm2', header: 'm²', defaultWidth: 65, minWidth: 45 },
-    { key: 'm3', header: 'm³', defaultWidth: 65, minWidth: 45 },
   ];
 
   const modelColumns: ColDef[] = [
@@ -1091,14 +1089,12 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
   const placedRow = (o: any) => ({
     face: { workspace: o.workspace, roomId: '', faceName: o.faceName, m2: o.surface_m2, m3: o.volume_m3, sortKey: 0, wallIndex: 0 } as AutoFace,
     cells: {
-      order: String(o.layer_order),
-      name: o.layer_order === 0 ? `⭐ ${o.name}` : o.name,
-      face: o.faceName,
+      name: o.layer_order === 0 ? `Superficie=${o.faceName}` : o.name,
       workspace: o.workspace,
       type: o.object_type || '',
       thickness: o.thickness_mm ? `${o.thickness_mm} mm` : '',
-      m2: o.surface_m2 != null ? o.surface_m2.toFixed(2) : '',
-      m3: o.volume_m3 != null ? o.volume_m3.toFixed(3) : '',
+      m2: o.surface_m2 != null ? o.surface_m2.toFixed(2).replace('.', ',') : '',
+      m3: o.volume_m3 != null ? o.volume_m3.toFixed(3).replace('.', ',') : '',
     },
   });
 

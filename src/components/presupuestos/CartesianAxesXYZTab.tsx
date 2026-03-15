@@ -1229,17 +1229,8 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
         }
       }
 
-      if (!matchedRoom && normalized) {
-        const partialCandidates = (workspaceRooms || []).filter(room => {
-          const roomName = normalizeWorkspaceName(room.name);
-          if (!roomName) return false;
-          return roomName.includes(normalized) || normalized.includes(roomName);
-        });
-        if (partialCandidates.length > 0) {
-          const compatible = partialCandidates.filter(room => isRoofLikeName(room.name) === sourceIsRoofLike);
-          matchedRoom = pickMostRecentlyUpdatedRoom(compatible.length > 0 ? compatible : partialCandidates);
-        }
-      }
+      // Avoid permissive partial-name matching here: it can inject wrong rooms in X/Y (ghost projections).
+      // Keep fallback strict to direct ID / exact normalized match / loose legacy match only.
 
       const fallbackId = matchedRoom?.id || src.polygon.id;
       if (projectedKeys.has(fallbackId)) continue;

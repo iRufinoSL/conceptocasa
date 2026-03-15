@@ -333,6 +333,8 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
       // Huecos — index by normalized room name so section copies can inherit
       type HuecoEntry = { wallIndex: number; positionXmm: number; widthMm: number; name: string; objectType: string };
       const huecosByName = new Map<string, HuecoEntry[]>();
+      console.log('[HUECOS DEBUG] allWallIds count:', allWallIds.length, 'huecoRes.data:', huecoRes.data?.length, 'rooms displayed:', rooms.map(r => `${r.id.slice(0,8)}=${r.name}`));
+      console.log('[HUECOS DEBUG] allRoomIds count:', allRoomIds.length, 'floorPlanIds:', floorPlanIds);
       if (huecoRes.data?.length) {
         for (const h of huecoRes.data) {
           const roomId = wallRoomMap.get(h.wall_id);

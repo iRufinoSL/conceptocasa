@@ -1607,6 +1607,9 @@ export function SectionAxisViewer({
     }
     lastObjClickRef.current = { time: now, objId };
 
+    // Select this object for keyboard movement
+    setSelectedObjectId(objId);
+
     const svg = svgRef.current;
     if (!svg) return;
     let pt = svg.createSVGPoint();

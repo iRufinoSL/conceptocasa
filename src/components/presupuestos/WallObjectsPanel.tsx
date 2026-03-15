@@ -262,6 +262,64 @@ export function WallObjectsPanel({
     queryClient.invalidateQueries({ queryKey: ['wall-objects', wallId] });
   };
 
+  const stripMetricFromDescription = (description: string | null) => {
+    if (!description) return `${roomName} / ${wallLabel}`;
+    return description.replace(/\s+—\s+[-\d.,]+\s*(m²|m³|ml)\s*$/u, '').trim();
+  };
+
+  const openSuperficieMetricsEditor = (obj: WallObject) => {
+    setEditingSuperficieMetrics(obj.id);
+    setManualSurfaceM2(obj.surface_m2 != null ? String(obj.surface_m2) : '');
+    setManualVolumeM3(obj.volume_m3 != null ? String(obj.volume_m3) : '');
+  };
+
+  const saveSuperficieMetrics = async (obj: WallObject) => {
+    const parseMaybeNumber = (value: string) => {
+      const trimmed = value.trim();
+      if (!trimmed) return null;
+      const parsed = Number.parseFloat(trimmed.replace(',', '.'));
+      return Number.isFinite(parsed) ? parsed : NaN;
+    };
+
+    const parsedM2 = parseMaybeNumber(manualSurfaceM2);
+    const parsedM3 = parseMaybeNumber(manualVolumeM3);
+
+    if (Number.isNaN(parsedM2) || Number.isNaN(parsedM3)) {
+      toast.error('Introduce valores numéricos válidos');
+      return;
+    }
+
+    const metricLabel = parsedM2 != null
+      ? `${parsedM2} m²`
+      : parsedM3 != null
+        ? `${parsedM3} m³`
+        : null;
+
+    const baseDescription = stripMetricFromDescription(obj.description);
+    const nextDescription = metricLabel ? `${baseDescription} — ${metricLabel}` : baseDescription;
+
+    setSavingSuperficieMetrics(true);
+    const { error } = await supabase
+      .from('budget_wall_objects')
+      .update({
+        surface_m2: parsedM2,
+        volume_m3: parsedM3,
+        description: nextDescription,
+      })
+      .eq('id', obj.id);
+    setSavingSuperficieMetrics(false);
+
+    if (error) {
+      toast.error('No se pudo guardar la medida manual');
+      return;
+    }
+
+    setEditingSuperficieMetrics(null);
+    toast.success('Medida de superficie actualizada');
+    queryClient.invalidateQueries({ queryKey: ['wall-objects', wallId] });
+    queryClient.invalidateQueries({ queryKey: ['budget-wall-objects-all'] });
+  };
+
   const isExterior = wallType.startsWith('exterior');
   const isInvisible = wallType.includes('invisible');
   const isEspacio = wallType === 'espacio';

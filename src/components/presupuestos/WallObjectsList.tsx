@@ -940,7 +940,7 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
 
       const roomIds = [...new Set(allFaces.map(face => face.roomId))];
       const roomById = new Map<string, WorkspaceAutoFaceSource>(
-        ((rooms || []) as WorkspaceAutoFaceSource[]).map(room => [room.id, room]),
+        eligibleRooms.map(room => [room.id, room]),
       );
 
       const { data: wallRows, error: wallsError } = await supabase

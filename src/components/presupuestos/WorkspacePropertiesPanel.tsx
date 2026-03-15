@@ -990,7 +990,7 @@ export function WorkspacePropertiesPanel({
                   const len = Math.sqrt(dx * dx + dy * dy);
                   const nx = len > 0 ? -dy / len : 0;
                   const ny = len > 0 ? dx / len : 0;
-                  const off = 24; // label offset further from edge
+                  const off = 0; // label sits on top of the edge line
                   const isHighlighted = expandedFace === `wall-${i}`;
                   const wallObjs = getObjectsForWall(i + 1);
                   const wallHuecos = wallObjs.filter(o => o.object_type === 'hueco');

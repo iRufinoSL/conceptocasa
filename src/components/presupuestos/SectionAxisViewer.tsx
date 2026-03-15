@@ -1080,8 +1080,19 @@ export function SectionAxisViewer({
     const { originX, originY, cellPxW, cellPxH } = gridLayout;
     const elements: JSX.Element[] = [];
 
-    polygons.forEach((poly, polyIdx) => {
-      const color = WORKSPACE_COLORS[polyIdx % WORKSPACE_COLORS.length];
+    // Sort polygons so the selected one renders LAST (on top) in vertex edit mode
+    const sortedPolygons = vertexEditMode && selectedPolygonId
+      ? [...visiblePolygons].sort((a, b) => {
+          if (a.id === selectedPolygonId) return 1;
+          if (b.id === selectedPolygonId) return -1;
+          return 0;
+        })
+      : visiblePolygons;
+
+    sortedPolygons.forEach((poly, polyIdx) => {
+      // Use original index for color consistency
+      const origIdx = visiblePolygons.indexOf(poly);
+      const color = WORKSPACE_COLORS[(origIdx >= 0 ? origIdx : polyIdx) % WORKSPACE_COLORS.length];
       const verts = poly.vertices;
       if (verts.length < 3) return;
 

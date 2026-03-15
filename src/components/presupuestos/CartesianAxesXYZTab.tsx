@@ -1033,20 +1033,9 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
   const computeProjectedPolygons = useCallback((section: CustomSection, otherSectionsOfSameType?: CustomSection[]): SectionPolygon[] => {
     if (section.sectionType === 'vertical') return [];
 
-    // Build a set of room IDs that are already explicitly saved in OTHER sections
-    // of the same type (e.g., other X sections). This prevents a workspace that was
-    // manually placed/saved in X20 from auto-projecting into X17.
-    const idsClaimedByOtherSections = new Set<string>();
-    if (otherSectionsOfSameType) {
-      for (const other of otherSectionsOfSameType) {
-        if (other.id === section.id) continue;
-        for (const poly of (other.polygons || [])) {
-          if (poly.vertices && poly.vertices.length > 0) {
-            idsClaimedByOtherSections.add(poly.id);
-          }
-        }
-      }
-    }
+    // NOTE: We no longer exclude rooms just because they appear in sibling sections.
+    // A workspace can legitimately intersect multiple X (or Y) planes.
+    // The geometric intersection check (findPolyIntersections) is the authoritative filter.
 
     const defaultHeight = 2.5; // fallback metres
     // Z unit = 250mm (block_height_mm)

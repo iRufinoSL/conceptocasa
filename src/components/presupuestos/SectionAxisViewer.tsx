@@ -1224,6 +1224,40 @@ export function SectionAxisViewer({
             } : undefined}
           />
         );
+        // Show axis coordinate label on vertices that fall on integer grid positions
+        if (!isDraggable) {
+          const vx = verts[i].x;
+          const vy = verts[i].y;
+          const isIntX = Math.abs(vx - Math.round(vx)) < 0.01;
+          const isIntY = Math.abs(vy - Math.round(vy)) < 0.01;
+          if (isIntX || isIntY) {
+            const coordParts: string[] = [];
+            if (isIntX) {
+              const hIdx = Math.round(vx);
+              coordParts.push(`${hAxis}${hIdx}`);
+            }
+            if (isIntY) {
+              const vIdx = Math.round(vy);
+              coordParts.push(`${vAxis}${vIdx}`);
+            }
+            const coordLabel = coordParts.join(',');
+            const labelW = coordLabel.length * 5.5 + 6;
+            elements.push(
+              <g key={`vtx-coord-${poly.id}-${i}`} style={{ pointerEvents: vertexEditMode ? 'none' : 'auto' }}>
+                <rect
+                  x={a.px + 8} y={a.py - 14}
+                  width={labelW} height={14} rx={2}
+                  fill="white" fillOpacity={0.92} stroke={color} strokeWidth={0.5}
+                />
+                <text
+                  x={a.px + 8 + labelW / 2} y={a.py - 5}
+                  textAnchor="middle" fontSize={8} fontWeight={700} fill={color} fontFamily="monospace">
+                  {coordLabel}
+                </text>
+              </g>
+            );
+          }
+        }
         // In edit mode, show "+" on edges to insert vertices
         if (isDraggable) {
           const j = (i + 1) % verts.length;

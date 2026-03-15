@@ -1053,8 +1053,9 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       const intersections = findPolyIntersections(poly, cutAxis, axisVal);
       if (intersections.length < 2) return;
 
-      const hMin = Math.min(...intersections);
-      const hMax = Math.max(...intersections);
+      // Snap intersections to nearest grid node (0.5 unit) so polygon edges align with grid lines
+      const hMin = Math.round(Math.min(...intersections) * 2) / 2;
+      const hMax = Math.round(Math.max(...intersections) * 2) / 2;
       if (Math.abs(hMax - hMin) < 0.01) return;
 
       // Resolve effective height: room height → max wall height → default

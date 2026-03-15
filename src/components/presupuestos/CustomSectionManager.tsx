@@ -290,7 +290,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
       setWallPatterns(pMap);
 
       // Huecos
-      const hMap = new Map<string, Array<{ wallIndex: number; positionX: number; widthMm: number; name: string; objectType: string }>>();
+      const hMap = new Map<string, Array<{ wallIndex: number; positionXmm: number; widthMm: number; name: string; objectType: string }>>();
       if (huecoRes.data?.length) {
         for (const h of huecoRes.data) {
           const roomId = wallRoomMap.get(h.wall_id);

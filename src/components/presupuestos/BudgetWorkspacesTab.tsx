@@ -2494,7 +2494,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
         floor_polygon: formVertices,
         is_base: payload.is_base,
       };
-      await Promise.all((editedWalls || []).map((w: any) => ensureSuperficieLayer(w.id, roomForMetrics, w.wall_index)));
+      await Promise.all((editedWalls || []).map((w: any) => ensureSuperficieLayer(w.id, roomForMetrics, w.wall_index, w.wall_type)));
 
       toast.success('Espacio actualizado');
     } else {

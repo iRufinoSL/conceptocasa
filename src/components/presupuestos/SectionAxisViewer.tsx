@@ -288,6 +288,7 @@ export function SectionAxisViewer({
   const [sectionObjects, setSectionObjects] = useState<SectionObjectData[]>([]);
   const [draggingObjectId, setDraggingObjectId] = useState<string | null>(null);
   const [dragStart, setDragStart] = useState<{ x: number; y: number; posX: number; sill: number } | null>(null);
+  const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
 
   const loadOpenings = useCallback(async () => {
     if (polygons.length === 0) return;

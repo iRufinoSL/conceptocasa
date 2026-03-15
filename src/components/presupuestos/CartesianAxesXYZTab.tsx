@@ -502,6 +502,15 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       if (deleteRoomsError) throw deleteRoomsError;
     }
 
+    // Also clean budget_floors (floor levels) that may have been copied
+    if (floorPlan?.id) {
+      const { error: deleteFloorsError } = await supabase
+        .from('budget_floors')
+        .delete()
+        .eq('floor_plan_id', floorPlan.id);
+      if (deleteFloorsError) throw deleteFloorsError;
+    }
+
     const currentCorners = parseCustomCorners();
     const cleanCorners = {
       ...currentCorners,
@@ -1625,14 +1634,14 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
               invalidateSectionQueries();
             }}
           />
-          {totalSections > 0 && isAdmin && (
+          {isAdmin && (
             <Button
               variant="destructive"
               size="sm"
               className="h-7 text-xs gap-1"
               onClick={handleDeleteAllSections}
             >
-              <Trash2 className="h-3 w-3" /> Eliminar todas
+              <Trash2 className="h-3 w-3" /> Limpieza Total
             </Button>
           )}
         </div>

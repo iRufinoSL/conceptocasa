@@ -1066,7 +1066,9 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       // If room height is missing/zero, compute from individual wall heights (prisma with per-face heights)
       if (!effectiveHeightM && wallRoomId) {
         const roomWalls = (allWalls || []).filter(w => w.room_id === wallRoomId);
-        const wallHeights = roomWalls.filter(w => w.height != null && w.height > 0).map(w => w.height!);
+        const wallHeights = roomWalls
+          .filter(w => w.height != null && w.height > 0)
+          .map(w => w.height! > 50 ? w.height! / 1000 : w.height!);
         if (wallHeights.length > 0) {
           effectiveHeightM = Math.max(...wallHeights);
         }

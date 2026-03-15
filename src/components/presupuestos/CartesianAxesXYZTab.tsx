@@ -1319,14 +1319,19 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     const filteredSavedPolys = liveSection.sectionType === 'vertical'
       ? normalizedSavedPolys
       : normalizedSavedPolys.filter(poly => {
+          // Always keep hidden markers (empty vertices = user explicitly hid this space)
           if (!poly.vertices || poly.vertices.length === 0) return true;
+          // Always keep if it matches an auto-projected polygon
           if (autoPolysById.has(poly.id)) return true;
 
           // Keep explicit face-assignment polygons (wall / ceiling) created from workspace bindings
           if (/_wall\d+$/.test(poly.id) || /_ceiling$/.test(poly.id)) return true;
 
+          // Always keep manually drawn polygons that were explicitly saved in this section
+          // (they may not match any auto-projection, e.g. drawn from scratch)
+          // We identify them as having vertices but no auto-projection match — keep them.
           const key = normalizeWorkspaceName(poly.name);
-          if (!key) return false;
+          if (!key) return true; // no name → keep (manually drawn)
 
           const canonicalId = autoNameToId.get(key);
           if (!canonicalId) return false;

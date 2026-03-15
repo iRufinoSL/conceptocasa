@@ -1046,6 +1046,7 @@ export function WorkspacePropertiesPanel({
 
   const resetForm = () => {
     setShowObjectForm(false);
+    setEditingObjId(null);
     setObjName('');
     setObjDescription('');
     setObjThickness('');
@@ -1064,6 +1065,97 @@ export function WorkspacePropertiesPanel({
     setObjCoordZ('');
     setObjShownInSection(false);
   };
+
+  /** Populate the form with an existing object for editing */
+  const handleEditObject = (obj: WallObjectRecord) => {
+    setEditingObjId(obj.id);
+    setShowObjectForm(true);
+    setObjName(obj.name);
+    setObjDescription(obj.description || '');
+    setObjType(obj.object_type);
+    setObjLayerOrder(String(obj.layer_order));
+    setObjThickness(obj.thickness_mm != null ? String(obj.thickness_mm) : '');
+    setObjWidthMm(obj.width_mm != null ? String(obj.width_mm) : '');
+    setObjHeightMm(obj.height_mm != null ? String(obj.height_mm) : '');
+    setObjSillHeight(obj.sill_height != null ? String(obj.sill_height) : '');
+    setObjPosX(obj.position_x != null ? String(obj.position_x) : '');
+    setObjDistWall(obj.distance_to_wall != null ? String(obj.distance_to_wall) : '');
+    setObjResourceId(obj.resource_id || '_none');
+    setObjCoordX(obj.coord_x != null ? String(obj.coord_x) : '');
+    setObjCoordY(obj.coord_y != null ? String(obj.coord_y) : '');
+    setObjCoordZ(obj.coord_z != null ? String(obj.coord_z) : '');
+    setObjShownInSection(obj.shown_in_section || false);
+    // Determine target face from wall_id
+    const wall = walls.find(w => w.id === obj.wall_id);
+    if (wall) {
+      if (wall.wall_index === -1) setObjTargetFace('floor');
+      else if (wall.wall_index === -2) setObjTargetFace('ceiling');
+      else if (wall.wall_index === 0) setObjTargetFace('space');
+      else setObjTargetFace(`wall-${wall.wall_index - 1}`);
+    }
+    setActiveTab('objects');
+  };
+
+  /** Save changes to an existing object */
+  const handleUpdateObject = async () => {
+    if (!editingObjId || !objName.trim()) return;
+
+    const parseNumeric = (value: string) => {
+      if (!value.trim()) return null;
+      const parsed = Number.parseFloat(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+
+    const coordXInput = parseNumeric(objCoordX);
+    const coordYInput = parseNumeric(objCoordY);
+    const coordZInput = parseNumeric(objCoordZ);
+    let computedSill = parseNumeric(objSillHeight);
+    let computedDistWall = parseNumeric(objDistWall);
+    if (coordZInput != null) computedSill = coordZInput;
+    if (coordXInput != null) computedDistWall = coordXInput;
+
+    const wallId = await ensureWallRecord(objTargetFace);
+    if (!wallId) return;
+
+    const payload: any = {
+      wall_id: wallId,
+      layer_order: Number.parseInt(objLayerOrder, 10) || 1,
+      name: objName.trim(),
+      description: objDescription.trim() || null,
+      object_type: objType,
+      thickness_mm: parseNumeric(objThickness),
+      width_mm: parseNumeric(objWidthMm),
+      height_mm: parseNumeric(objHeightMm),
+      position_x: parseNumeric(objPosX),
+      sill_height: computedSill,
+      distance_to_wall: computedDistWall,
+      resource_id: objResourceId === '_none' ? null : objResourceId,
+      coord_x: coordXInput,
+      coord_y: coordYInput,
+      coord_z: coordZInput,
+      shown_in_section: objShownInSection,
+    };
+
+    const { data, error } = await supabase.from('budget_wall_objects').update(payload).eq('id', editingObjId).select().single();
+    if (error) {
+      toast.error(`Error: ${error.message}`);
+      return;
+    }
+    if (data) {
+      setWallObjects(prev => prev.map(o => o.id === editingObjId ? (data as WallObjectRecord) : o));
+    }
+    resetForm();
+    onOpeningsChange?.();
+    toast.success('Objeto actualizado');
+  };
+
+  // Auto-open edit form for initialEditObjectId
+  useEffect(() => {
+    if (initialEditObjectId && wallObjects.length > 0 && !editingObjId) {
+      const obj = wallObjects.find(o => o.id === initialEditObjectId);
+      if (obj) handleEditObject(obj);
+    }
+  }, [initialEditObjectId, wallObjects]);
 
   const handleDeleteObject = async (id: string) => {
     await supabase.from('budget_wall_objects').delete().eq('id', id);

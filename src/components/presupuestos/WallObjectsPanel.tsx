@@ -96,6 +96,10 @@ export function WallObjectsPanel({
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingObj, setEditingObj] = useState<string | null>(null);
   const [editingSuperficiePattern, setEditingSuperficiePattern] = useState<string | null>(null);
+  const [editingSuperficieMetrics, setEditingSuperficieMetrics] = useState<string | null>(null);
+  const [manualSurfaceM2, setManualSurfaceM2] = useState('');
+  const [manualVolumeM3, setManualVolumeM3] = useState('');
+  const [savingSuperficieMetrics, setSavingSuperficieMetrics] = useState(false);
   // Quick "Superficie" layer form
   const [showSuperficieForm, setShowSuperficieForm] = useState(false);
   const [supName, setSupName] = useState('');

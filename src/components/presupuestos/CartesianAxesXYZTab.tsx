@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ChevronRight, Plus, Trash2, ArrowLeft, Eye } from 'lucide-react';
+import { ChevronRight, Plus, Trash2, ArrowLeft, Eye, Pencil, Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { CustomSection, SectionPolygon } from './CustomSectionManager';
 import { SectionAxisViewer } from './SectionAxisViewer';
@@ -194,9 +194,9 @@ const SECTION_CONFIG: Record<SectionType, { title: string; axis: 'X' | 'Y' | 'Z'
 };
 
 const INITIAL_DRAFTS: Record<SectionType, SectionDraft> = {
-  vertical: { name: 'Sección Z=0', axisValue: '0' },
-  longitudinal: { name: 'Sección Y=0', axisValue: '0' },
-  transversal: { name: 'Sección X=0', axisValue: '0' },
+  vertical: { name: '', axisValue: '0' },
+  longitudinal: { name: '', axisValue: '0' },
+  transversal: { name: '', axisValue: '0' },
 };
 
 export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabProps) {
@@ -205,6 +205,9 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
   const [drafts, setDrafts] = useState<Record<SectionType, SectionDraft>>(INITIAL_DRAFTS);
   const [creating, setCreating] = useState(false);
   const [activeSection, setActiveSection] = useState<CustomSection | null>(null);
+  const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
+  const [editSectionName, setEditSectionName] = useState('');
+  const [editSectionAxisValue, setEditSectionAxisValue] = useState('');
 
   const { data: floorPlan } = useQuery({
     queryKey: ['floor-plan-for-workspaces', budgetId],
@@ -542,6 +545,34 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     if (error) { toast.error('Error al eliminar sección'); return; }
 
     toast.success('Sección eliminada');
+    await invalidateSectionQueries();
+  };
+
+  const handleRenameSection = async (sectionId: string) => {
+    if (!isAdmin || !floorPlan?.id || !editSectionName.trim()) return;
+
+    const parsedCorners = parseCustomCorners();
+    const existingSections = Array.isArray(parsedCorners.customSections)
+      ? parsedCorners.customSections as CustomSection[]
+      : [];
+
+    const newAxisVal = parseFloat(editSectionAxisValue) || 0;
+    const nextCustomCorners = {
+      ...parsedCorners,
+      customSections: existingSections.map(s =>
+        s.id === sectionId ? { ...s, name: editSectionName.trim(), axisValue: newAxisVal } : s
+      ),
+    };
+
+    const { error } = await supabase
+      .from('budget_floor_plans')
+      .update({ custom_corners: nextCustomCorners as any })
+      .eq('id', floorPlan.id);
+
+    if (error) { toast.error('Error al renombrar sección'); return; }
+
+    toast.success('Sección renombrada');
+    setEditingSectionId(null);
     await invalidateSectionQueries();
   };
 
@@ -1455,26 +1486,70 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
 
                 {currentSections.length > 0 && (
                   <div className="space-y-1">
-                    <p className="text-[11px] font-medium text-muted-foreground">Secciones existentes — clic para entrar</p>
-                    <div className="flex flex-wrap gap-1">
+                    <p className="text-[11px] font-medium text-muted-foreground">Secciones existentes — clic para entrar, lápiz para editar nombre</p>
+                    <div className="flex flex-wrap gap-1.5">
                       {currentSections.map((section) => (
-                        <Badge
-                          key={section.id}
-                          variant="outline"
-                          className="text-[10px] h-6 gap-1 pr-1 cursor-pointer hover:bg-accent/60 transition-colors"
-                          onClick={() => setActiveSection(section)}
-                        >
-                          <Eye className="h-2.5 w-2.5 text-muted-foreground" />
-                          {section.name} ({section.axis}={section.axisValue})
-                          {isAdmin && (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleDeleteSection(section); }}
-                              className="ml-0.5 hover:text-destructive transition-colors"
-                            >
-                              <Trash2 className="h-2.5 w-2.5" />
+                        editingSectionId === section.id ? (
+                          <div key={section.id} className="flex items-center gap-1 rounded border border-primary/40 bg-card px-1.5 py-0.5" onClick={e => e.stopPropagation()}>
+                            <Input
+                              className="h-5 text-[10px] w-24 px-1"
+                              value={editSectionName}
+                              onChange={e => setEditSectionName(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') handleRenameSection(section.id);
+                                if (e.key === 'Escape') setEditingSectionId(null);
+                              }}
+                              autoFocus
+                            />
+                            <Input
+                              className="h-5 text-[10px] w-12 px-1"
+                              type="number"
+                              value={editSectionAxisValue}
+                              onChange={e => setEditSectionAxisValue(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') handleRenameSection(section.id);
+                                if (e.key === 'Escape') setEditingSectionId(null);
+                              }}
+                            />
+                            <button onClick={() => handleRenameSection(section.id)} className="text-primary hover:text-primary/80">
+                              <Check className="h-3 w-3" />
                             </button>
-                          )}
-                        </Badge>
+                            <button onClick={() => setEditingSectionId(null)} className="text-muted-foreground hover:text-foreground">
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ) : (
+                          <Badge
+                            key={section.id}
+                            variant="outline"
+                            className="text-[10px] h-6 gap-1 pr-1 cursor-pointer hover:bg-accent/60 transition-colors"
+                            onClick={() => setActiveSection(section)}
+                          >
+                            <Eye className="h-2.5 w-2.5 text-muted-foreground" />
+                            {section.name} ({section.axis}={section.axisValue})
+                            {isAdmin && (
+                              <>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEditingSectionId(section.id);
+                                    setEditSectionName(section.name);
+                                    setEditSectionAxisValue(String(section.axisValue));
+                                  }}
+                                  className="ml-0.5 hover:text-primary transition-colors"
+                                >
+                                  <Pencil className="h-2.5 w-2.5" />
+                                </button>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleDeleteSection(section); }}
+                                  className="ml-0.5 hover:text-destructive transition-colors"
+                                >
+                                  <Trash2 className="h-2.5 w-2.5" />
+                                </button>
+                              </>
+                            )}
+                          </Badge>
+                        )
                       ))}
                     </div>
                   </div>

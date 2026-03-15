@@ -88,6 +88,10 @@ interface WallObjectRecord {
   distance_to_wall: number | null;
   resource_id: string | null;
   template_id: string | null;
+  coord_x: number | null;
+  coord_y: number | null;
+  coord_z: number | null;
+  shown_in_section: boolean;
 }
 
 export interface FacePatterns {

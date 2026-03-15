@@ -2702,9 +2702,18 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
       };
     }
 
-    if (wallDbIndex === -1 || wallDbIndex === -2) {
+    if (wallDbIndex === -1) {
+      const hasFloor = room.has_floor !== false;
       return {
-        surface_m2: floorArea,
+        surface_m2: hasFloor ? floorArea : 0,
+        volume_m3: null as number | null,
+      };
+    }
+
+    if (wallDbIndex === -2) {
+      const hasCeiling = room.has_ceiling !== false;
+      return {
+        surface_m2: hasCeiling ? floorArea : 0,
         volume_m3: null as number | null,
       };
     }

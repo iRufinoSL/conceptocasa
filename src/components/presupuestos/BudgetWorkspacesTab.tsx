@@ -2966,7 +2966,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
       wall = newWall as WallData;
     }
 
-    await ensureSuperficieLayer(wall.id, room, 0);
+    await ensureSuperficieLayer(wall.id, room, 0, wall.wall_type);
 
     setWallPanelWallId(wall.id);
     setWallPanelWallIndex(0);

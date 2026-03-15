@@ -1091,7 +1091,11 @@ export function WorkspacePropertiesPanel({
 
   // Face options for object target
   const faceOptions = [
-    ...Array.from({ length: edgeCount }).map((_, i) => ({ value: `wall-${i}`, label: `P${i + 1}` })),
+    ...Array.from({ length: edgeCount }).map((_, i) => {
+      const w = walls.find(ww => ww.wall_index === i + 1);
+      const prefix = w?.wall_type === 'tejado' ? 'T' : 'P';
+      return { value: `wall-${i}`, label: `${prefix}${i + 1}` };
+    }),
     { value: 'floor', label: 'Suelo' },
     { value: 'ceiling', label: 'Techo' },
     { value: 'space', label: 'Espacio' },

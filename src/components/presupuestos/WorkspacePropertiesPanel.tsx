@@ -1085,6 +1085,7 @@ export function WorkspacePropertiesPanel({
     if (wall.wall_index === -1) return 'Suelo';
     if (wall.wall_index === -2) return 'Techo';
     if (wall.wall_index === 0) return 'Espacio';
+    if (wall.wall_type === 'tejado') return `T${wall.wall_index}`;
     return `P${wall.wall_index}`;
   };
 

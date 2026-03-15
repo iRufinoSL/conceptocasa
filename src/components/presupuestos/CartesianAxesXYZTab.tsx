@@ -1404,30 +1404,50 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
           onRegenerate={liveSection.sectionType !== 'vertical' ? async () => {
             // Regenerate: recompute auto-projected polygons and merge with existing ones
             const autoPolys = computeProjectedPolygons(liveSection);
+            const autoById = new Map(autoPolys.map(p => [p.id, p]));
+            const autoNameToId = new Map<string, string>();
+            for (const poly of autoPolys) {
+              const key = normalizeWorkspaceName(poly.name);
+              if (key && !autoNameToId.has(key)) autoNameToId.set(key, poly.id);
+            }
+
             const parsedCorners = parseCustomCorners();
             const sections = Array.isArray(parsedCorners.customSections)
               ? (parsedCorners.customSections as CustomSection[])
               : [];
             const currentSection = sections.find(s => s.id === liveSection.id);
             const existingPolygons = currentSection?.polygons || [];
-            
-            // Keep existing polygons that have custom edits, add new auto-projected ones
-            const existingIds = new Set(existingPolygons.map((p: SectionPolygon) => p.id));
-            const newPolys = autoPolys.filter(ap => !existingIds.has(ap.id));
-            
-            // Also update dimensions of existing polygons from auto-projection
-            const autoById = new Map(autoPolys.map(p => [p.id, p]));
-            const updatedExisting = existingPolygons.map((p: SectionPolygon) => {
+
+            // Remove stale duplicates that only differ by old IDs but collide by normalized auto name
+            const cleanedExisting = existingPolygons.filter((p: SectionPolygon) => {
+              if (autoById.has(p.id)) return true;
+              if (/_wall\d+$/.test(p.id) || /_ceiling$/.test(p.id)) return true;
+              const key = normalizeWorkspaceName(p.name);
+              if (!key) return true;
+              return !autoNameToId.has(key);
+            });
+
+            // Update existing polygons from auto-projection, including canonical name and flags
+            const updatedExisting = cleanedExisting.map((p: SectionPolygon) => {
               const auto = autoById.get(p.id);
               if (!auto) return p;
-              // Only update if existing polygon has same vertex count (no manual edits)
-              if (p.vertices.length === auto.vertices.length && p.vertices.length === 4) {
-                return { ...p, vertices: auto.vertices, zBase: auto.zBase, zTop: auto.zTop };
-              }
-              return p;
+              const shouldUpdateGeometry = p.vertices.length === auto.vertices.length && p.vertices.length === 4;
+              return {
+                ...p,
+                name: auto.name,
+                hasFloor: auto.hasFloor,
+                hasCeiling: auto.hasCeiling,
+                zBase: auto.zBase,
+                zTop: auto.zTop,
+                vertices: shouldUpdateGeometry ? auto.vertices : p.vertices,
+              };
             });
-            
+
+            const existingIds = new Set(updatedExisting.map((p: SectionPolygon) => p.id));
+            const newPolys = autoPolys.filter(ap => !existingIds.has(ap.id));
+
             const mergedPolygons = [...updatedExisting, ...newPolys];
+            const removedStale = existingPolygons.length - cleanedExisting.length;
             const updated = sections.map(s =>
               s.id === liveSection.id ? { ...s, polygons: mergedPolygons } : s
             );
@@ -1435,7 +1455,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
               .update({ custom_corners: { ...parsedCorners, customSections: updated } as any })
               .eq('id', floorPlan!.id);
             await invalidateSectionQueries();
-            toast.success(`Espacios regenerados: ${newPolys.length} nuevos, ${updatedExisting.length} actualizados`);
+            toast.success(`Espacios regenerados: ${newPolys.length} nuevos, ${updatedExisting.length} actualizados${removedStale > 0 ? `, ${removedStale} duplicados limpiados` : ''}`);
           } : undefined}
         />
       </div>

@@ -136,6 +136,7 @@ export function WorkspacePropertiesPanel({
   workspaceName,
   sectionType,
   sectionName,
+  sectionAxisValue,
   floorPlanId,
   onClose,
   focusFace,

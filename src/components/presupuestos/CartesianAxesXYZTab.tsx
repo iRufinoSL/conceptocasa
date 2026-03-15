@@ -1478,7 +1478,8 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
           allPolygonNames={allPolygonNames}
           onRegenerate={liveSection.sectionType !== 'vertical' ? async () => {
             // Regenerate: recompute auto-projected polygons and merge with existing ones
-            const autoPolys = computeProjectedPolygons(liveSection);
+            const siblingSections = allSections.filter(s => s.sectionType === liveSection.sectionType);
+            const autoPolys = computeProjectedPolygons(liveSection, siblingSections);
             const autoById = new Map(autoPolys.map(p => [p.id, p]));
             const autoNameToId = new Map<string, string>();
             for (const poly of autoPolys) {

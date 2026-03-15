@@ -3,6 +3,9 @@ Updated: now
 
 El sistema proyecta automáticamente los Espacios de trabajo en las secciones transversales (X) y longitudinales (Y) cuando intersectan el plano de corte. Solo se proyectan espacios que existen en alguna sección Z (vertical), filtrando espacios eliminados o fantasma.
 
+### Deduplicación de espacios por nombre
+Cuando existen múltiples rooms en la base de datos con el mismo nombre normalizado, el sistema deduplica: prioriza los rooms cuyo ID coincide con un polígono de sección vertical (canónicos). Solo si no hay ninguno canónico se usa el más recientemente actualizado. Esto evita que duplicados de otras secciones generen polígonos extra.
+
 ### Escala Z en secciones X/Y
 El eje vertical (Z) en secciones X/Y usa unidades de 250mm (block_height_mm). El placeholder del input de escala vertical sugiere 250mm para estas secciones, diferente de los 625mm de las secciones Z.
 

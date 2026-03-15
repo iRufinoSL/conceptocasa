@@ -275,14 +275,14 @@ export function WorkspacePropertiesPanel({
         const updates: Record<string, boolean> = {};
 
         if (floorWall) {
-          const wallSaysInvisible = floorWall.wall_type === 'invisible';
+          const wallSaysInvisible = isInvisibleWallType(floorWall.wall_type);
           if (roomData.has_floor === wallSaysInvisible) {
             updates.has_floor = !wallSaysInvisible;
           }
         }
 
         if (ceilingWall) {
-          const wallSaysInvisible = ceilingWall.wall_type === 'invisible';
+          const wallSaysInvisible = isInvisibleWallType(ceilingWall.wall_type);
           if (roomData.has_ceiling === wallSaysInvisible) {
             updates.has_ceiling = !wallSaysInvisible;
           }

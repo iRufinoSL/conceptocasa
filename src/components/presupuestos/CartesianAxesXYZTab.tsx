@@ -1019,22 +1019,17 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     // Z unit = 250mm (block_height_mm)
     const zUnitMm = 250;
 
-    // Project only workspaces that still exist in vertical (Z) sections.
-    // This prevents ghost/deleted rooms from being reintroduced in X/Y regeneration.
-    // CRITICAL: Deduplicate rooms by normalized name — prefer canonical IDs from vertical sections.
+    // Project only canonical workspaces from vertical (Z) sections.
+    // This blocks stale duplicates/ghosts from re-entering X/Y during regeneration.
     const hasVerticalReference = validRoomIds.size > 0 || verticalRoomNameSet.size > 0;
     const allEligible = (workspaceRooms || []).filter(room => {
       if (!room.floor_polygon || room.floor_polygon.length < 3) return false;
       if (!hasVerticalReference) return true;
-      if (validRoomIds.has(room.id)) return true;
-      const normalized = normalizeWorkspaceName(room.name);
-      return !!(normalized && verticalRoomNameSet.has(normalized));
+      return validRoomIds.has(room.id);
     });
 
-    // Deduplicate: group by normalized name, keep only the canonical room per name.
-    // A canonical room is one whose ID exists in a vertical section polygon.
-    // If multiple canonical rooms share the same name (e.g. same name at different floors),
-    // keep all canonical ones but discard non-canonical duplicates.
+    // Deduplicate by normalized name while keeping canonical IDs.
+    // If there is no vertical reference at all, fallback to most recently updated by name.
     const eligibleRooms = (() => {
       const byName = new Map<string, WorkspaceRoom[]>();
       for (const room of allEligible) {
@@ -1049,18 +1044,20 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       for (const [, rooms] of byName) {
         const canonical = rooms.filter(r => validRoomIds.has(r.id));
         if (canonical.length > 0) {
-          // Only keep rooms whose IDs are in vertical sections (canonical)
           result.push(...canonical);
-        } else {
-          // No canonical match — pick the most recently updated one only
-          const sorted = [...rooms].sort((a, b) => {
+          continue;
+        }
+
+        if (!hasVerticalReference) {
+          const recent = [...rooms].sort((a, b) => {
             const aTime = a.updated_at ? new Date(a.updated_at).getTime() : 0;
             const bTime = b.updated_at ? new Date(b.updated_at).getTime() : 0;
             return bTime - aTime;
-          });
-          if (sorted[0]) result.push(sorted[0]);
+          })[0];
+          if (recent) result.push(recent);
         }
       }
+
       return result;
     })();
 

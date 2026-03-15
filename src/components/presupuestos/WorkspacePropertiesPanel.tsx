@@ -1743,19 +1743,27 @@ export function WorkspacePropertiesPanel({
                 </div>
               </div>
               <div className="flex gap-1">
-                <Button size="sm" className="h-6 text-[10px] gap-1 flex-1" onClick={handleAddObject} disabled={!objName.trim()}>
-                  <Plus className="h-3 w-3" /> {objType === 'hueco' ? 'Añadir hueco' : 'Registrar'}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-6 text-[10px] gap-1"
-                  disabled={!objName.trim() || savingAsTemplate}
-                  onClick={handleSaveAsTemplate}
-                  title="Guardar como plantilla predefinida"
-                >
-                  <Star className="h-3 w-3" /> {savingAsTemplate ? '...' : 'Predefinir'}
-                </Button>
+                {editingObjId ? (
+                  <Button size="sm" className="h-6 text-[10px] gap-1 flex-1" onClick={handleUpdateObject} disabled={!objName.trim()}>
+                    <Save className="h-3 w-3" /> Guardar cambios
+                  </Button>
+                ) : (
+                  <>
+                    <Button size="sm" className="h-6 text-[10px] gap-1 flex-1" onClick={handleAddObject} disabled={!objName.trim()}>
+                      <Plus className="h-3 w-3" /> {objType === 'hueco' ? 'Añadir hueco' : 'Registrar'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-6 text-[10px] gap-1"
+                      disabled={!objName.trim() || savingAsTemplate}
+                      onClick={handleSaveAsTemplate}
+                      title="Guardar como plantilla predefinida"
+                    >
+                      <Star className="h-3 w-3" /> {savingAsTemplate ? '...' : 'Predefinir'}
+                    </Button>
+                  </>
+                )}
                 <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={resetForm}>
                   <X className="h-3 w-3" />
                 </Button>

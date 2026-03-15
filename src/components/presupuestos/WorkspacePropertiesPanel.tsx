@@ -584,6 +584,51 @@ export function WorkspacePropertiesPanel({
     setResources((data || []) as ExternalResourceOption[]);
   };
 
+  const fetchTemplates = async () => {
+    if (!floorPlanId) return;
+    // Get budget_id from floor_plan
+    const { data: fp } = await supabase.from('budget_floor_plans').select('budget_id').eq('id', floorPlanId).single();
+    if (!fp) return;
+    const { data } = await supabase
+      .from('budget_object_templates')
+      .select('id, name, object_type, width_mm, height_mm, thickness_mm, unit_measure')
+      .eq('budget_id', fp.budget_id)
+      .order('name')
+      .limit(200);
+    setDbTemplates((data || []) as any);
+  };
+
+  const handleSaveAsTemplate = async () => {
+    if (!objName.trim() || !floorPlanId) return;
+    setSavingAsTemplate(true);
+    const { data: fp } = await supabase.from('budget_floor_plans').select('budget_id').eq('id', floorPlanId).single();
+    if (!fp) { setSavingAsTemplate(false); toast.error('No se encontró el presupuesto'); return; }
+    const { error } = await supabase.from('budget_object_templates').insert({
+      budget_id: fp.budget_id,
+      name: objName.trim(),
+      object_type: objType,
+      width_mm: objWidthMm ? parseFloat(objWidthMm) : null,
+      height_mm: objHeightMm ? parseFloat(objHeightMm) : null,
+      thickness_mm: objThickness ? parseFloat(objThickness) : null,
+    });
+    setSavingAsTemplate(false);
+    if (error) { toast.error('Error guardando plantilla'); return; }
+    toast.success('Guardado como predefinido');
+    fetchTemplates();
+  };
+
+  // Filtered resources for the inline form search
+  const formFilteredResources = useMemo(() => {
+    if (!formResourceSearch) return resources;
+    const norm = normalizeSearchText(formResourceSearch);
+    return resources.filter(r => normalizeSearchText(r.name).includes(norm));
+  }, [resources, formResourceSearch]);
+
+  const selectedResourceName = useMemo(() => {
+    if (objResourceId === '_none') return 'Sin recurso';
+    return resources.find(r => r.id === objResourceId)?.name || 'Recurso';
+  }, [objResourceId, resources]);
+
   const getNextLayerOrder = useCallback((faceKey: string) => {
     let wallIndex: number;
     if (faceKey === 'floor') wallIndex = -1;
@@ -604,7 +649,9 @@ export function WorkspacePropertiesPanel({
   useEffect(() => {
     if (!showObjectForm) return;
     if (resources.length === 0) fetchResources();
-  }, [resources.length, showObjectForm]);
+    if (dbTemplates.length === 0) fetchTemplates();
+  }, [resources.length, dbTemplates.length, showObjectForm]);
+
 
   const getFloorType = () => {
     if (!room) return 'normal';

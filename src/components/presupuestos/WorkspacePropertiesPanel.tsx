@@ -103,6 +103,8 @@ interface WorkspacePropertiesPanelProps {
   workspaceName: string;
   sectionType: string;
   sectionName: string;
+  /** Axis value of the section (e.g. 0 for X0, 5 for Y5) */
+  sectionAxisValue?: number;
   floorPlanId?: string;
   onClose: () => void;
   focusFace?: string;
@@ -134,6 +136,7 @@ export function WorkspacePropertiesPanel({
   workspaceName,
   sectionType,
   sectionName,
+  sectionAxisValue,
   floorPlanId,
   onClose,
   focusFace,
@@ -1045,6 +1048,26 @@ export function WorkspacePropertiesPanel({
     toast.success(objType === 'hueco' ? 'Hueco añadido' : 'Objeto registrado');
   };
 
+  /** Pre-fill the fixed-axis coordinate based on the current section */
+  const prefillSectionCoord = () => {
+    const val = sectionAxisValue != null ? String(sectionAxisValue) : '';
+    if (sectionType === 'transversal') {
+      // X section → coord_x is fixed
+      setObjCoordX(val);
+      setObjCoordY('');
+      setObjCoordZ('');
+    } else if (sectionType === 'longitudinal') {
+      // Y section → coord_y is fixed
+      setObjCoordX('');
+      setObjCoordY(val);
+      setObjCoordZ('');
+    } else {
+      setObjCoordX('');
+      setObjCoordY('');
+      setObjCoordZ('');
+    }
+  };
+
   const resetForm = () => {
     setShowObjectForm(false);
     setEditingObjId(null);
@@ -1061,9 +1084,7 @@ export function WorkspacePropertiesPanel({
     setObjTargetFace('wall-0');
     setObjLayerOrder('1');
     setObjResourceId('_none');
-    setObjCoordX('');
-    setObjCoordY('');
-    setObjCoordZ('');
+    prefillSectionCoord();
     setObjShownInSection(false);
   };
 
@@ -1157,6 +1178,13 @@ export function WorkspacePropertiesPanel({
       if (obj) handleEditObject(obj);
     }
   }, [initialEditObjectId, wallObjects]);
+
+  // Auto-prefill the fixed-axis coordinate when opening form for a new object
+  useEffect(() => {
+    if (showObjectForm && !editingObjId) {
+      prefillSectionCoord();
+    }
+  }, [showObjectForm, editingObjId, sectionType, sectionAxisValue]);
 
   const handleDeleteObject = async (id: string) => {
     await supabase.from('budget_wall_objects').delete().eq('id', id);
@@ -1753,15 +1781,33 @@ export function WorkspacePropertiesPanel({
                 </div>
                 {/* XYZ Coordinates */}
                 <div className="col-span-2 border-t border-border/30 pt-1 mt-0.5">
-                  <label className="text-[9px] text-muted-foreground font-semibold">Coordenadas XYZ (esquina inf. izq.)</label>
+                  <label className="text-[9px] text-muted-foreground font-semibold">
+                    Coordenadas XYZ (esquina inf. izq.)
+                    {sectionType === 'transversal' && <span className="ml-1 text-primary font-normal">— Sección X{sectionAxisValue ?? ''}</span>}
+                    {sectionType === 'longitudinal' && <span className="ml-1 text-primary font-normal">— Sección Y{sectionAxisValue ?? ''}</span>}
+                  </label>
                 </div>
                 <div>
-                  <label className="text-[9px] text-muted-foreground">X (mm)</label>
-                  <Input className="h-6 text-[10px] font-mono" type="number" value={objCoordX} onChange={e => setObjCoordX(e.target.value)} placeholder="—" />
+                  <label className="text-[9px] text-muted-foreground">X (mm){sectionType === 'transversal' && !editingObjId ? ' ✓' : ''}</label>
+                  <Input
+                    className={`h-6 text-[10px] font-mono ${sectionType === 'transversal' && !editingObjId ? 'bg-muted text-muted-foreground' : ''}`}
+                    type="number"
+                    value={objCoordX}
+                    onChange={e => setObjCoordX(e.target.value)}
+                    placeholder="—"
+                    readOnly={sectionType === 'transversal' && !editingObjId}
+                  />
                 </div>
                 <div>
-                  <label className="text-[9px] text-muted-foreground">Y (mm)</label>
-                  <Input className="h-6 text-[10px] font-mono" type="number" value={objCoordY} onChange={e => setObjCoordY(e.target.value)} placeholder="—" />
+                  <label className="text-[9px] text-muted-foreground">Y (mm){sectionType === 'longitudinal' && !editingObjId ? ' ✓' : ''}</label>
+                  <Input
+                    className={`h-6 text-[10px] font-mono ${sectionType === 'longitudinal' && !editingObjId ? 'bg-muted text-muted-foreground' : ''}`}
+                    type="number"
+                    value={objCoordY}
+                    onChange={e => setObjCoordY(e.target.value)}
+                    placeholder="—"
+                    readOnly={sectionType === 'longitudinal' && !editingObjId}
+                  />
                 </div>
                 <div>
                   <label className="text-[9px] text-muted-foreground">Z (mm)</label>

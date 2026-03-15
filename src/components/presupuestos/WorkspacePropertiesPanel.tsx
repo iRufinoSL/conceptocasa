@@ -391,7 +391,7 @@ export function WorkspacePropertiesPanel({
         const inserts = nextWalls
           .filter(w => !existingByWall.has(w.id))
           .map(w => {
-            const { surface_m2, volume_m3 } = getFaceMetrics(roomData, w.wall_index, nextCellSizeM);
+            const { surface_m2, volume_m3 } = getFaceMetrics(roomData, w.wall_index, nextCellSizeM, w.wall_type);
             const metricLabel = surface_m2 != null ? `${surface_m2} m²` : volume_m3 != null ? `${volume_m3} m³` : null;
             return {
               wall_id: w.id,

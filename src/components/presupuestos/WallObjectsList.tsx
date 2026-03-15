@@ -974,6 +974,7 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
       queryClient.invalidateQueries({ queryKey: ['budget-wall-objects-all', budgetId] });
       queryClient.invalidateQueries({ queryKey: ['budget-walls-for-panel', budgetId] });
       queryClient.invalidateQueries({ queryKey: ['wall-objects'] });
+      queryClient.invalidateQueries({ queryKey: ['budget-auto-faces', budgetId] });
 
       if (!silent) {
         toast.success(`Superficies sincronizadas: ${inserts.length} nuevas, ${updates.length} actualizadas`);

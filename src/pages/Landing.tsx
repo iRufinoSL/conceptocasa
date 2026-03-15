@@ -36,6 +36,12 @@ import {
 import heroPassivhaus from "@/assets/hero-passivhaus.jpg";
 import healthyInterior from "@/assets/healthy-home-interior.jpg";
 import hokusaiHero from "@/assets/hokusai-houses-hero.jpg";
+import homeModern from "@/assets/home-modern.jpg";
+import homeClassic from "@/assets/home-classic.jpg";
+import homeRustic from "@/assets/home-rustic.jpg";
+import homeMediterranean from "@/assets/home-mediterranean.jpg";
+import homeEco from "@/assets/home-eco.jpg";
+import homeWood from "@/assets/home-wood.jpg";
 import HousesCarousel from "@/components/landing/HousesCarousel";
 
 

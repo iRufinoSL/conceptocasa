@@ -1103,6 +1103,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       .filter(s => s.sectionType === section.sectionType)
       .map(s => s.axisValue);
     const minSectionAxis = sameTypeAxisValues.length > 0 ? Math.min(...sameTypeAxisValues) : section.axisValue;
+    const maxSectionAxis = sameTypeAxisValues.length > 0 ? Math.max(...sameTypeAxisValues) : section.axisValue;
     const AXIS_EPS = 1e-6;
 
     const pushProjectedRoom = (

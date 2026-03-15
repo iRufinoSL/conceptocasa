@@ -1095,7 +1095,18 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
     if (!contactId) return null;
     if (contactCache[contactId]) return contactCache[contactId];
     const c = contacts.find(c => c.id === contactId);
-    return c ? `${c.name}${c.surname ? ' ' + c.surname : ''}` : contactId.slice(0, 8) + '...';
+    if (c) {
+      // Also cache it for future renders
+      setContactCache(prev => ({ ...prev, [contactId]: `${c.name}${c.surname ? ' ' + c.surname : ''}` }));
+      return `${c.name}${c.surname ? ' ' + c.surname : ''}`;
+    }
+    // Fetch the contact name on-demand if not in cache
+    supabase.from('crm_contacts').select('id, name, surname').eq('id', contactId).single().then(({ data }) => {
+      if (data) {
+        setContactCache(prev => ({ ...prev, [contactId]: `${data.name}${data.surname ? ' ' + data.surname : ''}` }));
+      }
+    });
+    return 'Cargando...';
   };
 
   // DÓNDE? panel

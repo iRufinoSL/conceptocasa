@@ -2258,14 +2258,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                     {/* Wall objects (huecos) — small rectangles on wall edges */}
                     {(() => {
                        const roomHuecos = wallHuecos.get(room.id);
-                       if (!roomHuecos?.length) {
-                         // Debug: log rooms that have no huecos
-                         if (room.name.toLowerCase().includes('hab')) {
-                           console.log('[HUECOS RENDER] Room', room.name, room.id.slice(0,8), 'has NO huecos. wallHuecos keys:', [...wallHuecos.keys()].map(k => k.slice(0,8)));
-                         }
-                         return null;
-                       }
-                       console.log('[HUECOS RENDER] Room', room.name, room.id.slice(0,8), 'has', roomHuecos.length, 'huecos:', roomHuecos);
+                       if (!roomHuecos?.length) return null;
                       const poly = room.floorPolygon!;
                       const svgPtsH = poly.map(p => ({
                         x: margin.left + getHIndex(p.x) * cellSize,

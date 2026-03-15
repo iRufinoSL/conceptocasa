@@ -162,6 +162,12 @@ export function WorkspacePropertiesPanel({
   const [showResourcePicker, setShowResourcePicker] = useState(false);
   const [resources, setResources] = useState<ExternalResourceOption[]>([]);
   const [resourceSearch, setResourceSearch] = useState('');
+  const [formResourceSearch, setFormResourceSearch] = useState('');
+  const [formResourceOpen, setFormResourceOpen] = useState(false);
+
+  // DB templates for "Elegir plantilla"
+  const [dbTemplates, setDbTemplates] = useState<Array<{ id: string; name: string; object_type: string; width_mm: number | null; height_mm: number | null; thickness_mm: number | null; unit_measure: string | null; }>>([]);
+  const [savingAsTemplate, setSavingAsTemplate] = useState(false);
 
   // Positioning state
   const [positioningObjId, setPositioningObjId] = useState<string | null>(null);

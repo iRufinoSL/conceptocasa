@@ -1288,7 +1288,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     }
 
     return projected;
-  }, [workspaceRooms, allWalls, resolveRoomZBase, validRoomIds, verticalRoomNameSet, verticalPolygonSources, workspaceRoomsByNormalizedName, workspaceRoomsByLooseName, workspaceRoomMap, pickMostRecentlyUpdatedRoom]);
+  }, [workspaceRooms, allWalls, resolveRoomZBase, validRoomIds, verticalRoomNameSet, verticalPolygonSources, workspaceRoomsByNormalizedName, workspaceRoomsByLooseName, workspaceRoomMap, pickMostRecentlyUpdatedRoom, canonicalNameMap]);
 
   // If viewing a section, show the viewer
   if (activeSection) {

@@ -74,71 +74,65 @@ export function BudgetContactsManager({ budgetId, isAdmin }: BudgetContactsManag
   const fetchData = async () => {
     setIsLoading(true);
     
-    // Fetch budget contacts
-    const { data: bcData } = await supabase
-      .from('budget_contacts')
-      .select('id, contact_id, contact_role')
-      .eq('budget_id', budgetId);
+    try {
+      // Fetch all data in parallel for speed
+      const [bcRes, contactsRes, activitiesRes, contactActivitiesRes] = await Promise.all([
+        supabase.from('budget_contacts').select('id, contact_id, contact_role').eq('budget_id', budgetId),
+        supabase.from('crm_contacts').select('id, name, surname, contact_type, email, phone, city').order('name'),
+        supabase.from('crm_professional_activities').select('id, name').order('name'),
+        supabase.from('crm_contact_professional_activities').select('contact_id, professional_activity_id'),
+      ]);
 
-    // Fetch all contacts with their professional activities
-    const { data: contactsData } = await supabase
-      .from('crm_contacts')
-      .select('id, name, surname, contact_type, email, phone, city')
-      .order('name');
+      const bcData = bcRes.data;
+      const contactsData = contactsRes.data;
+      const activitiesData = activitiesRes.data;
+      const contactActivitiesData = contactActivitiesRes.data;
 
-    // Fetch professional activities
-    const { data: activitiesData } = await supabase
-      .from('crm_professional_activities')
-      .select('id, name')
-      .order('name');
+      if (activitiesData) {
+        setProfessionalActivities(activitiesData);
+      }
 
-    // Fetch contact-activity relationships
-    const { data: contactActivitiesData } = await supabase
-      .from('crm_contact_professional_activities')
-      .select('contact_id, professional_activity_id');
+      if (contactsData) {
+        const enrichedContacts = contactsData.map(contact => {
+          const activityIds = contactActivitiesData
+            ?.filter(ca => ca.contact_id === contact.id)
+            .map(ca => ca.professional_activity_id) || [];
+          const activities = activitiesData?.filter(a => activityIds.includes(a.id)) || [];
+          return { ...contact, professional_activities: activities };
+        });
+        setAllContacts(enrichedContacts);
+      }
 
-    if (activitiesData) {
-      setProfessionalActivities(activitiesData);
-    }
-
-    if (contactsData) {
-      // Enrich contacts with their professional activities
-      const enrichedContacts = contactsData.map(contact => {
-        const activityIds = contactActivitiesData
-          ?.filter(ca => ca.contact_id === contact.id)
-          .map(ca => ca.professional_activity_id) || [];
-        
-        const activities = activitiesData?.filter(a => activityIds.includes(a.id)) || [];
-        
-        return {
-          ...contact,
-          professional_activities: activities
-        };
-      });
-      setAllContacts(enrichedContacts);
-    }
-
-    if (bcData && contactsData) {
-      const enrichedBudgetContacts = bcData.map(bc => {
-        const contactData = contactsData.find(c => c.id === bc.contact_id);
-        const activityIds = contactActivitiesData
-          ?.filter(ca => ca.contact_id === bc.contact_id)
-          .map(ca => ca.professional_activity_id) || [];
-        const activities = activitiesData?.filter(a => activityIds.includes(a.id)) || [];
-        
-        return {
+      if (bcData && contactsData) {
+        const enrichedBudgetContacts = bcData.map(bc => {
+          const contactData = contactsData.find(c => c.id === bc.contact_id);
+          const activityIds = contactActivitiesData
+            ?.filter(ca => ca.contact_id === bc.contact_id)
+            .map(ca => ca.professional_activity_id) || [];
+          const activities = activitiesData?.filter(a => activityIds.includes(a.id)) || [];
+          
+          return {
+            ...bc,
+            contact_role: bc.contact_role as 'cliente' | 'proveedor' | 'otros',
+            contact: contactData ? { ...contactData, professional_activities: activities } : undefined
+          };
+        });
+        setBudgetContacts(enrichedBudgetContacts);
+      } else if (bcData) {
+        // Budget contacts exist but crm_contacts query returned nothing (possible RLS issue)
+        // Still show the budget contacts with missing contact info
+        const fallbackContacts = bcData.map(bc => ({
           ...bc,
           contact_role: bc.contact_role as 'cliente' | 'proveedor' | 'otros',
-          contact: contactData ? {
-            ...contactData,
-            professional_activities: activities
-          } : undefined
-        };
-      });
-      setBudgetContacts(enrichedBudgetContacts);
+          contact: undefined
+        }));
+        setBudgetContacts(fallbackContacts);
+      }
+    } catch (error) {
+      console.error('Error fetching budget contacts:', error);
+    } finally {
+      setIsLoading(false);
     }
-
-    setIsLoading(false);
   };
 
   useEffect(() => {

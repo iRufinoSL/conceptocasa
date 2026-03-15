@@ -9,7 +9,7 @@ import { useBotProtection } from "@/hooks/useBotProtection";
 import { supabase } from "@/integrations/supabase/client";
 import HousingProfileForm from "@/components/landing/HousingProfileForm";
 import { useWebsiteTracking, getStoredUtmParams } from "@/hooks/useWebsiteTracking";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { FloatingTOC } from "@/components/landing/FloatingTOC";
 import { 
   Mail, 
@@ -36,6 +36,12 @@ import {
 import heroPassivhaus from "@/assets/hero-passivhaus.jpg";
 import healthyInterior from "@/assets/healthy-home-interior.jpg";
 import hokusaiHero from "@/assets/hokusai-houses-hero.jpg";
+import homeModern from "@/assets/home-modern.jpg";
+import homeClassic from "@/assets/home-classic.jpg";
+import homeRustic from "@/assets/home-rustic.jpg";
+import homeMediterranean from "@/assets/home-mediterranean.jpg";
+import homeEco from "@/assets/home-eco.jpg";
+import homeWood from "@/assets/home-wood.jpg";
 import HousesCarousel from "@/components/landing/HousesCarousel";
 
 
@@ -97,6 +103,22 @@ const Landing = () => {
   const { honeypotProps, validateSubmission, recordSubmission, isBlocked } = useBotProtection();
   const { trackButtonClick, trackFormStart, trackFormSubmit } = useWebsiteTracking();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  
+  // Hero carousel
+  const heroImages = [
+    { src: heroPassivhaus, alt: "Casa pasiva rodeada de naturaleza" },
+    { src: homeModern, alt: "Casa moderna cúbica" },
+    { src: homeRustic, alt: "Casa rústica" },
+    { src: homeMediterranean, alt: "Casa mediterránea" },
+    { src: homeClassic, alt: "Casa clásica" },
+    { src: homeEco, alt: "Casa eco compacta" },
+    { src: homeWood, alt: "Casa de madera" },
+  ];
+  const [heroIdx, setHeroIdx] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setHeroIdx(prev => (prev + 1) % heroImages.length), 5000);
+    return () => clearInterval(timer);
+  }, [heroImages.length]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showHousingForm, setShowHousingForm] = useState(false);
   const [attachments, setAttachments] = useState<File[]>([]);
@@ -270,7 +292,18 @@ const Landing = () => {
       {/* Hero Section */}
       <section id="inicio" className="relative min-h-screen flex items-center overflow-hidden pt-16">
         <div className="absolute inset-0">
-          <img src={heroPassivhaus} alt="Casa pasiva rodeada de naturaleza" className="w-full h-full object-cover" />
+          <AnimatePresence mode="wait">
+            <motion.img
+              key={heroIdx}
+              src={heroImages[heroIdx].src}
+              alt={heroImages[heroIdx].alt}
+              initial={{ opacity: 0, scale: 1.08 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.97 }}
+              transition={{ duration: 1.4, ease: [0.25, 0.46, 0.45, 0.94] }}
+              className="absolute inset-0 w-full h-full object-cover"
+            />
+          </AnimatePresence>
           <div className="absolute inset-0 bg-gradient-to-r from-foreground/75 via-foreground/50 to-foreground/20" />
         </div>
 
@@ -333,7 +366,21 @@ const Landing = () => {
           </div>
         </div>
 
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce">
+        {/* Hero carousel dots */}
+        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-10 flex gap-2">
+          {heroImages.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => setHeroIdx(i)}
+              className={`h-2 rounded-full transition-all duration-300 ${
+                i === heroIdx ? "bg-primary w-7" : "bg-background/40 w-2 hover:bg-background/70"
+              }`}
+              aria-label={`Ver imagen ${i + 1}`}
+            />
+          ))}
+        </div>
+
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 animate-bounce">
           <ChevronDown className="w-8 h-8 text-background/50" />
         </div>
       </section>

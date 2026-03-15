@@ -550,6 +550,11 @@ export function SectionAxisViewer({
       return;
     }
 
+    if (vertexEditMode && !drawMode) {
+      setSelectedPolygonId(null);
+      return;
+    }
+
     if (!drawMode) return;
     const node = snapToNode(e);
     if (!node) return;

@@ -247,7 +247,8 @@ function MultiPrism({ ws, scaleXY, scaleZ, offsetX, offsetZ, onFaceDoubleClick, 
       );
       const wall = ws.walls.find(w => w.wall_index === i + 1);
       const areaM2 = calcFaceAreaM2(wallVerts);
-      facesList.push({ vertices: wallVerts, color: getWallColor(wall?.wall_type), label: `P${i + 1}\n${ws.name}\n${areaM2.toFixed(2)} m²`, labelPos: wc, faceType: 'pared', faceIndex: i + 1 });
+      const wallPrefix = wall?.wall_type === 'tejado' ? 'T' : 'P';
+      facesList.push({ vertices: wallVerts, color: getWallColor(wall?.wall_type), label: `${wallPrefix}${i + 1}\n${ws.name}\n${areaM2.toFixed(2)} m²`, labelPos: wc, faceType: wall?.wall_type === 'tejado' ? 'tejado' : 'pared', faceIndex: i + 1 });
     }
 
     // Ceiling — only if hasCeiling

@@ -1278,7 +1278,8 @@ export function WorkspacePropertiesPanel({
             const wallHuecos = wallObjs.filter(o => o.object_type === 'hueco');
             // Determine wall label: T/S for cross-sections
             const isCross = sectionType === 'transversal' || sectionType === 'longitudinal';
-            let wallLabel = `P${i + 1}`;
+            const wallRecFace = walls.find(ww => ww.wall_index === i + 1);
+            let wallLabel = wallRecFace?.wall_type === 'tejado' ? `T${i + 1}` : `P${i + 1}`;
             const diagramVerts = verticesProp || poly;
             if (isCross && diagramVerts && diagramVerts.length >= 3) {
               const j = (i + 1) % diagramVerts.length;
@@ -1289,7 +1290,7 @@ export function WorkspacePropertiesPanel({
               const eMaxY = Math.max(diagramVerts[i].y, diagramVerts[j].y);
               if (rangeY > 0.01) {
                 if (Math.abs(eMinY - minY) < rangeY * 0.15 && Math.abs(eMaxY - minY) < rangeY * 0.15) wallLabel = 'S (Suelo)';
-                else if (Math.abs(eMinY - maxY) < rangeY * 0.15 && Math.abs(eMaxY - maxY) < rangeY * 0.15) wallLabel = 'T (Techo)';
+                else if (Math.abs(eMinY - maxY) < rangeY * 0.15 && Math.abs(eMaxY - maxY) < rangeY * 0.15) wallLabel = wallRecFace?.wall_type === 'tejado' ? `T${i + 1} (Tejado)` : 'T (Techo)';
               }
             }
             return (

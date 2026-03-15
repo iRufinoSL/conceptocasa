@@ -1,12 +1,14 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { X, Box, Layers, Paintbrush, Plus, Move, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Link2 } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { X, Box, Layers, Paintbrush, Plus, Move, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Link2, Search, Star } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { VISUAL_PATTERNS, PATTERN_CATEGORIES, getPatternById, patternPreviewDataUri, type VisualPattern } from '@/lib/visual-patterns';
+import { normalizeSearchText } from '@/lib/search-utils';
 
 const WALL_TYPES = [
   { value: 'exterior', label: 'Exterior' },
@@ -160,6 +162,12 @@ export function WorkspacePropertiesPanel({
   const [showResourcePicker, setShowResourcePicker] = useState(false);
   const [resources, setResources] = useState<ExternalResourceOption[]>([]);
   const [resourceSearch, setResourceSearch] = useState('');
+  const [formResourceSearch, setFormResourceSearch] = useState('');
+  const [formResourceOpen, setFormResourceOpen] = useState(false);
+
+  // DB templates for "Elegir plantilla"
+  const [dbTemplates, setDbTemplates] = useState<Array<{ id: string; name: string; object_type: string; width_mm: number | null; height_mm: number | null; thickness_mm: number | null; unit_measure: string | null; }>>([]);
+  const [savingAsTemplate, setSavingAsTemplate] = useState(false);
 
   // Positioning state
   const [positioningObjId, setPositioningObjId] = useState<string | null>(null);
@@ -576,6 +584,51 @@ export function WorkspacePropertiesPanel({
     setResources((data || []) as ExternalResourceOption[]);
   };
 
+  const fetchTemplates = async () => {
+    if (!floorPlanId) return;
+    // Get budget_id from floor_plan
+    const { data: fp } = await supabase.from('budget_floor_plans').select('budget_id').eq('id', floorPlanId).single();
+    if (!fp) return;
+    const { data } = await supabase
+      .from('budget_object_templates')
+      .select('id, name, object_type, width_mm, height_mm, thickness_mm, unit_measure')
+      .eq('budget_id', fp.budget_id)
+      .order('name')
+      .limit(200);
+    setDbTemplates((data || []) as any);
+  };
+
+  const handleSaveAsTemplate = async () => {
+    if (!objName.trim() || !floorPlanId) return;
+    setSavingAsTemplate(true);
+    const { data: fp } = await supabase.from('budget_floor_plans').select('budget_id').eq('id', floorPlanId).single();
+    if (!fp) { setSavingAsTemplate(false); toast.error('No se encontró el presupuesto'); return; }
+    const { error } = await supabase.from('budget_object_templates').insert({
+      budget_id: fp.budget_id,
+      name: objName.trim(),
+      object_type: objType,
+      width_mm: objWidthMm ? parseFloat(objWidthMm) : null,
+      height_mm: objHeightMm ? parseFloat(objHeightMm) : null,
+      thickness_mm: objThickness ? parseFloat(objThickness) : null,
+    });
+    setSavingAsTemplate(false);
+    if (error) { toast.error('Error guardando plantilla'); return; }
+    toast.success('Guardado como predefinido');
+    fetchTemplates();
+  };
+
+  // Filtered resources for the inline form search
+  const formFilteredResources = useMemo(() => {
+    if (!formResourceSearch) return resources;
+    const norm = normalizeSearchText(formResourceSearch);
+    return resources.filter(r => normalizeSearchText(r.name).includes(norm));
+  }, [resources, formResourceSearch]);
+
+  const selectedResourceName = useMemo(() => {
+    if (objResourceId === '_none') return 'Sin recurso';
+    return resources.find(r => r.id === objResourceId)?.name || 'Recurso';
+  }, [objResourceId, resources]);
+
   const getNextLayerOrder = useCallback((faceKey: string) => {
     let wallIndex: number;
     if (faceKey === 'floor') wallIndex = -1;
@@ -596,7 +649,9 @@ export function WorkspacePropertiesPanel({
   useEffect(() => {
     if (!showObjectForm) return;
     if (resources.length === 0) fetchResources();
-  }, [resources.length, showObjectForm]);
+    if (dbTemplates.length === 0) fetchTemplates();
+  }, [resources.length, dbTemplates.length, showObjectForm]);
+
 
   const getFloorType = () => {
     if (!room) return 'normal';
@@ -868,8 +923,24 @@ export function WorkspacePropertiesPanel({
     return data.id;
   };
 
-  const applyPreset = (idx: number) => {
+  const applyPreset = (val: string) => {
+    // Check if it's a DB template (prefixed with 'db-')
+    if (val.startsWith('db-')) {
+      const tplId = val.replace('db-', '');
+      const tpl = dbTemplates.find(t => t.id === tplId);
+      if (tpl) {
+        setObjType(tpl.object_type || 'material');
+        setObjWidthMm(tpl.width_mm ? String(tpl.width_mm) : '');
+        setObjHeightMm(tpl.height_mm ? String(tpl.height_mm) : '');
+        setObjThickness(tpl.thickness_mm ? String(tpl.thickness_mm) : '');
+        setObjName(tpl.name);
+        setObjSillHeight('');
+      }
+      return;
+    }
+    const idx = parseInt(val, 10);
     const p = OBJECT_PRESETS[idx];
+    if (!p) return;
     setObjType(p.type);
     setObjWidthMm(String(p.width));
     setObjHeightMm(String(p.height));
@@ -1376,15 +1447,26 @@ export function WorkspacePropertiesPanel({
             <div className="border rounded p-2 bg-muted/20 space-y-1.5">
               <p className="text-[10px] font-semibold">Nuevo objeto / hueco</p>
 
-              {/* Presets for huecos */}
+              {/* Presets for huecos + DB templates */}
               <div>
-                <label className="text-[9px] text-muted-foreground">Predefinido (huecos)</label>
-                <Select value={objPreset} onValueChange={v => { setObjPreset(v); applyPreset(parseInt(v)); }}>
+                <label className="text-[9px] text-muted-foreground">Predefinido / Plantilla</label>
+                <Select value={objPreset} onValueChange={v => { setObjPreset(v); applyPreset(v); }}>
                   <SelectTrigger className="h-6 text-[10px]"><SelectValue placeholder="Elegir plantilla..." /></SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="_header_presets" disabled>— Huecos predefinidos —</SelectItem>
                     {OBJECT_PRESETS.map((p, i) => (
                       <SelectItem key={i} value={String(i)}>{p.label} ({p.width}×{p.height}mm)</SelectItem>
                     ))}
+                    {dbTemplates.length > 0 && (
+                      <>
+                        <SelectItem value="_header_db" disabled>— Plantillas del presupuesto —</SelectItem>
+                        {dbTemplates.map(t => (
+                          <SelectItem key={t.id} value={`db-${t.id}`}>
+                            {t.name} {t.width_mm && t.height_mm ? `(${t.width_mm}×${t.height_mm}mm)` : ''}
+                          </SelectItem>
+                        ))}
+                      </>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -1426,17 +1508,46 @@ export function WorkspacePropertiesPanel({
                   <label className="text-[9px] text-muted-foreground">Orden capa (≠ 0)</label>
                   <Input className="h-6 text-[10px] font-mono" type="number" value={objLayerOrder} onChange={e => setObjLayerOrder(e.target.value)} />
                 </div>
-                <div>
+                <div className="col-span-2">
                   <label className="text-[9px] text-muted-foreground">Recurso enlazado</label>
-                  <Select value={objResourceId} onValueChange={setObjResourceId}>
-                    <SelectTrigger className="h-6 text-[10px]"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="_none">Sin recurso</SelectItem>
-                      {resources.map(r => (
-                        <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Popover open={formResourceOpen} onOpenChange={setFormResourceOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="h-6 text-[10px] w-full justify-start font-normal truncate">
+                        <Search className="h-3 w-3 mr-1 shrink-0" />
+                        <span className="truncate">{selectedResourceName}</span>
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-64 p-2" align="start">
+                      <Input
+                        className="h-6 text-[10px] mb-1.5"
+                        placeholder="Buscar recurso..."
+                        value={formResourceSearch}
+                        onChange={e => setFormResourceSearch(e.target.value)}
+                        autoFocus
+                      />
+                      <div className="max-h-40 overflow-y-auto space-y-0.5">
+                        <button
+                          className={`w-full text-left text-[10px] px-1.5 py-1 rounded hover:bg-accent/40 ${objResourceId === '_none' ? 'bg-accent/30 font-medium' : ''}`}
+                          onClick={() => { setObjResourceId('_none'); setFormResourceOpen(false); setFormResourceSearch(''); }}
+                        >
+                          Sin recurso
+                        </button>
+                        {formFilteredResources.map(r => (
+                          <button
+                            key={r.id}
+                            className={`w-full text-left text-[10px] px-1.5 py-1 rounded hover:bg-accent/40 flex items-center gap-1 ${objResourceId === r.id ? 'bg-accent/30 font-medium' : ''}`}
+                            onClick={() => { setObjResourceId(r.id); setFormResourceOpen(false); setFormResourceSearch(''); }}
+                          >
+                            <span className="truncate flex-1">{r.name}</span>
+                            <Badge variant="outline" className="text-[8px] h-3.5 px-1 shrink-0">{r.resource_type || '—'}</Badge>
+                          </button>
+                        ))}
+                        {formFilteredResources.length === 0 && (
+                          <p className="text-[9px] text-muted-foreground text-center py-2">Sin resultados</p>
+                        )}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                 </div>
                 <div>
                   <label className="text-[9px] text-muted-foreground">Ancho (mm)</label>
@@ -1470,6 +1581,16 @@ export function WorkspacePropertiesPanel({
               <div className="flex gap-1">
                 <Button size="sm" className="h-6 text-[10px] gap-1 flex-1" onClick={handleAddObject} disabled={!objName.trim()}>
                   <Plus className="h-3 w-3" /> {objType === 'hueco' ? 'Añadir hueco' : 'Registrar'}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-6 text-[10px] gap-1"
+                  disabled={!objName.trim() || savingAsTemplate}
+                  onClick={handleSaveAsTemplate}
+                  title="Guardar como plantilla predefinida"
+                >
+                  <Star className="h-3 w-3" /> {savingAsTemplate ? '...' : 'Predefinir'}
                 </Button>
                 <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={resetForm}>
                   <X className="h-3 w-3" />

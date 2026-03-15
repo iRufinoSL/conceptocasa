@@ -1268,7 +1268,7 @@ export function SectionAxisViewer({
       // Vertex dots — draggable in vertex edit mode
       for (let i = 0; i < verts.length; i++) {
         const a = pxVerts[i];
-        const isDraggable = vertexEditMode;
+        const isDraggable = vertexEditMode && selectedPolygonId === poly.id;
         const vertIdx = i;
         elements.push(
           <circle key={`vtx-${poly.id}-${i}`} cx={a.px} cy={a.py}

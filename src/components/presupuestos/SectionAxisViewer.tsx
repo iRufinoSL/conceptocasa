@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Save, PenTool, X, Check, Printer, Ruler, Undo2 } from 'lucide-react';
+import { Save, PenTool, X, Check, Printer, Ruler, Undo2, RefreshCw } from 'lucide-react';
 import type { SectionPolygon } from './CustomSectionManager';
 import { WorkspacePropertiesPanel } from './WorkspacePropertiesPanel';
 import { VISUAL_PATTERNS, getPatternById } from '@/lib/visual-patterns';
@@ -86,6 +86,8 @@ interface SectionAxisViewerProps {
   onFacePatternChange?: (polyId: string, faceKey: string, patternId: string | null) => void;
   /** All polygon names across ALL sections for uniqueness validation */
   allPolygonNames?: string[];
+  /** Callback to regenerate projected workspaces */
+  onRegenerate?: () => void;
 }
 
 const AXIS_COLORS = {
@@ -152,6 +154,7 @@ export function SectionAxisViewer({
   facePatterns: savedFacePatterns,
   onFacePatternChange,
   allPolygonNames,
+  onRegenerate,
 }: SectionAxisViewerProps) {
   const { fixedAxis, hAxis, vAxis } = getConfig(sectionType);
   const hColor = AXIS_COLORS[hAxis];
@@ -1173,7 +1176,7 @@ export function SectionAxisViewer({
 
           elements.push(
             <g key={`edge-label-${poly.id}-${i}`} data-pdf-layer="wall-labels"
-              style={{ cursor: 'pointer' }}
+              style={{ cursor: vertexEditMode ? 'default' : 'pointer', pointerEvents: vertexEditMode ? 'none' : 'auto' }}
               onClick={(e) => { e.stopPropagation(); handleEdgeClick(poly.id, i); }}>
               <rect
                 x={edgeMidX + nx * offset - boxW / 2}
@@ -1265,7 +1268,7 @@ export function SectionAxisViewer({
 
       elements.push(
         <g key={`center-${poly.id}`} data-pdf-layer="center-labels"
-          style={{ cursor: 'pointer' }}
+          style={{ cursor: vertexEditMode ? 'default' : 'pointer', pointerEvents: vertexEditMode ? 'none' : 'auto' }}
           onClick={(e) => {
             e.stopPropagation();
             setFacePanel({ polyId: poly.id, polyName: poly.name, faceKey: 'floor', edgeCount: poly.vertices.length, vertices: poly.vertices.map(v => ({ x: v.x, y: v.y })) });
@@ -1715,6 +1718,12 @@ export function SectionAxisViewer({
                   <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
                     onClick={() => { pushUndo(); setVertexEditMode(true); setRulerMode(false); setDrawMode(false); }}>
                     <PenTool className="h-3 w-3" /> Modificar
+                  </Button>
+                )}
+                {onRegenerate && (
+                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
+                    onClick={onRegenerate}>
+                    <RefreshCw className="h-3 w-3" /> Regenerar espacios
                   </Button>
                 )}
               </div>

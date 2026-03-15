@@ -1374,30 +1374,6 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
           <Badge variant="secondary" className="text-[10px] h-5 font-mono">
             {liveSection.axis}={liveSection.axisValue}
           </Badge>
-          {liveSection.sectionType !== 'vertical' && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 text-xs gap-1 ml-auto"
-              onClick={async () => {
-                // Force re-project: clear saved polygons for this section so auto-projection recalculates
-                const parsedCorners = parseCustomCorners();
-                const sections = Array.isArray(parsedCorners.customSections)
-                  ? (parsedCorners.customSections as CustomSection[])
-                  : [];
-                const updated = sections.map(s =>
-                  s.id === liveSection.id ? { ...s, polygons: [] } : s
-                );
-                await supabase.from('budget_floor_plans')
-                  .update({ custom_corners: { ...parsedCorners, customSections: updated } as any })
-                  .eq('id', floorPlan!.id);
-                await invalidateSectionQueries();
-                toast.success('Espacios regenerados');
-              }}
-            >
-              <RefreshCw className="h-3 w-3" /> Regenerar espacios
-            </Button>
-          )}
         </div>
         <SectionAxisViewer
           key={liveSection.id}
@@ -1422,6 +1398,26 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
           facePatterns={mergedFacePatterns}
           onFacePatternChange={handleFacePatternChange}
           allPolygonNames={allPolygonNames}
+          onRegenerate={liveSection.sectionType !== 'vertical' ? async () => {
+            // Regenerate: keep existing polygons that have custom data, only add missing projected ones
+            const parsedCorners = parseCustomCorners();
+            const sections = Array.isArray(parsedCorners.customSections)
+              ? (parsedCorners.customSections as CustomSection[])
+              : [];
+            // Mark section for re-projection without clearing existing polygons
+            // We set a flag so the projection logic adds missing spaces without overwriting
+            const currentSection = sections.find(s => s.id === liveSection.id);
+            const existingPolygons = currentSection?.polygons || [];
+            // Keep existing polygon IDs so projection only adds new ones
+            const updated = sections.map(s =>
+              s.id === liveSection.id ? { ...s, polygons: existingPolygons, _regenerate: true } : s
+            );
+            await supabase.from('budget_floor_plans')
+              .update({ custom_corners: { ...parsedCorners, customSections: updated } as any })
+              .eq('id', floorPlan!.id);
+            await invalidateSectionQueries();
+            toast.success('Espacios regenerados');
+          } : undefined}
         />
       </div>
     );

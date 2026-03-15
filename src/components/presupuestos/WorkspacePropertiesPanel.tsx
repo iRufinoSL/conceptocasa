@@ -1879,6 +1879,7 @@ function ObjectRow({ obj, isPositioning, onTogglePosition, onMove, onDelete, onL
         <Badge variant="outline" className="text-[8px] h-4 px-1 shrink-0">Capa {obj.layer_order}</Badge>
         <Badge variant="outline" className="text-[8px] h-4 px-1 shrink-0">{obj.object_type}</Badge>
         {obj.resource_id && <Link2 className="h-3 w-3 text-primary shrink-0" />}
+        {obj.shown_in_section && <Badge variant="secondary" className="text-[7px] h-3.5 px-0.5 shrink-0">SEC</Badge>}
       </div>
       <div className="flex items-center gap-1 flex-wrap text-muted-foreground">
         {dims && <span className="font-mono">{dims}mm</span>}
@@ -1886,6 +1887,9 @@ function ObjectRow({ obj, isPositioning, onTogglePosition, onMove, onDelete, onL
         {obj.sill_height != null && <span>↑{obj.sill_height}</span>}
         {obj.position_x != null && <span>→{obj.position_x}</span>}
         {obj.distance_to_wall != null && <span>↔{obj.distance_to_wall}</span>}
+        {(obj.coord_x != null || obj.coord_y != null || obj.coord_z != null) && (
+          <span className="font-mono text-[8px]">XYZ({obj.coord_x ?? '—'},{obj.coord_y ?? '—'},{obj.coord_z ?? '—'})</span>
+        )}
       </div>
       {/* Action buttons */}
       <div className="flex items-center gap-0.5">

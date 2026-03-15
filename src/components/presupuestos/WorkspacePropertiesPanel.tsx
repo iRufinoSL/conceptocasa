@@ -143,6 +143,8 @@ export function WorkspacePropertiesPanel({
   onOpeningsChange,
   localFaceTypes,
   onLocalFaceTypeChange,
+  initialEditObjectId,
+  initialTab,
 }: WorkspacePropertiesPanelProps) {
   const [walls, setWalls] = useState<WallRecord[]>([]);
   const [room, setRoom] = useState<any>(null);

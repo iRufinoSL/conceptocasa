@@ -1575,7 +1575,7 @@ export function WorkspacePropertiesPanel({
           {/* Add object form */}
           {showObjectForm && (
             <div className="border rounded p-2 bg-muted/20 space-y-1.5">
-              <p className="text-[10px] font-semibold">Nuevo objeto / hueco</p>
+              <p className="text-[10px] font-semibold">{editingObjId ? '✏️ Editar objeto' : 'Nuevo objeto / hueco'}</p>
 
               {/* Presets for huecos + DB templates */}
               <div>

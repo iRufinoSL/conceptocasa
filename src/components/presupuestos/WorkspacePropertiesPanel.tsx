@@ -1508,17 +1508,46 @@ export function WorkspacePropertiesPanel({
                   <label className="text-[9px] text-muted-foreground">Orden capa (≠ 0)</label>
                   <Input className="h-6 text-[10px] font-mono" type="number" value={objLayerOrder} onChange={e => setObjLayerOrder(e.target.value)} />
                 </div>
-                <div>
+                <div className="col-span-2">
                   <label className="text-[9px] text-muted-foreground">Recurso enlazado</label>
-                  <Select value={objResourceId} onValueChange={setObjResourceId}>
-                    <SelectTrigger className="h-6 text-[10px]"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="_none">Sin recurso</SelectItem>
-                      {resources.map(r => (
-                        <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Popover open={formResourceOpen} onOpenChange={setFormResourceOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="h-6 text-[10px] w-full justify-start font-normal truncate">
+                        <Search className="h-3 w-3 mr-1 shrink-0" />
+                        <span className="truncate">{selectedResourceName}</span>
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-64 p-2" align="start">
+                      <Input
+                        className="h-6 text-[10px] mb-1.5"
+                        placeholder="Buscar recurso..."
+                        value={formResourceSearch}
+                        onChange={e => setFormResourceSearch(e.target.value)}
+                        autoFocus
+                      />
+                      <div className="max-h-40 overflow-y-auto space-y-0.5">
+                        <button
+                          className={`w-full text-left text-[10px] px-1.5 py-1 rounded hover:bg-accent/40 ${objResourceId === '_none' ? 'bg-accent/30 font-medium' : ''}`}
+                          onClick={() => { setObjResourceId('_none'); setFormResourceOpen(false); setFormResourceSearch(''); }}
+                        >
+                          Sin recurso
+                        </button>
+                        {formFilteredResources.map(r => (
+                          <button
+                            key={r.id}
+                            className={`w-full text-left text-[10px] px-1.5 py-1 rounded hover:bg-accent/40 flex items-center gap-1 ${objResourceId === r.id ? 'bg-accent/30 font-medium' : ''}`}
+                            onClick={() => { setObjResourceId(r.id); setFormResourceOpen(false); setFormResourceSearch(''); }}
+                          >
+                            <span className="truncate flex-1">{r.name}</span>
+                            <Badge variant="outline" className="text-[8px] h-3.5 px-1 shrink-0">{r.resource_type || '—'}</Badge>
+                          </button>
+                        ))}
+                        {formFilteredResources.length === 0 && (
+                          <p className="text-[9px] text-muted-foreground text-center py-2">Sin resultados</p>
+                        )}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                 </div>
                 <div>
                   <label className="text-[9px] text-muted-foreground">Ancho (mm)</label>
@@ -1552,6 +1581,16 @@ export function WorkspacePropertiesPanel({
               <div className="flex gap-1">
                 <Button size="sm" className="h-6 text-[10px] gap-1 flex-1" onClick={handleAddObject} disabled={!objName.trim()}>
                   <Plus className="h-3 w-3" /> {objType === 'hueco' ? 'Añadir hueco' : 'Registrar'}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-6 text-[10px] gap-1"
+                  disabled={!objName.trim() || savingAsTemplate}
+                  onClick={handleSaveAsTemplate}
+                  title="Guardar como plantilla predefinida"
+                >
+                  <Star className="h-3 w-3" /> {savingAsTemplate ? '...' : 'Predefinir'}
                 </Button>
                 <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={resetForm}>
                   <X className="h-3 w-3" />

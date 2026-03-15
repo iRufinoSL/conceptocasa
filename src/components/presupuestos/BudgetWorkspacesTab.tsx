@@ -4033,8 +4033,8 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
                    onOtherPolygonRename={handleOtherPolygonRename}
                    onSelectOtherWorkspace={setSelectedOtherWorkspaceId}
                    perimeterPolygon={getSectionPerimeter(r.vertical_section_id)}
-                   pdfTitle="Espacio de trabajo"
-                   pdfSubtitle={r.name}
+                    pdfTitle={budgetName}
+                    pdfSubtitle={`Sección Z — ${r.name}`}
                    onWallClick={(idx) => {
                      setSelectedWallMap(prev => ({ ...prev, [r.id]: idx }));
                      if (!expandedIds.has(r.id)) {

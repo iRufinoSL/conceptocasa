@@ -734,7 +734,7 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
     },
   });
 
-  const [placedView, setPlacedView] = useState<'alpha' | 'workspace' | 'type'>('alpha');
+  const [placedView, setPlacedView] = useState<'alpha' | 'workspace'>('alpha');
   const [resourceOpenGroups, setResourceOpenGroups] = useState<Set<string>>(new Set());
 
   const toggleResourceGroup = (name: string) => {

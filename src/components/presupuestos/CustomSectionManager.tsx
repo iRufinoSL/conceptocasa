@@ -331,17 +331,38 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
       setWallPatterns(pMap);
 
       // Huecos — index by normalized room name so section copies can inherit
-      type HuecoEntry = { wallIndex: number; positionXmm: number; widthMm: number; name: string; objectType: string };
+      // Store edge direction from base room polygon to correctly match edges in section copies
+      type HuecoEntry = { wallIndex: number; positionXmm: number; widthMm: number; name: string; objectType: string; edgeDx: number; edgeDy: number };
       const huecosByName = new Map<string, HuecoEntry[]>();
-      console.log('[HUECOS DEBUG] allWallIds count:', allWallIds.length, 'huecoRes.data:', huecoRes.data?.length, 'rooms displayed:', rooms.map(r => `${r.id.slice(0,8)}=${r.name}`));
-      console.log('[HUECOS DEBUG] allRoomIds count:', allRoomIds.length, 'floorPlanIds:', floorPlanIds);
       if (huecoRes.data?.length) {
+        // Build a lookup from roomId -> polygon (from rooms prop)
+        const roomPolyById = new Map<string, Array<{x: number; y: number}>>();
+        for (const r of rooms) {
+          if (r.floorPolygon && r.floorPolygon.length >= 3) {
+            roomPolyById.set(r.id, r.floorPolygon);
+          }
+        }
+
         for (const h of huecoRes.data) {
           const roomId = wallRoomMap.get(h.wall_id);
           const wallIndex = wallIndexMap.get(h.wall_id);
           if (!roomId || wallIndex == null || wallIndex < 1) continue;
           const rName = roomNameById.get(roomId) || '';
           if (!rName) continue;
+
+          // Compute normalized edge direction from base room's polygon
+          const poly = roomPolyById.get(roomId);
+          const edgeIdx = wallIndex - 1;
+          let edgeDx = 1, edgeDy = 0;
+          if (poly && edgeIdx >= 0 && edgeIdx < poly.length) {
+            const p1 = poly[edgeIdx];
+            const p2 = poly[(edgeIdx + 1) % poly.length];
+            const dx = p2.x - p1.x;
+            const dy = p2.y - p1.y;
+            const len = Math.hypot(dx, dy);
+            if (len > 0) { edgeDx = dx / len; edgeDy = dy / len; }
+          }
+
           const list = huecosByName.get(rName) || [];
           list.push({
             wallIndex,
@@ -349,12 +370,14 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
             widthMm: h.width_mm ?? 800,
             name: h.name || '',
             objectType: h.object_type || 'hueco',
+            edgeDx,
+            edgeDy,
           });
           huecosByName.set(rName, list);
         }
       }
 
-      console.log('[HUECOS DEBUG] huecosByName keys:', [...huecosByName.keys()]);
+      console.log('[HUECOS DEBUG] huecosByName:', [...huecosByName.entries()].map(([k,v]) => `${k}:${v.length}`));
       
       // Map huecos back to displayed room IDs by name matching
       const hMap = new Map<string, HuecoEntry[]>();
@@ -365,7 +388,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
           hMap.set(r.id, huecos);
         }
       }
-      console.log('[HUECOS DEBUG] Final hMap keys:', [...hMap.keys()].map(k => `${k.slice(0,8)}=${hMap.get(k)?.length}`));
+      console.log('[HUECOS DEBUG] Final hMap size:', hMap.size);
       setWallHuecos(hMap);
     })();
   }, [rooms]);

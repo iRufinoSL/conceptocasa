@@ -1103,6 +1103,12 @@ export function SectionAxisViewer({
       // Double-click handler for polygon fill area
       const handlePolyFillClick = (e: React.MouseEvent) => {
         e.stopPropagation();
+
+        if (vertexEditMode) {
+          setSelectedPolygonId(poly.id);
+          return;
+        }
+
         const now = Date.now();
         const last = lastPolyClickRef.current;
         if (last && last.polyId === poly.id && (now - last.time) < 400) {

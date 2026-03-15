@@ -1323,10 +1323,21 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
           liveSection.sectionType as 'vertical' | 'longitudinal' | 'transversal',
         ));
 
+    const hiddenNameKeys = new Set(
+      healedSavedPolys
+        .filter(p => !p.vertices || p.vertices.length === 0)
+        .map(p => normalizeWorkspaceName(p.name))
+        .filter(Boolean),
+    );
+
     const savedIds = new Set(healedSavedPolys.map(p => p.id));
     const mergedPolygons = [
       ...healedSavedPolys,
-      ...autoPolys.filter(ap => !savedIds.has(ap.id)),
+      ...autoPolys.filter(ap => {
+        if (savedIds.has(ap.id)) return false;
+        const key = normalizeWorkspaceName(ap.name);
+        return !(key && hiddenNameKeys.has(key));
+      }),
     ];
 
     // X/Y sections always referenced from (0,0,0) at bottom-left.

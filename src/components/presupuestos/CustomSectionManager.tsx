@@ -2267,14 +2267,40 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                         x: margin.left + getHIndex(p.x) * cellSize,
                         y: margin.top + getVIndex(p.y) * cellSize,
                       }));
-                      // Map wallIndex (1-4) to polygon edge index
-                      // wallIndex 1=top (edge from vertex 0→1 in typical rect), etc.
-                      // For arbitrary polygons, map wall indices to edges by proximity
+                      // Match hueco edges by direction vector (handles different polygon vertex orderings)
                       const edgeCount = svgPtsH.length;
+                      // Pre-compute normalized edge directions for this room's polygon
+                      const polyEdgeDirs: Array<{dx: number; dy: number}> = [];
+                      for (let ei = 0; ei < edgeCount; ei++) {
+                        const ep1 = poly[ei];
+                        const ep2 = poly[(ei + 1) % poly.length];
+                        const edx = ep2.x - ep1.x;
+                        const edy = ep2.y - ep1.y;
+                        const elen = Math.hypot(edx, edy);
+                        polyEdgeDirs.push(elen > 0 ? { dx: edx / elen, dy: edy / elen } : { dx: 1, dy: 0 });
+                      }
+
                       return roomHuecos.map((hueco, hi) => {
-                        // Find the edge corresponding to this wallIndex
-                        // For rectangular rooms: wallIndex 1→edge0(top), 2→edge1(right), 3→edge2(bottom), 4→edge3(left)
-                        const edgeIdx = Math.min(hueco.wallIndex - 1, edgeCount - 1);
+                        // Find best matching edge by direction similarity (dot product)
+                        let bestEdgeIdx = Math.min(hueco.wallIndex - 1, edgeCount - 1);
+                        let bestDot = -2;
+                        for (let ei = 0; ei < edgeCount; ei++) {
+                          // Match both same direction and opposite direction (|dot product|)
+                          const dot = Math.abs(hueco.edgeDx * polyEdgeDirs[ei].dx + hueco.edgeDy * polyEdgeDirs[ei].dy);
+                          // Also check edge length similarity as tiebreaker
+                          const ep1 = poly[ei];
+                          const ep2 = poly[(ei + 1) % poly.length];
+                          const baseEdgeLen = Math.hypot(
+                            (ep2.x - ep1.x),
+                            (ep2.y - ep1.y)
+                          );
+                          // Weighted score: direction match is primary
+                          if (dot > bestDot + 0.01) {
+                            bestDot = dot;
+                            bestEdgeIdx = ei;
+                          }
+                        }
+                        const edgeIdx = bestEdgeIdx;
                         if (edgeIdx < 0 || edgeIdx >= edgeCount) return null;
                         const p1 = svgPtsH[edgeIdx];
                         const p2 = svgPtsH[(edgeIdx + 1) % edgeCount];

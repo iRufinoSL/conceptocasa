@@ -268,7 +268,19 @@ export function SectionAxisViewer({
   }, [undoStack, onSavePolygons, onSaveRulerLines]);
 
   // ── Openings data for visual rendering ──
-  interface OpeningData { id: string; wall_id: string; opening_type: string; width: number; height: number; sill_height: number; position_x: number | null; name: string | null; }
+  interface OpeningData {
+    id: string;
+    wall_id: string;
+    opening_type: string;
+    width: number;
+    height: number;
+    sill_height: number;
+    position_x: number | null;
+    name: string | null;
+    coord_x?: number | null;
+    coord_y?: number | null;
+    coord_z?: number | null;
+  }
   const [openingsMap, setOpeningsMap] = useState<Record<string, { wallIndex: number; openings: OpeningData[] }>>({});
   const [openingsVersion, setOpeningsVersion] = useState(0);
 
@@ -298,23 +310,56 @@ export function SectionAxisViewer({
     const { data: walls } = await supabase.from('budget_floor_plan_walls').select('id, room_id, wall_index').in('room_id', polyIds);
     if (!walls || walls.length === 0) { setOpeningsMap({}); setSectionObjects([]); return; }
     const wallIds = walls.map(w => w.id);
+
+    const normalizeAxisCoord = (value: number | null | undefined): number | null => {
+      if (value == null || !Number.isFinite(value)) return null;
+      return Math.abs(value) > 50 ? value / 1000 : value;
+    };
+
+    const axisValueNorm = normalizeAxisCoord(axisValue);
+    const AXIS_EPS = 0.05; // 50mm in meter-based axis units
+
+    const belongsToCurrentSection = (coords: { coord_x?: number | null; coord_y?: number | null; coord_z?: number | null }) => {
+      if (sectionType === 'longitudinal') {
+        const y = normalizeAxisCoord(coords.coord_y);
+        return y != null && axisValueNorm != null && Math.abs(y - axisValueNorm) <= AXIS_EPS;
+      }
+      if (sectionType === 'transversal') {
+        const x = normalizeAxisCoord(coords.coord_x);
+        return x != null && axisValueNorm != null && Math.abs(x - axisValueNorm) <= AXIS_EPS;
+      }
+      if (sectionType === 'vertical') {
+        const z = normalizeAxisCoord(coords.coord_z);
+        if (z == null || axisValueNorm == null) return true;
+        return Math.abs(z - axisValueNorm) <= AXIS_EPS;
+      }
+      return true;
+    };
+
     // Read from both legacy openings table AND wall_objects with type 'hueco'
     const [legacyRes, huecoRes, sectionObjRes] = await Promise.all([
       supabase.from('budget_floor_plan_openings').select('*').in('wall_id', wallIds),
       supabase.from('budget_wall_objects').select('*').in('wall_id', wallIds).eq('object_type', 'hueco'),
       supabase.from('budget_wall_objects').select('*').in('wall_id', wallIds).eq('shown_in_section', true),
     ]);
-    // Normalize hueco objects to OpeningData format
-    const huecoOpenings: OpeningData[] = (huecoRes.data || []).map((h: any) => ({
-      id: h.id,
-      wall_id: h.wall_id,
-      opening_type: (h.name || '').toLowerCase().includes('puerta') ? 'puerta' : 'ventana',
-      width: h.width_mm || 1000,
-      height: h.height_mm || 1000,
-      sill_height: h.sill_height || 0,
-      position_x: h.position_x,
-      name: h.name,
-    }));
+
+    // Normalize hueco objects to OpeningData format and filter by current section axis
+    const huecoOpenings: OpeningData[] = (huecoRes.data || [])
+      .filter((h: any) => belongsToCurrentSection(h))
+      .map((h: any) => ({
+        id: h.id,
+        wall_id: h.wall_id,
+        opening_type: (h.name || '').toLowerCase().includes('puerta') ? 'puerta' : 'ventana',
+        width: h.width_mm || 1000,
+        height: h.height_mm || 1000,
+        sill_height: h.sill_height || 0,
+        position_x: h.position_x,
+        name: h.name,
+        coord_x: h.coord_x,
+        coord_y: h.coord_y,
+        coord_z: h.coord_z,
+      }));
+
     const allOpenings = [...(legacyRes.data || []) as OpeningData[], ...huecoOpenings];
     const map: Record<string, { wallIndex: number; openings: OpeningData[] }> = {};
     for (const w of walls) {
@@ -331,22 +376,9 @@ export function SectionAxisViewer({
 
     // Build section objects array with room_id resolved
     const wallToRoom = new Map(walls.map(w => [w.id, w.room_id]));
-    const AXIS_EPS = 50; // 50mm tolerance for axis matching
     const secObjs: SectionObjectData[] = (sectionObjRes.data || [])
-      .filter((o: any) => {
-        if (o.object_type === 'hueco') return false; // huecos already rendered
-        // Filter objects by section axis coordinate — only show objects that belong to THIS section plane
-        if (sectionType === 'longitudinal' && o.coord_y != null) {
-          if (Math.abs(o.coord_y - axisValue) > AXIS_EPS) return false;
-        }
-        if (sectionType === 'transversal' && o.coord_x != null) {
-          if (Math.abs(o.coord_x - axisValue) > AXIS_EPS) return false;
-        }
-        if (sectionType === 'vertical' && o.coord_z != null) {
-          if (Math.abs(o.coord_z - axisValue) > AXIS_EPS) return false;
-        }
-        return true;
-      })
+      .filter((o: any) => o.object_type !== 'hueco')
+      .filter((o: any) => belongsToCurrentSection(o))
       .map((o: any) => ({
         id: o.id,
         wall_id: o.wall_id,

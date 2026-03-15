@@ -449,7 +449,18 @@ export function WorkspacePropertiesPanel({
               },
             };
           })
-          .filter((update): update is { id: string; payload: Record<string, unknown> } => !!update);
+          .filter((update): update is {
+            id: string;
+            payload: {
+              name: string;
+              description: string;
+              object_type: string;
+              is_core: boolean;
+              layer_order: number;
+              surface_m2: number;
+              volume_m3: number | null;
+            };
+          } => update !== null);
 
         const inserts = nextWalls
           .filter(w => !existingByWall.has(w.id))

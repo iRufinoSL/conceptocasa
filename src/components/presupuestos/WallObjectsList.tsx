@@ -1215,7 +1215,7 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
   });
 
   const placedRow = (o: any) => ({
-    face: { workspace: o.workspace, roomId: '', faceName: o.faceName, m2: o.surface_m2, m3: o.volume_m3, sortKey: 0, wallIndex: 0 } as AutoFace,
+    face: o,
     cells: {
       name: o.layer_order === 0 ? `Superficie=${o.faceName}` : o.name,
       workspace: o.workspace,

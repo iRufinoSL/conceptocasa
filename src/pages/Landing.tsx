@@ -292,7 +292,18 @@ const Landing = () => {
       {/* Hero Section */}
       <section id="inicio" className="relative min-h-screen flex items-center overflow-hidden pt-16">
         <div className="absolute inset-0">
-          <img src={heroPassivhaus} alt="Casa pasiva rodeada de naturaleza" className="w-full h-full object-cover" />
+          <AnimatePresence mode="wait">
+            <motion.img
+              key={heroIdx}
+              src={heroImages[heroIdx].src}
+              alt={heroImages[heroIdx].alt}
+              initial={{ opacity: 0, scale: 1.08 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.97 }}
+              transition={{ duration: 1.4, ease: [0.25, 0.46, 0.45, 0.94] }}
+              className="absolute inset-0 w-full h-full object-cover"
+            />
+          </AnimatePresence>
           <div className="absolute inset-0 bg-gradient-to-r from-foreground/75 via-foreground/50 to-foreground/20" />
         </div>
 

@@ -120,6 +120,9 @@ interface ExternalResourceOption {
   resource_type: string | null;
   unit_cost: number;
   unit_measure: string | null;
+  width_mm: number | null;
+  height_mm: number | null;
+  depth_mm: number | null;
 }
 
 export function WorkspacePropertiesPanel({

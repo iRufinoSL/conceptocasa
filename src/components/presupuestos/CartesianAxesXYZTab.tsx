@@ -1485,26 +1485,70 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
 
                 {currentSections.length > 0 && (
                   <div className="space-y-1">
-                    <p className="text-[11px] font-medium text-muted-foreground">Secciones existentes — clic para entrar</p>
-                    <div className="flex flex-wrap gap-1">
+                    <p className="text-[11px] font-medium text-muted-foreground">Secciones existentes — clic para entrar, lápiz para editar nombre</p>
+                    <div className="flex flex-wrap gap-1.5">
                       {currentSections.map((section) => (
-                        <Badge
-                          key={section.id}
-                          variant="outline"
-                          className="text-[10px] h-6 gap-1 pr-1 cursor-pointer hover:bg-accent/60 transition-colors"
-                          onClick={() => setActiveSection(section)}
-                        >
-                          <Eye className="h-2.5 w-2.5 text-muted-foreground" />
-                          {section.name} ({section.axis}={section.axisValue})
-                          {isAdmin && (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleDeleteSection(section); }}
-                              className="ml-0.5 hover:text-destructive transition-colors"
-                            >
-                              <Trash2 className="h-2.5 w-2.5" />
+                        editingSectionId === section.id ? (
+                          <div key={section.id} className="flex items-center gap-1 rounded border border-primary/40 bg-card px-1.5 py-0.5" onClick={e => e.stopPropagation()}>
+                            <Input
+                              className="h-5 text-[10px] w-24 px-1"
+                              value={editSectionName}
+                              onChange={e => setEditSectionName(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') handleRenameSection(section.id);
+                                if (e.key === 'Escape') setEditingSectionId(null);
+                              }}
+                              autoFocus
+                            />
+                            <Input
+                              className="h-5 text-[10px] w-12 px-1"
+                              type="number"
+                              value={editSectionAxisValue}
+                              onChange={e => setEditSectionAxisValue(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') handleRenameSection(section.id);
+                                if (e.key === 'Escape') setEditingSectionId(null);
+                              }}
+                            />
+                            <button onClick={() => handleRenameSection(section.id)} className="text-primary hover:text-primary/80">
+                              <Check className="h-3 w-3" />
                             </button>
-                          )}
-                        </Badge>
+                            <button onClick={() => setEditingSectionId(null)} className="text-muted-foreground hover:text-foreground">
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ) : (
+                          <Badge
+                            key={section.id}
+                            variant="outline"
+                            className="text-[10px] h-6 gap-1 pr-1 cursor-pointer hover:bg-accent/60 transition-colors"
+                            onClick={() => setActiveSection(section)}
+                          >
+                            <Eye className="h-2.5 w-2.5 text-muted-foreground" />
+                            {section.name} ({section.axis}={section.axisValue})
+                            {isAdmin && (
+                              <>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEditingSectionId(section.id);
+                                    setEditSectionName(section.name);
+                                    setEditSectionAxisValue(String(section.axisValue));
+                                  }}
+                                  className="ml-0.5 hover:text-primary transition-colors"
+                                >
+                                  <Pencil className="h-2.5 w-2.5" />
+                                </button>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleDeleteSection(section); }}
+                                  className="ml-0.5 hover:text-destructive transition-colors"
+                                >
+                                  <Trash2 className="h-2.5 w-2.5" />
+                                </button>
+                              </>
+                            )}
+                          </Badge>
+                        )
                       ))}
                     </div>
                   </div>

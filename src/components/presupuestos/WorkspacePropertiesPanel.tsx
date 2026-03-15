@@ -638,7 +638,7 @@ export function WorkspacePropertiesPanel({
     } else {
       const faceLabel = faceKey === 'floor' ? 'Suelo' : faceKey === 'ceiling' ? 'Techo' : `Pared ${wallIndex}`;
       const { surface_m2, volume_m3 } = room
-        ? getFaceMetrics(room, wallIndex, cellSizeM)
+        ? getFaceMetrics(room, wallIndex, cellSizeM, existingWall?.wall_type)
         : { surface_m2: null as number | null, volume_m3: null as number | null };
       const metricLabel = surface_m2 != null ? `${surface_m2} m²` : volume_m3 != null ? `${volume_m3} m³` : null;
       const { data } = await supabase.from('budget_wall_objects').insert({

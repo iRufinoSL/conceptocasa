@@ -991,6 +991,16 @@ export function WorkspacePropertiesPanel({
     const sillHeightInput = parseNumeric(objSillHeight);
     const positionXInput = parseNumeric(objPosX);
 
+    const coordXInput = parseNumeric(objCoordX);
+    const coordYInput = parseNumeric(objCoordY);
+    const coordZInput = parseNumeric(objCoordZ);
+
+    // If all 3 coordinates are set, auto-compute sill_height and distance_to_wall
+    let computedSill = objType === 'hueco' ? (sillHeightInput ?? 900) : sillHeightInput;
+    let computedDistWall = parseNumeric(objDistWall);
+    if (coordZInput != null) computedSill = coordZInput;
+    if (coordXInput != null) computedDistWall = coordXInput;
+
     const payload: any = {
       wall_id: wallId,
       layer_order: parsedLayerOrder,
@@ -1001,9 +1011,13 @@ export function WorkspacePropertiesPanel({
       width_mm: objType === 'hueco' ? (widthMmInput ?? 1200) : widthMmInput,
       height_mm: objType === 'hueco' ? (heightMmInput ?? 1000) : heightMmInput,
       position_x: objType === 'hueco' ? (positionXInput ?? 300) : positionXInput,
-      sill_height: objType === 'hueco' ? (sillHeightInput ?? 900) : sillHeightInput,
-      distance_to_wall: parseNumeric(objDistWall),
+      sill_height: computedSill,
+      distance_to_wall: computedDistWall,
       resource_id: objResourceId === '_none' ? null : objResourceId,
+      coord_x: coordXInput,
+      coord_y: coordYInput,
+      coord_z: coordZInput,
+      shown_in_section: objShownInSection,
     };
 
     const { data, error } = await supabase.from('budget_wall_objects').insert(payload).select().single();

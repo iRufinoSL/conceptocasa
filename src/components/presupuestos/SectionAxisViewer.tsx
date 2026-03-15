@@ -37,14 +37,16 @@ interface RidgeLineData {
   x1: number; y1: number; x2: number; y2: number; z: number;
 }
 
-const getDefaultScale = (sectionType: 'vertical' | 'longitudinal' | 'transversal'): SectionScale => (
+type ViewerSectionType = 'vertical' | 'longitudinal' | 'transversal' | 'inclined';
+
+const getDefaultScale = (sectionType: ViewerSectionType): SectionScale => (
   sectionType === 'vertical'
     ? { hScale: 625, vScale: 625 }
     : { hScale: 625, vScale: 250 }
 );
 
 const getSafeScale = (
-  sectionType: 'vertical' | 'longitudinal' | 'transversal',
+  sectionType: ViewerSectionType,
   input?: { hScale: number; vScale: number }
 ): SectionScale => {
   if (input && Number.isFinite(input.hScale) && Number.isFinite(input.vScale) && input.hScale > 0 && input.vScale > 0) {
@@ -66,7 +68,7 @@ export interface PolygonFacePatterns {
 }
 
 interface SectionAxisViewerProps {
-  sectionType: 'vertical' | 'longitudinal' | 'transversal';
+  sectionType: ViewerSectionType;
   axisValue: number;
   sectionName: string;
   floorPlanId?: string;

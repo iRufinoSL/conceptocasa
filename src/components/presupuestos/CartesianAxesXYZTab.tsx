@@ -1217,9 +1217,11 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     for (const room of eligibleRooms) {
       if (!room.floor_polygon || room.floor_polygon.length < 3) continue;
       const zBase = resolveRoomZBase(room);
+      // Use canonical name from Z section if available (authoritative)
+      const displayName = canonicalNameMap.get(room.id) || room.name;
       pushProjectedRoom(
         room.id,
-        room.name,
+        displayName,
         room.floor_polygon,
         zBase,
         room.height,

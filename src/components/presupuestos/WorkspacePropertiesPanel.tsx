@@ -1447,15 +1447,26 @@ export function WorkspacePropertiesPanel({
             <div className="border rounded p-2 bg-muted/20 space-y-1.5">
               <p className="text-[10px] font-semibold">Nuevo objeto / hueco</p>
 
-              {/* Presets for huecos */}
+              {/* Presets for huecos + DB templates */}
               <div>
-                <label className="text-[9px] text-muted-foreground">Predefinido (huecos)</label>
-                <Select value={objPreset} onValueChange={v => { setObjPreset(v); applyPreset(parseInt(v)); }}>
+                <label className="text-[9px] text-muted-foreground">Predefinido / Plantilla</label>
+                <Select value={objPreset} onValueChange={v => { setObjPreset(v); applyPreset(v); }}>
                   <SelectTrigger className="h-6 text-[10px]"><SelectValue placeholder="Elegir plantilla..." /></SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="_header_presets" disabled>— Huecos predefinidos —</SelectItem>
                     {OBJECT_PRESETS.map((p, i) => (
                       <SelectItem key={i} value={String(i)}>{p.label} ({p.width}×{p.height}mm)</SelectItem>
                     ))}
+                    {dbTemplates.length > 0 && (
+                      <>
+                        <SelectItem value="_header_db" disabled>— Plantillas del presupuesto —</SelectItem>
+                        {dbTemplates.map(t => (
+                          <SelectItem key={t.id} value={`db-${t.id}`}>
+                            {t.name} {t.width_mm && t.height_mm ? `(${t.width_mm}×${t.height_mm}mm)` : ''}
+                          </SelectItem>
+                        ))}
+                      </>
+                    )}
                   </SelectContent>
                 </Select>
               </div>

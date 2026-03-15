@@ -1125,11 +1125,11 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       if (axisCoords.length < 2) return;
       const polyMinAxis = Math.min(...axisCoords);
       const polyMaxAxis = Math.max(...axisCoords);
-      const onMinBoundary = Math.abs(axisVal - polyMinAxis) <= AXIS_EPS;
-      const isFirstSectionAxis = Math.abs(axisVal - minSectionAxis) <= AXIS_EPS;
+
+      // Include polygon if the section's axis value falls within or on the boundary of the polygon's range.
+      // A polygon belongs to this section if: polyMinAxis <= axisVal <= polyMaxAxis
       const belongsToSection =
-        (axisVal > polyMinAxis + AXIS_EPS && axisVal <= polyMaxAxis + AXIS_EPS) ||
-        (onMinBoundary && isFirstSectionAxis);
+        axisVal >= polyMinAxis - AXIS_EPS && axisVal <= polyMaxAxis + AXIS_EPS;
       if (!belongsToSection) return;
 
       const intersections = findPolyIntersections(poly, cutAxis, axisVal);

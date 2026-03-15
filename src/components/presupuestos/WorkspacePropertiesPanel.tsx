@@ -675,6 +675,26 @@ export function WorkspacePropertiesPanel({
             ? { ...o, description, surface_m2, volume_m3 }
             : o));
         }
+      } else {
+        const { data, error } = await supabase
+          .from('budget_wall_objects')
+          .insert({
+            wall_id: targetWall.id,
+            layer_order: 0,
+            name: 'Superficie',
+            description,
+            object_type: 'material',
+            is_core: false,
+            surface_m2,
+            volume_m3,
+            visual_pattern: 'vacio',
+          })
+          .select()
+          .single();
+
+        if (!error && data) {
+          setWallObjects(prev => [...prev, data as WallObjectRecord]);
+        }
       }
     }
 

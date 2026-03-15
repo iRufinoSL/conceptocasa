@@ -160,6 +160,7 @@ export function WorkspacePropertiesPanel({
   const [cellSizeM, setCellSizeM] = useState(1);
 
   // Object form state
+  const objectFormRef = useRef<HTMLDivElement>(null);
   const [showObjectForm, setShowObjectForm] = useState(false);
   const [objName, setObjName] = useState('');
   const [objType, setObjType] = useState('material');

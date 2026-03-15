@@ -743,10 +743,31 @@ export function SectionAxisViewer({
   }, [polygons, pushUndo, onSavePolygons]);
 
   const handleDeletePolygon = (polyId: string) => {
+    const target = polygons.find(p => p.id === polyId);
+    if (!target) return;
+
     pushUndo();
+
+    // In X/Y sections, keep a hidden marker (vertices=[]) so regen does not reintroduce this workspace.
+    if (sectionType !== 'vertical' && target.vertices.length >= 3) {
+      const hidden = polygons.map(p => (
+        p.id === polyId
+          ? { ...p, vertices: [] }
+          : p
+      ));
+      setPolygons(hidden);
+      onSavePolygons?.(hidden);
+      if (editingPolyId === polyId) setEditingPolyId(null);
+      if (selectedPolygonId === polyId) setSelectedPolygonId(null);
+      toast.success('Espacio ocultado en esta sección');
+      return;
+    }
+
     const updated = polygons.filter(p => p.id !== polyId);
     setPolygons(updated);
     onSavePolygons?.(updated);
+    if (editingPolyId === polyId) setEditingPolyId(null);
+    if (selectedPolygonId === polyId) setSelectedPolygonId(null);
   };
 
   const startEditPolygon = (poly: SectionPolygon) => {

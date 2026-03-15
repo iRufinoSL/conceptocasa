@@ -519,6 +519,62 @@ export function WallObjectsPanel({
                             : 'Clic para asignar patrón visual'}
                         </p>
                       )}
+
+                      {isAutoSuperficie && (
+                        <div className="mt-1" onClick={e => e.stopPropagation()}>
+                          {editingSuperficieMetrics === obj.id ? (
+                            <div className="space-y-1.5 border rounded p-1.5 bg-background">
+                              <div className="flex items-center gap-1 flex-wrap">
+                                <Label className="text-[9px]">m² manual</Label>
+                                <Input
+                                  className="h-6 w-24 text-[10px]"
+                                  type="number"
+                                  step="0.01"
+                                  value={manualSurfaceM2}
+                                  onChange={e => setManualSurfaceM2(e.target.value)}
+                                  placeholder="Ej: 0"
+                                />
+                                <Label className="text-[9px]">m³</Label>
+                                <Input
+                                  className="h-6 w-24 text-[10px]"
+                                  type="number"
+                                  step="0.001"
+                                  value={manualVolumeM3}
+                                  onChange={e => setManualVolumeM3(e.target.value)}
+                                  placeholder="Opcional"
+                                />
+                              </div>
+                              <div className="flex gap-1">
+                                <Button
+                                  size="sm"
+                                  className="h-6 text-[10px] px-2"
+                                  disabled={savingSuperficieMetrics}
+                                  onClick={() => void saveSuperficieMetrics(obj)}
+                                >
+                                  {savingSuperficieMetrics ? 'Guardando...' : 'Guardar medida'}
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 text-[10px] px-2"
+                                  onClick={() => setEditingSuperficieMetrics(null)}
+                                >
+                                  Cancelar
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-6 text-[10px] px-2"
+                              onClick={() => openSuperficieMetricsEditor(obj)}
+                            >
+                              Editar medida manual
+                            </Button>
+                          )}
+                        </div>
+                      )}
                     </div>
                     {!isAutoSuperficie && (
                     <Button

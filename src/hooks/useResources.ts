@@ -57,6 +57,9 @@ function mapDBToResource(dbResource: DBResource, relations: DBRelation[], files:
     tradeId: dbResource.trade_id,
     trade: dbResource.trade || null,
     vatIncludedPercent: dbResource.vat_included_percent,
+    widthMm: (dbResource as any).width_mm ?? null,
+    heightMm: (dbResource as any).height_mm ?? null,
+    depthMm: (dbResource as any).depth_mm ?? null,
     relatedResources: relations
       .filter(r => r.resource_id === dbResource.id)
       .map(r => ({ resourceId: r.related_resource_id, quantity: Number(r.quantity) || 1 })),

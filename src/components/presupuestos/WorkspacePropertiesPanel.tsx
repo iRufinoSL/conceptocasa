@@ -1610,6 +1610,32 @@ export function WorkspacePropertiesPanel({
                   <label className="text-[9px] text-muted-foreground">Dist. pared (mm)</label>
                   <Input className="h-6 text-[10px] font-mono" type="number" value={objDistWall} onChange={e => setObjDistWall(e.target.value)} />
                 </div>
+                {/* XYZ Coordinates */}
+                <div className="col-span-2 border-t border-border/30 pt-1 mt-0.5">
+                  <label className="text-[9px] text-muted-foreground font-semibold">Coordenadas XYZ (esquina inf. izq.)</label>
+                </div>
+                <div>
+                  <label className="text-[9px] text-muted-foreground">X (mm)</label>
+                  <Input className="h-6 text-[10px] font-mono" type="number" value={objCoordX} onChange={e => setObjCoordX(e.target.value)} placeholder="—" />
+                </div>
+                <div>
+                  <label className="text-[9px] text-muted-foreground">Y (mm)</label>
+                  <Input className="h-6 text-[10px] font-mono" type="number" value={objCoordY} onChange={e => setObjCoordY(e.target.value)} placeholder="—" />
+                </div>
+                <div>
+                  <label className="text-[9px] text-muted-foreground">Z (mm)</label>
+                  <Input className="h-6 text-[10px] font-mono" type="number" value={objCoordZ} onChange={e => setObjCoordZ(e.target.value)} placeholder="—" />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="checkbox"
+                    id="shownInSection"
+                    checked={objShownInSection}
+                    onChange={e => setObjShownInSection(e.target.checked)}
+                    className="h-3.5 w-3.5 rounded border-border"
+                  />
+                  <label htmlFor="shownInSection" className="text-[9px] text-muted-foreground cursor-pointer">¿Representado en sección?</label>
+                </div>
                 <div className="col-span-2">
                   <label className="text-[9px] text-muted-foreground">Descripción</label>
                   <Input className="h-6 text-[10px]" value={objDescription} onChange={e => setObjDescription(e.target.value)} />

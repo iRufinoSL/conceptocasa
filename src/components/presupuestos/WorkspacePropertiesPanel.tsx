@@ -268,29 +268,49 @@ export function WorkspacePropertiesPanel({
 
       let nextWalls = (wallsRes.data || []) as WallRecord[];
 
-      // Sync room flags from wall records if they disagree
+      // Sync floor/ceiling wall visibility from room flags (room flags are source of truth)
       if (nextWalls.length > 0) {
         const floorWall = nextWalls.find(w => w.wall_index === -1);
         const ceilingWall = nextWalls.find(w => w.wall_index === -2);
-        const updates: Record<string, boolean> = {};
+        const wallUpdates: Array<{ id: string; wall_type: string }> = [];
 
         if (floorWall) {
-          const wallSaysInvisible = isInvisibleWallType(floorWall.wall_type);
-          if (roomData.has_floor === wallSaysInvisible) {
-            updates.has_floor = !wallSaysInvisible;
+          const floorShouldBeInvisible = roomData.has_floor === false;
+          const floorIsInvisible = isInvisibleWallType(floorWall.wall_type);
+          if (floorShouldBeInvisible !== floorIsInvisible) {
+            wallUpdates.push({
+              id: floorWall.id,
+              wall_type: floorShouldBeInvisible ? 'invisible' : 'suelo_basico',
+            });
           }
         }
 
         if (ceilingWall) {
-          const wallSaysInvisible = isInvisibleWallType(ceilingWall.wall_type);
-          if (roomData.has_ceiling === wallSaysInvisible) {
-            updates.has_ceiling = !wallSaysInvisible;
+          const ceilingShouldBeInvisible = roomData.has_ceiling === false;
+          const ceilingIsInvisible = isInvisibleWallType(ceilingWall.wall_type);
+          if (ceilingShouldBeInvisible !== ceilingIsInvisible) {
+            wallUpdates.push({
+              id: ceilingWall.id,
+              wall_type: ceilingShouldBeInvisible ? 'invisible' : 'techo_basico',
+            });
           }
         }
 
-        if (Object.keys(updates).length > 0) {
-          await supabase.from('budget_floor_plan_rooms').update(updates).eq('id', workspaceId);
-          Object.assign(roomData, updates);
+        if (wallUpdates.length > 0) {
+          await Promise.all(
+            wallUpdates.map(update =>
+              supabase
+                .from('budget_floor_plan_walls')
+                .update({ wall_type: update.wall_type })
+                .eq('id', update.id),
+            ),
+          );
+
+          const updatedWallTypeById = new Map(wallUpdates.map(update => [update.id, update.wall_type]));
+          nextWalls = nextWalls.map(wall => {
+            const nextType = updatedWallTypeById.get(wall.id);
+            return nextType ? { ...wall, wall_type: nextType } : wall;
+          });
         }
       }
 

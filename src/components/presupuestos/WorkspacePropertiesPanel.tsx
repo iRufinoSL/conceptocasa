@@ -631,15 +631,51 @@ export function WorkspacePropertiesPanel({
     const wallIndex = field === 'has_floor' ? -1 : -2;
     const newWallType = boolVal ? (field === 'has_floor' ? 'suelo_basico' : 'techo_basico') : 'invisible';
     const existingWall = walls.find(w => w.wall_index === wallIndex);
+    let targetWall: WallRecord | null = null;
+
     if (existingWall) {
       await supabase.from('budget_floor_plan_walls').update({ wall_type: newWallType }).eq('id', existingWall.id);
+      targetWall = { ...existingWall, wall_type: newWallType };
       setWalls(prev => prev.map(w => w.id === existingWall.id ? { ...w, wall_type: newWallType } : w));
     } else {
       // Create the wall record if it doesn't exist
       const { data } = await supabase.from('budget_floor_plan_walls')
         .insert({ room_id: workspaceId, wall_index: wallIndex, wall_type: newWallType })
         .select().single();
-      if (data) setWalls(prev => [...prev, data as WallRecord]);
+      if (data) {
+        targetWall = data as WallRecord;
+        setWalls(prev => [...prev, targetWall!]);
+      }
+    }
+
+    const nextRoomForMetrics = room ? { ...room, ...updatePayload } : null;
+    if (targetWall && nextRoomForMetrics) {
+      const { surface_m2, volume_m3 } = getFaceMetrics(nextRoomForMetrics, wallIndex, cellSizeM, newWallType);
+      const faceLabel = wallIndex === -1 ? 'Suelo' : 'Techo';
+      const metricLabel = surface_m2 != null ? `${surface_m2} m²` : volume_m3 != null ? `${volume_m3} m³` : null;
+      const description = `${workspaceName} / ${faceLabel}${metricLabel ? ` — ${metricLabel}` : ''}`;
+      const existingSurface = wallObjects.find(o => o.wall_id === targetWall!.id && o.layer_order === 0);
+
+      if (existingSurface) {
+        const { error } = await supabase
+          .from('budget_wall_objects')
+          .update({
+            name: 'Superficie',
+            description,
+            object_type: 'material',
+            is_core: false,
+            layer_order: 0,
+            surface_m2,
+            volume_m3,
+          })
+          .eq('id', existingSurface.id);
+
+        if (!error) {
+          setWallObjects(prev => prev.map(o => o.id === existingSurface.id
+            ? { ...o, description, surface_m2, volume_m3 }
+            : o));
+        }
+      }
     }
 
     toast.success('Actualizado');

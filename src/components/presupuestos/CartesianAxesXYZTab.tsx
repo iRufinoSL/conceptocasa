@@ -576,6 +576,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     await invalidateSectionQueries();
   };
 
+  const handleDeleteAllSections = async () => {
     if (!isAdmin || !floorPlan?.id) return;
 
     const confirmed = window.confirm('Se eliminarán todas las secciones y todos los espacios para dejar el sistema en blanco. ¿Continuar?');

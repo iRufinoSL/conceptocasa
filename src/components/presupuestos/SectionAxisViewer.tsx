@@ -270,16 +270,36 @@ export function SectionAxisViewer({
   const [openingsMap, setOpeningsMap] = useState<Record<string, { wallIndex: number; openings: OpeningData[] }>>({});
   const [openingsVersion, setOpeningsVersion] = useState(0);
 
+  // ── Section objects (shown_in_section=true) ──
+  interface SectionObjectData {
+    id: string;
+    wall_id: string;
+    room_id: string;
+    name: string;
+    width_mm: number;
+    height_mm: number;
+    position_x: number;
+    sill_height: number;
+    object_type: string;
+    coord_x: number | null;
+    coord_y: number | null;
+    coord_z: number | null;
+  }
+  const [sectionObjects, setSectionObjects] = useState<SectionObjectData[]>([]);
+  const [draggingObjectId, setDraggingObjectId] = useState<string | null>(null);
+  const [dragStart, setDragStart] = useState<{ x: number; y: number; posX: number; sill: number } | null>(null);
+
   const loadOpenings = useCallback(async () => {
     if (polygons.length === 0) return;
     const polyIds = polygons.map(p => p.id);
     const { data: walls } = await supabase.from('budget_floor_plan_walls').select('id, room_id, wall_index').in('room_id', polyIds);
-    if (!walls || walls.length === 0) { setOpeningsMap({}); return; }
+    if (!walls || walls.length === 0) { setOpeningsMap({}); setSectionObjects([]); return; }
     const wallIds = walls.map(w => w.id);
     // Read from both legacy openings table AND wall_objects with type 'hueco'
-    const [legacyRes, huecoRes] = await Promise.all([
+    const [legacyRes, huecoRes, sectionObjRes] = await Promise.all([
       supabase.from('budget_floor_plan_openings').select('*').in('wall_id', wallIds),
       supabase.from('budget_wall_objects').select('*').in('wall_id', wallIds).eq('object_type', 'hueco'),
+      supabase.from('budget_wall_objects').select('*').in('wall_id', wallIds).eq('shown_in_section', true),
     ]);
     // Normalize hueco objects to OpeningData format
     const huecoOpenings: OpeningData[] = (huecoRes.data || []).map((h: any) => ({
@@ -305,6 +325,26 @@ export function SectionAxisViewer({
       }
     }
     setOpeningsMap(map);
+
+    // Build section objects array with room_id resolved
+    const wallToRoom = new Map(walls.map(w => [w.id, w.room_id]));
+    const secObjs: SectionObjectData[] = (sectionObjRes.data || [])
+      .filter((o: any) => o.object_type !== 'hueco') // huecos already rendered
+      .map((o: any) => ({
+        id: o.id,
+        wall_id: o.wall_id,
+        room_id: wallToRoom.get(o.wall_id) || '',
+        name: o.name || '',
+        width_mm: o.width_mm || 200,
+        height_mm: o.height_mm || 200,
+        position_x: o.position_x || 0,
+        sill_height: o.sill_height || 0,
+        object_type: o.object_type || 'material',
+        coord_x: o.coord_x,
+        coord_y: o.coord_y,
+        coord_z: o.coord_z,
+      }));
+    setSectionObjects(secObjs);
   }, [polygons]);
 
   useEffect(() => { loadOpenings(); }, [loadOpenings, openingsVersion]);

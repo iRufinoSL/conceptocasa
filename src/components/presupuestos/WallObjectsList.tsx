@@ -169,12 +169,17 @@ const buildAutoFacesForWorkspace = (room: WorkspaceAutoFaceSource, cellSizeM: nu
     : (room.length || 0) * (room.width || 0);
   const floorArea = Math.round(floorAreaRaw * 100) / 100;
 
-  const faces: AutoFace[] = [];
-
-  // Only add floor face if workspace has floor
-  if (room.has_floor !== false) {
-    faces.push({ workspace: room.name, roomId: room.id, faceName: 'Suelo', m2: floorArea, m3: null, sortKey: 0, wallIndex: -1 });
-  }
+  const faces: AutoFace[] = [
+    {
+      workspace: room.name,
+      roomId: room.id,
+      faceName: 'Suelo',
+      m2: room.has_floor === false ? 0 : floorArea,
+      m3: null,
+      sortKey: 0,
+      wallIndex: -1,
+    },
+  ];
 
   const edgeCount = poly && poly.length >= 3 ? poly.length : 4;
 
@@ -194,10 +199,15 @@ const buildAutoFacesForWorkspace = (room: WorkspaceAutoFaceSource, cellSizeM: nu
     });
   }
 
-  // Only add ceiling face if workspace has ceiling
-  if (room.has_ceiling !== false) {
-    faces.push({ workspace: room.name, roomId: room.id, faceName: 'Techo', m2: floorArea, m3: null, sortKey: edgeCount + 1, wallIndex: -2 });
-  }
+  faces.push({
+    workspace: room.name,
+    roomId: room.id,
+    faceName: 'Techo',
+    m2: room.has_ceiling === false ? 0 : floorArea,
+    m3: null,
+    sortKey: edgeCount + 1,
+    wallIndex: -2,
+  });
 
   faces.push(
     { workspace: room.name, roomId: room.id, faceName: 'Espacio', m2: null, m3: Math.round(floorAreaRaw * heightM * 1000) / 1000, sortKey: edgeCount + 2, wallIndex: 0 },

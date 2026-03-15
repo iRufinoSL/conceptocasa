@@ -259,6 +259,49 @@ export function ResourceForm({
             </Select>
           </div>
 
+          {/* Dimensions Section */}
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="widthMm">Ancho (mm)</Label>
+              <InputAddon addon="mm">
+                <NumericInput
+                  id="widthMm"
+                  value={formData.widthMm ?? 0}
+                  onChange={(value) => setFormData({ ...formData, widthMm: value || null })}
+                  placeholder="0"
+                  decimals={0}
+                />
+              </InputAddon>
+              <p className="text-xs text-muted-foreground">Horizontal</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="heightMm">Alto (mm)</Label>
+              <InputAddon addon="mm">
+                <NumericInput
+                  id="heightMm"
+                  value={formData.heightMm ?? 0}
+                  onChange={(value) => setFormData({ ...formData, heightMm: value || null })}
+                  placeholder="0"
+                  decimals={0}
+                />
+              </InputAddon>
+              <p className="text-xs text-muted-foreground">Vertical</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="depthMm">Profundidad (mm)</Label>
+              <InputAddon addon="mm">
+                <NumericInput
+                  id="depthMm"
+                  value={formData.depthMm ?? 0}
+                  onChange={(value) => setFormData({ ...formData, depthMm: value || null })}
+                  placeholder="0"
+                  decimals={0}
+                />
+              </InputAddon>
+              <p className="text-xs text-muted-foreground">Espesor</p>
+            </div>
+          </div>
+
           {/* Trade/Sector Section */}
           <div className="space-y-2">
             <Label>Oficio/Sector</Label>

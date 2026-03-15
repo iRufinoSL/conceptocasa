@@ -2367,6 +2367,8 @@ export function SectionAxisViewer({
           onOpeningsChange={() => setOpeningsVersion(v => v + 1)}
           localFaceTypes={polygons.find(p => p.id === facePanel.polyId)?.faceTypes || {}}
           onLocalFaceTypeChange={handleLocalFaceTypeChange}
+          initialEditObjectId={facePanel.initialEditObjectId}
+          initialTab={facePanel.initialTab}
         />
       )}
     </div>

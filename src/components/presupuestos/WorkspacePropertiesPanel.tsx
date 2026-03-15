@@ -205,19 +205,21 @@ export function WorkspacePropertiesPanel({
     }
 
     if (wallIndex === -1) {
-      // Floor: return 0 if workspace has no floor
+      // Floor: return 0 if workspace has no floor or wall is invisible
       const hasFloor = roomData?.has_floor !== false;
+      const floorVisible = wallType !== 'invisible';
       return {
-        surface_m2: hasFloor ? floorArea : 0,
+        surface_m2: hasFloor && floorVisible ? floorArea : 0,
         volume_m3: null as number | null,
       };
     }
 
     if (wallIndex === -2) {
-      // Ceiling: return 0 if workspace has no ceiling
+      // Ceiling: return 0 if workspace has no ceiling or wall is invisible
       const hasCeiling = roomData?.has_ceiling !== false;
+      const ceilingVisible = wallType !== 'invisible';
       return {
-        surface_m2: hasCeiling ? floorArea : 0,
+        surface_m2: hasCeiling && ceilingVisible ? floorArea : 0,
         volume_m3: null as number | null,
       };
     }

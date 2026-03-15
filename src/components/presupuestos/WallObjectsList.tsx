@@ -134,6 +134,68 @@ function edgeLength(a: PolygonVertex, b: PolygonVertex): number {
   return Math.sqrt((b.x - a.x) ** 2 + (b.y - a.y) ** 2);
 }
 
+function normalizeWorkspaceKey(value: string | null | undefined): string {
+  if (!value) return '';
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[._-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function extractVerticalWorkspaceRefs(customCorners: unknown): {
+  hasRefs: boolean;
+  validIds: Set<string>;
+  validNames: Set<string>;
+} {
+  const validIds = new Set<string>();
+  const validNames = new Set<string>();
+
+  try {
+    const parsed = typeof customCorners === 'string' ? JSON.parse(customCorners) : customCorners;
+    const sections = Array.isArray((parsed as any)?.customSections) ? (parsed as any).customSections : [];
+
+    for (const section of sections) {
+      if (section?.sectionType !== 'vertical') continue;
+      const polygons = Array.isArray(section?.polygons) ? section.polygons : [];
+      for (const polygon of polygons) {
+        const vertices = Array.isArray(polygon?.vertices) ? polygon.vertices : [];
+        if (vertices.length < 3) continue;
+
+        if (typeof polygon?.id === 'string' && polygon.id) {
+          validIds.add(polygon.id);
+        }
+
+        const normalizedName = normalizeWorkspaceKey(polygon?.name);
+        if (normalizedName) {
+          validNames.add(normalizedName);
+        }
+      }
+    }
+  } catch {
+    // noop
+  }
+
+  return {
+    hasRefs: validIds.size > 0 || validNames.size > 0,
+    validIds,
+    validNames,
+  };
+}
+
+function isRoomEligibleByVerticalRefs(
+  room: Pick<WorkspaceAutoFaceSource, 'id' | 'name' | 'floor_polygon'>,
+  refs: { hasRefs: boolean; validIds: Set<string>; validNames: Set<string> },
+): boolean {
+  if (!room.floor_polygon || !Array.isArray(room.floor_polygon) || room.floor_polygon.length < 3) return false;
+  if (!refs.hasRefs) return true;
+  if (refs.validIds.has(room.id)) return true;
+  const normalizedName = normalizeWorkspaceKey(room.name);
+  return !!(normalizedName && refs.validNames.has(normalizedName));
+}
+
 interface AutoFace {
   workspace: string;
   roomId: string;

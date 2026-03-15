@@ -647,14 +647,25 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     queryClient.invalidateQueries({ queryKey: ['floor-plan-for-workspaces', budgetId] });
   };
 
+  // Helper: read FRESH custom_corners from DB to avoid stale-state race conditions
+  const readFreshCustomCorners = async (): Promise<Record<string, unknown>> => {
+    if (!floorPlan?.id) return {};
+    const { data } = await supabase
+      .from('budget_floor_plans')
+      .select('custom_corners')
+      .eq('id', floorPlan.id)
+      .single();
+    if (!data) return {};
+    try {
+      return typeof data.custom_corners === 'string'
+        ? JSON.parse(data.custom_corners)
+        : (data.custom_corners || {}) as Record<string, unknown>;
+    } catch { return {}; }
+  };
+
   const handleSavePolygons = async (sectionId: string, polygons: import('./CustomSectionManager').SectionPolygon[]) => {
     if (!floorPlan?.id) return;
-    let parsedCorners: Record<string, unknown> = {};
-    try {
-      parsedCorners = typeof floorPlan.custom_corners === 'string'
-        ? JSON.parse(floorPlan.custom_corners)
-        : (floorPlan.custom_corners || {});
-    } catch { parsedCorners = {}; }
+    const parsedCorners = await readFreshCustomCorners();
 
     const sections = Array.isArray(parsedCorners.customSections)
       ? (parsedCorners.customSections as CustomSection[])

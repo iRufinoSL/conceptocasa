@@ -166,7 +166,7 @@ const SistemaConstructivo = () => {
                 Sistema propio
               </div>
               <h2 className="font-display text-3xl sm:text-4xl font-bold text-foreground mb-4">
-                Sistema MA'S EC
+                Sistema MA'S ETC
               </h2>
               <p className="text-xl text-primary font-display italic">
                 Mortero Armado, Aligerado y Aislante

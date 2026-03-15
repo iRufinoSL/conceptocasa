@@ -1659,7 +1659,58 @@ export function SectionAxisViewer({
     setDragStart(null);
   }, [draggingObjectId, sectionObjects]);
 
-  const sectionObjectElements = useMemo(() => {
+  // ── Keyboard arrow movement for selected object (half-scale increments) ──
+  useEffect(() => {
+    if (!selectedObjectId || !scale) return;
+    const halfH = Math.round(scale.hScale / 2); // half node in mm horizontally
+    const halfV = Math.round(scale.vScale / 2); // half node in mm vertically
+
+    const handler = async (e: KeyboardEvent) => {
+      if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      setSectionObjects(prev => prev.map(o => {
+        if (o.id !== selectedObjectId) return o;
+        let { position_x, sill_height } = o;
+        switch (e.key) {
+          case 'ArrowRight': position_x = position_x + halfH; break;
+          case 'ArrowLeft': position_x = Math.max(0, position_x - halfH); break;
+          case 'ArrowUp': sill_height = sill_height + halfV; break;
+          case 'ArrowDown': sill_height = Math.max(0, sill_height - halfV); break;
+        }
+        return { ...o, position_x, sill_height };
+      }));
+    };
+
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [selectedObjectId, scale]);
+
+  // Persist after keyboard movement (debounced)
+  const keyMoveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!selectedObjectId) return;
+    const obj = sectionObjects.find(o => o.id === selectedObjectId);
+    if (!obj) return;
+    if (keyMoveTimerRef.current) clearTimeout(keyMoveTimerRef.current);
+    keyMoveTimerRef.current = setTimeout(async () => {
+      await supabase.from('budget_wall_objects').update({
+        position_x: obj.position_x,
+        sill_height: obj.sill_height,
+      }).eq('id', selectedObjectId);
+    }, 300);
+  }, [sectionObjects, selectedObjectId]);
+
+  // Deselect object when clicking on empty area
+  const handleSvgClick = useCallback((e: React.MouseEvent) => {
+    // Only deselect if clicking directly on the SVG background
+    if ((e.target as Element).tagName === 'svg' || (e.target as Element).tagName === 'rect') {
+      setSelectedObjectId(null);
+    }
+  }, []);
+
+
     if (!gridLayout || !scale || sectionObjects.length === 0) return null;
     const { originX, originY, cellPxW, cellPxH } = gridLayout;
     const elements: JSX.Element[] = [];

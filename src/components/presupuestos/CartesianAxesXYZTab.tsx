@@ -1102,8 +1102,6 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       wallRoomId?: string,
     ) => {
       if (!poly || poly.length < 3) return;
-      // Skip rooms already saved in another section of the same type
-      if (idsClaimedByOtherSections.has(key)) return;
       const cutAxis = section.sectionType === 'longitudinal' ? 'y' : 'x';
       const axisVal = section.axisValue;
 

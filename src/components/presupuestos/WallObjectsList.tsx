@@ -734,7 +734,7 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
     },
   });
 
-  const [placedView, setPlacedView] = useState<'alpha' | 'workspace' | 'type'>('alpha');
+  const [placedView, setPlacedView] = useState<'alpha' | 'workspace'>('alpha');
   const [resourceOpenGroups, setResourceOpenGroups] = useState<Set<string>>(new Set());
 
   const toggleResourceGroup = (name: string) => {
@@ -971,27 +971,7 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
     }
   }, [budgetId, queryClient]);
 
-  useEffect(() => {
-    autoSyncSignatureRef.current = '';
-  }, [budgetId]);
-
-  useEffect(() => {
-    if (mainTab !== 'espacios' || autoFaces.length === 0) return;
-
-    const signature = autoFaces
-      .map(face => `${face.roomId}:${face.wallIndex}:${face.m2 ?? ''}:${face.m3 ?? ''}`)
-      .sort()
-      .join('|');
-
-    if (autoSyncSignatureRef.current === signature) return;
-
-    (async () => {
-      const syncResult = await syncSuperficies({ silent: true });
-      if (syncResult) {
-        autoSyncSignatureRef.current = signature;
-      }
-    })();
-  }, [autoFaces, mainTab, syncSuperficies]);
+  // Auto-sync removed: surfaces are now created only manually via "Generar todas las superficies"
 
   const ensureSuperficieObject = async (wallId: string, face: AutoFace) => {
     const surfaceM2 = face.m2 ?? null;
@@ -1075,14 +1055,12 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
     name === 'Espacio' ? '🔷' : name === 'Suelo' ? '⬛' : name === 'Techo' ? '⬜' : '🧱';
 
   const placedColumns: ColDef[] = [
-    { key: 'order', header: '#', defaultWidth: 36, minWidth: 30 },
-    { key: 'name', header: 'Objeto', defaultWidth: 150, minWidth: 80 },
-    { key: 'face', header: 'Cara', defaultWidth: 80, minWidth: 50 },
-    { key: 'workspace', header: 'Espacio', defaultWidth: 110, minWidth: 60 },
+    { key: 'name', header: 'Objeto', defaultWidth: 180, minWidth: 100 },
+    { key: 'workspace', header: 'Ubicación', defaultWidth: 120, minWidth: 60 },
+    { key: 'm2', header: 'm²', defaultWidth: 70, minWidth: 45 },
+    { key: 'm3', header: 'm³', defaultWidth: 70, minWidth: 45 },
     { key: 'type', header: 'Tipo', defaultWidth: 80, minWidth: 50 },
     { key: 'thickness', header: 'Espesor', defaultWidth: 65, minWidth: 45 },
-    { key: 'm2', header: 'm²', defaultWidth: 65, minWidth: 45 },
-    { key: 'm3', header: 'm³', defaultWidth: 65, minWidth: 45 },
   ];
 
   const modelColumns: ColDef[] = [
@@ -1111,14 +1089,12 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
   const placedRow = (o: any) => ({
     face: { workspace: o.workspace, roomId: '', faceName: o.faceName, m2: o.surface_m2, m3: o.volume_m3, sortKey: 0, wallIndex: 0 } as AutoFace,
     cells: {
-      order: String(o.layer_order),
-      name: o.layer_order === 0 ? `⭐ ${o.name}` : o.name,
-      face: o.faceName,
+      name: o.layer_order === 0 ? `Superficie=${o.faceName}` : o.name,
       workspace: o.workspace,
       type: o.object_type || '',
       thickness: o.thickness_mm ? `${o.thickness_mm} mm` : '',
-      m2: o.surface_m2 != null ? o.surface_m2.toFixed(2) : '',
-      m3: o.volume_m3 != null ? o.volume_m3.toFixed(3) : '',
+      m2: o.surface_m2 != null ? o.surface_m2.toFixed(2).replace('.', ',') : '',
+      m3: o.volume_m3 != null ? o.volume_m3.toFixed(3).replace('.', ',') : '',
     },
   });
 
@@ -1282,16 +1258,13 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
             <Button variant={placedView === 'workspace' ? 'default' : 'outline'} size="sm" className="h-7 text-xs gap-1" onClick={() => setPlacedView('workspace')}>
               <Layers className="h-3 w-3" /> Por espacio
             </Button>
-            <Button variant={placedView === 'type' ? 'default' : 'outline'} size="sm" className="h-7 text-xs gap-1" onClick={() => setPlacedView('type')}>
-              <Package className="h-3 w-3" /> Por tipo
-            </Button>
           </div>
 
           {filteredObjects.length === 0 ? (
             <p className="text-sm text-muted-foreground py-4 text-center">No hay objetos colocados en espacios</p>
           ) : placedView === 'alpha' ? (
             <ResizableTable columns={placedColumns} rows={objectsAlpha.map(placedRow)} onRowClick={() => {}} />
-          ) : placedView === 'workspace' ? (
+          ) : (
             <div className="space-y-1.5">
               {objectsByWorkspace.map(group => {
                 const isOpen = resourceOpenGroups.has(`ws-${group.name}`);
@@ -1305,33 +1278,6 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
                     <CollapsibleContent>
                       <ResizableTable
                         columns={placedColumns.filter(c => c.key !== 'workspace')}
-                        rows={group.objects.map((o: any) => ({
-                          ...placedRow(o),
-                          cells: { ...placedRow(o).cells },
-                        }))}
-                        onRowClick={() => {}}
-                        className="ml-6 mt-1"
-                      />
-                    </CollapsibleContent>
-                  </Collapsible>
-                );
-              })}
-            </div>
-          ) : (
-            /* By type */
-            <div className="space-y-1.5">
-              {objectsByType.map(group => {
-                const isOpen = resourceOpenGroups.has(`tp-${group.name}`);
-                return (
-                  <Collapsible key={group.name} open={isOpen} onOpenChange={() => toggleResourceGroup(`tp-${group.name}`)}>
-                    <CollapsibleTrigger className="flex items-center gap-2 w-full rounded-md px-2 py-1.5 bg-accent/30 hover:bg-accent/50 transition-colors text-left">
-                      <ChevronRight className={cn('h-4 w-4 text-muted-foreground transition-transform duration-200', isOpen && 'rotate-90')} />
-                      <span className="text-sm font-semibold flex-1">{group.name}</span>
-                      <Badge variant="outline" className="text-[10px] h-5">{group.objects.length}</Badge>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <ResizableTable
-                        columns={placedColumns.filter(c => c.key !== 'type')}
                         rows={group.objects.map((o: any) => ({
                           ...placedRow(o),
                           cells: { ...placedRow(o).cells },

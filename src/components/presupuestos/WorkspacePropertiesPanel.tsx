@@ -11,6 +11,7 @@ import { VISUAL_PATTERNS, PATTERN_CATEGORIES, getPatternById, patternPreviewData
 const WALL_TYPES = [
   { value: 'exterior', label: 'Exterior' },
   { value: 'interior', label: 'Interior' },
+  { value: 'tejado', label: 'Tejado' },
   { value: 'exterior_invisible', label: 'Ext. invisible' },
   { value: 'exterior_compartida', label: 'Ext. compartida' },
   { value: 'interior_compartida', label: 'Int. compartida' },
@@ -171,10 +172,11 @@ export function WorkspacePropertiesPanel({
   const [manualVolumeValue, setManualVolumeValue] = useState('');
   const [savingManualSuperficie, setSavingManualSuperficie] = useState(false);
 
-  const getFaceLabel = useCallback((wallIndex: number) => {
+  const getFaceLabel = useCallback((wallIndex: number, wallType?: string) => {
     if (wallIndex === -1) return 'Suelo';
     if (wallIndex === -2) return 'Techo';
     if (wallIndex === 0) return 'Espacio';
+    if (wallType === 'tejado') return `T${wallIndex}`;
     return `Pared ${wallIndex}`;
   }, []);
 
@@ -1014,7 +1016,9 @@ export function WorkspacePropertiesPanel({
           ? 'Techo'
           : faceWall.wall_index === 0
             ? 'Espacio'
-            : `P${faceWall.wall_index}`;
+            : faceWall.wall_type === 'tejado'
+              ? `T${faceWall.wall_index}`
+              : `P${faceWall.wall_index}`;
     const baseDescription = stripMetricFromDescription(sup.description, `${workspaceName} / ${faceLabel}`);
     const metricLabel = nextSurface != null
       ? `${nextSurface} m²`
@@ -1084,12 +1088,17 @@ export function WorkspacePropertiesPanel({
     if (wall.wall_index === -1) return 'Suelo';
     if (wall.wall_index === -2) return 'Techo';
     if (wall.wall_index === 0) return 'Espacio';
+    if (wall.wall_type === 'tejado') return `T${wall.wall_index}`;
     return `P${wall.wall_index}`;
   };
 
   // Face options for object target
   const faceOptions = [
-    ...Array.from({ length: edgeCount }).map((_, i) => ({ value: `wall-${i}`, label: `P${i + 1}` })),
+    ...Array.from({ length: edgeCount }).map((_, i) => {
+      const w = walls.find(ww => ww.wall_index === i + 1);
+      const prefix = w?.wall_type === 'tejado' ? 'T' : 'P';
+      return { value: `wall-${i}`, label: `${prefix}${i + 1}` };
+    }),
     { value: 'floor', label: 'Suelo' },
     { value: 'ceiling', label: 'Techo' },
     { value: 'space', label: 'Espacio' },
@@ -1200,8 +1209,9 @@ export function WorkspacePropertiesPanel({
                   const wallObjs = getObjectsForWall(i + 1);
                   const wallHuecos = wallObjs.filter(o => o.object_type === 'hueco');
 
-                  // Determine label: T (techo) / S (suelo) for cross-sections
-                  let wallLabel = `P${i + 1}`;
+                  // Determine label: T (techo/tejado) / S (suelo) for cross-sections
+                  const wallRec = walls.find(ww => ww.wall_index === i + 1);
+                  let wallLabel = wallRec?.wall_type === 'tejado' ? `T${i + 1}` : `P${i + 1}`;
                   if (isCrossSection && diagramVerts.length >= 3) {
                     const eMinY = Math.min(diagramVerts[i].y, diagramVerts[j].y);
                     const eMaxY = Math.max(diagramVerts[i].y, diagramVerts[j].y);
@@ -1269,7 +1279,8 @@ export function WorkspacePropertiesPanel({
             const wallHuecos = wallObjs.filter(o => o.object_type === 'hueco');
             // Determine wall label: T/S for cross-sections
             const isCross = sectionType === 'transversal' || sectionType === 'longitudinal';
-            let wallLabel = `P${i + 1}`;
+            const wallRecFace = walls.find(ww => ww.wall_index === i + 1);
+            let wallLabel = wallRecFace?.wall_type === 'tejado' ? `T${i + 1}` : `P${i + 1}`;
             const diagramVerts = verticesProp || poly;
             if (isCross && diagramVerts && diagramVerts.length >= 3) {
               const j = (i + 1) % diagramVerts.length;
@@ -1280,7 +1291,7 @@ export function WorkspacePropertiesPanel({
               const eMaxY = Math.max(diagramVerts[i].y, diagramVerts[j].y);
               if (rangeY > 0.01) {
                 if (Math.abs(eMinY - minY) < rangeY * 0.15 && Math.abs(eMaxY - minY) < rangeY * 0.15) wallLabel = 'S (Suelo)';
-                else if (Math.abs(eMinY - maxY) < rangeY * 0.15 && Math.abs(eMaxY - maxY) < rangeY * 0.15) wallLabel = 'T (Techo)';
+                else if (Math.abs(eMinY - maxY) < rangeY * 0.15 && Math.abs(eMaxY - maxY) < rangeY * 0.15) wallLabel = wallRecFace?.wall_type === 'tejado' ? `T${i + 1} (Tejado)` : 'T (Techo)';
               }
             }
             return (

@@ -44,6 +44,7 @@ interface Workspace3DListViewProps {
 const FACE_COLORS: Record<string, string> = {
   suelo: '#d4a574',
   techo: '#7ab8e0',
+  tejado: '#c45c5c',
   pared_exterior: '#8bc48b',
   pared_interior: '#e0c87a',
   pared_invisible: '#cccccc',
@@ -55,6 +56,7 @@ const FACE_COLORS: Record<string, string> = {
 
 function getWallColor(wallType?: string): string {
   if (!wallType) return FACE_COLORS.pared_default;
+  if (wallType === 'tejado') return FACE_COLORS.tejado;
   if (wallType.includes('exterior')) return FACE_COLORS.pared_exterior;
   if (wallType.includes('interior')) return FACE_COLORS.pared_interior;
   if (wallType.includes('invisible')) return FACE_COLORS.pared_invisible;
@@ -245,7 +247,8 @@ function MultiPrism({ ws, scaleXY, scaleZ, offsetX, offsetZ, onFaceDoubleClick, 
       );
       const wall = ws.walls.find(w => w.wall_index === i + 1);
       const areaM2 = calcFaceAreaM2(wallVerts);
-      facesList.push({ vertices: wallVerts, color: getWallColor(wall?.wall_type), label: `P${i + 1}\n${ws.name}\n${areaM2.toFixed(2)} m²`, labelPos: wc, faceType: 'pared', faceIndex: i + 1 });
+      const wallPrefix = wall?.wall_type === 'tejado' ? 'T' : 'P';
+      facesList.push({ vertices: wallVerts, color: getWallColor(wall?.wall_type), label: `${wallPrefix}${i + 1}\n${ws.name}\n${areaM2.toFixed(2)} m²`, labelPos: wc, faceType: wall?.wall_type === 'tejado' ? 'tejado' : 'pared', faceIndex: i + 1 });
     }
 
     // Ceiling — only if hasCeiling

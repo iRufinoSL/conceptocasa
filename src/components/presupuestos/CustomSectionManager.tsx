@@ -2503,14 +2503,14 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                 if ((cxSvg - emx) * enx + (cySvg - emy) * eny < 0) { enx = -enx; eny = -eny; }
                 const labelX = emx + enx * 20;
                 const labelY = emy + eny * 20;
-                const bgColor = edgeLabel === 'Suelo' ? 'hsl(30 80% 50% / 0.9)' : edgeLabel === 'Techo' ? 'hsl(210 70% 55% / 0.9)' : 'hsl(var(--muted-foreground) / 0.7)';
+                const bgColor = edgeLabel === 'Suelo' ? 'hsl(30 80% 50% / 0.9)' : edgeLabel === 'Techo' ? 'hsl(210 70% 55% / 0.9)' : edgeLabel.startsWith('T') && edgeLabel !== 'Techo' ? 'hsl(0 60% 55% / 0.9)' : 'hsl(var(--muted-foreground) / 0.7)';
                 return (
                   <g key={`efl-${ei}`} data-pdf-wall-number="">
                     <rect x={labelX - 18} y={labelY - 6} width={36} height={12} rx={3}
                       fill={bgColor} className="cursor-pointer"
                       onClick={(e) => {
                         e.stopPropagation();
-                        const faceTypes = [`P${ei + 1}`, 'Suelo', 'Techo'];
+                        const faceTypes = [`P${ei + 1}`, 'Suelo', 'Techo', `T${ei + 1}`];
                         const currentIdx = faceTypes.indexOf(edgeLabel);
                         const nextFaceLabel = faceTypes[(currentIdx + 1) % faceTypes.length];
                         if (!allSections || !onSectionsChange) return;

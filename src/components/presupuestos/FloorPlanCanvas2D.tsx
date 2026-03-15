@@ -106,6 +106,9 @@ const INT_STROKE_WIDTH = 2.5; // thin for all interior types
 
 function getWallStyle(segType: string): { color: string; width: number; dash?: string } {
   const t = (segType || '').toLowerCase();
+  // Tejado
+  if (t === 'tejado')
+    return { color: '#c45c5c', width: EXT_STROKE_WIDTH };
   // Exterior invisible
   if (t.includes('exterior') && t.includes('invisible'))
     return { color: '#9ca3af', width: EXT_STROKE_WIDTH, dash: '6 3' };

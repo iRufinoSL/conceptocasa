@@ -314,9 +314,11 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
           .not('visual_pattern', 'is', null) : { data: [] },
         supabase
           .from('budget_wall_objects')
-          .select('wall_id, name, object_type, position_x, width_mm')
+          .select('wall_id, name, object_type, position_x, width_mm, height_mm, shown_in_section')
           .in('wall_id', allWallIds)
-          .eq('object_type', 'hueco'),
+          .not('width_mm', 'is', null)
+          .not('height_mm', 'is', null)
+          .or('object_type.eq.hueco,shown_in_section.eq.true'),
       ]);
 
       // Patterns

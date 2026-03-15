@@ -194,8 +194,12 @@ const buildAutoFacesForWorkspace = (room: WorkspaceAutoFaceSource, cellSizeM: nu
     });
   }
 
+  // Only add ceiling face if workspace has ceiling
+  if (room.has_ceiling !== false) {
+    faces.push({ workspace: room.name, roomId: room.id, faceName: 'Techo', m2: floorArea, m3: null, sortKey: edgeCount + 1, wallIndex: -2 });
+  }
+
   faces.push(
-    { workspace: room.name, roomId: room.id, faceName: 'Techo', m2: floorArea, m3: null, sortKey: edgeCount + 1, wallIndex: -2 },
     { workspace: room.name, roomId: room.id, faceName: 'Espacio', m2: null, m3: Math.round(floorAreaRaw * heightM * 1000) / 1000, sortKey: edgeCount + 2, wallIndex: 0 },
   );
 

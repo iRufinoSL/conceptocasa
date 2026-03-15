@@ -268,29 +268,49 @@ export function WorkspacePropertiesPanel({
 
       let nextWalls = (wallsRes.data || []) as WallRecord[];
 
-      // Sync room flags from wall records if they disagree
+      // Sync floor/ceiling wall visibility from room flags (room flags are source of truth)
       if (nextWalls.length > 0) {
         const floorWall = nextWalls.find(w => w.wall_index === -1);
         const ceilingWall = nextWalls.find(w => w.wall_index === -2);
-        const updates: Record<string, boolean> = {};
+        const wallUpdates: Array<{ id: string; wall_type: string }> = [];
 
         if (floorWall) {
-          const wallSaysInvisible = isInvisibleWallType(floorWall.wall_type);
-          if (roomData.has_floor === wallSaysInvisible) {
-            updates.has_floor = !wallSaysInvisible;
+          const floorShouldBeInvisible = roomData.has_floor === false;
+          const floorIsInvisible = isInvisibleWallType(floorWall.wall_type);
+          if (floorShouldBeInvisible !== floorIsInvisible) {
+            wallUpdates.push({
+              id: floorWall.id,
+              wall_type: floorShouldBeInvisible ? 'invisible' : 'suelo_basico',
+            });
           }
         }
 
         if (ceilingWall) {
-          const wallSaysInvisible = isInvisibleWallType(ceilingWall.wall_type);
-          if (roomData.has_ceiling === wallSaysInvisible) {
-            updates.has_ceiling = !wallSaysInvisible;
+          const ceilingShouldBeInvisible = roomData.has_ceiling === false;
+          const ceilingIsInvisible = isInvisibleWallType(ceilingWall.wall_type);
+          if (ceilingShouldBeInvisible !== ceilingIsInvisible) {
+            wallUpdates.push({
+              id: ceilingWall.id,
+              wall_type: ceilingShouldBeInvisible ? 'invisible' : 'techo_basico',
+            });
           }
         }
 
-        if (Object.keys(updates).length > 0) {
-          await supabase.from('budget_floor_plan_rooms').update(updates).eq('id', workspaceId);
-          Object.assign(roomData, updates);
+        if (wallUpdates.length > 0) {
+          await Promise.all(
+            wallUpdates.map(update =>
+              supabase
+                .from('budget_floor_plan_walls')
+                .update({ wall_type: update.wall_type })
+                .eq('id', update.id),
+            ),
+          );
+
+          const updatedWallTypeById = new Map(wallUpdates.map(update => [update.id, update.wall_type]));
+          nextWalls = nextWalls.map(wall => {
+            const nextType = updatedWallTypeById.get(wall.id);
+            return nextType ? { ...wall, wall_type: nextType } : wall;
+          });
         }
       }
 
@@ -365,7 +385,7 @@ export function WorkspacePropertiesPanel({
 
         const { data: existingSuperficies, error: existingSuperficiesError } = await supabase
           .from('budget_wall_objects')
-          .select('id, wall_id')
+          .select('id, wall_id, surface_m2, volume_m3, description')
           .in('wall_id', wallIds)
           .eq('layer_order', 0)
           .eq('name', 'Superficie');
@@ -374,28 +394,73 @@ export function WorkspacePropertiesPanel({
           console.error('Error consultando capas Superficie:', existingSuperficiesError);
         }
 
-        const existingByWall = new Map<string, string>(
-          (existingSuperficies || []).map((row: any) => [row.wall_id as string, row.id as string])
-        );
+        const existingByWall = new Map<string, {
+          id: string;
+          surface_m2: number | null;
+          volume_m3: number | null;
+          description: string | null;
+        }>();
+
+        (existingSuperficies || []).forEach((row: any) => {
+          if (!existingByWall.has(row.wall_id)) {
+            existingByWall.set(row.wall_id, {
+              id: row.id,
+              surface_m2: row.surface_m2 ?? null,
+              volume_m3: row.volume_m3 ?? null,
+              description: row.description ?? null,
+            });
+          }
+        });
+
+        const mustForceZeroForFace = (wall: WallRecord) => {
+          if (wall.wall_index === -1) {
+            return roomData.has_floor === false || isInvisibleWallType(wall.wall_type);
+          }
+          if (wall.wall_index === -2) {
+            return roomData.has_ceiling === false || isInvisibleWallType(wall.wall_type);
+          }
+          return false;
+        };
 
         const updates = nextWalls
-          .filter(w => existingByWall.has(w.id))
           .map(w => {
-            const { surface_m2, volume_m3 } = getFaceMetrics(roomData, w.wall_index, nextCellSizeM, w.wall_type);
-            const metricLabel = surface_m2 != null ? `${surface_m2} m²` : volume_m3 != null ? `${volume_m3} m³` : null;
+            const existing = existingByWall.get(w.id);
+            if (!existing) return null;
+            if (!mustForceZeroForFace(w)) return null;
+
+            const baseLabel = `${workspaceName} / ${getFaceLabel(w.wall_index)}`;
+            const needsMetricUpdate = existing.surface_m2 === null || Math.abs(existing.surface_m2) > 0.0001 || existing.volume_m3 !== null;
+            const needsDescriptionUpdate = !(existing.description || '').includes('— 0 m²');
+
+            if (!needsMetricUpdate && !needsDescriptionUpdate) {
+              return null;
+            }
+
             return {
-              id: existingByWall.get(w.id)!,
+              id: existing.id,
               payload: {
                 name: 'Superficie',
-                description: `${workspaceName} / ${getFaceLabel(w.wall_index)}${metricLabel ? ` — ${metricLabel}` : ''}`,
+                description: `${baseLabel} — 0 m²`,
                 object_type: 'material',
                 is_core: false,
                 layer_order: 0,
-                surface_m2,
-                volume_m3,
+                surface_m2: 0,
+                volume_m3: null as number | null,
               },
             };
-          });
+          })
+          .filter((update): update is {
+            id: string;
+            payload: {
+              name: string;
+              description: string;
+              object_type: string;
+              is_core: boolean;
+              layer_order: number;
+              surface_m2: number;
+              volume_m3: number | null;
+            };
+          } => update !== null);
 
         const inserts = nextWalls
           .filter(w => !existingByWall.has(w.id))
@@ -566,15 +631,71 @@ export function WorkspacePropertiesPanel({
     const wallIndex = field === 'has_floor' ? -1 : -2;
     const newWallType = boolVal ? (field === 'has_floor' ? 'suelo_basico' : 'techo_basico') : 'invisible';
     const existingWall = walls.find(w => w.wall_index === wallIndex);
+    let targetWall: WallRecord | null = null;
+
     if (existingWall) {
       await supabase.from('budget_floor_plan_walls').update({ wall_type: newWallType }).eq('id', existingWall.id);
+      targetWall = { ...existingWall, wall_type: newWallType };
       setWalls(prev => prev.map(w => w.id === existingWall.id ? { ...w, wall_type: newWallType } : w));
     } else {
       // Create the wall record if it doesn't exist
       const { data } = await supabase.from('budget_floor_plan_walls')
         .insert({ room_id: workspaceId, wall_index: wallIndex, wall_type: newWallType })
         .select().single();
-      if (data) setWalls(prev => [...prev, data as WallRecord]);
+      if (data) {
+        targetWall = data as WallRecord;
+        setWalls(prev => [...prev, targetWall!]);
+      }
+    }
+
+    const nextRoomForMetrics = room ? { ...room, ...updatePayload } : null;
+    if (targetWall && nextRoomForMetrics) {
+      const { surface_m2, volume_m3 } = getFaceMetrics(nextRoomForMetrics, wallIndex, cellSizeM, newWallType);
+      const faceLabel = wallIndex === -1 ? 'Suelo' : 'Techo';
+      const metricLabel = surface_m2 != null ? `${surface_m2} m²` : volume_m3 != null ? `${volume_m3} m³` : null;
+      const description = `${workspaceName} / ${faceLabel}${metricLabel ? ` — ${metricLabel}` : ''}`;
+      const existingSurface = wallObjects.find(o => o.wall_id === targetWall!.id && o.layer_order === 0);
+
+      if (existingSurface) {
+        const { error } = await supabase
+          .from('budget_wall_objects')
+          .update({
+            name: 'Superficie',
+            description,
+            object_type: 'material',
+            is_core: false,
+            layer_order: 0,
+            surface_m2,
+            volume_m3,
+          })
+          .eq('id', existingSurface.id);
+
+        if (!error) {
+          setWallObjects(prev => prev.map(o => o.id === existingSurface.id
+            ? { ...o, description, surface_m2, volume_m3 }
+            : o));
+        }
+      } else {
+        const { data, error } = await supabase
+          .from('budget_wall_objects')
+          .insert({
+            wall_id: targetWall.id,
+            layer_order: 0,
+            name: 'Superficie',
+            description,
+            object_type: 'material',
+            is_core: false,
+            surface_m2,
+            volume_m3,
+            visual_pattern: 'vacio',
+          })
+          .select()
+          .single();
+
+        if (!error && data) {
+          setWallObjects(prev => [...prev, data as WallObjectRecord]);
+        }
+      }
     }
 
     toast.success('Actualizado');

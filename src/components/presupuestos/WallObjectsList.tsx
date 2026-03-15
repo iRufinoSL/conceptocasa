@@ -736,12 +736,13 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
     queryFn: async () => {
       const { data: fp } = await supabase
         .from('budget_floor_plans')
-        .select('id, scale_mode, block_length_mm')
+        .select('id, scale_mode, block_length_mm, custom_corners')
         .eq('budget_id', budgetId)
         .maybeSingle();
       if (!fp) return [];
 
       const cellSizeM = fp.scale_mode === 'bloque' ? (fp.block_length_mm || 625) / 1000 : 1;
+      const verticalRefs = extractVerticalWorkspaceRefs(fp.custom_corners);
 
       const { data: rooms } = await supabase
         .from('budget_floor_plan_rooms')
@@ -750,7 +751,10 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
         .order('name', { ascending: true });
       if (!rooms) return [];
 
-      return (rooms as WorkspaceAutoFaceSource[]).flatMap(room => buildAutoFacesForWorkspace(room, cellSizeM));
+      const eligibleRooms = (rooms as WorkspaceAutoFaceSource[])
+        .filter(room => isRoomEligibleByVerticalRefs(room, verticalRefs));
+
+      return eligibleRooms.flatMap(room => buildAutoFacesForWorkspace(room, cellSizeM));
     },
   });
 

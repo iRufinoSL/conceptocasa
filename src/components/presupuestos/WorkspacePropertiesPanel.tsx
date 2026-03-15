@@ -589,7 +589,7 @@ export function WorkspacePropertiesPanel({
   const fetchResources = async () => {
     const { data } = await supabase
       .from('external_resources')
-      .select('id, name, resource_type, unit_cost, unit_measure')
+      .select('id, name, resource_type, unit_cost, unit_measure, width_mm, height_mm, depth_mm')
       .order('name')
       .limit(200);
     setResources((data || []) as ExternalResourceOption[]);

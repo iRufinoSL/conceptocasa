@@ -188,6 +188,7 @@ export function SectionAxisViewer({
 
   // Vertex editing mode (drag vertices, add new ones)
   const [vertexEditMode, setVertexEditMode] = useState(false);
+  const [selectedPolygonId, setSelectedPolygonId] = useState<string | null>(null);
   const [draggingVertexInfo, setDraggingVertexInfo] = useState<{ polyId: string; vertexIdx: number } | null>(null);
 
   // Polygons

@@ -216,7 +216,7 @@ export function WorkspacePropertiesPanel({
     if (wallIndex === -1) {
       // Floor: return 0 if workspace has no floor or wall is invisible
       const hasFloor = roomData?.has_floor !== false;
-      const floorVisible = wallType !== 'invisible';
+      const floorVisible = !isInvisibleWallType(wallType);
       return {
         surface_m2: hasFloor && floorVisible ? floorArea : 0,
         volume_m3: null as number | null,
@@ -226,7 +226,7 @@ export function WorkspacePropertiesPanel({
     if (wallIndex === -2) {
       // Ceiling: return 0 if workspace has no ceiling or wall is invisible
       const hasCeiling = roomData?.has_ceiling !== false;
-      const ceilingVisible = wallType !== 'invisible';
+      const ceilingVisible = !isInvisibleWallType(wallType);
       return {
         surface_m2: hasCeiling && ceilingVisible ? floorArea : 0,
         volume_m3: null as number | null,

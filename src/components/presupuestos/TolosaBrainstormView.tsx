@@ -467,46 +467,50 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
       toast.error('Error al cargar ítems');
     } else {
       const loadedItems = (data as TolosItem[]) || [];
-      setItems(loadedItems);
       itemsRef.current = loadedItems;
-      setDondeForm({});
 
-      // Fetch linked contact names
+      // Fetch linked contact names BEFORE setting items to avoid intermediate renders
       const contactIds = new Set<string>();
       loadedItems.forEach(i => {
         if (i.client_contact_id) contactIds.add(i.client_contact_id);
         if (i.supplier_contact_id) contactIds.add(i.supplier_contact_id);
       });
-      if (contactIds.size > 0) {
-        const { data: cData } = await supabase
-          .from('crm_contacts')
-          .select('id, name, surname')
-          .in('id', Array.from(contactIds));
-        if (cData) {
-          const cache: Record<string, string> = {};
-          cData.forEach((c: any) => {
-            cache[c.id] = `${c.name}${c.surname ? ' ' + c.surname : ''}`;
-          });
-          setContactCache(prev => ({ ...prev, ...cache }));
-        }
-      }
 
       // Fetch linked housing profiles
       const profileIds = new Set<string>();
       loadedItems.forEach(i => {
         if (i.housing_profile_id) profileIds.add(i.housing_profile_id);
       });
-      if (profileIds.size > 0) {
-        const { data: pData } = await supabase
-          .from('project_profiles')
-          .select('id, contact_name, contact_email, poblacion, num_plantas, m2_por_planta, num_habitaciones_total, num_banos_total, tipo_salon, tipo_cocina, lavanderia, despensa, garaje, porche_cubierto, patio_descubierto, presupuesto_global, espacios_detalle, altura_habitaciones')
-          .in('id', Array.from(profileIds));
-        if (pData) {
-          const cache: Record<string, FullProfileData> = {};
-          pData.forEach((p: any) => { cache[p.id] = p; });
-          setProfileCache(prev => ({ ...prev, ...cache }));
-        }
+
+      // Parallel fetches for contacts and profiles
+      const [contactsRes, profilesRes] = await Promise.all([
+        contactIds.size > 0
+          ? supabase.from('crm_contacts').select('id, name, surname').in('id', Array.from(contactIds))
+          : Promise.resolve({ data: null }),
+        profileIds.size > 0
+          ? supabase.from('project_profiles')
+              .select('id, contact_name, contact_email, poblacion, num_plantas, m2_por_planta, num_habitaciones_total, num_banos_total, tipo_salon, tipo_cocina, lavanderia, despensa, garaje, porche_cubierto, patio_descubierto, presupuesto_global, espacios_detalle, altura_habitaciones')
+              .in('id', Array.from(profileIds))
+          : Promise.resolve({ data: null }),
+      ]);
+
+      if (contactsRes.data) {
+        const cache: Record<string, string> = {};
+        contactsRes.data.forEach((c: any) => {
+          cache[c.id] = `${c.name}${c.surname ? ' ' + c.surname : ''}`;
+        });
+        setContactCache(prev => ({ ...prev, ...cache }));
       }
+
+      if (profilesRes.data) {
+        const cache: Record<string, FullProfileData> = {};
+        profilesRes.data.forEach((p: any) => { cache[p.id] = p; });
+        setProfileCache(prev => ({ ...prev, ...cache }));
+      }
+
+      // Now set items AFTER caches are populated
+      setItems(loadedItems);
+      setDondeForm({});
     }
     setLoading(false);
     // Directly fetch summaries after items are loaded (ref is already updated)
@@ -1091,7 +1095,18 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
     if (!contactId) return null;
     if (contactCache[contactId]) return contactCache[contactId];
     const c = contacts.find(c => c.id === contactId);
-    return c ? `${c.name}${c.surname ? ' ' + c.surname : ''}` : contactId.slice(0, 8) + '...';
+    if (c) {
+      // Also cache it for future renders
+      setContactCache(prev => ({ ...prev, [contactId]: `${c.name}${c.surname ? ' ' + c.surname : ''}` }));
+      return `${c.name}${c.surname ? ' ' + c.surname : ''}`;
+    }
+    // Fetch the contact name on-demand if not in cache
+    supabase.from('crm_contacts').select('id, name, surname').eq('id', contactId).single().then(({ data }) => {
+      if (data) {
+        setContactCache(prev => ({ ...prev, [contactId]: `${data.name}${data.surname ? ' ' + data.surname : ''}` }));
+      }
+    });
+    return 'Cargando...';
   };
 
   // DÓNDE? panel

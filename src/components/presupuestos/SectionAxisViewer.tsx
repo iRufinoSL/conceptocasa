@@ -68,7 +68,7 @@ export interface PolygonFacePatterns {
 }
 
 interface SectionAxisViewerProps {
-  sectionType: 'vertical' | 'longitudinal' | 'transversal';
+  sectionType: ViewerSectionType;
   axisValue: number;
   sectionName: string;
   floorPlanId?: string;

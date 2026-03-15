@@ -1048,6 +1048,26 @@ export function WorkspacePropertiesPanel({
     toast.success(objType === 'hueco' ? 'Hueco añadido' : 'Objeto registrado');
   };
 
+  /** Pre-fill the fixed-axis coordinate based on the current section */
+  const prefillSectionCoord = () => {
+    const val = sectionAxisValue != null ? String(sectionAxisValue) : '';
+    if (sectionType === 'transversal') {
+      // X section → coord_x is fixed
+      setObjCoordX(val);
+      setObjCoordY('');
+      setObjCoordZ('');
+    } else if (sectionType === 'longitudinal') {
+      // Y section → coord_y is fixed
+      setObjCoordX('');
+      setObjCoordY(val);
+      setObjCoordZ('');
+    } else {
+      setObjCoordX('');
+      setObjCoordY('');
+      setObjCoordZ('');
+    }
+  };
+
   const resetForm = () => {
     setShowObjectForm(false);
     setEditingObjId(null);
@@ -1064,9 +1084,7 @@ export function WorkspacePropertiesPanel({
     setObjTargetFace('wall-0');
     setObjLayerOrder('1');
     setObjResourceId('_none');
-    setObjCoordX('');
-    setObjCoordY('');
-    setObjCoordZ('');
+    prefillSectionCoord();
     setObjShownInSection(false);
   };
 

@@ -2673,6 +2673,20 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
       updatePayload.has_roof = false;
     }
     await supabase.from('budget_floor_plan_rooms').update(updatePayload).eq('id', roomId);
+    // Also update the wall_type for the corresponding face
+    const wallIndex = field === 'has_floor' ? -1 : -2;
+    const wallType = boolVal
+      ? (field === 'has_floor' ? 'suelo_basico' : 'techo_basico')
+      : 'invisible';
+    await supabase
+      .from('budget_floor_plan_walls')
+      .update({ wall_type: wallType })
+      .eq('room_id', roomId)
+      .eq('wall_index', wallIndex);
+    
+    // Invalidate all related queries so surfaces recalculate
+    queryClient.invalidateQueries({ queryKey: ['budget-auto-faces', budgetId] });
+    queryClient.invalidateQueries({ queryKey: ['workspace-walls'] });
     refetch();
   };
 

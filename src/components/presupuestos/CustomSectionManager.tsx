@@ -2169,7 +2169,112 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
                       );
                     })}
 
-                    {/* Ceiling assignment button (center of polygon) */}
+                    {/* Wall objects (huecos) — small rectangles on wall edges */}
+                    {(() => {
+                      const roomHuecos = wallHuecos.get(room.id);
+                      if (!roomHuecos?.length) return null;
+                      const poly = room.floorPolygon!;
+                      const svgPtsH = poly.map(p => ({
+                        x: margin.left + getHIndex(p.x) * cellSize,
+                        y: margin.top + getVIndex(p.y) * cellSize,
+                      }));
+                      // Map wallIndex (1-4) to polygon edge index
+                      // wallIndex 1=top (edge from vertex 0→1 in typical rect), etc.
+                      // For arbitrary polygons, map wall indices to edges by proximity
+                      const edgeCount = svgPtsH.length;
+                      return roomHuecos.map((hueco, hi) => {
+                        // Find the edge corresponding to this wallIndex
+                        // For rectangular rooms: wallIndex 1→edge0(top), 2→edge1(right), 3→edge2(bottom), 4→edge3(left)
+                        const edgeIdx = Math.min(hueco.wallIndex - 1, edgeCount - 1);
+                        if (edgeIdx < 0 || edgeIdx >= edgeCount) return null;
+                        const p1 = svgPtsH[edgeIdx];
+                        const p2 = svgPtsH[(edgeIdx + 1) % edgeCount];
+                        const edgeLenPx = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+                        if (edgeLenPx < 2) return null;
+
+                        // Get wall real length in mm
+                        const g1 = poly[edgeIdx];
+                        const g2 = poly[(edgeIdx + 1) % edgeCount];
+                        const wallLenMm = Math.hypot(
+                          (g2.x - g1.x) * scaleH,
+                          (g2.y - g1.y) * scaleV
+                        );
+                        if (wallLenMm < 1) return null;
+
+                        // Object proportional width on the edge
+                        const objFrac = hueco.widthMm / wallLenMm;
+                        const objLenPx = Math.max(objFrac * edgeLenPx, 4);
+
+                        // Position along edge
+                        const posX = Math.max(0, Math.min(1, hueco.positionX));
+                        const halfFrac = objFrac / 2;
+                        const clampedPos = Math.max(halfFrac, Math.min(1 - halfFrac, posX));
+                        const centerFrac = clampedPos;
+
+                        // Center point on edge
+                        const cx = p1.x + (p2.x - p1.x) * centerFrac;
+                        const cy = p1.y + (p2.y - p1.y) * centerFrac;
+
+                        // Edge direction and normal
+                        const dx = p2.x - p1.x;
+                        const dy = p2.y - p1.y;
+                        const len = Math.sqrt(dx * dx + dy * dy) || 1;
+                        const ux = dx / len;
+                        const uy = dy / len;
+                        // Normal pointing outward (away from polygon center)
+                        let nx = -uy;
+                        let ny = ux;
+                        const cxPoly = svgPtsH.reduce((s, p) => s + p.x, 0) / svgPtsH.length;
+                        const cyPoly = svgPtsH.reduce((s, p) => s + p.y, 0) / svgPtsH.length;
+                        const toCenter = (cxPoly - cx) * nx + (cyPoly - cy) * ny;
+                        if (toCenter > 0) { nx = -nx; ny = -ny; }
+
+                        // Rectangle: along the edge, offset outward
+                        const rectThick = 4; // px thickness of the marker
+                        const rectOffset = 2; // px offset from wall line
+                        const ox = cx - ux * objLenPx / 2 + nx * rectOffset;
+                        const oy = cy - uy * objLenPx / 2 + ny * rectOffset;
+                        const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+
+                        // Determine if door or window by name
+                        const nameLC = hueco.name.toLowerCase();
+                        const isDoor = nameLC.includes('puerta') || nameLC.includes('door');
+                        const strokeColor = isDoor ? 'hsl(30 80% 50%)' : 'hsl(190 70% 45%)';
+                        const fillColor = isDoor ? 'hsl(30 80% 50% / 0.15)' : 'hsl(190 70% 45% / 0.15)';
+
+                        // Abbreviated label
+                        const shortLabel = hueco.name.length > 6 ? hueco.name.slice(0, 5) + '…' : hueco.name;
+
+                        return (
+                          <g key={`hueco-${room.id}-${hi}`} className="pointer-events-none">
+                            <rect
+                              x={ox} y={oy}
+                              width={objLenPx} height={rectThick}
+                              rx={1}
+                              fill={fillColor}
+                              stroke={strokeColor}
+                              strokeWidth={0.8}
+                              transform={`rotate(${angle}, ${ox}, ${oy})`}
+                            />
+                            {objLenPx > 12 && (
+                              <text
+                                x={cx + nx * (rectOffset + rectThick + 3)}
+                                y={cy + ny * (rectOffset + rectThick + 3)}
+                                textAnchor="middle"
+                                dominantBaseline="central"
+                                fontSize={5}
+                                fill={strokeColor}
+                                fontWeight={600}
+                                transform={`rotate(${angle > 90 || angle < -90 ? angle + 180 : angle}, ${cx + nx * (rectOffset + rectThick + 3)}, ${cy + ny * (rectOffset + rectThick + 3)})`}
+                              >
+                                {shortLabel}
+                              </text>
+                            )}
+                          </g>
+                        );
+                      });
+                    })()}
+
                     <rect
                       x={cxSvg + 22} y={cySvg - 16} width={16} height={16} rx={3}
                       fill="hsl(210 70% 55% / 0.8)" className="cursor-pointer"

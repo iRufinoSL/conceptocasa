@@ -354,6 +354,8 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
         }
       }
 
+      console.log('[HUECOS DEBUG] huecosByName keys:', [...huecosByName.keys()]);
+      
       // Map huecos back to displayed room IDs by name matching
       const hMap = new Map<string, HuecoEntry[]>();
       for (const r of rooms) {
@@ -363,6 +365,7 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
           hMap.set(r.id, huecos);
         }
       }
+      console.log('[HUECOS DEBUG] Final hMap keys:', [...hMap.keys()].map(k => `${k.slice(0,8)}=${hMap.get(k)?.length}`));
       setWallHuecos(hMap);
     })();
   }, [rooms]);

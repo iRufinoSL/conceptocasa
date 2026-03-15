@@ -204,9 +204,11 @@ const getWallStyle = (wt: WallType) => {
   const isInvis = isInvisibleType(wt);
   const isComp = isCompartidaType(wt);
   const isTejado = wt === 'tejado';
-  const thickness = isTejado ? 4 : isExt ? 4 : 2;
+  const isSuelo = wt === 'suelo';
+  const thickness = isSuelo ? 4 : isTejado ? 4 : isExt ? 4 : 2;
   let color: string;
-  if (isTejado) color = 'hsl(0, 60%, 55%)';
+  if (isSuelo) color = 'hsl(20, 60%, 40%)';
+  else if (isTejado) color = 'hsl(0, 60%, 55%)';
   else if (isExt && isComp) color = 'hsl(210, 70%, 55%)';
   else if (isExt && isInvis) color = 'hsl(0, 0%, 30%)';
   else if (isExt) color = 'hsl(var(--foreground))';

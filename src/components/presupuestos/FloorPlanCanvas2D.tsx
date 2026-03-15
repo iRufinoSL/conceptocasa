@@ -106,6 +106,9 @@ const INT_STROKE_WIDTH = 2.5; // thin for all interior types
 
 function getWallStyle(segType: string): { color: string; width: number; dash?: string } {
   const t = (segType || '').toLowerCase();
+  // Suelo
+  if (t === 'suelo')
+    return { color: '#a0522d', width: EXT_STROKE_WIDTH };
   // Tejado
   if (t === 'tejado')
     return { color: '#c45c5c', width: EXT_STROKE_WIDTH };

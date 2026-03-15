@@ -663,15 +663,42 @@ export function WorkspacePropertiesPanel({
       toast.error('No se encontró el plano asociado');
       return false;
     }
-    const { data, error } = await supabase.from('budget_floor_plan_rooms')
-      .insert({ id: workspaceId, floor_plan_id: floorPlanId, name: workspaceName, width: 1, length: 1 })
-      .select().single();
+
+    const sourceVertices = Array.isArray(verticesProp) && verticesProp.length >= 3 ? verticesProp : null;
+    const xValues = sourceVertices?.map(v => v.x) || [];
+    const yValues = sourceVertices?.map(v => v.y) || [];
+    const derivedWidth = xValues.length > 0 ? Math.max(0.1, Math.max(...xValues) - Math.min(...xValues)) : 1;
+    const derivedLength = yValues.length > 0 ? Math.max(0.1, Math.max(...yValues) - Math.min(...yValues)) : 1;
+
+    const { data, error } = await supabase
+      .from('budget_floor_plan_rooms')
+      .insert({
+        id: workspaceId,
+        floor_plan_id: floorPlanId,
+        name: workspaceName,
+        width: derivedWidth,
+        length: derivedLength,
+        floor_polygon: sourceVertices,
+      })
+      .select()
+      .single();
+
     if (error) {
-      const { data: existing } = await supabase.from('budget_floor_plan_rooms').select('*').eq('id', workspaceId).maybeSingle();
-      if (existing) { setRoom(existing); return true; }
+      const { data: existing } = await supabase
+        .from('budget_floor_plan_rooms')
+        .select('*')
+        .eq('id', workspaceId)
+        .maybeSingle();
+
+      if (existing) {
+        setRoom(existing);
+        return true;
+      }
+
       toast.error('Error creando registro de espacio');
       return false;
     }
+
     setRoom(data);
     return true;
   };

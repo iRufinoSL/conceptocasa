@@ -2892,7 +2892,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
         for (const room of rooms) {
           const roomWalls = wallsByRoom.get(room.id) || [];
           for (const wall of roomWalls) {
-            syncJobs.push(ensureSuperficieLayer(wall.id, room, wall.wall_index));
+            syncJobs.push(ensureSuperficieLayer(wall.id, room, wall.wall_index, wall.wall_type));
           }
         }
 

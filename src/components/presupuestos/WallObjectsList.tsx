@@ -152,6 +152,8 @@ interface WorkspaceAutoFaceSource {
   height: number | null;
   floor_polygon: unknown;
   is_base: boolean;
+  has_floor: boolean;
+  has_ceiling: boolean;
 }
 
 const buildAutoFacesForWorkspace = (room: WorkspaceAutoFaceSource, cellSizeM: number): AutoFace[] => {

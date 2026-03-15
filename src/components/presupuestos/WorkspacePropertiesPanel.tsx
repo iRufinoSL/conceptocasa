@@ -857,6 +857,70 @@ export function WorkspacePropertiesPanel({
     toast.success(`Vinculado a: ${resource.name}`);
   };
 
+  const stripMetricFromDescription = (description: string | null, fallback: string) => {
+    if (!description) return fallback;
+    return description.replace(/\s+—\s+[-\d.,]+\s*(m²|m³|ml)\s*$/u, '').trim();
+  };
+
+  const openSuperficieManualEditor = (sup: WallObjectRecord) => {
+    setEditingSuperficieId(sup.id);
+    setManualSurfaceValue(sup.surface_m2 != null ? String(sup.surface_m2) : '');
+    setManualVolumeValue(sup.volume_m3 != null ? String(sup.volume_m3) : '');
+  };
+
+  const saveSuperficieManualValues = async (sup: WallObjectRecord) => {
+    const parseMaybeNumber = (value: string) => {
+      const trimmed = value.trim();
+      if (!trimmed) return null;
+      const parsed = Number.parseFloat(trimmed.replace(',', '.'));
+      return Number.isFinite(parsed) ? parsed : NaN;
+    };
+
+    const nextSurface = parseMaybeNumber(manualSurfaceValue);
+    const nextVolume = parseMaybeNumber(manualVolumeValue);
+
+    if (Number.isNaN(nextSurface) || Number.isNaN(nextVolume)) {
+      toast.error('Introduce valores numéricos válidos');
+      return;
+    }
+
+    const faceLabel = getWallLabelForObject(sup.wall_id);
+    const baseDescription = stripMetricFromDescription(sup.description, `${workspaceName} / ${faceLabel}`);
+    const metricLabel = nextSurface != null
+      ? `${nextSurface} m²`
+      : nextVolume != null
+        ? `${nextVolume} m³`
+        : null;
+
+    setSavingManualSuperficie(true);
+    const { error } = await supabase
+      .from('budget_wall_objects')
+      .update({
+        surface_m2: nextSurface,
+        volume_m3: nextVolume,
+        description: metricLabel ? `${baseDescription} — ${metricLabel}` : baseDescription,
+      })
+      .eq('id', sup.id);
+    setSavingManualSuperficie(false);
+
+    if (error) {
+      toast.error('No se pudo guardar el valor manual');
+      return;
+    }
+
+    setWallObjects(prev => prev.map(o => o.id === sup.id
+      ? {
+          ...o,
+          surface_m2: nextSurface,
+          volume_m3: nextVolume,
+          description: metricLabel ? `${baseDescription} — ${metricLabel}` : baseDescription,
+        }
+      : o
+    ));
+    setEditingSuperficieId(null);
+    toast.success('Valor manual guardado');
+  };
+
   const poly = getEffectivePolygon(room);
   const roomPolyCount = Array.isArray(room?.floor_polygon) ? room.floor_polygon.length : 0;
   const edgeCount = edgeCountProp ?? (poly ? poly.length : roomPolyCount > 0 ? roomPolyCount : (room ? 4 : 0));

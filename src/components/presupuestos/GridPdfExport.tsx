@@ -194,16 +194,19 @@ export function GridPdfExport({ title, subtitle, containerRef, size = 'sm', hAxi
 
       const doc = new jsPDF({ orientation, unit: 'mm', format: 'a4' });
 
-      // Header
-      doc.setFontSize(10);
+      // Header — Title (budget name) on first line, subtitle (section) on second
+      doc.setFontSize(11);
       doc.setFont('helvetica', 'bold');
-      doc.text(`${title}  —  ${subtitle}`, MARGIN, MARGIN + 5);
+      doc.text(title, MARGIN, MARGIN + 5);
+
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.text(subtitle, MARGIN, MARGIN + 9.5);
 
       // Scale info with concrete measurements
       doc.setFontSize(7);
-      doc.setFont('helvetica', 'normal');
       const scaleLabel = buildScaleLabel(hAxisLabel, vAxisLabel, scaleH, scaleV);
-      doc.text(scaleLabel, MARGIN, MARGIN + 9);
+      if (scaleLabel) doc.text(scaleLabel, MARGIN, MARGIN + 13);
 
       const dateStr = new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
       doc.text(`Impresión: ${scalePct}%  ·  ${dateStr}`, A4_W - MARGIN, MARGIN + 5, { align: 'right' });

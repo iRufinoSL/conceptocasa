@@ -2218,6 +2218,19 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
     }
   }, [autoShow3D, onAutoShow3DHandled]);
 
+  const { data: budgetData } = useQuery({
+    queryKey: ['budget-name-for-workspaces', budgetId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('presupuestos')
+        .select('nombre')
+        .eq('id', budgetId)
+        .maybeSingle();
+      return data;
+    },
+  });
+  const budgetName = budgetData?.nombre || 'Presupuesto';
+
   const { data: floorPlan } = useQuery({
     queryKey: ['floor-plan-for-workspaces', budgetId],
     queryFn: async () => {

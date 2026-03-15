@@ -678,6 +678,21 @@ export function SectionAxisViewer({
     setHoverNode(null);
   };
 
+  const visiblePolygons = useMemo(
+    () => polygons.filter(p => Array.isArray(p.vertices) && p.vertices.length >= 3),
+    [polygons],
+  );
+
+  useEffect(() => {
+    if (!selectedPolygonId) return;
+    if (!vertexEditMode) {
+      setSelectedPolygonId(null);
+      return;
+    }
+    const exists = polygons.some(p => p.id === selectedPolygonId && p.vertices.length >= 3);
+    if (!exists) setSelectedPolygonId(null);
+  }, [polygons, selectedPolygonId, vertexEditMode]);
+
   // ── Vertex editing helpers ──
   const handleInsertVertexOnEdge = useCallback((polyId: string, edgeIdx: number) => {
     if (!vertexEditMode) return;

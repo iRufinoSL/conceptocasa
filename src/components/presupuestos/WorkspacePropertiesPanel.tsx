@@ -1118,6 +1118,10 @@ export function WorkspacePropertiesPanel({
       else setObjTargetFace(`wall-${wall.wall_index - 1}`);
     }
     setActiveTab('objects');
+    // Scroll form into view after render
+    setTimeout(() => {
+      objectFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
   };
 
   /** Save changes to an existing object */

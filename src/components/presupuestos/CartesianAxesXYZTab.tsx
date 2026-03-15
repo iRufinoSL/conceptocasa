@@ -1135,10 +1135,13 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
       // Anti-ghost filter: if the polygon only TOUCHES this section at one edge
       // (not cutting through its interior), AND a neighbouring section cuts through
       // the polygon's interior, skip it here to avoid duplicate/ghost labels.
+      // EXCEPTION: never filter at the global min/max section (building perimeter)
+      // because those boundary views should always show adjacent spaces.
       const isAtMinEdge = Math.abs(axisVal - polyMinAxis) < 0.01;
       const isAtMaxEdge = Math.abs(axisVal - polyMaxAxis) < 0.01;
       const polySpan = polyMaxAxis - polyMinAxis;
-      if ((isAtMinEdge !== isAtMaxEdge) && polySpan > 0.05) {
+      const isPerimeterSection = Math.abs(axisVal - minSectionAxis) < 0.01 || Math.abs(axisVal - maxSectionAxis) < 0.01;
+      if (!isPerimeterSection && (isAtMinEdge !== isAtMaxEdge) && polySpan > 0.05) {
         // This polygon only touches at one edge — check if an interior section exists
         const hasInteriorSection = sameTypeAxisValues.some(
           sv => sv > polyMinAxis + 0.01 && sv < polyMaxAxis - 0.01

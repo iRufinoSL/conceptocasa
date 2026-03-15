@@ -288,6 +288,7 @@ export function SectionAxisViewer({
   const [sectionObjects, setSectionObjects] = useState<SectionObjectData[]>([]);
   const [draggingObjectId, setDraggingObjectId] = useState<string | null>(null);
   const [dragStart, setDragStart] = useState<{ x: number; y: number; posX: number; sill: number } | null>(null);
+  const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
 
   const loadOpenings = useCallback(async () => {
     if (polygons.length === 0) return;
@@ -1606,6 +1607,9 @@ export function SectionAxisViewer({
     }
     lastObjClickRef.current = { time: now, objId };
 
+    // Select this object for keyboard movement
+    setSelectedObjectId(objId);
+
     const svg = svgRef.current;
     if (!svg) return;
     let pt = svg.createSVGPoint();
@@ -1655,6 +1659,59 @@ export function SectionAxisViewer({
     setDragStart(null);
   }, [draggingObjectId, sectionObjects]);
 
+  // ── Keyboard arrow movement for selected object (half-scale increments) ──
+  useEffect(() => {
+    if (!selectedObjectId || !scale) return;
+    const halfH = Math.round(scale.hScale / 2); // half node in mm horizontally
+    const halfV = Math.round(scale.vScale / 2); // half node in mm vertically
+
+    const handler = async (e: KeyboardEvent) => {
+      if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      setSectionObjects(prev => prev.map(o => {
+        if (o.id !== selectedObjectId) return o;
+        let { position_x, sill_height } = o;
+        switch (e.key) {
+          case 'ArrowRight': position_x = position_x + halfH; break;
+          case 'ArrowLeft': position_x = Math.max(0, position_x - halfH); break;
+          case 'ArrowUp': sill_height = sill_height + halfV; break;
+          case 'ArrowDown': sill_height = Math.max(0, sill_height - halfV); break;
+        }
+        return { ...o, position_x, sill_height };
+      }));
+    };
+
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [selectedObjectId, scale]);
+
+  // Persist after keyboard movement (debounced)
+  const keyMoveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!selectedObjectId) return;
+    const obj = sectionObjects.find(o => o.id === selectedObjectId);
+    if (!obj) return;
+    if (keyMoveTimerRef.current) clearTimeout(keyMoveTimerRef.current);
+    keyMoveTimerRef.current = setTimeout(async () => {
+      await supabase.from('budget_wall_objects').update({
+        position_x: obj.position_x,
+        sill_height: obj.sill_height,
+      }).eq('id', selectedObjectId);
+    }, 300);
+  }, [sectionObjects, selectedObjectId]);
+
+  // Deselect object when pressing Escape
+  useEffect(() => {
+    if (!selectedObjectId) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSelectedObjectId(null);
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [selectedObjectId]);
+
   const sectionObjectElements = useMemo(() => {
     if (!gridLayout || !scale || sectionObjects.length === 0) return null;
     const { originX, originY, cellPxW, cellPxH } = gridLayout;
@@ -1666,9 +1723,11 @@ export function SectionAxisViewer({
       if (!poly) continue;
 
       const polyMinY = Math.min(...poly.vertices.map(v => v.y));
+      const isSelected = obj.id === selectedObjectId;
+      const selStroke = isSelected ? 'hsl(45, 100%, 50%)' : OBJECT_COLOR;
+      const selWidth = isSelected ? 2.5 : 1.5;
 
       if (sectionType === 'vertical') {
-        // Z section: object appears as rectangle on floor plan
         const polyMinX = Math.min(...poly.vertices.map(v => v.x));
         const posXmm = obj.position_x;
         const wMm = obj.width_mm;
@@ -1676,22 +1735,25 @@ export function SectionAxisViewer({
         const x = originX + polyMinX * cellPxW + posXmm * pxPerMmH;
         const w = wMm * pxPerMmH;
         const hMm = obj.height_mm;
-        const h = hMm * pxPerMmH; // use same scale for plan view
+        const h = hMm * pxPerMmH;
         const y = originY - (polyMinY * cellPxH) - h;
 
         elements.push(
           <g key={`secobj-${obj.id}`} style={{ cursor: 'move' }}
             onMouseDown={e => handleObjectMouseDown(e, obj.id, obj)}>
+            {isSelected && <rect x={x - 2} y={y - 2} width={w + 4} height={h + 4}
+              fill="none" stroke="hsl(45, 100%, 50%)" strokeWidth={1} strokeDasharray="4 2" rx={3} />}
             <rect x={x} y={y} width={w} height={h}
-              fill={OBJECT_COLOR} fillOpacity={0.3} stroke={OBJECT_COLOR} strokeWidth={1.5} rx={2} />
+              fill={OBJECT_COLOR} fillOpacity={isSelected ? 0.45 : 0.3} stroke={selStroke} strokeWidth={selWidth} rx={2} />
             <text x={x + w / 2} y={y + h / 2 + 3} textAnchor="middle" fontSize={7} fontWeight={600}
               fill={OBJECT_COLOR} fontFamily="sans-serif" stroke="white" strokeWidth={1.5} paintOrder="stroke">
               {obj.name}
             </text>
+            {isSelected && <text x={x + w / 2} y={y - 4} textAnchor="middle" fontSize={5}
+              fill="hsl(45, 90%, 40%)" fontFamily="sans-serif" fontWeight={700}>⇦⇧⇩⇨</text>}
           </g>
         );
       } else {
-        // X/Y section: object rendered vertically in elevation
         const polyMinX = Math.min(...poly.vertices.map(v => v.x));
         const pxPerMmH = cellPxW / scale.hScale;
         const pxPerMmV = cellPxH / scale.vScale;
@@ -1708,8 +1770,10 @@ export function SectionAxisViewer({
         elements.push(
           <g key={`secobj-${obj.id}`} style={{ cursor: 'move' }}
             onMouseDown={e => handleObjectMouseDown(e, obj.id, obj)}>
+            {isSelected && <rect x={rx - 2} y={ry - 2} width={widthPx + 4} height={heightPx + 4}
+              fill="none" stroke="hsl(45, 100%, 50%)" strokeWidth={1} strokeDasharray="4 2" rx={3} />}
             <rect x={rx} y={ry} width={widthPx} height={heightPx}
-              fill={OBJECT_COLOR} fillOpacity={0.3} stroke={OBJECT_COLOR} strokeWidth={1.5} rx={2} />
+              fill={OBJECT_COLOR} fillOpacity={isSelected ? 0.45 : 0.3} stroke={selStroke} strokeWidth={selWidth} rx={2} />
             <text x={rx + widthPx / 2} y={ry + heightPx / 2 + 3} textAnchor="middle" fontSize={6} fontWeight={600}
               fill={OBJECT_COLOR} fontFamily="sans-serif" stroke="white" strokeWidth={1.5} paintOrder="stroke">
               {obj.name}
@@ -1718,13 +1782,15 @@ export function SectionAxisViewer({
               fontFamily="sans-serif" stroke="white" strokeWidth={1} paintOrder="stroke">
               {obj.width_mm}×{obj.height_mm}mm
             </text>
+            {isSelected && <text x={rx + widthPx / 2} y={ry - 10} textAnchor="middle" fontSize={5}
+              fill="hsl(45, 90%, 40%)" fontFamily="sans-serif" fontWeight={700}>⇦⇧⇩⇨</text>}
           </g>
         );
       }
     }
 
     return elements.length > 0 ? elements : null;
-  }, [sectionObjects, polygons, gridLayout, scale, sectionType, handleObjectMouseDown]);
+  }, [sectionObjects, polygons, gridLayout, scale, sectionType, handleObjectMouseDown, selectedObjectId]);
 
 
   const drawingOverlay = useMemo(() => {

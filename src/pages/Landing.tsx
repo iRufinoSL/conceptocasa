@@ -366,7 +366,21 @@ const Landing = () => {
           </div>
         </div>
 
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce">
+        {/* Hero carousel dots */}
+        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-10 flex gap-2">
+          {heroImages.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => setHeroIdx(i)}
+              className={`h-2 rounded-full transition-all duration-300 ${
+                i === heroIdx ? "bg-primary w-7" : "bg-background/40 w-2 hover:bg-background/70"
+              }`}
+              aria-label={`Ver imagen ${i + 1}`}
+            />
+          ))}
+        </div>
+
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 animate-bounce">
           <ChevronDown className="w-8 h-8 text-background/50" />
         </div>
       </section>

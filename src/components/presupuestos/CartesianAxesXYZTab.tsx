@@ -1334,7 +1334,8 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
           if (!key) return true; // no name → keep (manually drawn)
 
           const canonicalId = autoNameToId.get(key);
-          if (!canonicalId) return false;
+          // If no auto-projection exists for this name, keep the manually saved polygon
+          if (!canonicalId) return true;
 
           // Remove stale duplicates with same normalized name but obsolete IDs
           return canonicalId === poly.id;

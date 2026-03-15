@@ -181,7 +181,7 @@ export function WorkspacePropertiesPanel({
     return null;
   }, [verticesProp]);
 
-  const getFaceMetrics = useCallback((roomData: any, wallIndex: number, cellSize: number) => {
+  const getFaceMetrics = useCallback((roomData: any, wallIndex: number, cellSize: number, wallType?: string) => {
     const polygon = getEffectivePolygon(roomData);
 
     const floorAreaRaw = (() => {

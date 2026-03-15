@@ -1572,6 +1572,42 @@ export function WorkspacePropertiesPanel({
             </div>
           </div>
 
+          {/* Workspace minimap for object placement reference */}
+          {verticesProp && verticesProp.length >= 3 && (
+            <div className="border rounded p-1.5 bg-muted/10">
+              <p className="text-[8px] text-muted-foreground uppercase mb-1">Minimapa del espacio</p>
+              <svg viewBox={(() => {
+                const xs = verticesProp.map(v => v.x);
+                const ys = verticesProp.map(v => v.y);
+                const minX = Math.min(...xs) - 0.5;
+                const minY = Math.min(...ys) - 0.5;
+                const maxX = Math.max(...xs) + 0.5;
+                const maxY = Math.max(...ys) + 0.5;
+                return `${minX} ${minY} ${maxX - minX} ${maxY - minY}`;
+              })()} className="w-full h-16 bg-background rounded border">
+                <polygon
+                  points={verticesProp.map(v => `${v.x},${v.y}`).join(' ')}
+                  fill="hsl(var(--primary) / 0.1)"
+                  stroke="hsl(var(--primary))"
+                  strokeWidth={0.08}
+                />
+                {verticesProp.map((v, i) => {
+                  const wall = walls.find(w => w.wall_index === i + 1);
+                  const prefix = wall?.wall_type === 'tejado' ? 'T' : 'P';
+                  const next = verticesProp[(i + 1) % verticesProp.length];
+                  const mx = (v.x + next.x) / 2;
+                  const my = (v.y + next.y) / 2;
+                  return (
+                    <text key={i} x={mx} y={my} textAnchor="middle" dominantBaseline="central"
+                      fontSize={0.35} fill="hsl(var(--foreground))" fontFamily="sans-serif" fontWeight={600}>
+                      {prefix}{i + 1}
+                    </text>
+                  );
+                })}
+              </svg>
+            </div>
+          )}
+
           {/* Add object form */}
           {showObjectForm && (
             <div className="border rounded p-2 bg-muted/20 space-y-1.5">

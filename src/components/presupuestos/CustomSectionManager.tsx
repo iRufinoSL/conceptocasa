@@ -248,6 +248,8 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
   const [selectedExistingWorkspace, setSelectedExistingWorkspace] = useState('');
   // ── Wall visual patterns: roomId → patternId (from Superficie layer 0) ──
   const [wallPatterns, setWallPatterns] = useState<Map<string, string>>(new Map());
+  // ── Wall huecos for Z section rendering: roomId → [{wallIndex, positionX, widthMm, name, objectType}] ──
+  const [wallHuecos, setWallHuecos] = useState<Map<string, Array<{ wallIndex: number; positionX: number; widthMm: number; name: string; objectType: string }>>>(new Map());
   useEffect(() => {
     if (!rooms?.length) return;
     const roomIds = rooms.map(r => r.id);
@@ -259,20 +261,53 @@ function SectionGrid({ section, scaleConfig, rooms, budgetName, wallProjections,
         .in('room_id', roomIds);
       if (!walls?.length) return;
       const wallIds = walls.map(w => w.id);
-      const { data: objs } = await supabase
-        .from('budget_wall_objects')
-        .select('wall_id, visual_pattern, layer_order')
-        .in('wall_id', wallIds)
-        .eq('layer_order', 0)
-        .not('visual_pattern', 'is', null);
-      if (!objs?.length) { setWallPatterns(new Map()); return; }
       const wallRoomMap = new Map(walls.map(w => [w.id, w.room_id]));
+      const wallIndexMap = new Map(walls.map(w => [w.id, w.wall_index]));
+
+      // Fetch patterns and huecos in parallel
+      const [patternRes, huecoRes] = await Promise.all([
+        supabase
+          .from('budget_wall_objects')
+          .select('wall_id, visual_pattern, layer_order')
+          .in('wall_id', wallIds)
+          .eq('layer_order', 0)
+          .not('visual_pattern', 'is', null),
+        supabase
+          .from('budget_wall_objects')
+          .select('wall_id, name, object_type, position_x, width_mm')
+          .in('wall_id', wallIds)
+          .eq('object_type', 'hueco'),
+      ]);
+
+      // Patterns
       const pMap = new Map<string, string>();
-      for (const o of objs) {
-        const roomId = wallRoomMap.get(o.wall_id);
-        if (roomId && o.visual_pattern) pMap.set(roomId, o.visual_pattern);
+      if (patternRes.data?.length) {
+        for (const o of patternRes.data) {
+          const roomId = wallRoomMap.get(o.wall_id);
+          if (roomId && o.visual_pattern) pMap.set(roomId, o.visual_pattern);
+        }
       }
       setWallPatterns(pMap);
+
+      // Huecos
+      const hMap = new Map<string, Array<{ wallIndex: number; positionX: number; widthMm: number; name: string; objectType: string }>>();
+      if (huecoRes.data?.length) {
+        for (const h of huecoRes.data) {
+          const roomId = wallRoomMap.get(h.wall_id);
+          const wallIndex = wallIndexMap.get(h.wall_id);
+          if (!roomId || wallIndex == null || wallIndex < 1 || wallIndex > 4) continue;
+          const list = hMap.get(roomId) || [];
+          list.push({
+            wallIndex,
+            positionX: h.position_x ?? 0.5,
+            widthMm: h.width_mm ?? 800,
+            name: h.name || '',
+            objectType: h.object_type || 'hueco',
+          });
+          hMap.set(roomId, list);
+        }
+      }
+      setWallHuecos(hMap);
     })();
   }, [rooms]);
 

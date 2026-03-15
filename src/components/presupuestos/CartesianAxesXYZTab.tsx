@@ -963,6 +963,18 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     return ids;
   }, [verticalSections]);
 
+  // Map from room ID → canonical polygon name from Z sections (authoritative name)
+  const canonicalNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const vs of verticalSections) {
+      for (const p of (vs.polygons || [])) {
+        if (!p.vertices || p.vertices.length < 3) continue;
+        if (p.name) map.set(p.id, p.name);
+      }
+    }
+    return map;
+  }, [verticalSections]);
+
   // Flatten all vertical polygons as fallback projection source (for legacy/manual Z drawings)
   const verticalPolygonSources = useMemo(() => {
     const sources: Array<{ sectionId: string; axisValue: number; polygon: SectionPolygon }> = [];
@@ -1039,7 +1051,10 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     const eligibleRooms = (() => {
       const byName = new Map<string, WorkspaceRoom[]>();
       for (const room of allEligible) {
-        const key = normalizeWorkspaceName(room.name);
+        // Use canonical name from Z section if available (prevents collisions when
+        // a room was renamed in the rooms table but not in the section polygon)
+        const effectiveName = canonicalNameMap.get(room.id) || room.name;
+        const key = normalizeWorkspaceName(effectiveName);
         if (!key) continue;
         const list = byName.get(key) || [];
         list.push(room);
@@ -1114,17 +1129,18 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
         }
       }
 
-      // Also check vertical section polygons for this room's actual drawn height
+      // Also check vertical section polygons for this room's actual height (zTop/zBase)
       if (!effectiveHeightM) {
         for (const src of verticalPolygonSources) {
           if (src.polygon.id === key || src.polygon.name === roomName) {
-            const verts = src.polygon.vertices;
-            if (verts && verts.length >= 3) {
-              const minY = Math.min(...verts.map(v => v.y));
-              const maxY = Math.max(...verts.map(v => v.y));
-              const drawnHeightUnits = maxY - minY;
-              if (drawnHeightUnits > 0.01) {
-                effectiveHeightM = (drawnHeightUnits * zUnitMm) / 1000;
+            // Use zTop/zBase which store the actual height in mm or grid units
+            if (typeof src.polygon.zTop === 'number' && typeof src.polygon.zBase === 'number') {
+              const rawDelta = src.polygon.zTop - src.polygon.zBase;
+              if (rawDelta > 0.01) {
+                // If > 50 assume mm, otherwise grid units
+                effectiveHeightM = rawDelta > 50
+                  ? rawDelta / 1000
+                  : Math.max(0.25, (rawDelta * zUnitMm) / 1000);
                 break;
               }
             }
@@ -1201,9 +1217,11 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     for (const room of eligibleRooms) {
       if (!room.floor_polygon || room.floor_polygon.length < 3) continue;
       const zBase = resolveRoomZBase(room);
+      // Use canonical name from Z section if available (authoritative)
+      const displayName = canonicalNameMap.get(room.id) || room.name;
       pushProjectedRoom(
         room.id,
-        room.name,
+        displayName,
         room.floor_polygon,
         zBase,
         room.height,
@@ -1270,7 +1288,7 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
     }
 
     return projected;
-  }, [workspaceRooms, allWalls, resolveRoomZBase, validRoomIds, verticalRoomNameSet, verticalPolygonSources, workspaceRoomsByNormalizedName, workspaceRoomsByLooseName, workspaceRoomMap, pickMostRecentlyUpdatedRoom]);
+  }, [workspaceRooms, allWalls, resolveRoomZBase, validRoomIds, verticalRoomNameSet, verticalPolygonSources, workspaceRoomsByNormalizedName, workspaceRoomsByLooseName, workspaceRoomMap, pickMostRecentlyUpdatedRoom, canonicalNameMap]);
 
   // If viewing a section, show the viewer
   if (activeSection) {

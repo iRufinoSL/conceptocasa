@@ -1166,6 +1166,22 @@ export function WallObjectsList({ budgetId }: WallObjectsListProps) {
     setPanelOpen(true);
   };
 
+  const handlePlacedObjectClick = (obj: any) => {
+    if (!obj?.wall_id) return;
+
+    const wall = allWalls.find(w => w.id === obj.wall_id);
+    const wallIndex = wall?.wall_index ?? 0;
+    const wallType = wall?.wall_type ?? 'exterior';
+    const wallLabel = obj.faceName || (wallIndex === 0 ? 'Espacio' : wallIndex === -1 ? 'Suelo' : wallIndex === -2 ? 'Techo' : `Pared ${wallIndex}`);
+
+    setPanelWallId(obj.wall_id);
+    setPanelWallIndex(wallIndex);
+    setPanelWallType(wallType);
+    setPanelWallLabel(wallLabel);
+    setPanelRoomName(obj.workspace || '');
+    setPanelOpen(true);
+  };
+
   const handleDeleteTemplate = async (id: string) => {
     const { error } = await supabase.from('budget_object_templates').delete().eq('id', id);
     if (error) { toast.error('Error eliminando'); return; }

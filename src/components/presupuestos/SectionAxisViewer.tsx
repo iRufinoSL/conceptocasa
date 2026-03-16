@@ -1599,8 +1599,53 @@ export function SectionAxisViewer({
         const pxPerMm = edgeLen / edgeMm;
 
         if (sectionType === 'vertical') {
-          // Z sections (floor plan view): windows and doors must appear as empty wall-aligned rectangles.
-          // Continue below using the wall edge and position_x/width data.
+          for (const op of entry.openings) {
+            const widthPx = Math.max(2, op.width * pxPerMm);
+            const startPxRaw = (op.position_x || 0) * pxPerMm;
+            const maxStart = Math.max(0, edgeLen - widthPx);
+            const startPx = Math.max(0, Math.min(startPxRaw, maxStart));
+            const color = op.opening_type === 'puerta' ? DOOR_COLOR : OPENING_COLOR;
+            const thickness = 10;
+
+            const x1 = a.px + ux * startPx;
+            const y1 = a.py + uy * startPx;
+            const x2 = a.px + ux * (startPx + widthPx);
+            const y2 = a.py + uy * (startPx + widthPx);
+
+            const p1 = `${x1 + nx * thickness / 2},${y1 + ny * thickness / 2}`;
+            const p2 = `${x2 + nx * thickness / 2},${y2 + ny * thickness / 2}`;
+            const p3 = `${x2 - nx * thickness / 2},${y2 - ny * thickness / 2}`;
+            const p4 = `${x1 - nx * thickness / 2},${y1 - ny * thickness / 2}`;
+
+            elements.push(
+              <g key={`opening-${op.id}`}>
+                <polygon
+                  points={`${p1} ${p2} ${p3} ${p4}`}
+                  fill="white"
+                  fillOpacity={0.95}
+                  stroke={color}
+                  strokeWidth={1.8}
+                  strokeDasharray={op.opening_type === 'puerta' ? undefined : '4 2'}
+                />
+                {op.name && (
+                  <text
+                    x={(x1 + x2) / 2 + nx * 12}
+                    y={(y1 + y2) / 2 + ny * 12}
+                    textAnchor="middle"
+                    fontSize={6}
+                    fontWeight={700}
+                    fill={color}
+                    fontFamily="sans-serif"
+                    stroke="white"
+                    strokeWidth={1.5}
+                    paintOrder="stroke"
+                  >
+                    {op.name}
+                  </text>
+                )}
+              </g>
+            );
+          }
         } else {
           // X/Y sections: openings appear as vertical rectangles on the wall.
           // Here polygon Y-values are in grid units, so convert with current vertical scale (mm per unit).

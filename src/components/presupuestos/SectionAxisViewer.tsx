@@ -333,9 +333,10 @@ export function SectionAxisViewer({
         return x != null && axisValueNorm != null && Math.abs(x - axisValueNorm) <= AXIS_EPS;
       }
       if (sectionType === 'vertical') {
-        const z = normalizeAxisCoord(coords.coord_z);
-        if (z == null || axisValueNorm == null) return true;
-        return Math.abs(z - axisValueNorm) <= AXIS_EPS;
+        // Z sections (floor plans) show ALL objects on the floor's walls
+        // regardless of their coord_z (height). The room/wall membership
+        // already determines visibility; coord_z is just the object's height.
+        return true;
       }
       return true;
     };

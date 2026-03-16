@@ -1599,10 +1599,8 @@ export function SectionAxisViewer({
         const pxPerMm = edgeLen / edgeMm;
 
         if (sectionType === 'vertical') {
-          // Z sections (floor plan view): Do NOT render openings (ventanas/puertas) as rectangles.
-          // Windows and doors are vertical elements that don't appear in a top-down floor plan view.
-          // Skip all openings in vertical/Z sections.
-          continue;
+          // Z sections (floor plan view): windows and doors must appear as empty wall-aligned rectangles.
+          // Continue below using the wall edge and position_x/width data.
         } else {
           // X/Y sections: openings appear as vertical rectangles on the wall.
           // Here polygon Y-values are in grid units, so convert with current vertical scale (mm per unit).

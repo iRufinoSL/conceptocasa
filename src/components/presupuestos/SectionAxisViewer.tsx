@@ -307,10 +307,13 @@ export function SectionAxisViewer({
 
   const loadOpenings = useCallback(async () => {
     if (polygons.length === 0) return;
+
     const polyIds = polygons.map(p => p.id);
-    const { data: walls } = await supabase.from('budget_floor_plan_walls').select('id, room_id, wall_index').in('room_id', polyIds);
-    if (!walls || walls.length === 0) { setOpeningsMap({}); setSectionObjects([]); return; }
-    const wallIds = walls.map(w => w.id);
+    const normalizeName = (value: string | null | undefined) => (value || '').trim().toLowerCase();
+    const isOpeningLike = (value: string | null | undefined) => {
+      const name = (value || '').toLowerCase();
+      return name.includes('ventana') || name.includes('puerta') || name.includes('balcon') || name.includes('window') || name.includes('door');
+    };
 
     const normalizeAxisCoord = (value: number | null | undefined): number | null => {
       if (value == null || !Number.isFinite(value)) return null;
@@ -318,7 +321,7 @@ export function SectionAxisViewer({
     };
 
     const axisValueNorm = normalizeAxisCoord(axisValue);
-    const AXIS_EPS = 0.05; // 50mm in meter-based axis units
+    const AXIS_EPS = 0.05;
 
     const belongsToCurrentSection = (coords: { coord_x?: number | null; coord_y?: number | null; coord_z?: number | null }) => {
       if (sectionType === 'longitudinal') {
@@ -337,66 +340,121 @@ export function SectionAxisViewer({
       return true;
     };
 
-    // Read from both legacy openings table AND wall_objects with type 'hueco'
-    const [legacyRes, huecoRes, sectionObjRes] = await Promise.all([
-      supabase.from('budget_floor_plan_openings').select('*').in('wall_id', wallIds),
-      supabase.from('budget_wall_objects').select('*').in('wall_id', wallIds).eq('object_type', 'hueco'),
-      supabase.from('budget_wall_objects').select('*').in('wall_id', wallIds).eq('shown_in_section', true),
+    const { data: displayedRooms } = await supabase
+      .from('budget_floor_plan_rooms')
+      .select('id, name, floor_plan_id')
+      .in('id', polyIds);
+
+    if (!displayedRooms || displayedRooms.length === 0) {
+      setOpeningsMap({});
+      setSectionObjects([]);
+      return;
+    }
+
+    const displayedPolygonsByName = new Map<string, string[]>();
+    for (const poly of polygons) {
+      const key = normalizeName(poly.name);
+      const list = displayedPolygonsByName.get(key) || [];
+      list.push(poly.id);
+      displayedPolygonsByName.set(key, list);
+    }
+
+    const floorPlanIds = [...new Set(displayedRooms.map(room => room.floor_plan_id).filter(Boolean))];
+    const { data: allRooms } = await supabase
+      .from('budget_floor_plan_rooms')
+      .select('id, name, floor_plan_id')
+      .in('floor_plan_id', floorPlanIds);
+
+    const allRoomList = allRooms || displayedRooms;
+    const allRoomIds = allRoomList.map(room => room.id);
+
+    const { data: allWalls } = await supabase
+      .from('budget_floor_plan_walls')
+      .select('id, room_id, wall_index')
+      .in('room_id', allRoomIds);
+
+    if (!allWalls || allWalls.length === 0) {
+      setOpeningsMap({});
+      setSectionObjects([]);
+      return;
+    }
+
+    const allWallIds = allWalls.map(w => w.id);
+    const wallToRoom = new Map(allWalls.map(w => [w.id, w.room_id]));
+    const wallToIndex = new Map(allWalls.map(w => [w.id, w.wall_index]));
+    const roomNameById = new Map(allRoomList.map(room => [room.id, normalizeName(room.name)]));
+
+    const [legacyRes, wallObjectRes] = await Promise.all([
+      supabase.from('budget_floor_plan_openings').select('*').in('wall_id', allWallIds),
+      supabase
+        .from('budget_wall_objects')
+        .select('*')
+        .in('wall_id', allWallIds)
+        .not('width_mm', 'is', null)
+        .not('height_mm', 'is', null)
+        .or('object_type.eq.hueco,shown_in_section.eq.true'),
     ]);
 
-    // Normalize hueco objects to OpeningData format and filter by current section axis
-    const huecoOpenings: OpeningData[] = (huecoRes.data || [])
-      .filter((h: any) => belongsToCurrentSection(h))
-      .map((h: any) => ({
-        id: h.id,
-        wall_id: h.wall_id,
-        opening_type: (h.name || '').toLowerCase().includes('puerta') ? 'puerta' : 'ventana',
-        width: h.width_mm || 1000,
-        height: h.height_mm || 1000,
-        sill_height: h.sill_height || 0,
-        position_x: h.position_x,
-        name: h.name,
-        coord_x: h.coord_x,
-        coord_y: h.coord_y,
-        coord_z: h.coord_z,
+    const objectOpenings: OpeningData[] = (wallObjectRes.data || [])
+      .filter((obj: any) => belongsToCurrentSection(obj))
+      .filter((obj: any) => obj.object_type === 'hueco' || isOpeningLike(obj.name))
+      .map((obj: any) => ({
+        id: obj.id,
+        wall_id: obj.wall_id,
+        opening_type: (obj.name || '').toLowerCase().includes('puerta') ? 'puerta' : 'ventana',
+        width: obj.width_mm || 1000,
+        height: obj.height_mm || 1000,
+        sill_height: obj.sill_height || 0,
+        position_x: obj.position_x,
+        name: obj.name,
+        coord_x: obj.coord_x,
+        coord_y: obj.coord_y,
+        coord_z: obj.coord_z,
       }));
 
-    const allOpenings = [...(legacyRes.data || []) as OpeningData[], ...huecoOpenings];
-    const map: Record<string, { wallIndex: number; openings: OpeningData[] }> = {};
-    for (const w of walls) {
-      const wOpenings = allOpenings.filter(o => o.wall_id === w.id);
-      if (wOpenings.length > 0) {
-        if (!map[w.room_id]) map[w.room_id] = { wallIndex: w.wall_index, openings: [] };
-        for (const o of wOpenings) {
-          if (!map[`${w.room_id}__${w.wall_index}`]) map[`${w.room_id}__${w.wall_index}`] = { wallIndex: w.wall_index, openings: [] };
-          map[`${w.room_id}__${w.wall_index}`].openings.push(o);
-        }
+    const allOpenings = [...((legacyRes.data || []) as OpeningData[]), ...objectOpenings];
+    const openingMap: Record<string, { wallIndex: number; openings: OpeningData[] }> = {};
+
+    for (const opening of allOpenings) {
+      const roomId = wallToRoom.get(opening.wall_id);
+      const wallIndex = wallToIndex.get(opening.wall_id);
+      const roomName = roomId ? roomNameById.get(roomId) : null;
+      if (!roomName || wallIndex == null) continue;
+      const targetPolyIds = displayedPolygonsByName.get(roomName) || [];
+      for (const targetPolyId of targetPolyIds) {
+        const key = `${targetPolyId}__${wallIndex}`;
+        if (!openingMap[key]) openingMap[key] = { wallIndex, openings: [] };
+        openingMap[key].openings.push(opening);
       }
     }
-    setOpeningsMap(map);
+    setOpeningsMap(openingMap);
 
-    // Build section objects array with room_id resolved
-    const wallToRoom = new Map(walls.map(w => [w.id, w.room_id]));
-    const wallToIndex = new Map(walls.map(w => [w.id, w.wall_index]));
-    const secObjs: SectionObjectData[] = (sectionObjRes.data || [])
-      .filter((o: any) => o.object_type !== 'hueco')
-      .filter((o: any) => belongsToCurrentSection(o))
-      .map((o: any) => ({
-        id: o.id,
-        wall_id: o.wall_id,
-        room_id: wallToRoom.get(o.wall_id) || '',
-        name: o.name || '',
-        width_mm: o.width_mm || 200,
-        height_mm: o.height_mm || 200,
-        position_x: o.position_x || 0,
-        sill_height: o.sill_height || 0,
-        object_type: o.object_type || 'material',
-        coord_x: o.coord_x,
-        coord_y: o.coord_y,
-        coord_z: o.coord_z,
-        wall_index: wallToIndex.get(o.wall_id) || 0,
-      }));
-    setSectionObjects(secObjs);
+    const sectionItems: SectionObjectData[] = [];
+    for (const obj of wallObjectRes.data || []) {
+      if (!belongsToCurrentSection(obj)) continue;
+      if (obj.object_type === 'hueco' || isOpeningLike(obj.name)) continue;
+      const sourceRoomId = wallToRoom.get(obj.wall_id);
+      const sourceRoomName = sourceRoomId ? roomNameById.get(sourceRoomId) : null;
+      const targetPolyIds = sourceRoomName ? displayedPolygonsByName.get(sourceRoomName) || [] : [];
+      for (const targetPolyId of targetPolyIds) {
+        sectionItems.push({
+          id: obj.id,
+          wall_id: obj.wall_id,
+          room_id: targetPolyId,
+          name: obj.name || '',
+          width_mm: obj.width_mm || 200,
+          height_mm: obj.height_mm || 200,
+          position_x: obj.position_x || 0,
+          sill_height: obj.sill_height || 0,
+          object_type: obj.object_type || 'material',
+          coord_x: obj.coord_x,
+          coord_y: obj.coord_y,
+          coord_z: obj.coord_z,
+          wall_index: wallToIndex.get(obj.wall_id) || 0,
+        });
+      }
+    }
+    setSectionObjects(sectionItems);
   }, [polygons, sectionType, axisValue]);
 
   useEffect(() => { loadOpenings(); }, [loadOpenings, openingsVersion]);
@@ -1541,10 +1599,53 @@ export function SectionAxisViewer({
         const pxPerMm = edgeLen / edgeMm;
 
         if (sectionType === 'vertical') {
-          // Z sections (floor plan view): Do NOT render openings (ventanas/puertas) as rectangles.
-          // Windows and doors are vertical elements that don't appear in a top-down floor plan view.
-          // Skip all openings in vertical/Z sections.
-          continue;
+          for (const op of entry.openings) {
+            const widthPx = Math.max(2, op.width * pxPerMm);
+            const startPxRaw = (op.position_x || 0) * pxPerMm;
+            const maxStart = Math.max(0, edgeLen - widthPx);
+            const startPx = Math.max(0, Math.min(startPxRaw, maxStart));
+            const color = op.opening_type === 'puerta' ? DOOR_COLOR : OPENING_COLOR;
+            const thickness = 10;
+
+            const x1 = a.px + ux * startPx;
+            const y1 = a.py + uy * startPx;
+            const x2 = a.px + ux * (startPx + widthPx);
+            const y2 = a.py + uy * (startPx + widthPx);
+
+            const p1 = `${x1 + nx * thickness / 2},${y1 + ny * thickness / 2}`;
+            const p2 = `${x2 + nx * thickness / 2},${y2 + ny * thickness / 2}`;
+            const p3 = `${x2 - nx * thickness / 2},${y2 - ny * thickness / 2}`;
+            const p4 = `${x1 - nx * thickness / 2},${y1 - ny * thickness / 2}`;
+
+            elements.push(
+              <g key={`opening-${op.id}`}>
+                <polygon
+                  points={`${p1} ${p2} ${p3} ${p4}`}
+                  fill="white"
+                  fillOpacity={0.95}
+                  stroke={color}
+                  strokeWidth={1.8}
+                  strokeDasharray={op.opening_type === 'puerta' ? undefined : '4 2'}
+                />
+                {op.name && (
+                  <text
+                    x={(x1 + x2) / 2 + nx * 12}
+                    y={(y1 + y2) / 2 + ny * 12}
+                    textAnchor="middle"
+                    fontSize={6}
+                    fontWeight={700}
+                    fill={color}
+                    fontFamily="sans-serif"
+                    stroke="white"
+                    strokeWidth={1.5}
+                    paintOrder="stroke"
+                  >
+                    {op.name}
+                  </text>
+                )}
+              </g>
+            );
+          }
         } else {
           // X/Y sections: openings appear as vertical rectangles on the wall.
           // Here polygon Y-values are in grid units, so convert with current vertical scale (mm per unit).

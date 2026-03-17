@@ -1868,7 +1868,7 @@ export function SectionAxisViewer({
       }
     });
     return elements.length > 0 ? elements : null;
-  }, [polygons, gridLayout, scale, openingsMap, sectionType, selectedOpeningId, handleOpeningMouseDown, getOpeningHorizontalGridCoord]);
+  }, [polygons, gridLayout, scale, openingsMap, sectionType, selectedOpeningId, getOpeningHorizontalGridCoord]);
 
   const lastOpeningClickRef = useRef<{ time: number; openingId: string } | null>(null);
 
@@ -1964,6 +1964,51 @@ export function SectionAxisViewer({
     setDraggingObjectId(null);
     setDragStart(null);
   }, [draggingObjectId, persistSectionObjectPosition, sectionObjects]);
+
+  const OBJECT_COLOR = 'hsl(200, 70%, 50%)';
+
+  const handleObjectMouseDown = useCallback((e: React.MouseEvent, objId: string, obj: SectionObjectData) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setSelectedObjectId(objId);
+    setSelectedOpeningId(null);
+    setDraggingObjectId(objId);
+    const svg = svgRef.current;
+    if (!svg) return;
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX;
+    pt.y = e.clientY;
+    const ctm = svg.getScreenCTM()?.inverse();
+    if (!ctm) return;
+    const svgP = pt.matrixTransform(ctm);
+    setDragStart({ x: svgP.x, y: svgP.y, baseObject: { ...obj } });
+  }, []);
+
+  const handleObjectMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!draggingObjectId || !dragStart || !scale) return;
+    const svg = svgRef.current;
+    if (!svg) return;
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX;
+    pt.y = e.clientY;
+    const ctm = svg.getScreenCTM()?.inverse();
+    if (!ctm) return;
+    const svgP = pt.matrixTransform(ctm);
+
+    const { gridLayout: gl } = (() => ({ gridLayout }))();
+    if (!gl) return;
+    const { cellPxW, cellPxH } = gl;
+
+    const dxPx = svgP.x - dragStart.x;
+    const dyPx = svgP.y - dragStart.y;
+    const dxMm = dxPx / cellPxW * scale.hScale;
+    const dyMm = -(dyPx / cellPxH * scale.vScale);
+
+    setSectionObjects(prev => prev.map(o => {
+      if (o.id !== draggingObjectId) return o;
+      return applyObjectMovementDelta(dragStart.baseObject, dxMm, dyMm);
+    }));
+  }, [draggingObjectId, dragStart, scale, gridLayout, applyObjectMovementDelta]);
 
   // ── Keyboard arrow movement for selected object (half-scale increments) ──
   useEffect(() => {
@@ -2144,7 +2189,7 @@ export function SectionAxisViewer({
     }
 
     return elements.length > 0 ? elements : null;
-  }, [sectionObjects, polygons, gridLayout, scale, sectionType, handleObjectMouseDown, selectedObjectId]);
+  }, [sectionObjects, polygons, gridLayout, scale, sectionType, handleObjectMouseDown, selectedObjectId, OBJECT_COLOR]);
 
 
   const drawingOverlay = useMemo(() => {

@@ -321,7 +321,7 @@ export function SectionAxisViewer({
   }
   const [sectionObjects, setSectionObjects] = useState<SectionObjectData[]>([]);
   const [draggingObjectId, setDraggingObjectId] = useState<string | null>(null);
-  const [dragStart, setDragStart] = useState<{ x: number; y: number; posX: number; sill: number } | null>(null);
+  const [dragStart, setDragStart] = useState<{ x: number; y: number; baseObject: SectionObjectData } | null>(null);
   const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
 
   const loadOpenings = useCallback(async () => {
@@ -495,6 +495,59 @@ export function SectionAxisViewer({
   }, [polygons, sectionType, axisValue]);
 
   useEffect(() => { loadOpenings(); }, [loadOpenings, openingsVersion]);
+
+  const normalizeSectionCoord = useCallback((value: number | null | undefined) => {
+    if (value == null || !Number.isFinite(value)) return null;
+    return Math.abs(value) > 50 ? value / 1000 : value;
+  }, []);
+
+  const getObjectHorizontalGridCoord = useCallback((obj: SectionObjectData) => {
+    if (sectionType === 'longitudinal') return normalizeSectionCoord(obj.coord_x);
+    if (sectionType === 'transversal') return normalizeSectionCoord(obj.coord_y);
+    return null;
+  }, [normalizeSectionCoord, sectionType]);
+
+  const getFallbackObjectHorizontalGridCoord = useCallback((obj: SectionObjectData) => {
+    if (!scale || sectionType === 'vertical') return null;
+    const poly = polygons.find(p => p.id === obj.room_id);
+    if (!poly || poly.vertices.length === 0) return null;
+    const polyMinX = Math.min(...poly.vertices.map(v => v.x));
+    return polyMinX + ((obj.position_x || 0) + (obj.width_mm || 0) / 2) / scale.hScale;
+  }, [polygons, scale, sectionType]);
+
+  const applyObjectMovementDelta = useCallback((obj: SectionObjectData, deltaMmX: number, deltaMmY: number) => {
+    const nextPositionX = Math.max(0, (obj.position_x || 0) + deltaMmX);
+    const nextSillHeight = Math.max(0, (obj.sill_height || 0) + deltaMmY);
+
+    if (!scale || sectionType === 'vertical') {
+      return {
+        ...obj,
+        position_x: nextPositionX,
+        sill_height: nextSillHeight,
+      };
+    }
+
+    const currentGridCoord = getObjectHorizontalGridCoord(obj) ?? getFallbackObjectHorizontalGridCoord(obj);
+    const deltaGrid = deltaMmX / scale.hScale;
+    const nextGridCoord = currentGridCoord != null ? currentGridCoord + deltaGrid : null;
+
+    return {
+      ...obj,
+      position_x: nextPositionX,
+      sill_height: nextSillHeight,
+      coord_x: sectionType === 'longitudinal' ? nextGridCoord : obj.coord_x,
+      coord_y: sectionType === 'transversal' ? nextGridCoord : obj.coord_y,
+    };
+  }, [getFallbackObjectHorizontalGridCoord, getObjectHorizontalGridCoord, scale, sectionType]);
+
+  const persistSectionObjectPosition = useCallback(async (obj: SectionObjectData) => {
+    await supabase.from('budget_wall_objects').update({
+      position_x: obj.position_x,
+      sill_height: obj.sill_height,
+      coord_x: obj.coord_x,
+      coord_y: obj.coord_y,
+    }).eq('id', obj.id);
+  }, []);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -1790,7 +1843,7 @@ export function SectionAxisViewer({
     const ctm = svg.getScreenCTM();
     if (ctm) pt = pt.matrixTransform(ctm.inverse());
     setDraggingObjectId(objId);
-    setDragStart({ x: pt.x, y: pt.y, posX: obj.position_x, sill: obj.sill_height });
+    setDragStart({ x: pt.x, y: pt.y, baseObject: obj });
   }, [polygons]);
 
   const handleObjectMouseMove = useCallback((e: React.MouseEvent) => {
@@ -1802,34 +1855,29 @@ export function SectionAxisViewer({
     pt.y = e.clientY;
     const ctm = svg.getScreenCTM();
     if (ctm) pt = pt.matrixTransform(ctm.inverse());
-    
+
     const dxPx = pt.x - dragStart.x;
     const dyPx = pt.y - dragStart.y;
-    
+
     // Convert pixel delta to mm
     const pxPerMmH = gridLayout.cellPxW / scale.hScale;
     const pxPerMmV = gridLayout.cellPxH / scale.vScale;
     const dxMm = Math.round(dxPx / pxPerMmH);
     const dyMm = Math.round(-dyPx / pxPerMmV); // y axis is inverted in SVG
-    
-    const newPosX = Math.max(0, dragStart.posX + dxMm);
-    const newSill = Math.max(0, dragStart.sill + dyMm);
-    
-    setSectionObjects(prev => prev.map(o => o.id === draggingObjectId ? { ...o, position_x: newPosX, sill_height: newSill } : o));
-  }, [draggingObjectId, dragStart, gridLayout, scale]);
+
+    const movedObject = applyObjectMovementDelta(dragStart.baseObject, dxMm, dyMm);
+    setSectionObjects(prev => prev.map(o => o.id === draggingObjectId ? movedObject : o));
+  }, [applyObjectMovementDelta, draggingObjectId, dragStart, gridLayout, scale]);
 
   const handleObjectMouseUp = useCallback(async () => {
     if (!draggingObjectId) return;
     const obj = sectionObjects.find(o => o.id === draggingObjectId);
     if (obj) {
-      await supabase.from('budget_wall_objects').update({
-        position_x: obj.position_x,
-        sill_height: obj.sill_height,
-      }).eq('id', draggingObjectId);
+      await persistSectionObjectPosition(obj);
     }
     setDraggingObjectId(null);
     setDragStart(null);
-  }, [draggingObjectId, sectionObjects]);
+  }, [draggingObjectId, persistSectionObjectPosition, sectionObjects]);
 
   // ── Keyboard arrow movement for selected object (half-scale increments) ──
   useEffect(() => {
@@ -1844,20 +1892,24 @@ export function SectionAxisViewer({
 
       setSectionObjects(prev => prev.map(o => {
         if (o.id !== selectedObjectId) return o;
-        let { position_x, sill_height } = o;
         switch (e.key) {
-          case 'ArrowRight': position_x = position_x + halfH; break;
-          case 'ArrowLeft': position_x = Math.max(0, position_x - halfH); break;
-          case 'ArrowUp': sill_height = sill_height + halfV; break;
-          case 'ArrowDown': sill_height = Math.max(0, sill_height - halfV); break;
+          case 'ArrowRight':
+            return applyObjectMovementDelta(o, halfH, 0);
+          case 'ArrowLeft':
+            return applyObjectMovementDelta(o, -halfH, 0);
+          case 'ArrowUp':
+            return applyObjectMovementDelta(o, 0, halfV);
+          case 'ArrowDown':
+            return applyObjectMovementDelta(o, 0, -halfV);
+          default:
+            return o;
         }
-        return { ...o, position_x, sill_height };
       }));
     };
 
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [selectedObjectId, scale]);
+  }, [applyObjectMovementDelta, selectedObjectId, scale]);
 
   // Persist after keyboard movement (debounced)
   const keyMoveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1867,12 +1919,9 @@ export function SectionAxisViewer({
     if (!obj) return;
     if (keyMoveTimerRef.current) clearTimeout(keyMoveTimerRef.current);
     keyMoveTimerRef.current = setTimeout(async () => {
-      await supabase.from('budget_wall_objects').update({
-        position_x: obj.position_x,
-        sill_height: obj.sill_height,
-      }).eq('id', selectedObjectId);
+      await persistSectionObjectPosition(obj);
     }, 300);
-  }, [sectionObjects, selectedObjectId]);
+  }, [persistSectionObjectPosition, sectionObjects, selectedObjectId]);
 
   // Deselect object when pressing Escape
   useEffect(() => {
@@ -1976,11 +2025,10 @@ export function SectionAxisViewer({
         const widthPx = obj.width_mm * pxPerMmH;
 
         // Use absolute grid coordinate for horizontal placement in elevation views
-        const gridCoord = sectionType === 'longitudinal' ? obj.coord_x : obj.coord_y;
+        const gridCoord = getObjectHorizontalGridCoord(obj);
         let rx: number;
-        if (gridCoord != null && Number.isFinite(gridCoord)) {
-          const normCoord = Math.abs(gridCoord) > 50 ? gridCoord / 1000 : gridCoord;
-          rx = originX + normCoord * cellPxW - widthPx / 2;
+        if (gridCoord != null) {
+          rx = originX + gridCoord * cellPxW - widthPx / 2;
         } else {
           const posXPx = obj.position_x * pxPerMmH;
           rx = originX + polyMinX * cellPxW + posXPx;

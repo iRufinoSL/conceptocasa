@@ -328,7 +328,32 @@ export function SectionAxisViewer({
     if (polygons.length === 0) return;
 
     const polyIds = polygons.map(p => p.id);
-    const displayedPolygonIds = new Set(polyIds);
+    const isOpeningLike = (value: string | null | undefined) => {
+      const name = (value || '').toLowerCase();
+      return name.includes('ventana') || name.includes('puerta') || name.includes('balcon') || name.includes('window') || name.includes('door');
+    };
+
+    const normalizeAxisCoord = (value: number | null | undefined): number | null => {
+      if (value == null || !Number.isFinite(value)) return null;
+      return Math.abs(value) > 50 ? value / 1000 : value;
+    };
+
+    const axisValueNorm = normalizeAxisCoord(axisValue);
+    const AXIS_EPS = 0.05;
+
+    const belongsToCurrentSection = (coords: { coord_x?: number | null; coord_y?: number | null; coord_z?: number | null }) => {
+      if (sectionType === 'longitudinal') {
+        const y = normalizeAxisCoord(coords.coord_y);
+        return y != null && axisValueNorm != null && Math.abs(y - axisValueNorm) <= AXIS_EPS;
+      }
+      if (sectionType === 'transversal') {
+        const x = normalizeAxisCoord(coords.coord_x);
+        return x != null && axisValueNorm != null && Math.abs(x - axisValueNorm) <= AXIS_EPS;
+      }
+      if (sectionType === 'vertical') return true;
+      return true;
+    };
+
     const displayedPolygonsByName = new Map<string, string[]>();
     const displayedPolygonsByLooseName = new Map<string, string[]>();
     const displayedPolygonsByCanonicalId = new Map<string, string[]>();
@@ -345,12 +370,10 @@ export function SectionAxisViewer({
         list.push(poly.id);
         displayedPolygonsByLooseName.set(looseKey, list);
       }
-      if (displayedPolygonIds.has(poly.id)) {
-        const list = displayedPolygonsByCanonicalId.get(poly.id) || [];
-        list.push(poly.id);
-        displayedPolygonsByCanonicalId.set(poly.id, list);
-      }
-    };
+      const byId = displayedPolygonsByCanonicalId.get(poly.id) || [];
+      byId.push(poly.id);
+      displayedPolygonsByCanonicalId.set(poly.id, byId);
+    }
 
     const resolveTargetPolyIds = (sourceRoomId: string | null | undefined, sourceRoomName: string | null | undefined) => {
       const byId = sourceRoomId ? displayedPolygonsByCanonicalId.get(sourceRoomId) || [] : [];
@@ -359,8 +382,7 @@ export function SectionAxisViewer({
       const byStrictName = strictKey ? displayedPolygonsByName.get(strictKey) || [] : [];
       if (byStrictName.length > 0) return byStrictName;
       const looseKey = normalizeWorkspaceNameLoose(sourceRoomName);
-      const byLooseName = looseKey ? displayedPolygonsByLooseName.get(looseKey) || [] : [];
-      return byLooseName;
+      return looseKey ? displayedPolygonsByLooseName.get(looseKey) || [] : [];
     };
 
     const { data: displayedRooms } = await supabase
@@ -434,8 +456,8 @@ export function SectionAxisViewer({
       const roomId = wallToRoom.get(opening.wall_id);
       const wallIndex = wallToIndex.get(opening.wall_id);
       const roomName = roomId ? roomNameById.get(roomId) : null;
-      if (!roomName || wallIndex == null) continue;
-      const targetPolyIds = displayedPolygonsByName.get(roomName) || [];
+      if ((!roomId && !roomName) || wallIndex == null) continue;
+      const targetPolyIds = resolveTargetPolyIds(roomId, roomName);
       for (const targetPolyId of targetPolyIds) {
         const key = `${targetPolyId}__${wallIndex}`;
         if (!openingMap[key]) openingMap[key] = { wallIndex, openings: [] };
@@ -450,7 +472,7 @@ export function SectionAxisViewer({
       if (obj.object_type === 'hueco' || isOpeningLike(obj.name)) continue;
       const sourceRoomId = wallToRoom.get(obj.wall_id);
       const sourceRoomName = sourceRoomId ? roomNameById.get(sourceRoomId) : null;
-      const targetPolyIds = sourceRoomName ? displayedPolygonsByName.get(sourceRoomName) || [] : [];
+      const targetPolyIds = resolveTargetPolyIds(sourceRoomId, sourceRoomName);
       for (const targetPolyId of targetPolyIds) {
         sectionItems.push({
           id: obj.id,

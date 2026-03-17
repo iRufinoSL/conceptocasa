@@ -2006,7 +2006,7 @@ export function SectionAxisViewer({
 
     setSectionObjects(prev => prev.map(o => {
       if (o.id !== draggingObjectId) return o;
-      return applyObjectMovementDelta(dragStart.baseObject, o.id, dxMm, dyMm);
+      return applyObjectMovementDelta(dragStart.baseObject, dxMm, dyMm);
     }));
   }, [draggingObjectId, dragStart, scale, gridLayout, applyObjectMovementDelta]);
 

@@ -118,6 +118,25 @@ function getConfig(sectionType: string) {
   }
 }
 
+function normalizeWorkspaceName(value: string | null | undefined): string {
+  if (!value) return '';
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[._-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function normalizeWorkspaceNameLoose(value: string | null | undefined): string {
+  return normalizeWorkspaceName(value)
+    .replace(/\b(techo|cubierta|suelo|piso|planta|roof|ceiling|floor)\b/g, ' ')
+    .replace(/\d+\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function polygonAreaGrid(vertices: Array<{ x: number; y: number }>): number {
   let area = 0;
   const n = vertices.length;
@@ -309,7 +328,6 @@ export function SectionAxisViewer({
     if (polygons.length === 0) return;
 
     const polyIds = polygons.map(p => p.id);
-    const normalizeName = (value: string | null | undefined) => (value || '').trim().toLowerCase();
     const isOpeningLike = (value: string | null | undefined) => {
       const name = (value || '').toLowerCase();
       return name.includes('ventana') || name.includes('puerta') || name.includes('balcon') || name.includes('window') || name.includes('door');
@@ -332,13 +350,39 @@ export function SectionAxisViewer({
         const x = normalizeAxisCoord(coords.coord_x);
         return x != null && axisValueNorm != null && Math.abs(x - axisValueNorm) <= AXIS_EPS;
       }
-      if (sectionType === 'vertical') {
-        // Z sections (floor plans) show ALL objects on the floor's walls
-        // regardless of their coord_z (height). The room/wall membership
-        // already determines visibility; coord_z is just the object's height.
-        return true;
-      }
+      if (sectionType === 'vertical') return true;
       return true;
+    };
+
+    const displayedPolygonsByName = new Map<string, string[]>();
+    const displayedPolygonsByLooseName = new Map<string, string[]>();
+    const displayedPolygonsByCanonicalId = new Map<string, string[]>();
+    for (const poly of polygons) {
+      const strictKey = normalizeWorkspaceName(poly.name);
+      const looseKey = normalizeWorkspaceNameLoose(poly.name);
+      if (strictKey) {
+        const list = displayedPolygonsByName.get(strictKey) || [];
+        list.push(poly.id);
+        displayedPolygonsByName.set(strictKey, list);
+      }
+      if (looseKey) {
+        const list = displayedPolygonsByLooseName.get(looseKey) || [];
+        list.push(poly.id);
+        displayedPolygonsByLooseName.set(looseKey, list);
+      }
+      const byId = displayedPolygonsByCanonicalId.get(poly.id) || [];
+      byId.push(poly.id);
+      displayedPolygonsByCanonicalId.set(poly.id, byId);
+    }
+
+    const resolveTargetPolyIds = (sourceRoomId: string | null | undefined, sourceRoomName: string | null | undefined) => {
+      const byId = sourceRoomId ? displayedPolygonsByCanonicalId.get(sourceRoomId) || [] : [];
+      if (byId.length > 0) return byId;
+      const strictKey = normalizeWorkspaceName(sourceRoomName);
+      const byStrictName = strictKey ? displayedPolygonsByName.get(strictKey) || [] : [];
+      if (byStrictName.length > 0) return byStrictName;
+      const looseKey = normalizeWorkspaceNameLoose(sourceRoomName);
+      return looseKey ? displayedPolygonsByLooseName.get(looseKey) || [] : [];
     };
 
     const { data: displayedRooms } = await supabase
@@ -350,14 +394,6 @@ export function SectionAxisViewer({
       setOpeningsMap({});
       setSectionObjects([]);
       return;
-    }
-
-    const displayedPolygonsByName = new Map<string, string[]>();
-    for (const poly of polygons) {
-      const key = normalizeName(poly.name);
-      const list = displayedPolygonsByName.get(key) || [];
-      list.push(poly.id);
-      displayedPolygonsByName.set(key, list);
     }
 
     const floorPlanIds = [...new Set(displayedRooms.map(room => room.floor_plan_id).filter(Boolean))];
@@ -383,7 +419,7 @@ export function SectionAxisViewer({
     const allWallIds = allWalls.map(w => w.id);
     const wallToRoom = new Map(allWalls.map(w => [w.id, w.room_id]));
     const wallToIndex = new Map(allWalls.map(w => [w.id, w.wall_index]));
-    const roomNameById = new Map(allRoomList.map(room => [room.id, normalizeName(room.name)]));
+    const roomNameById = new Map(allRoomList.map(room => [room.id, room.name]));
 
     const [legacyRes, wallObjectRes] = await Promise.all([
       supabase.from('budget_floor_plan_openings').select('*').in('wall_id', allWallIds),
@@ -420,8 +456,8 @@ export function SectionAxisViewer({
       const roomId = wallToRoom.get(opening.wall_id);
       const wallIndex = wallToIndex.get(opening.wall_id);
       const roomName = roomId ? roomNameById.get(roomId) : null;
-      if (!roomName || wallIndex == null) continue;
-      const targetPolyIds = displayedPolygonsByName.get(roomName) || [];
+      if ((!roomId && !roomName) || wallIndex == null) continue;
+      const targetPolyIds = resolveTargetPolyIds(roomId, roomName);
       for (const targetPolyId of targetPolyIds) {
         const key = `${targetPolyId}__${wallIndex}`;
         if (!openingMap[key]) openingMap[key] = { wallIndex, openings: [] };
@@ -436,7 +472,7 @@ export function SectionAxisViewer({
       if (obj.object_type === 'hueco' || isOpeningLike(obj.name)) continue;
       const sourceRoomId = wallToRoom.get(obj.wall_id);
       const sourceRoomName = sourceRoomId ? roomNameById.get(sourceRoomId) : null;
-      const targetPolyIds = sourceRoomName ? displayedPolygonsByName.get(sourceRoomName) || [] : [];
+      const targetPolyIds = resolveTargetPolyIds(sourceRoomId, sourceRoomName);
       for (const targetPolyId of targetPolyIds) {
         sectionItems.push({
           id: obj.id,

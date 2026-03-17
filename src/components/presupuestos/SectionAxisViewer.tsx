@@ -496,6 +496,59 @@ export function SectionAxisViewer({
 
   useEffect(() => { loadOpenings(); }, [loadOpenings, openingsVersion]);
 
+  const normalizeSectionCoord = useCallback((value: number | null | undefined) => {
+    if (value == null || !Number.isFinite(value)) return null;
+    return Math.abs(value) > 50 ? value / 1000 : value;
+  }, []);
+
+  const getObjectHorizontalGridCoord = useCallback((obj: SectionObjectData) => {
+    if (sectionType === 'longitudinal') return normalizeSectionCoord(obj.coord_x);
+    if (sectionType === 'transversal') return normalizeSectionCoord(obj.coord_y);
+    return null;
+  }, [normalizeSectionCoord, sectionType]);
+
+  const getFallbackObjectHorizontalGridCoord = useCallback((obj: SectionObjectData) => {
+    if (!scale || sectionType === 'vertical') return null;
+    const poly = polygons.find(p => p.id === obj.room_id);
+    if (!poly || poly.vertices.length === 0) return null;
+    const polyMinX = Math.min(...poly.vertices.map(v => v.x));
+    return polyMinX + ((obj.position_x || 0) + (obj.width_mm || 0) / 2) / scale.hScale;
+  }, [polygons, scale, sectionType]);
+
+  const applyObjectMovementDelta = useCallback((obj: SectionObjectData, deltaMmX: number, deltaMmY: number) => {
+    const nextPositionX = Math.max(0, (obj.position_x || 0) + deltaMmX);
+    const nextSillHeight = Math.max(0, (obj.sill_height || 0) + deltaMmY);
+
+    if (!scale || sectionType === 'vertical') {
+      return {
+        ...obj,
+        position_x: nextPositionX,
+        sill_height: nextSillHeight,
+      };
+    }
+
+    const currentGridCoord = getObjectHorizontalGridCoord(obj) ?? getFallbackObjectHorizontalGridCoord(obj);
+    const deltaGrid = deltaMmX / scale.hScale;
+    const nextGridCoord = currentGridCoord != null ? currentGridCoord + deltaGrid : null;
+
+    return {
+      ...obj,
+      position_x: nextPositionX,
+      sill_height: nextSillHeight,
+      coord_x: sectionType === 'longitudinal' ? nextGridCoord : obj.coord_x,
+      coord_y: sectionType === 'transversal' ? nextGridCoord : obj.coord_y,
+    };
+  }, [getFallbackObjectHorizontalGridCoord, getObjectHorizontalGridCoord, scale, sectionType]);
+
+  const persistSectionObjectPosition = useCallback(async (obj: SectionObjectData) => {
+    await supabase.from('budget_wall_objects').update({
+      position_x: obj.position_x,
+      sill_height: obj.sill_height,
+      coord_x: obj.coord_x,
+      coord_y: obj.coord_y,
+    }).eq('id', obj.id);
+  }, []);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const [containerSize, setContainerSize] = useState({ w: 800, h: 500 });

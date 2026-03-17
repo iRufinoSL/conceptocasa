@@ -1967,6 +1967,30 @@ export function SectionAxisViewer({
 
   const OBJECT_COLOR = 'hsl(200, 70%, 50%)';
 
+  const moveDraggedObject = useCallback((clientX: number, clientY: number) => {
+    if (!draggingObjectId || !dragStart || !scale || !gridLayout) return;
+    const svg = svgRef.current;
+    if (!svg) return;
+
+    const pt = svg.createSVGPoint();
+    pt.x = clientX;
+    pt.y = clientY;
+    const ctm = svg.getScreenCTM()?.inverse();
+    if (!ctm) return;
+    const svgP = pt.matrixTransform(ctm);
+
+    const { cellPxW, cellPxH } = gridLayout;
+    const dxPx = svgP.x - dragStart.x;
+    const dyPx = svgP.y - dragStart.y;
+    const dxMm = (dxPx / cellPxW) * scale.hScale;
+    const dyMm = -(dyPx / cellPxH) * scale.vScale;
+
+    setSectionObjects(prev => prev.map(o => {
+      if (o.id !== draggingObjectId) return o;
+      return applyObjectMovementDelta(dragStart.baseObject, dxMm, dyMm);
+    }));
+  }, [draggingObjectId, dragStart, scale, gridLayout, applyObjectMovementDelta]);
+
   const handleObjectMouseDown = useCallback((e: React.MouseEvent, objId: string, obj: SectionObjectData) => {
     e.stopPropagation();
     e.preventDefault();
@@ -1985,39 +2009,42 @@ export function SectionAxisViewer({
   }, []);
 
   const handleObjectMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!draggingObjectId || !dragStart || !scale) return;
-    const svg = svgRef.current;
-    if (!svg) return;
-    const pt = svg.createSVGPoint();
-    pt.x = e.clientX;
-    pt.y = e.clientY;
-    const ctm = svg.getScreenCTM()?.inverse();
-    if (!ctm) return;
-    const svgP = pt.matrixTransform(ctm);
+    moveDraggedObject(e.clientX, e.clientY);
+  }, [moveDraggedObject]);
 
-    const { gridLayout: gl } = (() => ({ gridLayout }))();
-    if (!gl) return;
-    const { cellPxW, cellPxH } = gl;
+  useEffect(() => {
+    if (!draggingObjectId) return;
 
-    const dxPx = svgP.x - dragStart.x;
-    const dyPx = svgP.y - dragStart.y;
-    const dxMm = dxPx / cellPxW * scale.hScale;
-    const dyMm = -(dyPx / cellPxH * scale.vScale);
+    const handleWindowMouseMove = (e: MouseEvent) => {
+      moveDraggedObject(e.clientX, e.clientY);
+    };
 
-    setSectionObjects(prev => prev.map(o => {
-      if (o.id !== draggingObjectId) return o;
-      return applyObjectMovementDelta(dragStart.baseObject, dxMm, dyMm);
-    }));
-  }, [draggingObjectId, dragStart, scale, gridLayout, applyObjectMovementDelta]);
+    const handleWindowMouseUp = () => {
+      void handleObjectMouseUp();
+    };
+
+    window.addEventListener('mousemove', handleWindowMouseMove, true);
+    window.addEventListener('mouseup', handleWindowMouseUp, true);
+
+    return () => {
+      window.removeEventListener('mousemove', handleWindowMouseMove, true);
+      window.removeEventListener('mouseup', handleWindowMouseUp, true);
+    };
+  }, [draggingObjectId, handleObjectMouseUp, moveDraggedObject]);
 
   // ── Keyboard arrow movement for selected object (half-scale increments) ──
   useEffect(() => {
     if (!selectedObjectId || !scale) return;
-    const halfH = Math.round(scale.hScale / 2); // half node in mm horizontally
-    const halfV = Math.round(scale.vScale / 2); // half node in mm vertically
+    const halfH = Math.round(scale.hScale / 2);
+    const halfV = Math.round(scale.vScale / 2);
 
-    const handler = async (e: KeyboardEvent) => {
+    const handler = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      const isEditable = !!target && (target.isContentEditable || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT');
+      if (isEditable) return;
       if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+
       e.preventDefault();
       e.stopPropagation();
 
@@ -2038,8 +2065,8 @@ export function SectionAxisViewer({
       }));
     };
 
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    window.addEventListener('keydown', handler, true);
+    return () => window.removeEventListener('keydown', handler, true);
   }, [applyObjectMovementDelta, selectedObjectId, scale]);
 
   // Persist after keyboard movement (debounced)

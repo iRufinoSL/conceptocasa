@@ -1868,7 +1868,7 @@ export function SectionAxisViewer({
       }
     });
     return elements.length > 0 ? elements : null;
-  }, [polygons, gridLayout, scale, openingsMap, sectionType, selectedOpeningId, handleOpeningMouseDown, getOpeningHorizontalGridCoord]);
+  }, [polygons, gridLayout, scale, openingsMap, sectionType, selectedOpeningId, getOpeningHorizontalGridCoord]);
 
   const lastOpeningClickRef = useRef<{ time: number; openingId: string } | null>(null);
 

@@ -1268,7 +1268,11 @@ export function CartesianAxesXYZTab({ budgetId, isAdmin }: CartesianAxesXYZTabPr
         finalZTopRight = zTopRight <= zBase ? guardedZTop : zTopRight;
       }
 
-      // If both tops equal zBase at boundary, still push as a line polygon (height=0)
+      // Skip degenerate boundary polygons where both tops equal zBase (zero height at perimeter)
+      if (isBoundarySection && finalZTopLeft <= zBase && finalZTopRight <= zBase) {
+        return;
+      }
+
       projected.push({
         id: key,
         name: roomName,

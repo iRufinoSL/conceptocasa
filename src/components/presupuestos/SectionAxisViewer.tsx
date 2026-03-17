@@ -299,9 +299,13 @@ export function SectionAxisViewer({
     coord_x?: number | null;
     coord_y?: number | null;
     coord_z?: number | null;
+    source: 'legacy' | 'wall_object';
   }
   const [openingsMap, setOpeningsMap] = useState<Record<string, { wallIndex: number; openings: OpeningData[] }>>({});
   const [openingsVersion, setOpeningsVersion] = useState(0);
+  const [draggingOpeningId, setDraggingOpeningId] = useState<string | null>(null);
+  const [openingDragStart, setOpeningDragStart] = useState<{ x: number; y: number; baseOpening: OpeningData; polyId: string } | null>(null);
+  const [selectedOpeningId, setSelectedOpeningId] = useState<string | null>(null);
 
   // ── Section objects (shown_in_section=true) ──
   interface SectionObjectData {

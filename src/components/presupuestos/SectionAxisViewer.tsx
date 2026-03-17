@@ -1648,42 +1648,34 @@ export function SectionAxisViewer({
             );
           }
         } else {
-          // X/Y sections: openings appear as vertical rectangles on the wall.
-          // Here polygon Y-values are in grid units, so convert with current vertical scale (mm per unit).
-          const polyMinY = Math.min(...verts.map(v => v.y));
-          const polyMaxY = Math.max(...verts.map(v => v.y));
-          const wallHeightUnits = Math.max(0.001, polyMaxY - polyMinY);
-          const wallHeightMm = Math.max(1, wallHeightUnits * scale.vScale);
-          const wallHeightPx = edgeLen;
-          const pxPerMmV = wallHeightPx / wallHeightMm;
+          // X/Y sections (elevation views): openings are rendered as vertical rectangles
+          // positioned by position_x (horizontal from polygon left) and sill_height (vertical from polygon bottom).
+          // The wall edge they're attached to is irrelevant in elevation views.
+          const polyMinX = Math.min(...verts.map(v => v.x));
+          const localPolyMinY = Math.min(...verts.map(v => v.y));
+          const pxPerMmH = cellPxW / scale.hScale;
+          const pxPerMmV = cellPxH / scale.vScale;
 
           for (const op of entry.openings) {
-            const rawSillPx = op.sill_height * pxPerMmV;
-            const rawHeightPx = op.height * pxPerMmV;
-            const startFromBottom = Math.max(0, Math.min(rawSillPx, wallHeightPx));
-            const openingHeightPx = Math.max(0, Math.min(rawHeightPx, wallHeightPx - startFromBottom));
-            if (openingHeightPx <= 0.5) continue;
-
             const color = op.opening_type === 'puerta' ? DOOR_COLOR : OPENING_COLOR;
-            const thickness = 6;
+            const sillPx = op.sill_height * pxPerMmV;
+            const heightPx = op.height * pxPerMmV;
+            const widthPx = op.width * pxPerMmH;
+            const posXPx = (op.position_x || 0) * pxPerMmH;
 
-            // Opening rectangle: from bottom (b) going up
-            const x1 = b.px - ux * startFromBottom;
-            const y1 = b.py - uy * startFromBottom;
-            const x2 = b.px - ux * (startFromBottom + openingHeightPx);
-            const y2 = b.py - uy * (startFromBottom + openingHeightPx);
+            const basePxY = originY - localPolyMinY * cellPxH;
+            const rx = originX + polyMinX * cellPxW + posXPx;
+            const ry = basePxY - sillPx - heightPx;
 
-            const p1 = `${x1 + nx * thickness / 2},${y1 + ny * thickness / 2}`;
-            const p2 = `${x2 + nx * thickness / 2},${y2 + ny * thickness / 2}`;
-            const p3 = `${x2 - nx * thickness / 2},${y2 - ny * thickness / 2}`;
-            const p4 = `${x1 - nx * thickness / 2},${y1 - ny * thickness / 2}`;
+            if (heightPx <= 0.5 || widthPx <= 0.5) continue;
 
             elements.push(
               <g key={`opening-${op.id}`}>
-                <polygon points={`${p1} ${p2} ${p3} ${p4}`}
-                  fill={color} fillOpacity={0.5} stroke={color} strokeWidth={1.5} />
+                <rect x={rx} y={ry} width={widthPx} height={heightPx}
+                  fill={color} fillOpacity={0.35} stroke={color} strokeWidth={1.5}
+                  strokeDasharray={op.opening_type === 'puerta' ? undefined : '4 2'} rx={1} />
                 {op.name && (
-                  <text x={(x1 + x2) / 2 + nx * 12} y={(y1 + y2) / 2 + ny * 12}
+                  <text x={rx + widthPx / 2} y={ry + heightPx / 2 + 3}
                     textAnchor="middle" fontSize={6} fontWeight={600} fill={color} fontFamily="sans-serif"
                     stroke="white" strokeWidth={1.5} paintOrder="stroke">
                     {op.name}

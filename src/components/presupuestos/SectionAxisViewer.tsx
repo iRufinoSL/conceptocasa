@@ -2025,11 +2025,10 @@ export function SectionAxisViewer({
         const widthPx = obj.width_mm * pxPerMmH;
 
         // Use absolute grid coordinate for horizontal placement in elevation views
-        const gridCoord = sectionType === 'longitudinal' ? obj.coord_x : obj.coord_y;
+        const gridCoord = getObjectHorizontalGridCoord(obj);
         let rx: number;
-        if (gridCoord != null && Number.isFinite(gridCoord)) {
-          const normCoord = Math.abs(gridCoord) > 50 ? gridCoord / 1000 : gridCoord;
-          rx = originX + normCoord * cellPxW - widthPx / 2;
+        if (gridCoord != null) {
+          rx = originX + gridCoord * cellPxW - widthPx / 2;
         } else {
           const posXPx = obj.position_x * pxPerMmH;
           rx = originX + polyMinX * cellPxW + posXPx;

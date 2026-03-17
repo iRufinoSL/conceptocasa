@@ -1938,9 +1938,17 @@ export function SectionAxisViewer({
         const sillPx = obj.sill_height * pxPerMmV;
         const heightPx = obj.height_mm * pxPerMmV;
         const widthPx = obj.width_mm * pxPerMmH;
-        const posXPx = obj.position_x * pxPerMmH;
 
-        const rx = originX + polyMinX * cellPxW + posXPx;
+        // Use absolute grid coordinate for horizontal placement in elevation views
+        const gridCoord = sectionType === 'longitudinal' ? obj.coord_x : obj.coord_y;
+        let rx: number;
+        if (gridCoord != null && Number.isFinite(gridCoord)) {
+          const normCoord = Math.abs(gridCoord) > 50 ? gridCoord / 1000 : gridCoord;
+          rx = originX + normCoord * cellPxW - widthPx / 2;
+        } else {
+          const posXPx = obj.position_x * pxPerMmH;
+          rx = originX + polyMinX * cellPxW + posXPx;
+        }
         const ry = basePxY - sillPx - heightPx;
 
         elements.push(

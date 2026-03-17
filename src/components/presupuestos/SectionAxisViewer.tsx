@@ -1843,7 +1843,7 @@ export function SectionAxisViewer({
     const ctm = svg.getScreenCTM();
     if (ctm) pt = pt.matrixTransform(ctm.inverse());
     setDraggingObjectId(objId);
-    setDragStart({ x: pt.x, y: pt.y, posX: obj.position_x, sill: obj.sill_height });
+    setDragStart({ x: pt.x, y: pt.y, baseObject: obj });
   }, [polygons]);
 
   const handleObjectMouseMove = useCallback((e: React.MouseEvent) => {
@@ -1855,34 +1855,29 @@ export function SectionAxisViewer({
     pt.y = e.clientY;
     const ctm = svg.getScreenCTM();
     if (ctm) pt = pt.matrixTransform(ctm.inverse());
-    
+
     const dxPx = pt.x - dragStart.x;
     const dyPx = pt.y - dragStart.y;
-    
+
     // Convert pixel delta to mm
     const pxPerMmH = gridLayout.cellPxW / scale.hScale;
     const pxPerMmV = gridLayout.cellPxH / scale.vScale;
     const dxMm = Math.round(dxPx / pxPerMmH);
     const dyMm = Math.round(-dyPx / pxPerMmV); // y axis is inverted in SVG
-    
-    const newPosX = Math.max(0, dragStart.posX + dxMm);
-    const newSill = Math.max(0, dragStart.sill + dyMm);
-    
-    setSectionObjects(prev => prev.map(o => o.id === draggingObjectId ? { ...o, position_x: newPosX, sill_height: newSill } : o));
-  }, [draggingObjectId, dragStart, gridLayout, scale]);
+
+    const movedObject = applyObjectMovementDelta(dragStart.baseObject, dxMm, dyMm);
+    setSectionObjects(prev => prev.map(o => o.id === draggingObjectId ? movedObject : o));
+  }, [applyObjectMovementDelta, draggingObjectId, dragStart, gridLayout, scale]);
 
   const handleObjectMouseUp = useCallback(async () => {
     if (!draggingObjectId) return;
     const obj = sectionObjects.find(o => o.id === draggingObjectId);
     if (obj) {
-      await supabase.from('budget_wall_objects').update({
-        position_x: obj.position_x,
-        sill_height: obj.sill_height,
-      }).eq('id', draggingObjectId);
+      await persistSectionObjectPosition(obj);
     }
     setDraggingObjectId(null);
     setDragStart(null);
-  }, [draggingObjectId, sectionObjects]);
+  }, [draggingObjectId, persistSectionObjectPosition, sectionObjects]);
 
   // ── Keyboard arrow movement for selected object (half-scale increments) ──
   useEffect(() => {
@@ -1897,20 +1892,24 @@ export function SectionAxisViewer({
 
       setSectionObjects(prev => prev.map(o => {
         if (o.id !== selectedObjectId) return o;
-        let { position_x, sill_height } = o;
         switch (e.key) {
-          case 'ArrowRight': position_x = position_x + halfH; break;
-          case 'ArrowLeft': position_x = Math.max(0, position_x - halfH); break;
-          case 'ArrowUp': sill_height = sill_height + halfV; break;
-          case 'ArrowDown': sill_height = Math.max(0, sill_height - halfV); break;
+          case 'ArrowRight':
+            return applyObjectMovementDelta(o, halfH, 0);
+          case 'ArrowLeft':
+            return applyObjectMovementDelta(o, -halfH, 0);
+          case 'ArrowUp':
+            return applyObjectMovementDelta(o, 0, halfV);
+          case 'ArrowDown':
+            return applyObjectMovementDelta(o, 0, -halfV);
+          default:
+            return o;
         }
-        return { ...o, position_x, sill_height };
       }));
     };
 
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [selectedObjectId, scale]);
+  }, [applyObjectMovementDelta, selectedObjectId, scale]);
 
   // Persist after keyboard movement (debounced)
   const keyMoveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1920,12 +1919,9 @@ export function SectionAxisViewer({
     if (!obj) return;
     if (keyMoveTimerRef.current) clearTimeout(keyMoveTimerRef.current);
     keyMoveTimerRef.current = setTimeout(async () => {
-      await supabase.from('budget_wall_objects').update({
-        position_x: obj.position_x,
-        sill_height: obj.sill_height,
-      }).eq('id', selectedObjectId);
+      await persistSectionObjectPosition(obj);
     }, 300);
-  }, [sectionObjects, selectedObjectId]);
+  }, [persistSectionObjectPosition, sectionObjects, selectedObjectId]);
 
   // Deselect object when pressing Escape
   useEffect(() => {

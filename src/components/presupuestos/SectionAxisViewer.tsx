@@ -511,19 +511,58 @@ export function SectionAxisViewer({
     return Math.abs(value) > 50 ? value / 1000 : value;
   }, []);
 
+  const getOpeningHorizontalGridCoord = useCallback((opening: OpeningData) => {
+    if (sectionType === 'longitudinal') return normalizeSectionCoord(opening.coord_x);
+    if (sectionType === 'transversal') return normalizeSectionCoord(opening.coord_y);
+    return null;
+  }, [normalizeSectionCoord, sectionType]);
+
   const getObjectHorizontalGridCoord = useCallback((obj: SectionObjectData) => {
     if (sectionType === 'longitudinal') return normalizeSectionCoord(obj.coord_x);
     if (sectionType === 'transversal') return normalizeSectionCoord(obj.coord_y);
     return null;
   }, [normalizeSectionCoord, sectionType]);
 
-  const getFallbackObjectHorizontalGridCoord = useCallback((obj: SectionObjectData) => {
+  const getFallbackHorizontalGridCoord = useCallback((roomId: string, positionX: number, widthMm: number) => {
     if (!scale || sectionType === 'vertical') return null;
-    const poly = polygons.find(p => p.id === obj.room_id);
+    const poly = polygons.find(p => p.id === roomId);
     if (!poly || poly.vertices.length === 0) return null;
     const polyMinX = Math.min(...poly.vertices.map(v => v.x));
-    return polyMinX + ((obj.position_x || 0) + (obj.width_mm || 0) / 2) / scale.hScale;
+    return polyMinX + (positionX + widthMm / 2) / scale.hScale;
   }, [polygons, scale, sectionType]);
+
+  const getFallbackObjectHorizontalGridCoord = useCallback((obj: SectionObjectData) => {
+    return getFallbackHorizontalGridCoord(obj.room_id, obj.position_x || 0, obj.width_mm || 0);
+  }, [getFallbackHorizontalGridCoord]);
+
+  const getFallbackOpeningHorizontalGridCoord = useCallback((opening: OpeningData, polyId: string) => {
+    return getFallbackHorizontalGridCoord(polyId, opening.position_x || 0, opening.width || 0);
+  }, [getFallbackHorizontalGridCoord]);
+
+  const applyOpeningMovementDelta = useCallback((opening: OpeningData, polyId: string, deltaMmX: number, deltaMmY: number) => {
+    const nextPositionX = Math.max(0, (opening.position_x || 0) + deltaMmX);
+    const nextSillHeight = Math.max(0, (opening.sill_height || 0) + deltaMmY);
+
+    if (!scale || sectionType === 'vertical') {
+      return {
+        ...opening,
+        position_x: nextPositionX,
+        sill_height: nextSillHeight,
+      };
+    }
+
+    const currentGridCoord = getOpeningHorizontalGridCoord(opening) ?? getFallbackOpeningHorizontalGridCoord(opening, polyId);
+    const deltaGrid = deltaMmX / scale.hScale;
+    const nextGridCoord = currentGridCoord != null ? currentGridCoord + deltaGrid : null;
+
+    return {
+      ...opening,
+      position_x: nextPositionX,
+      sill_height: nextSillHeight,
+      coord_x: sectionType === 'longitudinal' ? nextGridCoord : opening.coord_x,
+      coord_y: sectionType === 'transversal' ? nextGridCoord : opening.coord_y,
+    };
+  }, [getFallbackOpeningHorizontalGridCoord, getOpeningHorizontalGridCoord, scale, sectionType]);
 
   const applyObjectMovementDelta = useCallback((obj: SectionObjectData, deltaMmX: number, deltaMmY: number) => {
     const nextPositionX = Math.max(0, (obj.position_x || 0) + deltaMmX);
@@ -549,6 +588,23 @@ export function SectionAxisViewer({
       coord_y: sectionType === 'transversal' ? nextGridCoord : obj.coord_y,
     };
   }, [getFallbackObjectHorizontalGridCoord, getObjectHorizontalGridCoord, scale, sectionType]);
+
+  const persistOpeningPosition = useCallback(async (opening: OpeningData) => {
+    if (opening.source === 'wall_object') {
+      await supabase.from('budget_wall_objects').update({
+        position_x: opening.position_x,
+        sill_height: opening.sill_height,
+        coord_x: opening.coord_x,
+        coord_y: opening.coord_y,
+      }).eq('id', opening.id);
+      return;
+    }
+
+    await supabase.from('budget_floor_plan_openings').update({
+      position_x: opening.position_x,
+      sill_height: opening.sill_height,
+    }).eq('id', opening.id);
+  }, []);
 
   const persistSectionObjectPosition = useCallback(async (obj: SectionObjectData) => {
     await supabase.from('budget_wall_objects').update({

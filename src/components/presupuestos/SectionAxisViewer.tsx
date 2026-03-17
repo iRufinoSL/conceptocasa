@@ -451,9 +451,15 @@ export function SectionAxisViewer({
         coord_x: obj.coord_x,
         coord_y: obj.coord_y,
         coord_z: obj.coord_z,
+        source: 'wall_object',
       }));
 
-    const allOpenings = [...((legacyRes.data || []) as OpeningData[]), ...objectOpenings];
+    const legacyOpenings: OpeningData[] = ((legacyRes.data || []) as any[]).map((op: any) => ({
+      ...op,
+      source: 'legacy',
+    }));
+
+    const allOpenings = [...legacyOpenings, ...objectOpenings];
     const openingMap: Record<string, { wallIndex: number; openings: OpeningData[] }> = {};
 
     for (const opening of allOpenings) {

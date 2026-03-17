@@ -328,36 +328,39 @@ export function SectionAxisViewer({
     if (polygons.length === 0) return;
 
     const polyIds = polygons.map(p => p.id);
-    const normalizeName = (value: string | null | undefined) => (value || '').trim().toLowerCase();
-    const isOpeningLike = (value: string | null | undefined) => {
-      const name = (value || '').toLowerCase();
-      return name.includes('ventana') || name.includes('puerta') || name.includes('balcon') || name.includes('window') || name.includes('door');
+    const displayedPolygonIds = new Set(polyIds);
+    const displayedPolygonsByName = new Map<string, string[]>();
+    const displayedPolygonsByLooseName = new Map<string, string[]>();
+    const displayedPolygonsByCanonicalId = new Map<string, string[]>();
+    for (const poly of polygons) {
+      const strictKey = normalizeWorkspaceName(poly.name);
+      const looseKey = normalizeWorkspaceNameLoose(poly.name);
+      if (strictKey) {
+        const list = displayedPolygonsByName.get(strictKey) || [];
+        list.push(poly.id);
+        displayedPolygonsByName.set(strictKey, list);
+      }
+      if (looseKey) {
+        const list = displayedPolygonsByLooseName.get(looseKey) || [];
+        list.push(poly.id);
+        displayedPolygonsByLooseName.set(looseKey, list);
+      }
+      if (displayedPolygonIds.has(poly.id)) {
+        const list = displayedPolygonsByCanonicalId.get(poly.id) || [];
+        list.push(poly.id);
+        displayedPolygonsByCanonicalId.set(poly.id, list);
+      }
     };
 
-    const normalizeAxisCoord = (value: number | null | undefined): number | null => {
-      if (value == null || !Number.isFinite(value)) return null;
-      return Math.abs(value) > 50 ? value / 1000 : value;
-    };
-
-    const axisValueNorm = normalizeAxisCoord(axisValue);
-    const AXIS_EPS = 0.05;
-
-    const belongsToCurrentSection = (coords: { coord_x?: number | null; coord_y?: number | null; coord_z?: number | null }) => {
-      if (sectionType === 'longitudinal') {
-        const y = normalizeAxisCoord(coords.coord_y);
-        return y != null && axisValueNorm != null && Math.abs(y - axisValueNorm) <= AXIS_EPS;
-      }
-      if (sectionType === 'transversal') {
-        const x = normalizeAxisCoord(coords.coord_x);
-        return x != null && axisValueNorm != null && Math.abs(x - axisValueNorm) <= AXIS_EPS;
-      }
-      if (sectionType === 'vertical') {
-        // Z sections (floor plans) show ALL objects on the floor's walls
-        // regardless of their coord_z (height). The room/wall membership
-        // already determines visibility; coord_z is just the object's height.
-        return true;
-      }
-      return true;
+    const resolveTargetPolyIds = (sourceRoomId: string | null | undefined, sourceRoomName: string | null | undefined) => {
+      const byId = sourceRoomId ? displayedPolygonsByCanonicalId.get(sourceRoomId) || [] : [];
+      if (byId.length > 0) return byId;
+      const strictKey = normalizeWorkspaceName(sourceRoomName);
+      const byStrictName = strictKey ? displayedPolygonsByName.get(strictKey) || [] : [];
+      if (byStrictName.length > 0) return byStrictName;
+      const looseKey = normalizeWorkspaceNameLoose(sourceRoomName);
+      const byLooseName = looseKey ? displayedPolygonsByLooseName.get(looseKey) || [] : [];
+      return byLooseName;
     };
 
     const { data: displayedRooms } = await supabase
@@ -369,14 +372,6 @@ export function SectionAxisViewer({
       setOpeningsMap({});
       setSectionObjects([]);
       return;
-    }
-
-    const displayedPolygonsByName = new Map<string, string[]>();
-    for (const poly of polygons) {
-      const key = normalizeName(poly.name);
-      const list = displayedPolygonsByName.get(key) || [];
-      list.push(poly.id);
-      displayedPolygonsByName.set(key, list);
     }
 
     const floorPlanIds = [...new Set(displayedRooms.map(room => room.floor_plan_id).filter(Boolean))];
@@ -402,7 +397,7 @@ export function SectionAxisViewer({
     const allWallIds = allWalls.map(w => w.id);
     const wallToRoom = new Map(allWalls.map(w => [w.id, w.room_id]));
     const wallToIndex = new Map(allWalls.map(w => [w.id, w.wall_index]));
-    const roomNameById = new Map(allRoomList.map(room => [room.id, normalizeName(room.name)]));
+    const roomNameById = new Map(allRoomList.map(room => [room.id, room.name]));
 
     const [legacyRes, wallObjectRes] = await Promise.all([
       supabase.from('budget_floor_plan_openings').select('*').in('wall_id', allWallIds),

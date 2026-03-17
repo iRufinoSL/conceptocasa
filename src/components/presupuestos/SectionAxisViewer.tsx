@@ -299,9 +299,13 @@ export function SectionAxisViewer({
     coord_x?: number | null;
     coord_y?: number | null;
     coord_z?: number | null;
+    source: 'legacy' | 'wall_object';
   }
   const [openingsMap, setOpeningsMap] = useState<Record<string, { wallIndex: number; openings: OpeningData[] }>>({});
   const [openingsVersion, setOpeningsVersion] = useState(0);
+  const [draggingOpeningId, setDraggingOpeningId] = useState<string | null>(null);
+  const [openingDragStart, setOpeningDragStart] = useState<{ x: number; y: number; baseOpening: OpeningData; polyId: string } | null>(null);
+  const [selectedOpeningId, setSelectedOpeningId] = useState<string | null>(null);
 
   // ── Section objects (shown_in_section=true) ──
   interface SectionObjectData {
@@ -447,9 +451,15 @@ export function SectionAxisViewer({
         coord_x: obj.coord_x,
         coord_y: obj.coord_y,
         coord_z: obj.coord_z,
+        source: 'wall_object',
       }));
 
-    const allOpenings = [...((legacyRes.data || []) as OpeningData[]), ...objectOpenings];
+    const legacyOpenings: OpeningData[] = ((legacyRes.data || []) as any[]).map((op: any) => ({
+      ...op,
+      source: 'legacy',
+    }));
+
+    const allOpenings = [...legacyOpenings, ...objectOpenings];
     const openingMap: Record<string, { wallIndex: number; openings: OpeningData[] }> = {};
 
     for (const opening of allOpenings) {
@@ -501,19 +511,58 @@ export function SectionAxisViewer({
     return Math.abs(value) > 50 ? value / 1000 : value;
   }, []);
 
+  const getOpeningHorizontalGridCoord = useCallback((opening: OpeningData) => {
+    if (sectionType === 'longitudinal') return normalizeSectionCoord(opening.coord_x);
+    if (sectionType === 'transversal') return normalizeSectionCoord(opening.coord_y);
+    return null;
+  }, [normalizeSectionCoord, sectionType]);
+
   const getObjectHorizontalGridCoord = useCallback((obj: SectionObjectData) => {
     if (sectionType === 'longitudinal') return normalizeSectionCoord(obj.coord_x);
     if (sectionType === 'transversal') return normalizeSectionCoord(obj.coord_y);
     return null;
   }, [normalizeSectionCoord, sectionType]);
 
-  const getFallbackObjectHorizontalGridCoord = useCallback((obj: SectionObjectData) => {
+  const getFallbackHorizontalGridCoord = useCallback((roomId: string, positionX: number, widthMm: number) => {
     if (!scale || sectionType === 'vertical') return null;
-    const poly = polygons.find(p => p.id === obj.room_id);
+    const poly = polygons.find(p => p.id === roomId);
     if (!poly || poly.vertices.length === 0) return null;
     const polyMinX = Math.min(...poly.vertices.map(v => v.x));
-    return polyMinX + ((obj.position_x || 0) + (obj.width_mm || 0) / 2) / scale.hScale;
+    return polyMinX + (positionX + widthMm / 2) / scale.hScale;
   }, [polygons, scale, sectionType]);
+
+  const getFallbackObjectHorizontalGridCoord = useCallback((obj: SectionObjectData) => {
+    return getFallbackHorizontalGridCoord(obj.room_id, obj.position_x || 0, obj.width_mm || 0);
+  }, [getFallbackHorizontalGridCoord]);
+
+  const getFallbackOpeningHorizontalGridCoord = useCallback((opening: OpeningData, polyId: string) => {
+    return getFallbackHorizontalGridCoord(polyId, opening.position_x || 0, opening.width || 0);
+  }, [getFallbackHorizontalGridCoord]);
+
+  const applyOpeningMovementDelta = useCallback((opening: OpeningData, polyId: string, deltaMmX: number, deltaMmY: number) => {
+    const nextPositionX = Math.max(0, (opening.position_x || 0) + deltaMmX);
+    const nextSillHeight = Math.max(0, (opening.sill_height || 0) + deltaMmY);
+
+    if (!scale || sectionType === 'vertical') {
+      return {
+        ...opening,
+        position_x: nextPositionX,
+        sill_height: nextSillHeight,
+      };
+    }
+
+    const currentGridCoord = getOpeningHorizontalGridCoord(opening) ?? getFallbackOpeningHorizontalGridCoord(opening, polyId);
+    const deltaGrid = deltaMmX / scale.hScale;
+    const nextGridCoord = currentGridCoord != null ? currentGridCoord + deltaGrid : null;
+
+    return {
+      ...opening,
+      position_x: nextPositionX,
+      sill_height: nextSillHeight,
+      coord_x: sectionType === 'longitudinal' ? nextGridCoord : opening.coord_x,
+      coord_y: sectionType === 'transversal' ? nextGridCoord : opening.coord_y,
+    };
+  }, [getFallbackOpeningHorizontalGridCoord, getOpeningHorizontalGridCoord, scale, sectionType]);
 
   const applyObjectMovementDelta = useCallback((obj: SectionObjectData, deltaMmX: number, deltaMmY: number) => {
     const nextPositionX = Math.max(0, (obj.position_x || 0) + deltaMmX);
@@ -539,6 +588,23 @@ export function SectionAxisViewer({
       coord_y: sectionType === 'transversal' ? nextGridCoord : obj.coord_y,
     };
   }, [getFallbackObjectHorizontalGridCoord, getObjectHorizontalGridCoord, scale, sectionType]);
+
+  const persistOpeningPosition = useCallback(async (opening: OpeningData) => {
+    if (opening.source === 'wall_object') {
+      await supabase.from('budget_wall_objects').update({
+        position_x: opening.position_x,
+        sill_height: opening.sill_height,
+        coord_x: opening.coord_x,
+        coord_y: opening.coord_y,
+      }).eq('id', opening.id);
+      return;
+    }
+
+    await supabase.from('budget_floor_plan_openings').update({
+      position_x: opening.position_x,
+      sill_height: opening.sill_height,
+    }).eq('id', opening.id);
+  }, []);
 
   const persistSectionObjectPosition = useCallback(async (obj: SectionObjectData) => {
     await supabase.from('budget_wall_objects').update({
@@ -1662,7 +1728,7 @@ export function SectionAxisViewer({
     if (!gridLayout || !scale || Object.keys(openingsMap).length === 0) return null;
     const { originX, originY, cellPxW, cellPxH } = gridLayout;
     const elements: JSX.Element[] = [];
-    const OPENING_COLOR = 'hsl(30, 90%, 50%)'; // orange for visibility
+    const OPENING_COLOR = 'hsl(30, 90%, 50%)';
     const DOOR_COLOR = 'hsl(200, 70%, 45%)';
 
     polygons.forEach((poly) => {
@@ -1674,7 +1740,6 @@ export function SectionAxisViewer({
       }));
 
       if (sectionType === 'vertical') {
-        // Z sections: match openings to specific polygon edges by wall_index
         for (let i = 0; i < verts.length; i++) {
           const wallIdx = i + 1;
           const key = `${poly.id}__${wallIdx}`;
@@ -1704,6 +1769,7 @@ export function SectionAxisViewer({
             const maxStart = Math.max(0, edgeLen - widthPx);
             const startPx = Math.max(0, Math.min(startPxRaw, maxStart));
             const color = op.opening_type === 'puerta' ? DOOR_COLOR : OPENING_COLOR;
+            const isSelected = op.id === selectedOpeningId;
             const thickness = 10;
 
             const x1 = a.px + ux * startPx;
@@ -1717,13 +1783,14 @@ export function SectionAxisViewer({
             const p4 = `${x1 - nx * thickness / 2},${y1 - ny * thickness / 2}`;
 
             elements.push(
-              <g key={`opening-${op.id}`}>
+              <g key={`opening-${op.id}`} style={{ cursor: 'move' }} onMouseDown={(e) => handleOpeningMouseDown(e, op, poly.id)}>
+                {isSelected && <polygon points={`${p1} ${p2} ${p3} ${p4}`} fill="none" stroke="hsl(45, 100%, 50%)" strokeWidth={1} strokeDasharray="4 2" />}
                 <polygon
                   points={`${p1} ${p2} ${p3} ${p4}`}
                   fill="white"
                   fillOpacity={0.95}
-                  stroke={color}
-                  strokeWidth={1.8}
+                  stroke={isSelected ? 'hsl(45, 100%, 50%)' : color}
+                  strokeWidth={isSelected ? 2.4 : 1.8}
                   strokeDasharray={op.opening_type === 'puerta' ? undefined : '4 2'}
                 />
                 {op.name && (
@@ -1738,6 +1805,7 @@ export function SectionAxisViewer({
                     stroke="white"
                     strokeWidth={1.5}
                     paintOrder="stroke"
+                    style={{ pointerEvents: 'none' }}
                   >
                     {op.name}
                   </text>
@@ -1747,9 +1815,6 @@ export function SectionAxisViewer({
           }
         }
       } else {
-        // X/Y elevation sections: collect ALL openings for this polygon
-        // regardless of wall_index, since section polygons have different
-        // edge structures than original rooms.
         const allPolyOpenings: OpeningData[] = [];
         for (const mapKey of Object.keys(openingsMap)) {
           if (mapKey.startsWith(`${poly.id}__`)) {
@@ -1759,29 +1824,22 @@ export function SectionAxisViewer({
         if (allPolyOpenings.length === 0) return;
 
         const polyMinX = Math.min(...verts.map(v => v.x));
-        const polyMaxX = Math.max(...verts.map(v => v.x));
         const localPolyMinY = Math.min(...verts.map(v => v.y));
         const pxPerMmH = cellPxW / scale.hScale;
         const pxPerMmV = cellPxH / scale.vScale;
-        const polyWidthCells = polyMaxX - polyMinX;
 
         for (const op of allPolyOpenings) {
           const color = op.opening_type === 'puerta' ? DOOR_COLOR : OPENING_COLOR;
           const sillPx = op.sill_height * pxPerMmV;
           const heightPx = op.height * pxPerMmV;
           const widthPx = op.width * pxPerMmH;
+          const isSelected = op.id === selectedOpeningId;
 
-          // For elevation views, use the absolute grid coordinate to position horizontally.
-          // In Y sections the horizontal axis is X (coord_x); in X sections it's Y (coord_y).
-          const gridCoord = sectionType === 'longitudinal' ? op.coord_x : op.coord_y;
+          const gridCoord = getOpeningHorizontalGridCoord(op);
           let rx: number;
           if (gridCoord != null && Number.isFinite(gridCoord)) {
-            // Normalize: values > 50 are assumed mm, convert to grid units
-            const normCoord = Math.abs(gridCoord) > 50 ? gridCoord / 1000 : gridCoord;
-            // Place the object centered on its grid coordinate
-            rx = originX + normCoord * cellPxW - widthPx / 2;
+            rx = originX + gridCoord * cellPxW - widthPx / 2;
           } else {
-            // Fallback: use position_x (mm) relative to polygon left edge
             const posXPx = (op.position_x || 0) * pxPerMmH;
             rx = originX + polyMinX * cellPxW + posXPx;
           }
@@ -1792,14 +1850,15 @@ export function SectionAxisViewer({
           if (heightPx <= 0.5 || widthPx <= 0.5) continue;
 
           elements.push(
-            <g key={`opening-${op.id}`}>
+            <g key={`opening-${op.id}`} style={{ cursor: 'move' }} onMouseDown={(e) => handleOpeningMouseDown(e, op, poly.id)}>
+              {isSelected && <rect x={rx - 2} y={ry - 2} width={widthPx + 4} height={heightPx + 4} fill="none" stroke="hsl(45, 100%, 50%)" strokeWidth={1} strokeDasharray="4 2" rx={3} />}
               <rect x={rx} y={ry} width={widthPx} height={heightPx}
-                fill={color} fillOpacity={0.35} stroke={color} strokeWidth={1.5}
+                fill={color} fillOpacity={0.35} stroke={isSelected ? 'hsl(45, 100%, 50%)' : color} strokeWidth={isSelected ? 2.4 : 1.5}
                 strokeDasharray={op.opening_type === 'puerta' ? undefined : '4 2'} rx={1} />
               {op.name && (
                 <text x={rx + widthPx / 2} y={ry + heightPx / 2 + 3}
                   textAnchor="middle" fontSize={6} fontWeight={600} fill={color} fontFamily="sans-serif"
-                  stroke="white" strokeWidth={1.5} paintOrder="stroke">
+                  stroke="white" strokeWidth={1.5} paintOrder="stroke" style={{ pointerEvents: 'none' }}>
                   {op.name}
                 </text>
               )}
@@ -1809,24 +1868,19 @@ export function SectionAxisViewer({
       }
     });
     return elements.length > 0 ? elements : null;
-  }, [polygons, gridLayout, scale, openingsMap, sectionType]);
+  }, [polygons, gridLayout, scale, openingsMap, sectionType, selectedOpeningId, handleOpeningMouseDown, getOpeningHorizontalGridCoord]);
 
-  // ── Section objects rendering (shown_in_section=true) ──
-  const OBJECT_COLOR = 'hsl(270, 60%, 55%)';
+  const lastOpeningClickRef = useRef<{ time: number; openingId: string } | null>(null);
 
-  const lastObjClickRef = useRef<{ time: number; objId: string } | null>(null);
-
-  const handleObjectMouseDown = useCallback((e: React.MouseEvent, objId: string, obj: SectionObjectData) => {
+  const handleOpeningMouseDown = useCallback((e: React.MouseEvent, opening: OpeningData, polyId: string) => {
     e.stopPropagation();
     e.preventDefault();
 
-    // Double-click detection → open edit panel
     const now = Date.now();
-    const last = lastObjClickRef.current;
-    if (last && last.objId === objId && (now - last.time) < 400) {
-      lastObjClickRef.current = null;
-      // Find polygon for this object
-      const poly = polygons.find(p => p.id === obj.room_id);
+    const last = lastOpeningClickRef.current;
+    if (last && last.openingId === opening.id && (now - last.time) < 400 && opening.source === 'wall_object') {
+      lastOpeningClickRef.current = null;
+      const poly = polygons.find(p => p.id === polyId);
       if (poly) {
         setFacePanel({
           polyId: poly.id,
@@ -1834,16 +1888,16 @@ export function SectionAxisViewer({
           faceKey: 'floor',
           edgeCount: poly.vertices.length,
           vertices: poly.vertices.map(v => ({ x: v.x, y: v.y })),
-          initialEditObjectId: objId,
+          initialEditObjectId: opening.id,
           initialTab: 'objects',
         });
       }
       return;
     }
-    lastObjClickRef.current = { time: now, objId };
+    lastOpeningClickRef.current = { time: now, openingId: opening.id };
 
-    // Select this object for keyboard movement
-    setSelectedObjectId(objId);
+    setSelectedOpeningId(opening.id);
+    setSelectedObjectId(null);
 
     const svg = svgRef.current;
     if (!svg) return;
@@ -1852,12 +1906,12 @@ export function SectionAxisViewer({
     pt.y = e.clientY;
     const ctm = svg.getScreenCTM();
     if (ctm) pt = pt.matrixTransform(ctm.inverse());
-    setDraggingObjectId(objId);
-    setDragStart({ x: pt.x, y: pt.y, baseObject: obj });
+    setDraggingOpeningId(opening.id);
+    setOpeningDragStart({ x: pt.x, y: pt.y, baseOpening: opening, polyId });
   }, [polygons]);
 
-  const handleObjectMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!draggingObjectId || !dragStart || !gridLayout || !scale) return;
+  const handleOpeningMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!draggingOpeningId || !openingDragStart || !gridLayout || !scale) return;
     const svg = svgRef.current;
     if (!svg) return;
     let pt = svg.createSVGPoint();
@@ -1866,18 +1920,40 @@ export function SectionAxisViewer({
     const ctm = svg.getScreenCTM();
     if (ctm) pt = pt.matrixTransform(ctm.inverse());
 
-    const dxPx = pt.x - dragStart.x;
-    const dyPx = pt.y - dragStart.y;
-
-    // Convert pixel delta to mm
+    const dxPx = pt.x - openingDragStart.x;
+    const dyPx = pt.y - openingDragStart.y;
     const pxPerMmH = gridLayout.cellPxW / scale.hScale;
     const pxPerMmV = gridLayout.cellPxH / scale.vScale;
     const dxMm = Math.round(dxPx / pxPerMmH);
-    const dyMm = Math.round(-dyPx / pxPerMmV); // y axis is inverted in SVG
+    const dyMm = Math.round(-dyPx / pxPerMmV);
+    const movedOpening = applyOpeningMovementDelta(openingDragStart.baseOpening, openingDragStart.polyId, dxMm, dyMm);
 
-    const movedObject = applyObjectMovementDelta(dragStart.baseObject, dxMm, dyMm);
-    setSectionObjects(prev => prev.map(o => o.id === draggingObjectId ? movedObject : o));
-  }, [applyObjectMovementDelta, draggingObjectId, dragStart, gridLayout, scale]);
+    setOpeningsMap(prev => {
+      const next: typeof prev = {};
+      for (const [key, entry] of Object.entries(prev)) {
+        next[key] = {
+          ...entry,
+          openings: entry.openings.map(op => op.id === draggingOpeningId ? movedOpening : op),
+        };
+      }
+      return next;
+    });
+  }, [applyOpeningMovementDelta, draggingOpeningId, openingDragStart, gridLayout, scale]);
+
+  const handleOpeningMouseUp = useCallback(async () => {
+    if (!draggingOpeningId) return;
+    let openingToPersist: OpeningData | null = null;
+    for (const entry of Object.values(openingsMap)) {
+      const found = entry.openings.find(op => op.id === draggingOpeningId);
+      if (found) {
+        openingToPersist = found;
+        break;
+      }
+    }
+    if (openingToPersist) await persistOpeningPosition(openingToPersist);
+    setDraggingOpeningId(null);
+    setOpeningDragStart(null);
+  }, [draggingOpeningId, openingsMap, persistOpeningPosition]);
 
   const handleObjectMouseUp = useCallback(async () => {
     if (!draggingObjectId) return;

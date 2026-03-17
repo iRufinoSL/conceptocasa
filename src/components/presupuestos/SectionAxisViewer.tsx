@@ -1574,32 +1574,31 @@ export function SectionAxisViewer({
         py: originY - v.y * cellPxH,
       }));
 
-      for (let i = 0; i < verts.length; i++) {
-        const wallIdx = i + 1; // db wall_index is 1-based
-        const key = `${poly.id}__${wallIdx}`;
-        const entry = openingsMap[key];
-        if (!entry || entry.openings.length === 0) continue;
+      if (sectionType === 'vertical') {
+        // Z sections: match openings to specific polygon edges by wall_index
+        for (let i = 0; i < verts.length; i++) {
+          const wallIdx = i + 1;
+          const key = `${poly.id}__${wallIdx}`;
+          const entry = openingsMap[key];
+          if (!entry || entry.openings.length === 0) continue;
 
-        const a = pxVerts[i];
-        const b = pxVerts[(i + 1) % verts.length];
-        const edgeDx = b.px - a.px;
-        const edgeDy = b.py - a.py;
-        const edgeLen = Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy);
-        if (edgeLen === 0) continue;
+          const a = pxVerts[i];
+          const b = pxVerts[(i + 1) % verts.length];
+          const edgeDx = b.px - a.px;
+          const edgeDy = b.py - a.py;
+          const edgeLen = Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy);
+          if (edgeLen === 0) continue;
 
-        // Edge unit vector and normal
-        const ux = edgeDx / edgeLen;
-        const uy = edgeDy / edgeLen;
-        const nx = -uy;
-        const ny = ux;
+          const ux = edgeDx / edgeLen;
+          const uy = edgeDy / edgeLen;
+          const nx = -uy;
+          const ny = ux;
 
-        // Edge length in mm
-        const dxGrid = Math.abs(verts[(i + 1) % verts.length].x - verts[i].x);
-        const dyGrid = Math.abs(verts[(i + 1) % verts.length].y - verts[i].y);
-        const edgeMm = Math.sqrt((dxGrid * scale.hScale) ** 2 + (dyGrid * scale.vScale) ** 2);
-        const pxPerMm = edgeLen / edgeMm;
+          const dxGrid = Math.abs(verts[(i + 1) % verts.length].x - verts[i].x);
+          const dyGrid = Math.abs(verts[(i + 1) % verts.length].y - verts[i].y);
+          const edgeMm = Math.sqrt((dxGrid * scale.hScale) ** 2 + (dyGrid * scale.vScale) ** 2);
+          const pxPerMm = edgeLen / edgeMm;
 
-        if (sectionType === 'vertical') {
           for (const op of entry.openings) {
             const widthPx = Math.max(2, op.width * pxPerMm);
             const startPxRaw = (op.position_x || 0) * pxPerMm;
@@ -1647,43 +1646,51 @@ export function SectionAxisViewer({
               </g>
             );
           }
-        } else {
-          // X/Y sections (elevation views): openings are rendered as vertical rectangles
-          // positioned by position_x (horizontal from polygon left) and sill_height (vertical from polygon bottom).
-          // The wall edge they're attached to is irrelevant in elevation views.
-          const polyMinX = Math.min(...verts.map(v => v.x));
-          const localPolyMinY = Math.min(...verts.map(v => v.y));
-          const pxPerMmH = cellPxW / scale.hScale;
-          const pxPerMmV = cellPxH / scale.vScale;
-
-          for (const op of entry.openings) {
-            const color = op.opening_type === 'puerta' ? DOOR_COLOR : OPENING_COLOR;
-            const sillPx = op.sill_height * pxPerMmV;
-            const heightPx = op.height * pxPerMmV;
-            const widthPx = op.width * pxPerMmH;
-            const posXPx = (op.position_x || 0) * pxPerMmH;
-
-            const basePxY = originY - localPolyMinY * cellPxH;
-            const rx = originX + polyMinX * cellPxW + posXPx;
-            const ry = basePxY - sillPx - heightPx;
-
-            if (heightPx <= 0.5 || widthPx <= 0.5) continue;
-
-            elements.push(
-              <g key={`opening-${op.id}`}>
-                <rect x={rx} y={ry} width={widthPx} height={heightPx}
-                  fill={color} fillOpacity={0.35} stroke={color} strokeWidth={1.5}
-                  strokeDasharray={op.opening_type === 'puerta' ? undefined : '4 2'} rx={1} />
-                {op.name && (
-                  <text x={rx + widthPx / 2} y={ry + heightPx / 2 + 3}
-                    textAnchor="middle" fontSize={6} fontWeight={600} fill={color} fontFamily="sans-serif"
-                    stroke="white" strokeWidth={1.5} paintOrder="stroke">
-                    {op.name}
-                  </text>
-                )}
-              </g>
-            );
+        }
+      } else {
+        // X/Y elevation sections: collect ALL openings for this polygon
+        // regardless of wall_index, since section polygons have different
+        // edge structures than original rooms.
+        const allPolyOpenings: OpeningData[] = [];
+        for (const mapKey of Object.keys(openingsMap)) {
+          if (mapKey.startsWith(`${poly.id}__`)) {
+            allPolyOpenings.push(...openingsMap[mapKey].openings);
           }
+        }
+        if (allPolyOpenings.length === 0) return;
+
+        const polyMinX = Math.min(...verts.map(v => v.x));
+        const localPolyMinY = Math.min(...verts.map(v => v.y));
+        const pxPerMmH = cellPxW / scale.hScale;
+        const pxPerMmV = cellPxH / scale.vScale;
+
+        for (const op of allPolyOpenings) {
+          const color = op.opening_type === 'puerta' ? DOOR_COLOR : OPENING_COLOR;
+          const sillPx = op.sill_height * pxPerMmV;
+          const heightPx = op.height * pxPerMmV;
+          const widthPx = op.width * pxPerMmH;
+          const posXPx = (op.position_x || 0) * pxPerMmH;
+
+          const basePxY = originY - localPolyMinY * cellPxH;
+          const rx = originX + polyMinX * cellPxW + posXPx;
+          const ry = basePxY - sillPx - heightPx;
+
+          if (heightPx <= 0.5 || widthPx <= 0.5) continue;
+
+          elements.push(
+            <g key={`opening-${op.id}`}>
+              <rect x={rx} y={ry} width={widthPx} height={heightPx}
+                fill={color} fillOpacity={0.35} stroke={color} strokeWidth={1.5}
+                strokeDasharray={op.opening_type === 'puerta' ? undefined : '4 2'} rx={1} />
+              {op.name && (
+                <text x={rx + widthPx / 2} y={ry + heightPx / 2 + 3}
+                  textAnchor="middle" fontSize={6} fontWeight={600} fill={color} fontFamily="sans-serif"
+                  stroke="white" strokeWidth={1.5} paintOrder="stroke">
+                  {op.name}
+                </text>
+              )}
+            </g>
+          );
         }
       }
     });

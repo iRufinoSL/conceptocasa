@@ -2189,7 +2189,7 @@ export function SectionAxisViewer({
     }
 
     return elements.length > 0 ? elements : null;
-  }, [sectionObjects, polygons, gridLayout, scale, sectionType, handleObjectMouseDown, selectedObjectId]);
+  }, [sectionObjects, polygons, gridLayout, scale, sectionType, handleObjectMouseDown, selectedObjectId, OBJECT_COLOR]);
 
 
   const drawingOverlay = useMemo(() => {

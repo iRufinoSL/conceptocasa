@@ -930,8 +930,18 @@ export function SectionAxisViewer({
   };
 
   const visiblePolygons = useMemo(
-    () => polygons.filter(p => Array.isArray(p.vertices) && p.vertices.length >= 3),
-    [polygons],
+    () => polygons.filter(p => {
+      if (!Array.isArray(p.vertices) || p.vertices.length < 3) return false;
+      // Filter out degenerate polygons where all Y values are the same (zero-height projections)
+      if (sectionType !== 'vertical') {
+        const ys = p.vertices.map(v => v.y);
+        const minY = Math.min(...ys);
+        const maxY = Math.max(...ys);
+        if (maxY - minY < 0.01) return false;
+      }
+      return true;
+    }),
+    [polygons, sectionType],
   );
 
   useEffect(() => {

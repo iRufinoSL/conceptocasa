@@ -118,6 +118,25 @@ function getConfig(sectionType: string) {
   }
 }
 
+function normalizeWorkspaceName(value: string | null | undefined): string {
+  if (!value) return '';
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[._-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function normalizeWorkspaceNameLoose(value: string | null | undefined): string {
+  return normalizeWorkspaceName(value)
+    .replace(/\b(techo|cubierta|suelo|piso|planta|roof|ceiling|floor)\b/g, ' ')
+    .replace(/\d+\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function polygonAreaGrid(vertices: Array<{ x: number; y: number }>): number {
   let area = 0;
   const n = vertices.length;

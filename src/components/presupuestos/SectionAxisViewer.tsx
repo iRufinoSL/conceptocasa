@@ -1660,19 +1660,34 @@ export function SectionAxisViewer({
         if (allPolyOpenings.length === 0) return;
 
         const polyMinX = Math.min(...verts.map(v => v.x));
+        const polyMaxX = Math.max(...verts.map(v => v.x));
         const localPolyMinY = Math.min(...verts.map(v => v.y));
         const pxPerMmH = cellPxW / scale.hScale;
         const pxPerMmV = cellPxH / scale.vScale;
+        const polyWidthCells = polyMaxX - polyMinX;
 
         for (const op of allPolyOpenings) {
           const color = op.opening_type === 'puerta' ? DOOR_COLOR : OPENING_COLOR;
           const sillPx = op.sill_height * pxPerMmV;
           const heightPx = op.height * pxPerMmV;
           const widthPx = op.width * pxPerMmH;
-          const posXPx = (op.position_x || 0) * pxPerMmH;
+
+          // For elevation views, use the absolute grid coordinate to position horizontally.
+          // In Y sections the horizontal axis is X (coord_x); in X sections it's Y (coord_y).
+          const gridCoord = sectionType === 'longitudinal' ? op.coord_x : op.coord_y;
+          let rx: number;
+          if (gridCoord != null && Number.isFinite(gridCoord)) {
+            // Normalize: values > 50 are assumed mm, convert to grid units
+            const normCoord = Math.abs(gridCoord) > 50 ? gridCoord / 1000 : gridCoord;
+            // Place the object centered on its grid coordinate
+            rx = originX + normCoord * cellPxW - widthPx / 2;
+          } else {
+            // Fallback: use position_x (mm) relative to polygon left edge
+            const posXPx = (op.position_x || 0) * pxPerMmH;
+            rx = originX + polyMinX * cellPxW + posXPx;
+          }
 
           const basePxY = originY - localPolyMinY * cellPxH;
-          const rx = originX + polyMinX * cellPxW + posXPx;
           const ry = basePxY - sillPx - heightPx;
 
           if (heightPx <= 0.5 || widthPx <= 0.5) continue;
@@ -1923,9 +1938,17 @@ export function SectionAxisViewer({
         const sillPx = obj.sill_height * pxPerMmV;
         const heightPx = obj.height_mm * pxPerMmV;
         const widthPx = obj.width_mm * pxPerMmH;
-        const posXPx = obj.position_x * pxPerMmH;
 
-        const rx = originX + polyMinX * cellPxW + posXPx;
+        // Use absolute grid coordinate for horizontal placement in elevation views
+        const gridCoord = sectionType === 'longitudinal' ? obj.coord_x : obj.coord_y;
+        let rx: number;
+        if (gridCoord != null && Number.isFinite(gridCoord)) {
+          const normCoord = Math.abs(gridCoord) > 50 ? gridCoord / 1000 : gridCoord;
+          rx = originX + normCoord * cellPxW - widthPx / 2;
+        } else {
+          const posXPx = obj.position_x * pxPerMmH;
+          rx = originX + polyMinX * cellPxW + posXPx;
+        }
         const ry = basePxY - sillPx - heightPx;
 
         elements.push(

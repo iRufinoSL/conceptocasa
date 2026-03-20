@@ -2,8 +2,9 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Wallet, ArrowLeft, BookOpen, Calculator, BarChart3, FileText, Receipt, Percent, Mic, AlertTriangle, ShoppingCart } from 'lucide-react';
+import { Wallet, ArrowLeft, BookOpen, Calculator, BarChart3, FileText, Receipt, Percent, Mic, AlertTriangle, ShoppingCart, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
 import { AccountingEntriesTab } from '@/components/administracion/AccountingEntriesTab';
 import { AccountingEntryLinesTab } from '@/components/administracion/AccountingEntryLinesTab';
@@ -28,8 +29,48 @@ export default function Administracion() {
   const [voiceAssistantOpen, setVoiceAssistantOpen] = useState(false);
   const [entriesKey, setEntriesKey] = useState(0);
   const [provisionalCount, setProvisionalCount] = useState(0);
+  const [downloadingTable, setDownloadingTable] = useState<string | null>(null);
   
   const { createEntryFromVoice } = useVoiceAccountingEntry();
+
+  const handleDownloadCSV = async (table: string, filename: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDownloadingTable(table);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No hay sesión activa');
+      
+      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      const ledgerParam = selectedLedgerId && selectedLedgerId !== 'total' ? `&ledger_id=${selectedLedgerId}` : '';
+      const response = await fetch(
+        `https://${projectId}.supabase.co/functions/v1/export-csv?table=${table}${ledgerParam}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+        }
+      );
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || 'Error al exportar');
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${filename}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success(`${filename}.csv descargado correctamente`);
+    } catch (error: any) {
+      console.error('Error downloading CSV:', error);
+      toast.error(error.message || 'Error al descargar CSV');
+    } finally {
+      setDownloadingTable(null);
+    }
+  };
 
   useEffect(() => {
     checkAuth();
@@ -186,22 +227,57 @@ export default function Administracion() {
             <TabsTrigger value="purchase_orders" className="gap-2">
               <ShoppingCart className="h-4 w-4" />
               Órdenes Pedido
+              <button
+                onClick={(e) => handleDownloadCSV('purchase_orders', 'ordenes_pedido', e)}
+                className="ml-1 p-0.5 rounded hover:bg-muted-foreground/20 transition-colors"
+                title="Descargar CSV"
+              >
+                <Download className={`h-3.5 w-3.5 ${downloadingTable === 'purchase_orders' ? 'animate-bounce' : ''}`} />
+              </button>
             </TabsTrigger>
             <TabsTrigger value="invoices" className="gap-2">
               <Receipt className="h-4 w-4" />
               Facturas
+              <button
+                onClick={(e) => handleDownloadCSV('invoices', 'facturas', e)}
+                className="ml-1 p-0.5 rounded hover:bg-muted-foreground/20 transition-colors"
+                title="Descargar CSV"
+              >
+                <Download className={`h-3.5 w-3.5 ${downloadingTable === 'invoices' ? 'animate-bounce' : ''}`} />
+              </button>
             </TabsTrigger>
             <TabsTrigger value="entries" className="gap-2">
               <BookOpen className="h-4 w-4" />
               Asientos
+              <button
+                onClick={(e) => handleDownloadCSV('accounting_entries', 'asientos', e)}
+                className="ml-1 p-0.5 rounded hover:bg-muted-foreground/20 transition-colors"
+                title="Descargar CSV"
+              >
+                <Download className={`h-3.5 w-3.5 ${downloadingTable === 'accounting_entries' ? 'animate-bounce' : ''}`} />
+              </button>
             </TabsTrigger>
             <TabsTrigger value="lines" className="gap-2">
               <FileText className="h-4 w-4" />
               Apuntes
+              <button
+                onClick={(e) => handleDownloadCSV('accounting_entry_lines', 'apuntes', e)}
+                className="ml-1 p-0.5 rounded hover:bg-muted-foreground/20 transition-colors"
+                title="Descargar CSV"
+              >
+                <Download className={`h-3.5 w-3.5 ${downloadingTable === 'accounting_entry_lines' ? 'animate-bounce' : ''}`} />
+              </button>
             </TabsTrigger>
             <TabsTrigger value="accounts" className="gap-2">
               <Calculator className="h-4 w-4" />
               Cuentas Contables
+              <button
+                onClick={(e) => handleDownloadCSV('accounting_accounts', 'cuentas_contables', e)}
+                className="ml-1 p-0.5 rounded hover:bg-muted-foreground/20 transition-colors"
+                title="Descargar CSV"
+              >
+                <Download className={`h-3.5 w-3.5 ${downloadingTable === 'accounting_accounts' ? 'animate-bounce' : ''}`} />
+              </button>
             </TabsTrigger>
             <TabsTrigger value="balance" className="gap-2">
               <BarChart3 className="h-4 w-4" />

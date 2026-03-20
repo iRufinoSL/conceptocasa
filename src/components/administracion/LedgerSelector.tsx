@@ -46,9 +46,9 @@ export function LedgerSelector({ selectedLedgerId, onLedgerChange }: Props) {
       if (error) throw error;
       setLedgers(data || []);
 
-      // Auto-select first ledger if none selected
-      if (!selectedLedgerId && data && data.length > 0) {
-        onLedgerChange(data[0].id);
+      // Auto-select "Contabilidad Total" if none selected
+      if (!selectedLedgerId) {
+        onLedgerChange(TOTAL_LEDGER_ID);
       }
     } catch (error) {
       console.error('Error fetching ledgers:', error);

@@ -224,22 +224,57 @@ export default function Administracion() {
             <TabsTrigger value="purchase_orders" className="gap-2">
               <ShoppingCart className="h-4 w-4" />
               Órdenes Pedido
+              <button
+                onClick={(e) => handleDownloadCSV('purchase_orders', 'ordenes_pedido', e)}
+                className="ml-1 p-0.5 rounded hover:bg-muted-foreground/20 transition-colors"
+                title="Descargar CSV"
+              >
+                <Download className={`h-3.5 w-3.5 ${downloadingTable === 'purchase_orders' ? 'animate-bounce' : ''}`} />
+              </button>
             </TabsTrigger>
             <TabsTrigger value="invoices" className="gap-2">
               <Receipt className="h-4 w-4" />
               Facturas
+              <button
+                onClick={(e) => handleDownloadCSV('invoices', 'facturas', e)}
+                className="ml-1 p-0.5 rounded hover:bg-muted-foreground/20 transition-colors"
+                title="Descargar CSV"
+              >
+                <Download className={`h-3.5 w-3.5 ${downloadingTable === 'invoices' ? 'animate-bounce' : ''}`} />
+              </button>
             </TabsTrigger>
             <TabsTrigger value="entries" className="gap-2">
               <BookOpen className="h-4 w-4" />
               Asientos
+              <button
+                onClick={(e) => handleDownloadCSV('accounting_entries', 'asientos', e)}
+                className="ml-1 p-0.5 rounded hover:bg-muted-foreground/20 transition-colors"
+                title="Descargar CSV"
+              >
+                <Download className={`h-3.5 w-3.5 ${downloadingTable === 'accounting_entries' ? 'animate-bounce' : ''}`} />
+              </button>
             </TabsTrigger>
             <TabsTrigger value="lines" className="gap-2">
               <FileText className="h-4 w-4" />
               Apuntes
+              <button
+                onClick={(e) => handleDownloadCSV('accounting_entry_lines', 'apuntes', e)}
+                className="ml-1 p-0.5 rounded hover:bg-muted-foreground/20 transition-colors"
+                title="Descargar CSV"
+              >
+                <Download className={`h-3.5 w-3.5 ${downloadingTable === 'accounting_entry_lines' ? 'animate-bounce' : ''}`} />
+              </button>
             </TabsTrigger>
             <TabsTrigger value="accounts" className="gap-2">
               <Calculator className="h-4 w-4" />
               Cuentas Contables
+              <button
+                onClick={(e) => handleDownloadCSV('accounting_accounts', 'cuentas_contables', e)}
+                className="ml-1 p-0.5 rounded hover:bg-muted-foreground/20 transition-colors"
+                title="Descargar CSV"
+              >
+                <Download className={`h-3.5 w-3.5 ${downloadingTable === 'accounting_accounts' ? 'animate-bounce' : ''}`} />
+              </button>
             </TabsTrigger>
             <TabsTrigger value="balance" className="gap-2">
               <BarChart3 className="h-4 w-4" />

@@ -29,8 +29,45 @@ export default function Administracion() {
   const [voiceAssistantOpen, setVoiceAssistantOpen] = useState(false);
   const [entriesKey, setEntriesKey] = useState(0);
   const [provisionalCount, setProvisionalCount] = useState(0);
+  const [downloadingTable, setDownloadingTable] = useState<string | null>(null);
   
   const { createEntryFromVoice } = useVoiceAccountingEntry();
+
+  const handleDownloadCSV = async (table: string, filename: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDownloadingTable(table);
+    try {
+      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      const ledgerParam = selectedLedgerId && selectedLedgerId !== 'total' ? `&ledger_id=${selectedLedgerId}` : '';
+      const response = await fetch(
+        `https://${projectId}.supabase.co/functions/v1/export-csv?table=${table}${ledgerParam}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+        }
+      );
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || 'Error al exportar');
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${filename}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success(`${filename}.csv descargado correctamente`);
+    } catch (error: any) {
+      console.error('Error downloading CSV:', error);
+      toast.error(error.message || 'Error al descargar CSV');
+    } finally {
+      setDownloadingTable(null);
+    }
+  };
 
   useEffect(() => {
     checkAuth();

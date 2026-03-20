@@ -37,13 +37,23 @@ export default function Administracion() {
     e.stopPropagation();
     setDownloadingTable(table);
     try {
-      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
       const ledgerParam = selectedLedgerId && selectedLedgerId !== 'total' ? `&ledger_id=${selectedLedgerId}` : '';
+      const { data, error } = await supabase.functions.invoke('export-csv', {
+        method: 'GET',
+        headers: { 'Content-Type': 'text/csv' },
+        body: null,
+      });
+      
+      // Use direct fetch since supabase.functions.invoke doesn't support query params well
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No hay sesión activa');
+      
+      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
       const response = await fetch(
         `https://${projectId}.supabase.co/functions/v1/export-csv?table=${table}${ledgerParam}`,
         {
           headers: {
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            'Authorization': `Bearer ${session.access_token}`,
           },
         }
       );

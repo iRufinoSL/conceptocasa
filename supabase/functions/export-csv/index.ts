@@ -38,10 +38,11 @@ Deno.serve(async (req) => {
   }
 
   const ledgerId = url.searchParams.get("ledger_id");
+  const isValidUuid = ledgerId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ledgerId);
 
   let query = supabase.from(table).select("*").order("created_at", { ascending: true }).limit(5000);
 
-  if (ledgerId && ledgerId !== "total" && ["accounting_accounts", "accounting_entries", "accounting_entry_lines"].includes(table)) {
+  if (isValidUuid && ["accounting_accounts", "accounting_entries", "accounting_entry_lines"].includes(table)) {
     query = query.eq("ledger_id", ledgerId);
   }
 

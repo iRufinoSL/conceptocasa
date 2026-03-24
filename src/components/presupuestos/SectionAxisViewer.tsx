@@ -10,6 +10,7 @@ import { Save, PenTool, X, Check, Printer, Ruler, Undo2, RefreshCw } from 'lucid
 import type { SectionPolygon } from './CustomSectionManager';
 import { WorkspacePropertiesPanel } from './WorkspacePropertiesPanel';
 import { VISUAL_PATTERNS, getPatternById } from '@/lib/visual-patterns';
+import { getWallCode } from '@/utils/wallCodeUtils';
 import jsPDF from 'jspdf';
 import { toast } from 'sonner';
 
@@ -27,6 +28,7 @@ const RULER_TEXT = 'hsl(310, 80%, 28%)';
 const RULER_BTN = 'hsl(310 100% 42%)';
 
 type WallLabelMode = 'both' | 'name-only' | 'measure-only' | 'none';
+type ViewInfoMode = 'all' | 'names-only' | 'codes-only';
 
 interface SectionScale {
   hScale: number;
@@ -235,6 +237,8 @@ export function SectionAxisViewer({
 
   // Wall label display mode
   const [wallLabelMode, setWallLabelMode] = useState<WallLabelMode>('both');
+  // View info mode: all / names-only / codes-only
+  const [viewInfoMode, setViewInfoMode] = useState<ViewInfoMode>('all');
 
   // PDF export layer options
   const [pdfLayers, setPdfLayers] = useState({
@@ -1531,8 +1535,10 @@ export function SectionAxisViewer({
         }
 
         // Label text - use T (techo) / S (suelo) for top/bottom edges in cross-sections
-        if (wallLabelMode !== 'none') {
-          let wallLabel = `P${wallNum}`;
+        if (wallLabelMode !== 'none' && viewInfoMode !== 'names-only') {
+          // Determine wall type from polygon faceTypes
+          const edgeFaceType = poly.faceTypes?.[`wall-${i}`];
+          let wallLabel: string;
           const isCrossSection = sectionType === 'transversal' || sectionType === 'longitudinal';
           if (isCrossSection && verts.length >= 3) {
             const minY = Math.min(...verts.map(v => v.y));
@@ -1543,9 +1549,14 @@ export function SectionAxisViewer({
             if (rangeY > 0.01) {
               const isBottom = Math.abs(edgeMinY - minY) < rangeY * 0.15 && Math.abs(edgeMaxY - minY) < rangeY * 0.15;
               const isTop = Math.abs(edgeMinY - maxY) < rangeY * 0.15 && Math.abs(edgeMaxY - maxY) < rangeY * 0.15;
-              if (isBottom) wallLabel = 'S';
-              else if (isTop) wallLabel = 'T';
+              if (isBottom) wallLabel = `S${wallNum}`;
+              else if (isTop) wallLabel = `T${wallNum}`;
+              else wallLabel = getWallCode(edgeFaceType, wallNum);
+            } else {
+              wallLabel = getWallCode(edgeFaceType, wallNum);
             }
+          } else {
+            wallLabel = getWallCode(edgeFaceType, wallNum);
           }
 
           let labelText = '';
@@ -1694,34 +1705,36 @@ export function SectionAxisViewer({
       const labelW = Math.max(poly.name.length * nameFontSize * 0.65, labelText.length * detailFontSize * 0.55) + 12;
       const labelH = nameFontSize + detailFontSize + 10;
 
-      elements.push(
-        <g key={`center-${poly.id}`} data-pdf-layer="center-labels"
-          style={{ cursor: vertexEditMode ? 'pointer' : 'pointer', pointerEvents: 'auto', opacity: isSelectedInEdit ? 1 : 0.72 }}
-          onClick={(e) => {
-            e.stopPropagation();
-            if (vertexEditMode) {
-              setSelectedPolygonId(poly.id);
-              return;
-            }
-            setFacePanel({ polyId: poly.id, polyName: poly.name, faceKey: 'floor', edgeCount: poly.vertices.length, vertices: poly.vertices.map(v => ({ x: v.x, y: v.y })) });
-          }}>
-          <rect
-            x={cx - labelW / 2} y={cy - labelH / 2}
-            width={labelW} height={labelH} rx={4}
-            fill="white" fillOpacity={0.85} stroke={color} strokeWidth={0.5}
-          />
-          <text x={cx} y={cy - detailFontSize / 2 + 1} textAnchor="middle" fontSize={nameFontSize} fontWeight={800} fill={darkColor} fontFamily="sans-serif">
-            {poly.name}
-          </text>
-          <text x={cx} y={cy + nameFontSize / 2 + 3} textAnchor="middle" fontSize={detailFontSize} fontWeight={700} fill={darkColor} fontFamily="monospace">
-            {labelText}
-          </text>
-        </g>
-      );
+      if (viewInfoMode !== 'codes-only') {
+        elements.push(
+          <g key={`center-${poly.id}`} data-pdf-layer="center-labels"
+            style={{ cursor: vertexEditMode ? 'pointer' : 'pointer', pointerEvents: 'auto', opacity: isSelectedInEdit ? 1 : 0.72 }}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (vertexEditMode) {
+                setSelectedPolygonId(poly.id);
+                return;
+              }
+              setFacePanel({ polyId: poly.id, polyName: poly.name, faceKey: 'floor', edgeCount: poly.vertices.length, vertices: poly.vertices.map(v => ({ x: v.x, y: v.y })) });
+            }}>
+            <rect
+              x={cx - labelW / 2} y={cy - labelH / 2}
+              width={labelW} height={labelH} rx={4}
+              fill="white" fillOpacity={0.85} stroke={color} strokeWidth={0.5}
+            />
+            <text x={cx} y={cy - detailFontSize / 2 + 1} textAnchor="middle" fontSize={nameFontSize} fontWeight={800} fill={darkColor} fontFamily="sans-serif">
+              {poly.name}
+            </text>
+            <text x={cx} y={cy + nameFontSize / 2 + 3} textAnchor="middle" fontSize={detailFontSize} fontWeight={700} fill={darkColor} fontFamily="monospace">
+              {labelText}
+            </text>
+          </g>
+        );
+      }
     });
 
     return elements;
-  }, [polygons, gridLayout, scale, wallLabelMode, facePatterns, handleEdgeClick, vertexEditMode, selectedPolygonId, pushUndo, handleInsertVertexOnEdge, handleDeleteVertex]);
+  }, [polygons, gridLayout, scale, wallLabelMode, viewInfoMode, facePatterns, handleEdgeClick, vertexEditMode, selectedPolygonId, pushUndo, handleInsertVertexOnEdge, handleDeleteVertex]);
 
   // ── Openings visual rendering on edges ──
   const openingElements = useMemo(() => {
@@ -2394,13 +2407,23 @@ export function SectionAxisViewer({
               </Button>
             )}
             <div className="flex items-center gap-1">
+              <Select value={viewInfoMode} onValueChange={(v) => setViewInfoMode(v as ViewInfoMode)}>
+                <SelectTrigger className="h-7 w-[100px] text-[10px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todo</SelectItem>
+                  <SelectItem value="names-only">Solo nombre</SelectItem>
+                  <SelectItem value="codes-only">Solo código</SelectItem>
+                </SelectContent>
+              </Select>
               <Select value={wallLabelMode} onValueChange={(v) => setWallLabelMode(v as WallLabelMode)}>
                 <SelectTrigger className="h-7 w-[130px] text-[10px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="both">P + medida</SelectItem>
-                  <SelectItem value="name-only">Solo P</SelectItem>
+                  <SelectItem value="both">Código + medida</SelectItem>
+                  <SelectItem value="name-only">Solo código</SelectItem>
                   <SelectItem value="measure-only">Solo medida</SelectItem>
                   <SelectItem value="none">Sin etiquetas</SelectItem>
                 </SelectContent>

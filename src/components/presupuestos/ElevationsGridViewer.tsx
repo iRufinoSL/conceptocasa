@@ -3253,13 +3253,16 @@ function CadRuler({ rx, ry, rw, rh, widthM, heightM, scale }: {
 }
 
 /** Ruler measurement lines overlay */
-function RulerLinesOverlay({ lines, drawPoint, widthM, rw }: {
+function RulerLinesOverlay({ lines, drawPoint, widthM, rw, selectedIndex, onSelect, onDelete }: {
   lines: Array<{ x1: number; y1: number; x2: number; y2: number }>;
   drawPoint: { x1: number; y1: number } | null;
   widthM: number; rw: number;
+  selectedIndex?: number | null;
+  onSelect?: (index: number) => void;
+  onDelete?: (index: number) => void;
 }) {
   return (
-    <g pointerEvents="none">
+    <g>
       {lines.map((rl, i) => {
         const dx = rl.x2 - rl.x1;
         const dy = rl.y2 - rl.y1;
@@ -3267,18 +3270,27 @@ function RulerLinesOverlay({ lines, drawPoint, widthM, rw }: {
         const distMm = Math.round(distPx / rw * widthM * 1000);
         const mx = (rl.x1 + rl.x2) / 2;
         const my = (rl.y1 + rl.y2) / 2;
+        const isSelected = selectedIndex === i;
+        const color = isSelected ? 'hsl(200, 90%, 45%)' : 'hsl(350, 80%, 50%)';
         return (
-          <g key={i}>
-            <line x1={rl.x1} y1={rl.y1} x2={rl.x2} y2={rl.y2} stroke="hsl(350, 80%, 50%)" strokeWidth={1.5} strokeDasharray="6,3" />
-            <circle cx={rl.x1} cy={rl.y1} r={3} fill="hsl(350, 80%, 50%)" />
-            <circle cx={rl.x2} cy={rl.y2} r={3} fill="hsl(350, 80%, 50%)" />
-            <rect x={mx - 28} y={my - 9} width={56} height={16} rx={3} fill="white" stroke="hsl(350, 80%, 50%)" strokeWidth={0.5} opacity={0.9} />
-            <text x={mx} y={my + 4} textAnchor="middle" fontSize={10} fontWeight={700} fill="hsl(350, 80%, 50%)">{distMm}mm</text>
+          <g key={i} style={{ cursor: 'pointer', pointerEvents: 'auto' }}
+            onClick={(e) => { e.stopPropagation(); onSelect?.(i); }}>
+            <line x1={rl.x1} y1={rl.y1} x2={rl.x2} y2={rl.y2} stroke={color} strokeWidth={isSelected ? 2.5 : 1.5} strokeDasharray="6,3" />
+            <circle cx={rl.x1} cy={rl.y1} r={isSelected ? 4 : 3} fill={color} />
+            <circle cx={rl.x2} cy={rl.y2} r={isSelected ? 4 : 3} fill={color} />
+            <rect x={mx - 28} y={my - 9} width={56} height={16} rx={3} fill="white" stroke={color} strokeWidth={isSelected ? 1 : 0.5} opacity={0.9} />
+            <text x={mx} y={my + 4} textAnchor="middle" fontSize={10} fontWeight={700} fill={color}>{distMm}mm</text>
+            {isSelected && onDelete && (
+              <g style={{ cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); onDelete(i); }}>
+                <circle cx={mx + 32} cy={my - 5} r={7} fill="hsl(0, 70%, 50%)" />
+                <text x={mx + 32} y={my - 1} textAnchor="middle" fontSize={9} fontWeight={700} fill="white">✕</text>
+              </g>
+            )}
           </g>
         );
       })}
       {drawPoint && (
-        <circle cx={drawPoint.x1} cy={drawPoint.y1} r={4} fill="hsl(350, 80%, 50%)" opacity={0.7}>
+        <circle cx={drawPoint.x1} cy={drawPoint.y1} r={4} fill="hsl(350, 80%, 50%)" opacity={0.7} pointerEvents="none">
           <animate attributeName="r" values="3;5;3" dur="1s" repeatCount="indefinite" />
         </circle>
       )}
@@ -3317,6 +3329,7 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
   const [cardRulerMode, setCardRulerMode] = useState(false);
   const [cardRulerLines, setCardRulerLines] = useState<Array<{ x1: number; y1: number; x2: number; y2: number }>>([]);
   const [cardRulerDraw, setCardRulerDraw] = useState<{ x1: number; y1: number } | null>(null);
+  const [selectedRulerIndex, setSelectedRulerIndex] = useState<number | null>(null);
 
   // Arrow key handler for pixel-by-pixel opening movement in fullscreen
   useEffect(() => {
@@ -4013,7 +4026,11 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
         )}
         {/* Ruler measurement lines */}
         {fsScale && (cardRulerLines.length > 0 || cardRulerDraw) && (
-          <RulerLinesOverlay lines={cardRulerLines} drawPoint={cardRulerDraw} widthM={card.width} rw={rw} />
+          <RulerLinesOverlay lines={cardRulerLines} drawPoint={cardRulerDraw} widthM={card.width} rw={rw}
+            selectedIndex={selectedRulerIndex}
+            onSelect={(idx) => setSelectedRulerIndex(prev => prev === idx ? null : idx)}
+            onDelete={(idx) => { setCardRulerLines(prev => prev.filter((_, j) => j !== idx)); setSelectedRulerIndex(null); }}
+          />
         )}
       </svg>
     );
@@ -4356,9 +4373,15 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
           {cardRulerLines.length > 0 && (
             <>
               <span className="text-xs text-muted-foreground">{cardRulerLines.length} medida{cardRulerLines.length > 1 ? 's' : ''}</span>
+              {selectedRulerIndex != null && (
+                <Button size="sm" variant="outline" className="h-7 text-xs text-destructive"
+                  onClick={() => { setCardRulerLines(prev => prev.filter((_, j) => j !== selectedRulerIndex)); setSelectedRulerIndex(null); }}>
+                  Borrar seleccionada
+                </Button>
+              )}
               <Button size="sm" variant="outline" className="h-7 text-xs"
-                onClick={() => { setCardRulerLines([]); setCardRulerDraw(null); }}>
-                Borrar medidas
+                onClick={() => { setCardRulerLines([]); setCardRulerDraw(null); setSelectedRulerIndex(null); }}>
+                Borrar todas
               </Button>
             </>
           )}

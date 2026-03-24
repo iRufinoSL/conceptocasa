@@ -9,6 +9,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { VISUAL_PATTERNS, PATTERN_CATEGORIES, getPatternById, patternPreviewDataUri, type VisualPattern } from '@/lib/visual-patterns';
 import { normalizeSearchText } from '@/lib/search-utils';
+import { getWallCode } from '@/utils/wallCodeUtils';
 
 const WALL_TYPES = [
   { value: 'exterior', label: 'Exterior' },
@@ -1447,15 +1448,15 @@ export function WorkspacePropertiesPanel({
 
                   // Determine label: T (techo/tejado) / S (suelo) for cross-sections
                   const wallRec = walls.find(ww => ww.wall_index === i + 1);
-                  let wallLabel = wallRec?.wall_type === 'tejado' ? `T${i + 1}` : `P${i + 1}`;
+                  let wallLabel = getWallCode(wallRec?.wall_type, i + 1);
                   if (isCrossSection && diagramVerts.length >= 3) {
                     const eMinY = Math.min(diagramVerts[i].y, diagramVerts[j].y);
                     const eMaxY = Math.max(diagramVerts[i].y, diagramVerts[j].y);
                     if (rangeY > 0.01) {
                       const isBottom = Math.abs(eMinY - minY) < rangeY * 0.15 && Math.abs(eMaxY - minY) < rangeY * 0.15;
                       const isTop = Math.abs(eMinY - maxY) < rangeY * 0.15 && Math.abs(eMaxY - maxY) < rangeY * 0.15;
-                      if (isBottom) wallLabel = 'S';
-                      else if (isTop) wallLabel = 'T';
+                       if (isBottom) wallLabel = `S${i + 1}`;
+                       else if (isTop) wallLabel = `T${i + 1}`;
                     }
                   }
 
@@ -1516,7 +1517,7 @@ export function WorkspacePropertiesPanel({
             // Determine wall label: T/S for cross-sections
             const isCross = sectionType === 'transversal' || sectionType === 'longitudinal';
             const wallRecFace = walls.find(ww => ww.wall_index === i + 1);
-            let wallLabel = wallRecFace?.wall_type === 'tejado' ? `T${i + 1}` : `P${i + 1}`;
+            let wallLabel = getWallCode(wallRecFace?.wall_type, i + 1);
             const diagramVerts = verticesProp || poly;
             if (isCross && diagramVerts && diagramVerts.length >= 3) {
               const j = (i + 1) % diagramVerts.length;
@@ -1526,8 +1527,8 @@ export function WorkspacePropertiesPanel({
               const eMinY = Math.min(diagramVerts[i].y, diagramVerts[j].y);
               const eMaxY = Math.max(diagramVerts[i].y, diagramVerts[j].y);
               if (rangeY > 0.01) {
-                if (Math.abs(eMinY - minY) < rangeY * 0.15 && Math.abs(eMaxY - minY) < rangeY * 0.15) wallLabel = 'S (Suelo)';
-                else if (Math.abs(eMinY - maxY) < rangeY * 0.15 && Math.abs(eMaxY - maxY) < rangeY * 0.15) wallLabel = wallRecFace?.wall_type === 'tejado' ? `T${i + 1} (Tejado)` : 'T (Techo)';
+                if (Math.abs(eMinY - minY) < rangeY * 0.15 && Math.abs(eMaxY - minY) < rangeY * 0.15) wallLabel = `S${i + 1} (Suelo)`;
+                else if (Math.abs(eMinY - maxY) < rangeY * 0.15 && Math.abs(eMaxY - maxY) < rangeY * 0.15) wallLabel = wallRecFace?.wall_type === 'tejado' ? `T${i + 1} (Tejado)` : `T${i + 1} (Techo)`;
               }
             }
             return (

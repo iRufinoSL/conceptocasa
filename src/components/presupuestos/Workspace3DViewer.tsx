@@ -4,6 +4,7 @@ import { OrbitControls, Text, Line } from '@react-three/drei';
 import * as THREE from 'three';
 import { InfiniteAxes3D } from './InfiniteAxes3D';
 import { computeVertexTopPositions } from './workspace3dUtils';
+import { getWallCode } from '@/utils/wallCodeUtils';
 import type { CustomSection } from './CustomSectionManager';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -439,7 +440,7 @@ function PrismModel({ polygon, height, walls, scaleXY = 625, scaleZ = 250, zBase
       const zTopNext = Math.round(topVerts3D[next].y / zScaleBlocks);
 
       result.push({
-        type: wall?.wall_type === 'tejado' ? 'tejado' : 'pared', index: i + 1, label: wall?.wall_type === 'tejado' ? `T${i + 1}` : `P${i + 1}`,
+        type: wall?.wall_type === 'tejado' ? 'tejado' : 'pared', index: i + 1, label: getWallCode(wall?.wall_type, i + 1),
         vertices: wallVerts, labelPos: wallCenter,
         color: getWallColor(wall?.wall_type),
         realVertices: [

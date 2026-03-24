@@ -4,6 +4,7 @@ import { OrbitControls, Text, Line } from '@react-three/drei';
 import * as THREE from 'three';
 import { InfiniteAxes3D } from './InfiniteAxes3D';
 import { computeVertexTopPositions } from './workspace3dUtils';
+import { computeZ0AlignedCamera } from './threeCameraPresets';
 import { getWallCode } from '@/utils/wallCodeUtils';
 import type { CustomSection } from './CustomSectionManager';
 import { Button } from '@/components/ui/button';
@@ -175,10 +176,7 @@ function GroundPlane({ size, centerX, centerZ }: { size: number; centerX: number
   );
 }
 
-/** Auto-frame camera aligned with Z0 reading:
- * X stays horizontally to the right, plan-Y recedes to the background/top,
- * and the initial view comes from the frontal side instead of a diagonal skew.
- */
+/** Auto-frame camera aligned with Z0 reading and anchored to X0Y0Z0. */
 function AutoFrameCamera({ bounds, resetTrigger, controlsRef }: {
   bounds: { minX: number; maxX: number; minY: number; maxY: number; minZ: number; maxZ: number };
   resetTrigger: number;
@@ -195,27 +193,10 @@ function AutoFrameCamera({ bounds, resetTrigger, controlsRef }: {
     if (hasFramed.current) return;
     hasFramed.current = true;
 
-    const dx = bounds.maxX - bounds.minX;
-    const dy = bounds.maxY - bounds.minY;
-    const dz = bounds.maxZ - bounds.minZ;
-    const maxPlanDim = Math.max(dx, dz, 1);
-    const dist = Math.max(maxPlanDim * 1.6, dy * 2.4, 3.5);
-
-    const cx = (bounds.minX + bounds.maxX) / 2;
-    const cy = (bounds.minY + bounds.maxY) / 2;
-    const cz = (bounds.minZ + bounds.maxZ) / 2;
-    const center = new THREE.Vector3(cx, cy, cz);
-
-    // Frontal elevated view: no lateral skew on X, so X remains visually horizontal
-    // like in Z0, while world-Z becomes the background depth axis on screen.
-    const cameraOffset = new THREE.Vector3(0, 0.9, -1.45)
-      .normalize()
-      .multiplyScalar(dist);
-
-    const target = new THREE.Vector3(cx, cy + dy * 0.12, cz);
+    const { position, target } = computeZ0AlignedCamera(bounds);
 
     camera.up.set(0, 1, 0);
-    camera.position.copy(center.clone().add(cameraOffset));
+    camera.position.copy(position);
     camera.lookAt(target);
     camera.updateProjectionMatrix();
 

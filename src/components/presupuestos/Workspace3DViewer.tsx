@@ -3,6 +3,7 @@ import { Canvas, useThree, useFrame, ThreeEvent } from '@react-three/fiber';
 import { OrbitControls, Text, Line } from '@react-three/drei';
 import * as THREE from 'three';
 import { InfiniteAxes3D } from './InfiniteAxes3D';
+import { computeZ0AlignedCamera } from './threeCameraPresets';
 import { computeVertexTopPositions } from './workspace3dUtils';
 import { getWallCode } from '@/utils/wallCodeUtils';
 import type { CustomSection } from './CustomSectionManager';
@@ -787,6 +788,36 @@ export function Workspace3DViewer({ name, polygon, height, walls, scaleXY, scale
     }
   }, [onVertexEdit, polygon, walls, height, zBase, scaleZ, scaleXY]);
 
+  const cameraConfig = useMemo(() => {
+    const sMxy = (scaleXY || 625) / 1000;
+    const zScaleBlocks = (scaleZ || 250) / 1000;
+
+    if (!polygon || polygon.length === 0) {
+      return computeZ0AlignedCamera({
+        minX: 0,
+        maxX: 1,
+        minY: 0,
+        maxY: 1,
+        minZ: 0,
+        maxZ: 1,
+      });
+    }
+
+    const xs = polygon.map(v => v.x * sMxy);
+    const zs = polygon.map(v => v.y * sMxy);
+    const heights = walls.map(w => w.height != null ? w.height : height);
+    const maxWallHeight = heights.length > 0 ? Math.max(...heights) : height;
+
+    return computeZ0AlignedCamera({
+      minX: Math.min(...xs),
+      maxX: Math.max(...xs),
+      minY: zBase * zScaleBlocks,
+      maxY: (zBase + Math.round(maxWallHeight / zScaleBlocks)) * zScaleBlocks,
+      minZ: Math.min(...zs),
+      maxZ: Math.max(...zs),
+    });
+  }, [polygon, walls, height, scaleXY, scaleZ, zBase]);
+
   if (!polygon || polygon.length < 3) {
     return (
       <div className="flex items-center justify-center h-64 bg-muted/30 rounded-lg border text-sm text-muted-foreground">
@@ -800,9 +831,6 @@ export function Workspace3DViewer({ name, polygon, height, walls, scaleXY, scale
     : 'space-y-2';
 
   const canvasHeight = isFullscreen ? 'flex-1' : 'h-80';
-
-  // Camera offset from centroid
-  const camPos: [number, number, number] = [centroid[0] + 3, centroid[1] + 3, centroid[2] + 3];
 
   return (
     <div className={containerClass}>
@@ -830,7 +858,7 @@ export function Workspace3DViewer({ name, polygon, height, walls, scaleXY, scale
         </div>
       </div>
       <div className={`${canvasHeight} rounded-lg border bg-gradient-to-b from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 overflow-hidden`}>
-        <Canvas camera={{ position: camPos, fov: 50 }}>
+        <Canvas camera={{ position: [cameraConfig.position.x, cameraConfig.position.y, cameraConfig.position.z], fov: 50 }}>
           <ambientLight intensity={0.6} />
           <directionalLight position={[5, 8, 5]} intensity={0.8} />
           <directionalLight position={[-3, 4, -3]} intensity={0.3} />
@@ -853,7 +881,7 @@ export function Workspace3DViewer({ name, polygon, height, walls, scaleXY, scale
             hasFloor={hasFloor}
             hasCeiling={hasCeiling}
           />
-          <CenteredOrbitControls orbitRef={orbitRef} target={centroid} />
+          <CenteredOrbitControls orbitRef={orbitRef} target={[cameraConfig.target.x, cameraConfig.target.y, cameraConfig.target.z]} />
           <gridHelper args={[20, 40, '#888888', '#cccccc']} />
           <InfiniteAxes3D labelDistance={1.2} />
         </Canvas>

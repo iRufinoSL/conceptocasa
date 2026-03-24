@@ -3,6 +3,7 @@ import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, Text } from '@react-three/drei';
 import * as THREE from 'three';
 import { InfiniteAxes3D } from './InfiniteAxes3D';
+import { computeZ0AlignedCamera } from './threeCameraPresets';
 import type { FloorPlanData, RoomData } from '@/lib/floor-plan-calculations';
 import { autoClassifyWalls, isExteriorType, isInvisibleType } from '@/lib/floor-plan-calculations';
 
@@ -333,9 +334,17 @@ function CameraSetup({ bounds, defaultHeight }: { bounds: { w: number; l: number
   const { camera } = useThree();
 
   useEffect(() => {
-    const dist = Math.max(bounds.w, bounds.l) * 1.8;
-    camera.position.set(bounds.cx + dist * 0.6, defaultHeight * 2.5, bounds.cz + dist * 0.6);
-    camera.lookAt(bounds.cx, defaultHeight / 2, bounds.cz);
+    const { position, target } = computeZ0AlignedCamera({
+      minX: bounds.cx - bounds.w / 2,
+      maxX: bounds.cx + bounds.w / 2,
+      minY: 0,
+      maxY: defaultHeight,
+      minZ: bounds.cz - bounds.l / 2,
+      maxZ: bounds.cz + bounds.l / 2,
+    });
+
+    camera.position.copy(position);
+    camera.lookAt(target);
     camera.updateProjectionMatrix();
   }, [camera, bounds, defaultHeight]);
 

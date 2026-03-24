@@ -788,23 +788,21 @@ export function Workspace3DViewer({ name, polygon, height, walls, scaleXY, scale
     }
   }, [onVertexEdit, polygon, walls, height, zBase, scaleZ, scaleXY]);
 
-  if (!polygon || polygon.length < 3) {
-    return (
-      <div className="flex items-center justify-center h-64 bg-muted/30 rounded-lg border text-sm text-muted-foreground">
-        Se necesitan al menos 3 vértices para la vista 3D
-      </div>
-    );
-  }
-
-  const containerClass = isFullscreen
-    ? 'fixed inset-0 z-50 bg-background flex flex-col'
-    : 'space-y-2';
-
-  const canvasHeight = isFullscreen ? 'flex-1' : 'h-80';
-
   const cameraConfig = useMemo(() => {
     const sMxy = (scaleXY || 625) / 1000;
     const zScaleBlocks = (scaleZ || 250) / 1000;
+
+    if (!polygon || polygon.length === 0) {
+      return computeZ0AlignedCamera({
+        minX: 0,
+        maxX: 1,
+        minY: 0,
+        maxY: 1,
+        minZ: 0,
+        maxZ: 1,
+      });
+    }
+
     const xs = polygon.map(v => v.x * sMxy);
     const zs = polygon.map(v => v.y * sMxy);
     const heights = walls.map(w => w.height != null ? w.height : height);
@@ -819,6 +817,20 @@ export function Workspace3DViewer({ name, polygon, height, walls, scaleXY, scale
       maxZ: Math.max(...zs),
     });
   }, [polygon, walls, height, scaleXY, scaleZ, zBase]);
+
+  if (!polygon || polygon.length < 3) {
+    return (
+      <div className="flex items-center justify-center h-64 bg-muted/30 rounded-lg border text-sm text-muted-foreground">
+        Se necesitan al menos 3 vértices para la vista 3D
+      </div>
+    );
+  }
+
+  const containerClass = isFullscreen
+    ? 'fixed inset-0 z-50 bg-background flex flex-col'
+    : 'space-y-2';
+
+  const canvasHeight = isFullscreen ? 'flex-1' : 'h-80';
 
   return (
     <div className={containerClass}>

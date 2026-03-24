@@ -175,7 +175,9 @@ function GroundPlane({ size }: { size: number }) {
   );
 }
 
-/** Auto-frame camera to fit all workspaces with Z0-aligned initial orientation */
+/** Auto-frame camera with the same spatial reading as Z0:
+ * origin at lower-left, X grows to the right, Y grows towards the background/top.
+ */
 function AutoFrameCamera({ bounds, resetTrigger, controlsRef }: {
   bounds: { minX: number; maxX: number; minY: number; maxY: number; minZ: number; maxZ: number };
   resetTrigger: number;
@@ -195,28 +197,27 @@ function AutoFrameCamera({ bounds, resetTrigger, controlsRef }: {
     const dx = bounds.maxX - bounds.minX;
     const dy = bounds.maxY - bounds.minY;
     const dz = bounds.maxZ - bounds.minZ;
+    const maxPlanDim = Math.max(dx, dz, 1);
     const maxDim = Math.max(dx, dy, dz, 1);
-    const dist = maxDim * 2.0;
+    const dist = Math.max(maxPlanDim * 1.9, maxDim * 1.45);
 
-    // Center of the building
     const cx = (bounds.minX + bounds.maxX) / 2;
     const cy = (bounds.minY + bounds.maxY) / 2;
     const cz = (bounds.minZ + bounds.maxZ) / 2;
     const center = new THREE.Vector3(cx, cy, cz);
 
-    // Initial basis aligned to the Z0 plan:
-    // - X (red) reads horizontally to the right on screen
-    // - Y plan/depth (green, mapped to world Z) reads upward/towards the background
-    // - Z height (blue, mapped to world Y) stays visually upward
-    const screenUp = new THREE.Vector3(0, 0.85, 0.53).normalize();
-    const cameraBack = new THREE.Vector3(0, 0.53, -0.85).normalize();
+    // Put the camera in the negative X / negative Y-plan quadrant (world Z here),
+    // and above the model. This makes the front-left-lower corner correspond to
+    // the plan origin, so Z0 reads naturally: X→right and plan Y→up/back.
+    const cameraOffset = new THREE.Vector3(-1.15, 0.95, -1.15)
+      .normalize()
+      .multiplyScalar(dist);
 
-    camera.up.copy(screenUp);
-    camera.position.copy(center.clone().add(cameraBack.multiplyScalar(dist)));
+    camera.up.set(0, 1, 0);
+    camera.position.copy(center.clone().add(cameraOffset));
     camera.lookAt(center);
     camera.updateProjectionMatrix();
 
-    // Point orbit target at building center for smooth rotation
     if (controlsRef.current) {
       controlsRef.current.target.set(cx, cy, cz);
       controlsRef.current.update();

@@ -1734,7 +1734,7 @@ export function SectionAxisViewer({
     });
 
     return elements;
-  }, [polygons, gridLayout, scale, wallLabelMode, facePatterns, handleEdgeClick, vertexEditMode, selectedPolygonId, pushUndo, handleInsertVertexOnEdge, handleDeleteVertex]);
+  }, [polygons, gridLayout, scale, wallLabelMode, viewInfoMode, facePatterns, handleEdgeClick, vertexEditMode, selectedPolygonId, pushUndo, handleInsertVertexOnEdge, handleDeleteVertex]);
 
   // ── Openings visual rendering on edges ──
   const openingElements = useMemo(() => {

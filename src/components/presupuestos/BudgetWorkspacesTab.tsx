@@ -4066,7 +4066,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
                          const dbWallIndex = i + 1;
                          const wall = sibWalls.find(w => w.wall_index === dbWallIndex);
                          return (
-                            <FaceRow key={i} label={`🧱 P${i + 1}`} type={normalizeWallType(wall?.wall_type)} options={WALL_TYPES} onChange={(v) => ensureAndUpdateWallType(sibRoom.id, i, v, wall?.id)} />
+                            <FaceRow key={i} label={`🧱 ${getWallCode(normalizeWallType(wall?.wall_type), i + 1)}`} type={normalizeWallType(wall?.wall_type)} options={WALL_TYPES} onChange={(v) => ensureAndUpdateWallType(sibRoom.id, i, v, wall?.id)} />
                          );
                        })}
                        <FaceRow label="⬜ Techo" type={getCeilingType(sibRoom)} options={FLOOR_CEILING_TYPES} onChange={(v) => updateFloorCeiling(sibRoom.id, 'has_ceiling', v as FloorCeilingType)} />
@@ -4086,7 +4086,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
                        const dbWallIndex = i + 1;
                        const wall = roomWalls.find(w => w.wall_index === dbWallIndex);
                        return (
-                         <FaceRow key={i} label={`🧱 P${i + 1}`} type={normalizeWallType(wall?.wall_type)} options={WALL_TYPES} onChange={(v) => ensureAndUpdateWallType(r.id, i, v, wall?.id)} />
+                          <FaceRow key={i} label={`🧱 ${getWallCode(normalizeWallType(wall?.wall_type), i + 1)}`} type={normalizeWallType(wall?.wall_type)} options={WALL_TYPES} onChange={(v) => ensureAndUpdateWallType(r.id, i, v, wall?.id)} />
                        );
                      })}
                       <FaceRow label={r.has_roof ? '🏠 Techo (cubierta)' : '⬜ Techo'} type={getCeilingType(r)} options={FLOOR_CEILING_TYPES} onChange={(v) => updateFloorCeiling(r.id, 'has_ceiling', v as FloorCeilingType)} />
@@ -4215,7 +4215,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
                            const dbWallIndex = i + 1;
                            const wall = sibWalls.find(w => w.wall_index === dbWallIndex);
                            return (
-                             <FaceRow key={i} label={`🧱 P${i + 1}`} type={normalizeWallType(wall?.wall_type)} options={WALL_TYPES} onChange={(v) => ensureAndUpdateWallType(sibRoom.id, i, v, wall?.id)} />
+                             <FaceRow key={i} label={`🧱 ${getWallCode(normalizeWallType(wall?.wall_type), i + 1)}`} type={normalizeWallType(wall?.wall_type)} options={WALL_TYPES} onChange={(v) => ensureAndUpdateWallType(sibRoom.id, i, v, wall?.id)} />
                            );
                          })}
                           <FaceRow label="⬜ Techo" type={getCeilingType(sibRoom)} options={FLOOR_CEILING_TYPES} onChange={(v) => updateFloorCeiling(sibRoom.id, 'has_ceiling', v as FloorCeilingType)} />
@@ -4235,7 +4235,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
                          const dbWallIndex = i + 1;
                          const wall = roomWalls.find(w => w.wall_index === dbWallIndex);
                          return (
-                           <FaceRow key={i} label={`🧱 P${i + 1}`} type={normalizeWallType(wall?.wall_type)} options={WALL_TYPES} onChange={(v) => ensureAndUpdateWallType(r.id, i, v, wall?.id)} />
+                           <FaceRow key={i} label={`🧱 ${getWallCode(normalizeWallType(wall?.wall_type), i + 1)}`} type={normalizeWallType(wall?.wall_type)} options={WALL_TYPES} onChange={(v) => ensureAndUpdateWallType(r.id, i, v, wall?.id)} />
                          );
                        })}
                         <FaceRow label={r.has_roof ? '🏠 Techo (cubierta)' : '⬜ Techo'} type={getCeilingType(r)} options={FLOOR_CEILING_TYPES} onChange={(v) => updateFloorCeiling(r.id, 'has_ceiling', v as FloorCeilingType)} />
@@ -4322,7 +4322,7 @@ export function BudgetWorkspacesTab({ budgetId, isAdmin, autoShow3D, onAutoShow3
               return (
                 <FaceRow
                   key={i}
-                  label={`🧱 P${i + 1}${edgeLen ? ` (${edgeLen.toFixed(2)}m)` : ''}`}
+                  label={`🧱 ${getWallCode(normalizeWallType(wall?.wall_type), i + 1)}${edgeLen ? ` (${edgeLen.toFixed(2)}m)` : ''}`}
                   type={normalizeWallType(wall?.wall_type)}
                   options={WALL_TYPES}
                   onChange={(v) => ensureAndUpdateWallType(r.id, i, v, wall?.id)}

@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
-const VERSION_KEY = 'app_version_timestamp';
-const AUTO_UPDATE_KEY = 'app_auto_updated';
+const VERSION_KEY = 'app_version_hash';
+const POLL_INTERVAL = 60_000; // check every 60s
 
-export function useVersionCheck(autoUpdate: boolean = false) {
+export function useVersionCheck() {
   const [hasUpdate, setHasUpdate] = useState(false);
-  const [checking, setChecking] = useState(true);
+  const currentHashRef = useRef<string | null>(null);
 
   const detectHash = useCallback(async (): Promise<string | null> => {
     try {
@@ -15,7 +15,6 @@ export function useVersionCheck(autoUpdate: boolean = false) {
       });
       if (!response.ok) return null;
       const html = await response.text();
-      // Vite adds content hash to built JS files
       const scriptMatch = html.match(/src="\/assets\/index-([a-zA-Z0-9]+)\.js"/);
       return scriptMatch ? scriptMatch[1] : null;
     } catch {
@@ -23,101 +22,73 @@ export function useVersionCheck(autoUpdate: boolean = false) {
     }
   }, []);
 
-  // Force any waiting service worker to activate immediately
+  // Force any waiting service worker to activate
   useEffect(() => {
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistration().then(reg => {
-        if (reg?.waiting) {
-          reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-        }
+        if (reg?.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
         reg?.addEventListener('updatefound', () => {
           const newWorker = reg.installing;
           newWorker?.addEventListener('statechange', () => {
             if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              // New SW installed while old one is active — activate it now
               newWorker.postMessage({ type: 'SKIP_WAITING' });
             }
           });
         });
-      });
-
-      // When the new SW takes over, reload to get fresh code
-      let refreshing = false;
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (!refreshing) {
-          refreshing = true;
-          window.location.reload();
-        }
       });
     }
   }, []);
 
   useEffect(() => {
     const checkVersion = async () => {
-      try {
-        const currentHash = await detectHash();
-        const storedHash = localStorage.getItem(VERSION_KEY);
+      const remoteHash = await detectHash();
+      if (!remoteHash) return;
 
-        if (currentHash && storedHash && currentHash !== storedHash) {
-          const justUpdated = sessionStorage.getItem(AUTO_UPDATE_KEY);
+      // First run — store baseline
+      if (!currentHashRef.current) {
+        const stored = localStorage.getItem(VERSION_KEY);
+        currentHashRef.current = stored || remoteHash;
+        if (!stored) localStorage.setItem(VERSION_KEY, remoteHash);
+      }
 
-          if (autoUpdate && !justUpdated) {
-            sessionStorage.setItem(AUTO_UPDATE_KEY, 'true');
-            localStorage.setItem(VERSION_KEY, currentHash);
-            // Clear all caches before reload
-            if ('caches' in window) {
-              const keys = await caches.keys();
-              await Promise.all(keys.map(k => caches.delete(k)));
-            }
-            window.location.reload();
-            return;
-          }
-
-          setHasUpdate(true);
-        } else if (currentHash && !storedHash) {
-          localStorage.setItem(VERSION_KEY, currentHash);
-        }
-
-        sessionStorage.removeItem(AUTO_UPDATE_KEY);
-      } catch (error) {
-        console.log('Version check skipped:', error);
-      } finally {
-        setChecking(false);
+      if (remoteHash !== currentHashRef.current) {
+        setHasUpdate(true);
       }
     };
 
     checkVersion();
 
-    // Also recheck when the tab regains focus (user comes back to the app)
+    // Poll periodically
+    const interval = setInterval(checkVersion, POLL_INTERVAL);
+
+    // Also check on tab focus
     const handleVisibility = () => {
-      if (document.visibilityState === 'visible') {
-        checkVersion();
-      }
+      if (document.visibilityState === 'visible') checkVersion();
     };
     document.addEventListener('visibilitychange', handleVisibility);
-    return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, [autoUpdate, detectHash]);
 
-  const updateApp = async () => {
-    localStorage.removeItem(VERSION_KEY);
-    // Clear all service worker caches
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [detectHash]);
+
+  const updateApp = useCallback(async () => {
+    // Save new hash so after reload we don't re-trigger
+    const remoteHash = await detectHash();
+    if (remoteHash) localStorage.setItem(VERSION_KEY, remoteHash);
+
+    // Clear caches
     if ('caches' in window) {
       const keys = await caches.keys();
       await Promise.all(keys.map(k => caches.delete(k)));
     }
-    // Unregister SW to force clean start
     if ('serviceWorker' in navigator) {
       const reg = await navigator.serviceWorker.getRegistration();
       if (reg) await reg.unregister();
     }
     window.location.reload();
-  };
+  }, [detectHash]);
 
-  const saveCurrentVersion = () => {
-    detectHash().then(hash => {
-      if (hash) localStorage.setItem(VERSION_KEY, hash);
-    });
-  };
-
-  return { hasUpdate, checking, updateApp, saveCurrentVersion };
+  return { hasUpdate, updateApp };
 }

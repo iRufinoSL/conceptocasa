@@ -30,7 +30,7 @@ export default function Auth() {
   const [searchParams] = useSearchParams();
   const location = useLocation();
   const { user, loading, signIn, signOut, resetPasswordForEmail, updatePassword } = useAuth();
-  const { hasUpdate, updateApp } = useVersionCheck(true);
+  const { hasUpdate, updateApp } = useVersionCheck();
   
   const [mode, setMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState('');

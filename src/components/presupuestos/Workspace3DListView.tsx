@@ -166,17 +166,18 @@ function InteractiveFace({ vertices, color, label, labelPos, labelRot, onDoubleC
 }
 
 /** Ground plane for context */
-function GroundPlane({ size }: { size: number }) {
+function GroundPlane({ size, centerX, centerZ }: { size: number; centerX: number; centerZ: number }) {
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[size / 2, -0.005, size / 2]} receiveShadow>
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[centerX, -0.005, centerZ]} receiveShadow>
       <planeGeometry args={[size * 2, size * 2]} />
       <meshStandardMaterial color="#e8e4dc" roughness={0.95} transparent opacity={0.4} side={THREE.DoubleSide} />
     </mesh>
   );
 }
 
-/** Auto-frame camera with the same spatial reading as Z0:
- * origin at lower-left, X grows to the right, Y grows towards the background/top.
+/** Auto-frame camera aligned with Z0 reading:
+ * X stays horizontally to the right, plan-Y recedes to the background/top,
+ * and the initial view comes from the frontal side instead of a diagonal skew.
  */
 function AutoFrameCamera({ bounds, resetTrigger, controlsRef }: {
   bounds: { minX: number; maxX: number; minY: number; maxY: number; minZ: number; maxZ: number };
@@ -198,31 +199,28 @@ function AutoFrameCamera({ bounds, resetTrigger, controlsRef }: {
     const dy = bounds.maxY - bounds.minY;
     const dz = bounds.maxZ - bounds.minZ;
     const maxPlanDim = Math.max(dx, dz, 1);
-    const maxDim = Math.max(dx, dy, dz, 1);
-    const dist = Math.max(maxPlanDim * 1.9, maxDim * 1.45);
+    const dist = Math.max(maxPlanDim * 1.6, dy * 2.4, 3.5);
 
     const cx = (bounds.minX + bounds.maxX) / 2;
     const cy = (bounds.minY + bounds.maxY) / 2;
     const cz = (bounds.minZ + bounds.maxZ) / 2;
     const center = new THREE.Vector3(cx, cy, cz);
 
-    // Camera positioned primarily in front of the building (strong negative Z)
-    // with a slight left offset (small negative X) and elevated (positive Y).
-    // This replicates the Z0 plan reading:
-    //   • X (red) → clearly horizontal to the right
-    //   • Plan-Y / world-Z (green) → clearly recedes into the background (top of screen)
-    //   • Height / world-Y (blue) → vertical
-    const cameraOffset = new THREE.Vector3(-0.35, 0.85, -1.1)
+    // Frontal elevated view: no lateral skew on X, so X remains visually horizontal
+    // like in Z0, while world-Z becomes the background depth axis on screen.
+    const cameraOffset = new THREE.Vector3(0, 0.9, -1.45)
       .normalize()
       .multiplyScalar(dist);
 
+    const target = new THREE.Vector3(cx, cy + dy * 0.12, cz);
+
     camera.up.set(0, 1, 0);
     camera.position.copy(center.clone().add(cameraOffset));
-    camera.lookAt(center);
+    camera.lookAt(target);
     camera.updateProjectionMatrix();
 
     if (controlsRef.current) {
-      controlsRef.current.target.set(cx, cy, cz);
+      controlsRef.current.target.set(target.x, target.y, target.z);
       controlsRef.current.update();
     }
   }, [bounds, camera, resetTrigger, controlsRef]);
@@ -473,6 +471,8 @@ export function Workspace3DListView({ workspaces, scaleXY, scaleZ, onClose, onFa
     sceneBounds.maxZ - sceneBounds.minZ,
     3
   );
+  const groundCenterX = (sceneBounds.minX + sceneBounds.maxX) / 2;
+  const groundCenterZ = (sceneBounds.minZ + sceneBounds.maxZ) / 2;
 
   return (
     <div className={containerClass}>
@@ -619,7 +619,7 @@ export function Workspace3DListView({ workspaces, scaleXY, scaleZ, onClose, onFa
               />
             ))}
 
-            <GroundPlane size={groundSize} />
+            <GroundPlane size={groundSize} centerX={groundCenterX} centerZ={groundCenterZ} />
 
             <OrbitControls
               ref={orbitControlsRef}
@@ -631,7 +631,7 @@ export function Workspace3DListView({ workspaces, scaleXY, scaleZ, onClose, onFa
               minDistance={0.5}
               maxDistance={80}
             />
-            <gridHelper args={[groundSize * 2, Math.round(groundSize * 2 / 0.625), '#aaaaaa', '#dddddd']} position={[groundSize, 0, groundSize]} />
+            <gridHelper args={[groundSize * 2, Math.round(groundSize * 2 / 0.625), '#aaaaaa', '#dddddd']} position={[groundCenterX, 0, groundCenterZ]} />
             <InfiniteAxes3D labelDistance={1.8} />
           </Canvas>
         ) : (

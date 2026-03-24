@@ -237,6 +237,8 @@ export function SectionAxisViewer({
 
   // Wall label display mode
   const [wallLabelMode, setWallLabelMode] = useState<WallLabelMode>('both');
+  // View info mode: all / names-only / codes-only
+  const [viewInfoMode, setViewInfoMode] = useState<ViewInfoMode>('all');
 
   // PDF export layer options
   const [pdfLayers, setPdfLayers] = useState({

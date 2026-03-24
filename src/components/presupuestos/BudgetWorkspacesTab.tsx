@@ -1422,9 +1422,9 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
                           fill={activeWs.color} opacity={0.9}
                           stroke="hsl(var(--background))" strokeWidth={1.5} />
                         <text x={bx} y={by} textAnchor="middle" dominantBaseline="central"
-                          className="text-[7px] font-bold select-none"
+                          className="text-[6px] font-bold select-none"
                           fill="hsl(var(--background))">
-                          {wallDbIdx}
+                          {getWallCode(activeWt, wallDbIdx)}
                         </text>
                         {/* Invisible larger hitbox for easier clicking */}
                         {selectMode && (

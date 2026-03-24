@@ -4026,7 +4026,11 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
         )}
         {/* Ruler measurement lines */}
         {fsScale && (cardRulerLines.length > 0 || cardRulerDraw) && (
-          <RulerLinesOverlay lines={cardRulerLines} drawPoint={cardRulerDraw} widthM={card.width} rw={rw} />
+          <RulerLinesOverlay lines={cardRulerLines} drawPoint={cardRulerDraw} widthM={card.width} rw={rw}
+            selectedIndex={selectedRulerIndex}
+            onSelect={(idx) => setSelectedRulerIndex(prev => prev === idx ? null : idx)}
+            onDelete={(idx) => { setCardRulerLines(prev => prev.filter((_, j) => j !== idx)); setSelectedRulerIndex(null); }}
+          />
         )}
       </svg>
     );

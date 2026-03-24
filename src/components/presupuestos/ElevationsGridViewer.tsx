@@ -4373,9 +4373,15 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
           {cardRulerLines.length > 0 && (
             <>
               <span className="text-xs text-muted-foreground">{cardRulerLines.length} medida{cardRulerLines.length > 1 ? 's' : ''}</span>
+              {selectedRulerIndex != null && (
+                <Button size="sm" variant="outline" className="h-7 text-xs text-destructive"
+                  onClick={() => { setCardRulerLines(prev => prev.filter((_, j) => j !== selectedRulerIndex)); setSelectedRulerIndex(null); }}>
+                  Borrar seleccionada
+                </Button>
+              )}
               <Button size="sm" variant="outline" className="h-7 text-xs"
-                onClick={() => { setCardRulerLines([]); setCardRulerDraw(null); }}>
-                Borrar medidas
+                onClick={() => { setCardRulerLines([]); setCardRulerDraw(null); setSelectedRulerIndex(null); }}>
+                Borrar todas
               </Button>
             </>
           )}

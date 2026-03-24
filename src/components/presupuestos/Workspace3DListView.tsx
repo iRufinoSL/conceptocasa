@@ -200,7 +200,7 @@ function AutoFrameCamera({ bounds, resetTrigger }: {
     const maxDim = Math.max(dx, dy, dz, 1);
     const dist = maxDim * 1.8;
 
-    camera.position.set(cx + dist * 0.6, cy + dist * 0.8, cz + dist * 0.6);
+    camera.position.set(cx - dist * 0.6, cy + dist * 0.8, cz - dist * 0.6);
     camera.lookAt(cx, cy, cz);
     camera.updateProjectionMatrix();
   }, [bounds, camera, resetTrigger]);

@@ -3329,6 +3329,7 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
   const [cardRulerMode, setCardRulerMode] = useState(false);
   const [cardRulerLines, setCardRulerLines] = useState<Array<{ x1: number; y1: number; x2: number; y2: number }>>([]);
   const [cardRulerDraw, setCardRulerDraw] = useState<{ x1: number; y1: number } | null>(null);
+  const [selectedRulerIndex, setSelectedRulerIndex] = useState<number | null>(null);
 
   // Arrow key handler for pixel-by-pixel opening movement in fullscreen
   useEffect(() => {

@@ -1705,30 +1705,32 @@ export function SectionAxisViewer({
       const labelW = Math.max(poly.name.length * nameFontSize * 0.65, labelText.length * detailFontSize * 0.55) + 12;
       const labelH = nameFontSize + detailFontSize + 10;
 
-      elements.push(
-        <g key={`center-${poly.id}`} data-pdf-layer="center-labels"
-          style={{ cursor: vertexEditMode ? 'pointer' : 'pointer', pointerEvents: 'auto', opacity: isSelectedInEdit ? 1 : 0.72 }}
-          onClick={(e) => {
-            e.stopPropagation();
-            if (vertexEditMode) {
-              setSelectedPolygonId(poly.id);
-              return;
-            }
-            setFacePanel({ polyId: poly.id, polyName: poly.name, faceKey: 'floor', edgeCount: poly.vertices.length, vertices: poly.vertices.map(v => ({ x: v.x, y: v.y })) });
-          }}>
-          <rect
-            x={cx - labelW / 2} y={cy - labelH / 2}
-            width={labelW} height={labelH} rx={4}
-            fill="white" fillOpacity={0.85} stroke={color} strokeWidth={0.5}
-          />
-          <text x={cx} y={cy - detailFontSize / 2 + 1} textAnchor="middle" fontSize={nameFontSize} fontWeight={800} fill={darkColor} fontFamily="sans-serif">
-            {poly.name}
-          </text>
-          <text x={cx} y={cy + nameFontSize / 2 + 3} textAnchor="middle" fontSize={detailFontSize} fontWeight={700} fill={darkColor} fontFamily="monospace">
-            {labelText}
-          </text>
-        </g>
-      );
+      if (viewInfoMode !== 'codes-only') {
+        elements.push(
+          <g key={`center-${poly.id}`} data-pdf-layer="center-labels"
+            style={{ cursor: vertexEditMode ? 'pointer' : 'pointer', pointerEvents: 'auto', opacity: isSelectedInEdit ? 1 : 0.72 }}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (vertexEditMode) {
+                setSelectedPolygonId(poly.id);
+                return;
+              }
+              setFacePanel({ polyId: poly.id, polyName: poly.name, faceKey: 'floor', edgeCount: poly.vertices.length, vertices: poly.vertices.map(v => ({ x: v.x, y: v.y })) });
+            }}>
+            <rect
+              x={cx - labelW / 2} y={cy - labelH / 2}
+              width={labelW} height={labelH} rx={4}
+              fill="white" fillOpacity={0.85} stroke={color} strokeWidth={0.5}
+            />
+            <text x={cx} y={cy - detailFontSize / 2 + 1} textAnchor="middle" fontSize={nameFontSize} fontWeight={800} fill={darkColor} fontFamily="sans-serif">
+              {poly.name}
+            </text>
+            <text x={cx} y={cy + nameFontSize / 2 + 3} textAnchor="middle" fontSize={detailFontSize} fontWeight={700} fill={darkColor} fontFamily="monospace">
+              {labelText}
+            </text>
+          </g>
+        );
+      }
     });
 
     return elements;

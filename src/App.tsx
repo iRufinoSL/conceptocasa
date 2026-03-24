@@ -42,6 +42,7 @@ const App = () => {
         <AuthProvider>
           <FloatingVoiceNoteButton />
           <InactivityHandler />
+          <UpdateBanner />
           <Routes>
             {/* Public routes */}
             <Route path="/" element={<Landing />} />

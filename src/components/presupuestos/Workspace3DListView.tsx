@@ -585,7 +585,7 @@ export function Workspace3DListView({ workspaces, scaleXY, scaleZ, onClose, onFa
             <directionalLight position={[-5, 6, -5]} intensity={0.3} />
             <hemisphereLight args={['#b1e1ff', '#b97a20', 0.2]} />
 
-            <AutoFrameCamera bounds={sceneBounds} resetTrigger={cameraResetTrigger} />
+            <AutoFrameCamera bounds={sceneBounds} resetTrigger={cameraResetTrigger} controlsRef={orbitControlsRef} />
 
             {currentItems.map(ws => (
               <MultiPrism
@@ -605,6 +605,7 @@ export function Workspace3DListView({ workspaces, scaleXY, scaleZ, onClose, onFa
             <GroundPlane size={groundSize} />
 
             <OrbitControls
+              ref={orbitControlsRef}
               enableDamping
               dampingFactor={0.15}
               zoomSpeed={0.5}

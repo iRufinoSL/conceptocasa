@@ -206,10 +206,13 @@ function AutoFrameCamera({ bounds, resetTrigger, controlsRef }: {
     const cz = (bounds.minZ + bounds.maxZ) / 2;
     const center = new THREE.Vector3(cx, cy, cz);
 
-    // Put the camera in the negative X / negative Y-plan quadrant (world Z here),
-    // and above the model. This makes the front-left-lower corner correspond to
-    // the plan origin, so Z0 reads naturally: X→right and plan Y→up/back.
-    const cameraOffset = new THREE.Vector3(-1.15, 0.95, -1.15)
+    // Camera positioned primarily in front of the building (strong negative Z)
+    // with a slight left offset (small negative X) and elevated (positive Y).
+    // This replicates the Z0 plan reading:
+    //   • X (red) → clearly horizontal to the right
+    //   • Plan-Y / world-Z (green) → clearly recedes into the background (top of screen)
+    //   • Height / world-Y (blue) → vertical
+    const cameraOffset = new THREE.Vector3(-0.35, 0.85, -1.1)
       .normalize()
       .multiplyScalar(dist);
 

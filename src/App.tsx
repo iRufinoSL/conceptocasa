@@ -7,7 +7,7 @@ import { InactivityHandler } from "@/components/InactivityHandler";
 import { AuthProvider } from "@/context/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { FloatingVoiceNoteButton } from "@/components/voice/FloatingVoiceNoteButton";
-import { useVersionCheck } from "@/hooks/useVersionCheck";
+import { UpdateBanner } from "@/components/UpdateBanner";
 import Landing from "./pages/Landing";
 import Dashboard from "./pages/Dashboard";
 import Recursos from "./pages/Recursos";
@@ -33,9 +33,6 @@ import Brain from "./pages/Brain";
 const queryClient = new QueryClient();
 
 const App = () => {
-  // Global version check — auto-updates when a new deploy is detected
-  useVersionCheck(true);
-  
   return (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>

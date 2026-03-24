@@ -175,10 +175,11 @@ function GroundPlane({ size }: { size: number }) {
   );
 }
 
-/** Auto-frame camera to fit all workspaces */
-function AutoFrameCamera({ bounds, resetTrigger }: {
+/** Auto-frame camera to fit all workspaces – origin (0,0,0) bottom-left */
+function AutoFrameCamera({ bounds, resetTrigger, controlsRef }: {
   bounds: { minX: number; maxX: number; minY: number; maxY: number; minZ: number; maxZ: number };
   resetTrigger: number;
+  controlsRef: React.RefObject<any>;
 }) {
   const { camera } = useThree();
   const hasFramed = useRef(false);
@@ -191,20 +192,23 @@ function AutoFrameCamera({ bounds, resetTrigger }: {
     if (hasFramed.current) return;
     hasFramed.current = true;
 
-    const cx = (bounds.minX + bounds.maxX) / 2;
-    const cy = (bounds.minY + bounds.maxY) / 2;
-    const cz = (bounds.minZ + bounds.maxZ) / 2;
-
     const dx = bounds.maxX - bounds.minX;
     const dy = bounds.maxY - bounds.minY;
     const dz = bounds.maxZ - bounds.minZ;
     const maxDim = Math.max(dx, dy, dz, 1);
-    const dist = maxDim * 1.8;
+    const dist = maxDim * 2.0;
 
-    camera.position.set(cx + dist * 0.6, cy + dist * 0.8, cz - dist * 0.6);
-    camera.lookAt(cx, cy, cz);
+    // Camera at positive X, positive Z, elevated Y → origin stays bottom-left
+    camera.position.set(dist * 0.9, dist * 0.7, dist * 0.9);
+    camera.lookAt(0, 0, 0);
     camera.updateProjectionMatrix();
-  }, [bounds, camera, resetTrigger]);
+
+    // Point orbit target at origin so rotation pivots around (0,0,0)
+    if (controlsRef.current) {
+      controlsRef.current.target.set(0, dy * 0.3, 0);
+      controlsRef.current.update();
+    }
+  }, [bounds, camera, resetTrigger, controlsRef]);
 
   return null;
 }

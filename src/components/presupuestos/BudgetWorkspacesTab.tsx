@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
 import type { CustomSection } from './CustomSectionManager';
+import { getWallCode } from '@/utils/wallCodeUtils';
 
 interface BudgetWorkspacesTabProps {
   budgetId: string;

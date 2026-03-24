@@ -10,6 +10,7 @@ import { Save, PenTool, X, Check, Printer, Ruler, Undo2, RefreshCw } from 'lucid
 import type { SectionPolygon } from './CustomSectionManager';
 import { WorkspacePropertiesPanel } from './WorkspacePropertiesPanel';
 import { VISUAL_PATTERNS, getPatternById } from '@/lib/visual-patterns';
+import { getWallCode } from '@/utils/wallCodeUtils';
 import jsPDF from 'jspdf';
 import { toast } from 'sonner';
 
@@ -27,6 +28,7 @@ const RULER_TEXT = 'hsl(310, 80%, 28%)';
 const RULER_BTN = 'hsl(310 100% 42%)';
 
 type WallLabelMode = 'both' | 'name-only' | 'measure-only' | 'none';
+type ViewInfoMode = 'all' | 'names-only' | 'codes-only';
 
 interface SectionScale {
   hScale: number;

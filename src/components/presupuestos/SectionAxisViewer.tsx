@@ -2407,13 +2407,23 @@ export function SectionAxisViewer({
               </Button>
             )}
             <div className="flex items-center gap-1">
+              <Select value={viewInfoMode} onValueChange={(v) => setViewInfoMode(v as ViewInfoMode)}>
+                <SelectTrigger className="h-7 w-[100px] text-[10px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todo</SelectItem>
+                  <SelectItem value="names-only">Solo nombre</SelectItem>
+                  <SelectItem value="codes-only">Solo código</SelectItem>
+                </SelectContent>
+              </Select>
               <Select value={wallLabelMode} onValueChange={(v) => setWallLabelMode(v as WallLabelMode)}>
                 <SelectTrigger className="h-7 w-[130px] text-[10px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="both">P + medida</SelectItem>
-                  <SelectItem value="name-only">Solo P</SelectItem>
+                  <SelectItem value="both">Código + medida</SelectItem>
+                  <SelectItem value="name-only">Solo código</SelectItem>
                   <SelectItem value="measure-only">Solo medida</SelectItem>
                   <SelectItem value="none">Sin etiquetas</SelectItem>
                 </SelectContent>

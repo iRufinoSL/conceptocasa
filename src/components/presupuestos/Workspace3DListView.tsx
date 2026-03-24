@@ -175,7 +175,7 @@ function GroundPlane({ size }: { size: number }) {
   );
 }
 
-/** Auto-frame camera to fit all workspaces – origin (0,0,0) bottom-left */
+/** Auto-frame camera to fit all workspaces with Z0-aligned initial orientation */
 function AutoFrameCamera({ bounds, resetTrigger, controlsRef }: {
   bounds: { minX: number; maxX: number; minY: number; maxY: number; minZ: number; maxZ: number };
   resetTrigger: number;
@@ -202,12 +202,18 @@ function AutoFrameCamera({ bounds, resetTrigger, controlsRef }: {
     const cx = (bounds.minX + bounds.maxX) / 2;
     const cy = (bounds.minY + bounds.maxY) / 2;
     const cz = (bounds.minZ + bounds.maxZ) / 2;
+    const center = new THREE.Vector3(cx, cy, cz);
 
-    // Camera positioned at NEGATIVE X and NEGATIVE Z relative to center
-    // so that origin (0,0,0) appears at bottom-left of screen
-    // X axis (red) goes to the right, Y axis (green/depth) goes away from viewer
-    camera.position.set(cx - dist * 0.7, cy + dist * 0.8, cz - dist * 0.7);
-    camera.lookAt(cx, cy, cz);
+    // Initial basis aligned to the Z0 plan:
+    // - X (red) reads horizontally to the right on screen
+    // - Y plan/depth (green, mapped to world Z) reads upward/towards the background
+    // - Z height (blue, mapped to world Y) stays visually upward
+    const screenUp = new THREE.Vector3(0, 0.85, 0.53).normalize();
+    const cameraBack = new THREE.Vector3(0, 0.53, -0.85).normalize();
+
+    camera.up.copy(screenUp);
+    camera.position.copy(center.clone().add(cameraBack.multiplyScalar(dist)));
+    camera.lookAt(center);
     camera.updateProjectionMatrix();
 
     // Point orbit target at building center for smooth rotation

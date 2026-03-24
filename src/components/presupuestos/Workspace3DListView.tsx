@@ -4,6 +4,7 @@ import { OrbitControls, Text, Line } from '@react-three/drei';
 import * as THREE from 'three';
 import { InfiniteAxes3D } from './InfiniteAxes3D';
 import { computeVertexTopPositions } from './workspace3dUtils';
+import { getWallCode } from '@/utils/wallCodeUtils';
 import type { CustomSection } from './CustomSectionManager';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -289,8 +290,8 @@ function MultiPrism({ ws, scaleXY, scaleZ, offsetX, offsetZ, onFaceDoubleClick, 
       );
       const wall = ws.walls.find(w => w.wall_index === i + 1);
       const areaM2 = calcFaceAreaM2(wallVerts);
-      const wallPrefix = wall?.wall_type === 'tejado' ? 'T' : 'P';
-      facesList.push({ vertices: wallVerts, color: getWallColor(wall?.wall_type), label: `${wallPrefix}${i + 1}\n${ws.name}\n${areaM2.toFixed(2)} m²`, labelPos: wc, faceType: wall?.wall_type === 'tejado' ? 'tejado' : 'pared', faceIndex: i + 1 });
+      const wallCode = getWallCode(wall?.wall_type, i + 1);
+      facesList.push({ vertices: wallVerts, color: getWallColor(wall?.wall_type), label: `${wallCode}\n${ws.name}\n${areaM2.toFixed(2)} m²`, labelPos: wc, faceType: wall?.wall_type === 'tejado' ? 'tejado' : 'pared', faceIndex: i + 1 });
     }
 
     // Ceiling

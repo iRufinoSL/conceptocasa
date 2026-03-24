@@ -198,14 +198,21 @@ function AutoFrameCamera({ bounds, resetTrigger, controlsRef }: {
     const maxDim = Math.max(dx, dy, dz, 1);
     const dist = maxDim * 2.0;
 
-    // Camera at positive X, positive Z, elevated Y → origin stays bottom-left
-    camera.position.set(dist * 0.9, dist * 0.7, dist * 0.9);
-    camera.lookAt(0, 0, 0);
+    // Center of the building
+    const cx = (bounds.minX + bounds.maxX) / 2;
+    const cy = (bounds.minY + bounds.maxY) / 2;
+    const cz = (bounds.minZ + bounds.maxZ) / 2;
+
+    // Camera positioned at NEGATIVE X and NEGATIVE Z relative to center
+    // so that origin (0,0,0) appears at bottom-left of screen
+    // X axis (red) goes to the right, Y axis (green/depth) goes away from viewer
+    camera.position.set(cx - dist * 0.7, cy + dist * 0.8, cz - dist * 0.7);
+    camera.lookAt(cx, cy, cz);
     camera.updateProjectionMatrix();
 
-    // Point orbit target at origin so rotation pivots around (0,0,0)
+    // Point orbit target at building center for smooth rotation
     if (controlsRef.current) {
-      controlsRef.current.target.set(0, dy * 0.3, 0);
+      controlsRef.current.target.set(cx, cy, cz);
       controlsRef.current.update();
     }
   }, [bounds, camera, resetTrigger, controlsRef]);

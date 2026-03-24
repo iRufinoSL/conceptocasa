@@ -1535,8 +1535,10 @@ export function SectionAxisViewer({
         }
 
         // Label text - use T (techo) / S (suelo) for top/bottom edges in cross-sections
-        if (wallLabelMode !== 'none') {
-          let wallLabel = `P${wallNum}`;
+        if (wallLabelMode !== 'none' && viewInfoMode !== 'names-only') {
+          // Determine wall type from polygon faceTypes
+          const edgeFaceType = poly.faceTypes?.[`wall-${i}`];
+          let wallLabel: string;
           const isCrossSection = sectionType === 'transversal' || sectionType === 'longitudinal';
           if (isCrossSection && verts.length >= 3) {
             const minY = Math.min(...verts.map(v => v.y));
@@ -1547,9 +1549,14 @@ export function SectionAxisViewer({
             if (rangeY > 0.01) {
               const isBottom = Math.abs(edgeMinY - minY) < rangeY * 0.15 && Math.abs(edgeMaxY - minY) < rangeY * 0.15;
               const isTop = Math.abs(edgeMinY - maxY) < rangeY * 0.15 && Math.abs(edgeMaxY - maxY) < rangeY * 0.15;
-              if (isBottom) wallLabel = 'S';
-              else if (isTop) wallLabel = 'T';
+              if (isBottom) wallLabel = `S${wallNum}`;
+              else if (isTop) wallLabel = `T${wallNum}`;
+              else wallLabel = getWallCode(edgeFaceType, wallNum);
+            } else {
+              wallLabel = getWallCode(edgeFaceType, wallNum);
             }
+          } else {
+            wallLabel = getWallCode(edgeFaceType, wallNum);
           }
 
           let labelText = '';

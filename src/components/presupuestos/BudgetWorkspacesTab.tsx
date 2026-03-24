@@ -1409,9 +1409,9 @@ function GridPolygonDrawer({ vertices, onChange, gridWidth = 20, gridHeight = 16
 
                   {/* Wall number badge on edge midpoint */}
                   {isClosed && (() => {
-                    const badgeR = 8;
+                    const badgeR = 12;
                     // Position badge slightly inward from the edge center
-                    const badgeOff = -6;
+                    const badgeOff = -8;
                     const bx = mx + nx * badgeOff;
                     const by = my + ny * badgeOff;
                     const wallTypeLabel = WALL_TYPES.find(t => t.value === activeWt)?.label || activeWt;

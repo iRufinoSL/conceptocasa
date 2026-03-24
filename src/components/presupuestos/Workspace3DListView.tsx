@@ -360,6 +360,7 @@ export function Workspace3DListView({ workspaces, scaleXY, scaleZ, onClose, onFa
   const [showLabels, setShowLabels] = useState(true);
   const [hiddenSections, setHiddenSections] = useState<Set<string>>(new Set());
   const [cameraResetTrigger, setCameraResetTrigger] = useState(0);
+  const orbitControlsRef = useRef<any>(null);
 
   const sections = useMemo(() => {
     const map = new Map<number, { zBase: number; sectionName: string; items: WorkspaceEntry[] }>();

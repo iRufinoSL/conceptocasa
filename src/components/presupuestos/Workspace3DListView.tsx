@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { Canvas, ThreeEvent, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls, Text, Line } from '@react-three/drei';
 import * as THREE from 'three';
@@ -7,7 +7,8 @@ import { computeVertexTopPositions } from './workspace3dUtils';
 import type { CustomSection } from './CustomSectionManager';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Minimize2, Maximize2, Home, Layers, SortAsc, X } from 'lucide-react';
+import { Slider } from '@/components/ui/slider';
+import { Minimize2, Maximize2, Home, Layers, SortAsc, X, Eye, EyeOff, RotateCcw, ZoomIn, Building2 } from 'lucide-react';
 
 interface PolygonVertex { x: number; y: number; }
 interface WallData { id: string; room_id: string; wall_index: number; wall_type: string; height: number | null; }
@@ -51,8 +52,6 @@ const FACE_COLORS: Record<string, string> = {
   pared_default: '#b0b0b0',
   selected: '#ff6b6b',
 };
-
-// OriginAxes replaced by shared InfiniteAxes3D
 
 function getWallColor(wallType?: string): string {
   if (!wallType) return FACE_COLORS.pared_default;
@@ -100,10 +99,10 @@ function CornerLabel({ position, text }: { position: THREE.Vector3; text: string
   );
 }
 
-/** Interactive face mesh for list view with proximity transparency */
-function InteractiveFace({ vertices, color, label, labelPos, labelRot, onDoubleClick, proximityOpacity }: {
+/** Interactive face mesh with proximity transparency */
+function InteractiveFace({ vertices, color, label, labelPos, labelRot, onDoubleClick, globalOpacity = 1 }: {
   vertices: THREE.Vector3[]; color: string; label: string; labelPos: THREE.Vector3;
-  labelRot?: [number, number, number]; onDoubleClick: () => void; proximityOpacity?: number;
+  labelRot?: [number, number, number]; onDoubleClick: () => void; globalOpacity?: number;
 }) {
   const [hovered, setHovered] = useState(false);
   const meshRef = useRef<THREE.Mesh>(null);
@@ -124,19 +123,16 @@ function InteractiveFace({ vertices, color, label, labelPos, labelRot, onDoubleC
     return geo;
   }, [vertices]);
 
-  // Proximity transparency: faces close to camera become transparent
   useFrame(() => {
     if (!meshRef.current || !matRef.current) return;
     const center = new THREE.Vector3();
     vertices.forEach(v => center.add(v));
     center.divideScalar(vertices.length);
     const dist = camera.position.distanceTo(center);
-    // Faces within 1.5 units → fully transparent; beyond 4 → normal opacity
     const proximityFade = THREE.MathUtils.clamp((dist - 1.0) / 3.0, 0, 1);
     const baseOpacity = hovered ? 0.8 : 0.6;
-    matRef.current.opacity = baseOpacity * proximityFade;
-    // Also hide edges and labels when very close
-    meshRef.current.visible = proximityFade > 0.05;
+    matRef.current.opacity = baseOpacity * proximityFade * globalOpacity;
+    meshRef.current.visible = proximityFade > 0.05 && globalOpacity > 0.05;
   });
 
   return (
@@ -168,19 +164,65 @@ function InteractiveFace({ vertices, color, label, labelPos, labelRot, onDoubleC
   );
 }
 
-/** Single workspace prism for multi-workspace scene with interactive faces */
-function MultiPrism({ ws, scaleXY, scaleZ, offsetX, offsetZ, onFaceDoubleClick, allSections }: {
+/** Ground plane for context */
+function GroundPlane({ size }: { size: number }) {
+  return (
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[size / 2, -0.005, size / 2]} receiveShadow>
+      <planeGeometry args={[size * 2, size * 2]} />
+      <meshStandardMaterial color="#e8e4dc" roughness={0.95} transparent opacity={0.4} side={THREE.DoubleSide} />
+    </mesh>
+  );
+}
+
+/** Auto-frame camera to fit all workspaces */
+function AutoFrameCamera({ bounds, resetTrigger }: {
+  bounds: { minX: number; maxX: number; minY: number; maxY: number; minZ: number; maxZ: number };
+  resetTrigger: number;
+}) {
+  const { camera } = useThree();
+  const hasFramed = useRef(false);
+
+  useEffect(() => {
+    hasFramed.current = false;
+  }, [resetTrigger]);
+
+  useEffect(() => {
+    if (hasFramed.current) return;
+    hasFramed.current = true;
+
+    const cx = (bounds.minX + bounds.maxX) / 2;
+    const cy = (bounds.minY + bounds.maxY) / 2;
+    const cz = (bounds.minZ + bounds.maxZ) / 2;
+
+    const dx = bounds.maxX - bounds.minX;
+    const dy = bounds.maxY - bounds.minY;
+    const dz = bounds.maxZ - bounds.minZ;
+    const maxDim = Math.max(dx, dy, dz, 1);
+    const dist = maxDim * 1.8;
+
+    camera.position.set(cx + dist * 0.6, cy + dist * 0.8, cz + dist * 0.6);
+    camera.lookAt(cx, cy, cz);
+    camera.updateProjectionMatrix();
+  }, [bounds, camera, resetTrigger]);
+
+  return null;
+}
+
+/** Single workspace prism for multi-workspace scene */
+function MultiPrism({ ws, scaleXY, scaleZ, offsetX, offsetZ, onFaceDoubleClick, allSections, opacity, showLabels }: {
   ws: WorkspaceEntry; scaleXY: number; scaleZ: number; offsetX: number; offsetZ: number;
   onFaceDoubleClick?: (info: FaceInfo) => void;
   allSections?: CustomSection[];
+  opacity?: number;
+  showLabels?: boolean;
 }) {
   const sMxy = scaleXY / 1000;
   const zScaleM = scaleZ / 1000;
+  const globalOpacity = opacity ?? 1;
 
   const { baseVerts, topVerts, faces, cornerLabels, edgeLabels } = useMemo(() => {
     const base = ws.polygon.map(v => new THREE.Vector3(v.x * sMxy + offsetX, ws.zBase * zScaleM, v.y * sMxy + offsetZ));
 
-    // Use section polygon data to compute per-vertex top Z when available
     const topYMeters = (allSections && allSections.length > 0)
       ? computeVertexTopPositions(ws.polygon, ws.walls, ws.zBase, ws.height, scaleXY, scaleZ, allSections, ws.id)
       : null;
@@ -224,10 +266,9 @@ function MultiPrism({ ws, scaleXY, scaleZ, offsetX, offsetZ, onFaceDoubleClick, 
         axisStart: `Z${ws.zBase}`, axisEnd: `Z${zTopVal}` });
     }
 
-    // Build interactive faces
     const facesList: { vertices: THREE.Vector3[]; color: string; label: string; labelPos: THREE.Vector3; labelRot?: [number, number, number]; faceType: string; faceIndex: number }[] = [];
 
-    // Floor — only if hasFloor
+    // Floor
     if (ws.hasFloor !== false) {
       const floorCenter = new THREE.Vector3(
         base.reduce((s, v) => s + v.x, 0) / n, base[0].y - 0.01,
@@ -252,7 +293,7 @@ function MultiPrism({ ws, scaleXY, scaleZ, offsetX, offsetZ, onFaceDoubleClick, 
       facesList.push({ vertices: wallVerts, color: getWallColor(wall?.wall_type), label: `${wallPrefix}${i + 1}\n${ws.name}\n${areaM2.toFixed(2)} m²`, labelPos: wc, faceType: wall?.wall_type === 'tejado' ? 'tejado' : 'pared', faceIndex: i + 1 });
     }
 
-    // Ceiling — only if hasCeiling
+    // Ceiling
     if (ws.hasCeiling !== false) {
       const topCenter = new THREE.Vector3(
         top.reduce((s, v) => s + v.x, 0) / n,
@@ -287,15 +328,16 @@ function MultiPrism({ ws, scaleXY, scaleZ, offsetX, offsetZ, onFaceDoubleClick, 
           labelPos={f.labelPos}
           labelRot={f.labelRot}
           onDoubleClick={() => handleFaceDblClick(f.faceType, f.faceIndex, f.label.split('\n')[0])}
+          globalOpacity={globalOpacity}
         />
       ))}
       {baseVerts.map((bv, i) => (
         <Line key={`ve-${i}`} points={[bv, topVerts[i]]} color="#555555" lineWidth={1} />
       ))}
-      {edgeLabels.map((el, i) => (
+      {showLabels !== false && edgeLabels.map((el, i) => (
         <EdgeLabel key={`el-${i}`} from={el.from} to={el.to} lengthMm={el.lengthMm} axisStart={el.axisStart} axisEnd={el.axisEnd} />
       ))}
-      {cornerLabels.map((cl, i) => (
+      {showLabels !== false && cornerLabels.map((cl, i) => (
         <CornerLabel key={`cl-${i}`} position={cl.pos} text={cl.text} />
       ))}
     </group>
@@ -309,6 +351,10 @@ export function Workspace3DListView({ workspaces, scaleXY, scaleZ, onClose, onFa
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
   const [selectedWs, setSelectedWs] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(true);
+  const [wallOpacity, setWallOpacity] = useState(80);
+  const [showLabels, setShowLabels] = useState(true);
+  const [hiddenSections, setHiddenSections] = useState<Set<string>>(new Set());
+  const [cameraResetTrigger, setCameraResetTrigger] = useState(0);
 
   const sections = useMemo(() => {
     const map = new Map<number, { zBase: number; sectionName: string; items: WorkspaceEntry[] }>();
@@ -323,52 +369,127 @@ export function Workspace3DListView({ workspaces, scaleXY, scaleZ, onClose, onFa
   const sortedWs = useMemo(() => [...workspaces].sort((a, b) => a.name.localeCompare(b.name)), [workspaces]);
 
   const currentItems = useMemo(() => {
-    if (viewMode === 'complete') return workspaces;
-    if (viewMode === 'by-section') {
+    let items: WorkspaceEntry[];
+    if (viewMode === 'complete') {
+      items = workspaces.filter(ws => {
+        const secName = ws.sectionName || `Z=${ws.zBase}`;
+        return !hiddenSections.has(secName);
+      });
+    } else if (viewMode === 'by-section') {
       if (selectedSection !== null) {
         const sec = sections.find(s => s.sectionName === selectedSection);
-        return sec?.items || [];
+        items = sec?.items || [];
+      } else {
+        items = [];
       }
-      return [];
+    } else if (viewMode === 'by-workspace') {
+      items = selectedWs ? workspaces.filter(w => w.id === selectedWs) : [];
+    } else {
+      items = [];
     }
-    if (viewMode === 'by-workspace') {
-      if (selectedWs) return workspaces.filter(w => w.id === selectedWs);
-      return [];
-    }
-    return [];
-  }, [viewMode, workspaces, sections, selectedSection, selectedWs]);
+    return items;
+  }, [viewMode, workspaces, sections, selectedSection, selectedWs, hiddenSections]);
+
+  // Compute scene bounds for camera framing
+  const sceneBounds = useMemo(() => {
+    if (currentItems.length === 0) return { minX: 0, maxX: 5, minY: 0, maxY: 3, minZ: 0, maxZ: 5 };
+    const sMxy = scaleXY / 1000;
+    const zScaleM = scaleZ / 1000;
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    currentItems.forEach(ws => {
+      ws.polygon.forEach(v => {
+        const wx = v.x * sMxy;
+        const wz = v.y * sMxy;
+        minX = Math.min(minX, wx);
+        maxX = Math.max(maxX, wx);
+        minZ = Math.min(minZ, wz);
+        maxZ = Math.max(maxZ, wz);
+      });
+      const baseY = ws.zBase * zScaleM;
+      minY = Math.min(minY, baseY);
+      const maxWallH = ws.walls.reduce((m, w) => Math.max(m, w.height ?? ws.height), ws.height);
+      const topY = (ws.zBase + Math.round(maxWallH / zScaleM)) * zScaleM;
+      maxY = Math.max(maxY, topY);
+    });
+    return { minX, maxX, minY, maxY, minZ, maxZ };
+  }, [currentItems, scaleXY, scaleZ]);
+
+  // Building stats
+  const buildingStats = useMemo(() => {
+    const totalSpaces = workspaces.length;
+    const totalLevels = sections.length;
+    const sMxy = scaleXY / 1000;
+    let totalFloorArea = 0;
+    workspaces.forEach(ws => {
+      if (ws.polygon.length < 3) return;
+      const verts = ws.polygon.map(v => new THREE.Vector3(v.x * sMxy, 0, v.y * sMxy));
+      totalFloorArea += calcFaceAreaM2(verts);
+    });
+    return { totalSpaces, totalLevels, totalFloorArea };
+  }, [workspaces, sections, scaleXY]);
+
+  const toggleSectionVisibility = useCallback((secName: string) => {
+    setHiddenSections(prev => {
+      const next = new Set(prev);
+      if (next.has(secName)) next.delete(secName);
+      else next.add(secName);
+      return next;
+    });
+  }, []);
+
+  const resetCamera = useCallback(() => {
+    setCameraResetTrigger(t => t + 1);
+  }, []);
 
   const containerClass = isFullscreen
     ? 'fixed inset-0 z-50 bg-background flex flex-col'
     : 'space-y-2 border rounded-lg p-2';
 
+  const groundSize = Math.max(
+    sceneBounds.maxX - sceneBounds.minX,
+    sceneBounds.maxZ - sceneBounds.minZ,
+    3
+  );
+
   return (
     <div className={containerClass}>
       {/* Toolbar */}
       <div className="flex items-center gap-2 p-2 border-b bg-muted/30 flex-wrap">
-        <span className="text-xs font-semibold">🧊 Listado 3D</span>
-        <span className="text-[9px] text-muted-foreground hidden sm:inline">Doble clic en una cara → editar en 2D</span>
-        <div className="flex gap-1">
+        <Building2 className="h-4 w-4 text-primary" />
+        <span className="text-xs font-semibold">Vista 3D Global</span>
+
+        {/* Stats */}
+        <div className="hidden sm:flex items-center gap-2 text-[9px] text-muted-foreground border-l pl-2 ml-1">
+          <span>{buildingStats.totalLevels} nivel(es)</span>
+          <span>·</span>
+          <span>{buildingStats.totalSpaces} espacio(s)</span>
+          <span>·</span>
+          <span>{buildingStats.totalFloorArea.toFixed(1)} m² total</span>
+        </div>
+
+        {/* View mode buttons */}
+        <div className="flex gap-1 ml-2">
           <Button variant={viewMode === 'complete' ? 'default' : 'outline'} size="sm" className="h-6 text-[10px] gap-1"
-            onClick={() => { setViewMode('complete'); setSelectedSection(null); setSelectedWs(null); }}>
-            <Home className="h-3 w-3" /> Vivienda completa
+            onClick={() => { setViewMode('complete'); setSelectedSection(null); setSelectedWs(null); resetCamera(); }}>
+            <Home className="h-3 w-3" /> Edificio completo
           </Button>
           <Button variant={viewMode === 'by-section' ? 'default' : 'outline'} size="sm" className="h-6 text-[10px] gap-1"
-            onClick={() => { setViewMode('by-section'); setSelectedWs(null); if (!selectedSection && sections.length) setSelectedSection(sections[0].sectionName); }}>
-            <Layers className="h-3 w-3" /> Por sección Z
+            onClick={() => { setViewMode('by-section'); setSelectedWs(null); if (!selectedSection && sections.length) setSelectedSection(sections[0].sectionName); resetCamera(); }}>
+            <Layers className="h-3 w-3" /> Por nivel
           </Button>
           <Button variant={viewMode === 'by-workspace' ? 'default' : 'outline'} size="sm" className="h-6 text-[10px] gap-1"
-            onClick={() => { setViewMode('by-workspace'); setSelectedSection(null); if (!selectedWs && sortedWs.length) setSelectedWs(sortedWs[0].id); }}>
-            <SortAsc className="h-3 w-3" /> Por espacio (A-Z)
+            onClick={() => { setViewMode('by-workspace'); setSelectedSection(null); if (!selectedWs && sortedWs.length) setSelectedWs(sortedWs[0].id); resetCamera(); }}>
+            <SortAsc className="h-3 w-3" /> Por espacio
           </Button>
         </div>
 
+        {/* Section/workspace selectors */}
         {viewMode === 'by-section' && (
           <div className="flex gap-1 ml-2">
             {sections.map(s => (
               <Badge key={s.sectionName} variant={selectedSection === s.sectionName ? 'default' : 'outline'}
-                className="text-[10px] cursor-pointer" onClick={() => setSelectedSection(s.sectionName)}>
-                3D {s.sectionName} ({s.items.length})
+                className="text-[10px] cursor-pointer" onClick={() => { setSelectedSection(s.sectionName); resetCamera(); }}>
+                {s.sectionName} ({s.items.length})
               </Badge>
             ))}
           </div>
@@ -378,14 +499,18 @@ export function Workspace3DListView({ workspaces, scaleXY, scaleZ, onClose, onFa
           <div className="flex gap-1 ml-2 flex-wrap max-h-16 overflow-y-auto">
             {sortedWs.map(ws => (
               <Badge key={ws.id} variant={selectedWs === ws.id ? 'default' : 'outline'}
-                className="text-[10px] cursor-pointer" onClick={() => setSelectedWs(ws.id)}>
+                className="text-[10px] cursor-pointer" onClick={() => { setSelectedWs(ws.id); resetCamera(); }}>
                 {ws.name}
               </Badge>
             ))}
           </div>
         )}
 
-        <div className="ml-auto flex gap-1">
+        {/* Right controls */}
+        <div className="ml-auto flex gap-1 items-center">
+          <Button variant="outline" size="sm" className="h-6 text-[9px] gap-1" onClick={resetCamera}>
+            <RotateCcw className="h-3 w-3" /> Centrar
+          </Button>
           <Button variant="outline" size="sm" className="h-6 text-[9px] gap-1"
             onClick={() => setIsFullscreen(f => !f)}>
             {isFullscreen ? <Minimize2 className="h-3 w-3" /> : <Maximize2 className="h-3 w-3" />}
@@ -397,23 +522,82 @@ export function Workspace3DListView({ workspaces, scaleXY, scaleZ, onClose, onFa
         </div>
       </div>
 
-      {/* Info */}
-      <div className="flex gap-2 px-2 text-[9px] text-muted-foreground">
-        <span>{currentItems.length} espacio(s)</span>
-        <span>· Doble clic en una cara para acceder al espacio de trabajo</span>
+      {/* Secondary controls bar */}
+      <div className="flex items-center gap-3 px-3 py-1 border-b bg-muted/10 flex-wrap">
+        {/* Opacity slider */}
+        <div className="flex items-center gap-2">
+          <span className="text-[9px] text-muted-foreground whitespace-nowrap">Opacidad paredes:</span>
+          <Slider
+            value={[wallOpacity]}
+            onValueChange={([v]) => setWallOpacity(v)}
+            min={10}
+            max={100}
+            step={5}
+            className="w-20"
+          />
+          <span className="text-[9px] text-muted-foreground w-7">{wallOpacity}%</span>
+        </div>
+
+        {/* Labels toggle */}
+        <Button variant={showLabels ? 'default' : 'outline'} size="sm" className="h-5 text-[9px] gap-1 px-2"
+          onClick={() => setShowLabels(v => !v)}>
+          {showLabels ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+          Cotas
+        </Button>
+
+        {/* Section visibility (complete view) */}
+        {viewMode === 'complete' && sections.length > 1 && (
+          <div className="flex items-center gap-1 border-l pl-2">
+            <span className="text-[9px] text-muted-foreground">Niveles:</span>
+            {sections.map(s => (
+              <Button
+                key={s.sectionName}
+                variant={hiddenSections.has(s.sectionName) ? 'outline' : 'default'}
+                size="sm"
+                className="h-5 text-[9px] gap-1 px-2"
+                onClick={() => toggleSectionVisibility(s.sectionName)}
+              >
+                {hiddenSections.has(s.sectionName) ? <EyeOff className="h-2.5 w-2.5" /> : <Eye className="h-2.5 w-2.5" />}
+                {s.sectionName}
+              </Button>
+            ))}
+          </div>
+        )}
+
+        {/* Info */}
+        <span className="text-[9px] text-muted-foreground ml-auto">
+          {currentItems.length} espacio(s) · Doble clic en cara → editar
+        </span>
       </div>
 
       {/* 3D Canvas */}
       <div className={`${isFullscreen ? 'flex-1' : 'h-[500px]'} rounded-lg border bg-gradient-to-b from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 overflow-hidden mx-2 mb-2`}>
         {currentItems.length > 0 ? (
-          <Canvas camera={{ position: [6, 6, 6], fov: 50 }}>
-            <ambientLight intensity={0.6} />
-            <directionalLight position={[5, 8, 5]} intensity={0.8} />
-            <directionalLight position={[-3, 4, -3]} intensity={0.3} />
+          <Canvas camera={{ position: [6, 6, 6], fov: 50 }} shadows>
+            <ambientLight intensity={0.5} />
+            <directionalLight position={[8, 12, 8]} intensity={0.9} castShadow />
+            <directionalLight position={[-5, 6, -5]} intensity={0.3} />
+            <hemisphereLight args={['#b1e1ff', '#b97a20', 0.2]} />
+
+            <AutoFrameCamera bounds={sceneBounds} resetTrigger={cameraResetTrigger} />
+
             {currentItems.map(ws => (
-              <MultiPrism key={ws.id} ws={ws} scaleXY={scaleXY} scaleZ={scaleZ} offsetX={0} offsetZ={0}
-                onFaceDoubleClick={onFaceDoubleClick} allSections={allSections} />
+              <MultiPrism
+                key={ws.id}
+                ws={ws}
+                scaleXY={scaleXY}
+                scaleZ={scaleZ}
+                offsetX={0}
+                offsetZ={0}
+                onFaceDoubleClick={onFaceDoubleClick}
+                allSections={allSections}
+                opacity={wallOpacity / 100}
+                showLabels={showLabels}
+              />
             ))}
+
+            <GroundPlane size={groundSize} />
+
             <OrbitControls
               enableDamping
               dampingFactor={0.15}
@@ -421,14 +605,14 @@ export function Workspace3DListView({ workspaces, scaleXY, scaleZ, onClose, onFa
               rotateSpeed={0.8}
               panSpeed={0.6}
               minDistance={0.5}
-              maxDistance={50}
+              maxDistance={80}
             />
-            <gridHelper args={[10, 20, '#888888', '#cccccc']} />
+            <gridHelper args={[groundSize * 2, Math.round(groundSize * 2 / 0.625), '#aaaaaa', '#dddddd']} position={[groundSize, 0, groundSize]} />
             <InfiniteAxes3D labelDistance={1.8} />
           </Canvas>
         ) : (
           <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
-            Selecciona una sección o espacio de trabajo para ver el modelo 3D
+            Selecciona un nivel o espacio de trabajo para ver el modelo 3D
           </div>
         )}
       </div>
@@ -439,6 +623,7 @@ export function Workspace3DListView({ workspaces, scaleXY, scaleZ, onClose, onFa
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded" style={{ background: FACE_COLORS.techo }} /> Techo</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded" style={{ background: FACE_COLORS.pared_exterior }} /> Pared ext.</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded" style={{ background: FACE_COLORS.pared_interior }} /> Pared int.</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded" style={{ background: FACE_COLORS.tejado }} /> Tejado</span>
       </div>
     </div>
   );

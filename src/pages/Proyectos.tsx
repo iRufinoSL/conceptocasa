@@ -110,6 +110,7 @@ export default function Proyectos() {
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [downloadingCSV, setDownloadingCSV] = useState(false);
+  const [downloadingPDF, setDownloadingPDF] = useState(false);
 
   const handleDownloadCSV = async () => {
     setDownloadingCSV(true);
@@ -140,6 +141,73 @@ export default function Proyectos() {
       toast({ title: error.message || 'Error al descargar CSV', variant: 'destructive' });
     } finally {
       setDownloadingCSV(false);
+    }
+  };
+
+  const handleDownloadPDF = async () => {
+    setDownloadingPDF(true);
+    try {
+      const { default: jsPDF } = await import('jspdf');
+      const { default: autoTable } = await import('jspdf-autotable');
+
+      const doc = new jsPDF({ orientation: 'landscape' });
+      const pageWidth = doc.internal.pageSize.getWidth();
+
+      // Title
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(37, 99, 235);
+      doc.text('LISTADO DE PROYECTOS', pageWidth / 2, 18, { align: 'center' });
+      doc.setTextColor(0);
+
+      // Date
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(100);
+      doc.text(`Fecha: ${format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es })}`, pageWidth / 2, 25, { align: 'center' });
+      doc.setTextColor(0);
+
+      const statusLabel = (s: string) => {
+        const map: Record<string, string> = { prospecto: 'Prospecto', activo: 'Activo', completado: 'Completado', cancelado: 'Cancelado' };
+        return map[s] || s;
+      };
+
+      const tableData = filteredProjects.map(p => [
+        p.name,
+        p.project_type || '-',
+        statusLabel(p.status),
+        p.location || '-',
+        p.budget != null ? formatCurrencyNoDecimals(p.budget) : '-',
+        p.start_date ? format(new Date(p.start_date), 'dd/MM/yyyy') : '-',
+        p.end_date ? format(new Date(p.end_date), 'dd/MM/yyyy') : '-',
+      ]);
+
+      autoTable(doc, {
+        startY: 32,
+        head: [['Nombre', 'Tipo', 'Estado', 'Ubicación', 'Presupuesto', 'Inicio', 'Fin']],
+        body: tableData,
+        theme: 'striped',
+        headStyles: { fillColor: [37, 99, 235], textColor: [255, 255, 255], fontSize: 9, fontStyle: 'bold' },
+        bodyStyles: { fontSize: 8 },
+        margin: { left: 14, right: 14, bottom: 20 },
+      });
+
+      // Footer with page numbers
+      const totalPages = doc.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(100);
+        doc.text(`Página ${i} de ${totalPages}`, pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
+      }
+
+      doc.save(`Proyectos_${format(new Date(), 'yyyyMMdd')}.pdf`);
+      toast({ title: 'PDF descargado correctamente' });
+    } catch (error: any) {
+      console.error('Error downloading PDF:', error);
+      toast({ title: error.message || 'Error al descargar PDF', variant: 'destructive' });
+    } finally {
+      setDownloadingPDF(false);
     }
   };
 
@@ -512,9 +580,23 @@ export default function Proyectos() {
           </div>
           <div className="flex items-center gap-2">
             {isAdmin && (
-              <Button variant="outline" size="icon" onClick={handleDownloadCSV} disabled={downloadingCSV} title="Descargar CSV">
-                <Download className={`h-4 w-4 ${downloadingCSV ? 'animate-bounce' : ''}`} />
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon" title="Descargar datos" disabled={downloadingCSV || downloadingPDF}>
+                    <Download className={`h-4 w-4 ${downloadingCSV || downloadingPDF ? 'animate-bounce' : ''}`} />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={handleDownloadCSV} disabled={downloadingCSV}>
+                    <FileText className="h-4 w-4 mr-2" />
+                    Descargar CSV
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleDownloadPDF} disabled={downloadingPDF}>
+                    <FileText className="h-4 w-4 mr-2" />
+                    Descargar PDF
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
             {canEdit && <BackupButton module="projects" variant="outline" />}
             {canEdit && (

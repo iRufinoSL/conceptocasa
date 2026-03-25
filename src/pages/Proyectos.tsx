@@ -27,7 +27,8 @@ import {
   Archive,
   ChevronDown,
   ChevronRight,
-  Home
+  Home,
+  Download
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { format } from 'date-fns';
@@ -108,6 +109,39 @@ export default function Proyectos() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [downloadingCSV, setDownloadingCSV] = useState(false);
+
+  const handleDownloadCSV = async () => {
+    setDownloadingCSV(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No hay sesión activa');
+      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      const response = await fetch(
+        `https://${projectId}.supabase.co/functions/v1/export-csv?table=projects`,
+        { headers: { 'Authorization': `Bearer ${session.access_token}` } }
+      );
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || 'Error al exportar');
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'proyectos.csv';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast({ title: 'proyectos.csv descargado correctamente' });
+    } catch (error: any) {
+      console.error('Error downloading CSV:', error);
+      toast({ title: error.message || 'Error al descargar CSV', variant: 'destructive' });
+    } finally {
+      setDownloadingCSV(false);
+    }
+  };
 
   useEffect(() => {
     if (!loading && !user) {
@@ -477,6 +511,11 @@ export default function Proyectos() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {isAdmin && (
+              <Button variant="outline" size="icon" onClick={handleDownloadCSV} disabled={downloadingCSV} title="Descargar CSV">
+                <Download className={`h-4 w-4 ${downloadingCSV ? 'animate-bounce' : ''}`} />
+              </Button>
+            )}
             {canEdit && <BackupButton module="projects" variant="outline" />}
             {canEdit && (
               <Button onClick={handleAddNew} className="gap-2">

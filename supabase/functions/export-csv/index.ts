@@ -63,6 +63,7 @@ Deno.serve(async (req) => {
     "invoice_lines",
     "purchase_orders",
     "purchase_order_lines",
+    "projects",
   ];
 
   if (!allowed.includes(table)) {

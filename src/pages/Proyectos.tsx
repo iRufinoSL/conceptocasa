@@ -27,7 +27,8 @@ import {
   Archive,
   ChevronDown,
   ChevronRight,
-  Home
+  Home,
+  Download
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { format } from 'date-fns';

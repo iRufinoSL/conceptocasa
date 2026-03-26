@@ -13,6 +13,7 @@ import { Mail, Send, X, Plus, Paperclip, FileText, Search, User } from 'lucide-r
 import { supabase } from '@/integrations/supabase/client';
 import { ContactForm } from '@/components/crm/ContactForm';
 import { normalizeSearchText } from '@/lib/search-utils';
+import { EmailTranslationSection } from '@/components/email/EmailTranslationSection';
 
 interface CrmContact {
   id: string;
@@ -52,6 +53,7 @@ export function ResourceEmailDialog({
   const [body, setBody] = useState('');
   const [pdfMode, setPdfMode] = useState<'inline' | 'attach'>('attach');
   const [extraAttachments, setExtraAttachments] = useState<File[]>([]);
+  const [translatedHtml, setTranslatedHtml] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Contact search state
@@ -198,12 +200,17 @@ export function ResourceEmailDialog({
       });
     }
 
-    const bodyHtml =
-      pdfMode === 'inline'
-        ? buildInlineHtml()
-        : body
-          ? `<div style="font-family:Arial,sans-serif"><p>${body.replace(/\n/g, '<br>')}</p></div>`
-          : `<p>Adjunto encontrará el listado de recursos: ${headerText || 'Listado de Recursos'}</p>`;
+    let bodyHtml: string;
+    if (translatedHtml) {
+      // Use the dual-column translated HTML
+      bodyHtml = `<div style="font-family:Arial,sans-serif;max-width:700px">${translatedHtml}</div>`;
+    } else if (pdfMode === 'inline') {
+      bodyHtml = buildInlineHtml();
+    } else if (body) {
+      bodyHtml = `<div style="font-family:Arial,sans-serif"><p>${body.replace(/\n/g, '<br>')}</p></div>`;
+    } else {
+      bodyHtml = `<p>Adjunto encontrará el listado de recursos: ${headerText || 'Listado de Recursos'}</p>`;
+    }
 
     // Pass contact_id from the first CRM contact recipient so the email appears in their communications
     const firstContactRecipient = recipients.find(r => r.type === 'contact' && r.contactId);
@@ -354,6 +361,12 @@ export function ResourceEmailDialog({
               className="min-h-[80px]"
             />
           </div>
+
+          {/* Translation */}
+          <EmailTranslationSection
+            originalText={body}
+            onTranslationReady={setTranslatedHtml}
+          />
 
           {/* PDF mode */}
           <div className="space-y-2 border rounded-lg p-3 bg-muted/30">

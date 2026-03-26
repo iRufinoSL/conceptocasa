@@ -18,6 +18,7 @@ import {
   Send, Mail, User, Paperclip, X, Plus, 
   FileText, ChevronDown, Ticket as TicketIcon, File, Forward, Search, ArrowLeft, MailOpen
 } from 'lucide-react';
+import { EmailTranslationSection } from '@/components/email/EmailTranslationSection';
 import type { Tables } from '@/integrations/supabase/types';
 
 interface AttachmentFile {
@@ -90,6 +91,7 @@ export function ComposeEmail({ replyTo, onSent, onCancel }: ComposeEmailProps) {
   const [loadingForwardAttachments, setLoadingForwardAttachments] = useState(false);
   const [contactSearchOpen, setContactSearchOpen] = useState(false);
   const [selectedRecipients, setSelectedRecipients] = useState<Array<{ id: string; email: string; name: string }>>([]);
+  const [translatedHtml, setTranslatedHtml] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -263,10 +265,14 @@ export function ComposeEmail({ replyTo, onSent, onCancel }: ComposeEmailProps) {
         })
       );
 
+      const finalBodyHtml = translatedHtml
+        ? `<div style="font-family:Arial,sans-serif">${translatedHtml}</div>`
+        : formData.body.replace(/\n/g, '<br>');
+
       await sendEmail({
         to: formData.to,
         subject: formData.subject,
-        body_html: formData.body.replace(/\n/g, '<br>'),
+        body_html: finalBodyHtml,
         body_text: formData.body,
         cc: formData.cc ? formData.cc.split(',').map(e => e.trim()) : undefined,
         bcc: formData.bcc ? formData.bcc.split(',').map(e => e.trim()) : undefined,
@@ -501,6 +507,12 @@ export function ComposeEmail({ replyTo, onSent, onCancel }: ComposeEmailProps) {
               className="min-h-[200px]"
             />
           </div>
+
+          {/* Translation */}
+          <EmailTranslationSection
+            originalText={formData.body}
+            onTranslationReady={setTranslatedHtml}
+          />
 
           {/* Attachments */}
           <div className="space-y-3 border rounded-lg p-4 bg-muted/30">

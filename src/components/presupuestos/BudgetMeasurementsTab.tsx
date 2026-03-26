@@ -653,15 +653,15 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
       );
 
       if (!result.success && result.data.length === 0) {
-        const errorMsg = result.errors[0]?.message || 'Error al procesar el archivo';
+        const errorMsg = result.issues[0]?.message || 'Error al procesar el archivo';
         toast.error(errorMsg);
         return;
       }
 
       // Show validation errors if any
-      if (result.errors.length > 0) {
-        console.warn('Import validation errors:', result.errors);
-        toast.warning(`${result.errors.length} filas con errores de validación omitidas`);
+      if (result.issues.length > 0) {
+        console.warn('Import validation errors:', result.issues);
+        toast.warning(`${result.issues.length} filas con errores de validación omitidas`);
       }
 
       // Build a map of existing measurements by name (case-insensitive)

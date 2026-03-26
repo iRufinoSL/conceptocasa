@@ -265,10 +265,14 @@ export function ComposeEmail({ replyTo, onSent, onCancel }: ComposeEmailProps) {
         })
       );
 
+      const finalBodyHtml = translatedHtml
+        ? `<div style="font-family:Arial,sans-serif">${translatedHtml}</div>`
+        : formData.body.replace(/\n/g, '<br>');
+
       await sendEmail({
         to: formData.to,
         subject: formData.subject,
-        body_html: formData.body.replace(/\n/g, '<br>'),
+        body_html: finalBodyHtml,
         body_text: formData.body,
         cc: formData.cc ? formData.cc.split(',').map(e => e.trim()) : undefined,
         bcc: formData.bcc ? formData.bcc.split(',').map(e => e.trim()) : undefined,

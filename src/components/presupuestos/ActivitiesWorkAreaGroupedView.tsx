@@ -242,7 +242,7 @@ export function ActivitiesWorkAreaGroupedView({
                           <TableCell className="max-w-[150px]">
                             {canEditActivity(activity.id) ? (
                               <WorkspaceInlineSelect
-                                ref={(el) => workspaceRefs.current.set(activity.id, el)}
+                                ref={(el) => { workspaceRefs.current.set(activity.id, el); }}
                                 activityId={activity.id}
                                 workspaces={workspaces}
                                 workspaceRelations={workspaceRelations}
@@ -262,7 +262,7 @@ export function ActivitiesWorkAreaGroupedView({
                           <TableCell className="text-sm max-w-[200px]">
                             {canEditActivity(activity.id) ? (
                               <MeasurementInlineSelect
-                                ref={(el) => measurementRefs.current.set(activity.id, el)}
+                                ref={(el) => { measurementRefs.current.set(activity.id, el); }}
                                 activityId={activity.id}
                                 value={activity.measurement_id}
                                 measurements={measurements}

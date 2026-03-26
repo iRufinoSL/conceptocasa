@@ -97,7 +97,7 @@ export function getCellString(value: unknown, maxLength: number = 500): string {
 export interface ExcelReadResult<T> {
   success: boolean;
   data: T[];
-  errors: Array<{ row: number; message: string }>;
+  issues: Array<{ row: number; message: string }>;
   totalRows: number;
 }
 
@@ -116,7 +116,7 @@ export async function readExcelFile<T>(
   const result: ExcelReadResult<T> = {
     success: false,
     data: [],
-    errors: [],
+    issues: [],
     totalRows: 0,
   };
 

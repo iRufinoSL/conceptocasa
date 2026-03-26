@@ -362,6 +362,12 @@ export function ResourceEmailDialog({
             />
           </div>
 
+          {/* Translation */}
+          <EmailTranslationSection
+            originalText={body}
+            onTranslationReady={setTranslatedHtml}
+          />
+
           {/* PDF mode */}
           <div className="space-y-2 border rounded-lg p-3 bg-muted/30">
             <Label className="text-sm font-medium">Listado de recursos</Label>

@@ -1,12 +1,12 @@
 {
-  "name": "taskpulse",
-  "version": "1.0.0",
-  "description": "Project management dashboard",
+  "name": "gestconcepto",
+  "private": true,
+  "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "start": "npx serve .",
-    "dev": "npx serve .",
-    "build": "echo 'No build step needed'"
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
   },
   "dependencies": {},
   "devDependencies": {}

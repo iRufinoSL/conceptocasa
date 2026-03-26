@@ -1,41 +1,1970 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Brain Concepto To.Lo.Sa. — Tu casa cuida de ti</title>
-    <meta name="description" content="Viviendas unifamiliares Passivhaus: salud, confort y eficiencia energética. Tu casa cuida de ti.">
-    <meta name="author" content="Terra.Idea.Concepto" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Project Dashboard</title>
+    <style>
+      :root {
+        /* Design tokens (HSL triplets) */
+        --background: 0 0% 100%;
+        --foreground: 222 47% 11%;
+        --muted: 210 40% 96%;
+        --muted-foreground: 215 16% 47%;
+        --card: 0 0% 100%;
+        --card-foreground: 222 47% 11%;
+        --border: 214 32% 91%;
+        --input: 214 32% 91%;
+        --primary: 222 89% 53%;
+        --primary-foreground: 0 0% 100%;
+        --ring: 222 89% 53%;
+        --radius: 12px;
 
-    <!-- PWA Meta Tags -->
-    <meta name="theme-color" content="#3d8b6a" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Brain Concepto To.Lo.Sa." />
-    <link rel="apple-touch-icon" href="/icon-192.png" />
-    <link rel="manifest" href="/manifest.webmanifest" />
+        --shadow: 0 12px 30px hsl(222 47% 11% / 0.10);
+        --shadow-sm: 0 6px 16px hsl(222 47% 11% / 0.08);
 
-    
-    
-    <meta property="og:type" content="website" />
-    <meta property="og:image" content="https://storage.googleapis.com/gpt-engineer-file-uploads/wOX6lFzRRCgNXxWueLbNpr5QHwQ2/social-images/social-1770552010577-Logo-casa.jpg">
+        --sidebar-width: 260px;
+        --header-height: 60px;
 
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:site" content="@concepto_casa" />
-    <meta name="twitter:image" content="https://storage.googleapis.com/gpt-engineer-file-uploads/wOX6lFzRRCgNXxWueLbNpr5QHwQ2/social-images/social-1770552010577-Logo-casa.jpg">
+        --font-sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji",
+          "Segoe UI Emoji";
+      }
 
-    <link rel="canonical" href="https://concepto.casa" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&display=swap" />
-    <meta property="og:title" content="Brain Concepto To.Lo.Sa. — Tu casa cuida de ti">
-  <meta name="twitter:title" content="Brain Concepto To.Lo.Sa. — Tu casa cuida de ti">
-  <meta property="og:description" content="Viviendas unifamiliares Passivhaus: salud, confort y eficiencia energética. Tu casa cuida de ti.">
-  <meta name="twitter:description" content="Viviendas unifamiliares Passivhaus: salud, confort y eficiencia energética. Tu casa cuida de ti.">
-</head>
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --background: 222 47% 7%;
+          --foreground: 210 40% 98%;
+          --muted: 222 36% 12%;
+          --muted-foreground: 217 19% 73%;
+          --card: 222 47% 9%;
+          --card-foreground: 210 40% 98%;
+          --border: 222 36% 16%;
+          --input: 222 36% 16%;
+          --primary: 217 91% 60%;
+          --primary-foreground: 222 47% 7%;
+          --ring: 217 91% 60%;
+          --shadow: 0 12px 30px hsl(0 0% 0% / 0.35);
+          --shadow-sm: 0 6px 16px hsl(0 0% 0% / 0.28);
+        }
+      }
 
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        height: 100%;
+      }
+
+      body {
+        margin: 0;
+        font-family: var(--font-sans);
+        color: hsl(var(--foreground));
+        background: radial-gradient(1200px 700px at 10% -10%, hsl(var(--primary) / 0.12), transparent 55%),
+          radial-gradient(900px 600px at 110% 0%, hsl(210 100% 50% / 0.10), transparent 50%),
+          hsl(var(--background));
+        overflow-x: hidden;
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        border: 0;
+      }
+
+      .app {
+        min-height: 100%;
+        display: grid;
+        grid-template-columns: var(--sidebar-width) 1fr;
+      }
+
+      .sidebar {
+        border-right: 1px solid hsl(var(--border));
+        background: hsl(var(--card) / 0.72);
+        backdrop-filter: blur(12px);
+        padding: 18px;
+        position: sticky;
+        top: 0;
+        height: 100vh;
+        z-index: 20;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 10px 16px;
+      }
+
+      .brand-mark {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        background: linear-gradient(135deg, hsl(var(--primary)), hsl(210 100% 55%));
+        box-shadow: var(--shadow-sm);
+      }
+
+      .brand h1 {
+        font-size: 14px;
+        line-height: 1.1;
+        margin: 0;
+        letter-spacing: 0.2px;
+      }
+
+      .brand small {
+        display: block;
+        font-size: 12px;
+        color: hsl(var(--muted-foreground));
+        font-weight: 500;
+        margin-top: 3px;
+      }
+
+      .nav {
+        display: grid;
+        gap: 6px;
+        margin-top: 6px;
+      }
+
+      .nav a {
+        padding: 10px 10px;
+        border-radius: calc(var(--radius) - 4px);
+        border: 1px solid transparent;
+        color: hsl(var(--muted-foreground));
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        transition: all 0.2s ease;
+      }
+
+      .nav a:hover {
+        background: hsl(var(--muted) / 0.6);
+        color: hsl(var(--foreground));
+      }
+
+      .nav a[aria-current="page"] {
+        background: hsl(var(--primary) / 0.12);
+        border-color: hsl(var(--primary) / 0.25);
+        color: hsl(var(--foreground));
+      }
+
+      .nav-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        background: hsl(var(--border));
+        flex: none;
+        transition: background 0.2s ease;
+      }
+
+      .nav a[aria-current="page"] .nav-dot {
+        background: hsl(var(--primary));
+      }
+
+      .content {
+        min-width: 0;
+        display: grid;
+        grid-template-rows: var(--header-height) 1fr;
+      }
+
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 14px 22px;
+        border-bottom: 1px solid hsl(var(--border));
+        background: hsl(var(--card) / 0.6);
+        backdrop-filter: blur(12px);
+        position: sticky;
+        top: 0;
+        z-index: 10;
+      }
+
+      .header-title {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+      }
+
+      .header-title strong {
+        font-size: 14px;
+        font-weight: 650;
+        letter-spacing: 0.2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .header-title span {
+        font-size: 12px;
+        color: hsl(var(--muted-foreground));
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .header-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .input {
+        width: min(460px, 44vw);
+        padding: 10px 12px;
+        border-radius: calc(var(--radius) - 4px);
+        border: 1px solid hsl(var(--input));
+        background: hsl(var(--background) / 0.45);
+        color: hsl(var(--foreground));
+        outline: none;
+        transition: all 0.2s ease;
+      }
+
+      .input:focus {
+        box-shadow: 0 0 0 3px hsl(var(--ring) / 0.25);
+        border-color: hsl(var(--ring) / 0.55);
+        background: hsl(var(--background));
+      }
+
+      main {
+        padding: 22px;
+        animation: fadeIn 0.3s ease-out;
+      }
+
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(4px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+
+      .panel {
+        background: hsl(var(--card) / 0.72);
+        border: 1px solid hsl(var(--border));
+        border-radius: var(--radius);
+        box-shadow: var(--shadow-sm);
+        padding: 18px;
+      }
+
+      .panel h2 {
+        margin: 0 0 8px;
+        font-size: 16px;
+        letter-spacing: 0.2px;
+      }
+
+      .panel p {
+        margin: 0;
+        color: hsl(var(--muted-foreground));
+        line-height: 1.6;
+        font-size: 13px;
+      }
+
+      .kbd {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size: 12px;
+        padding: 2px 6px;
+        border: 1px solid hsl(var(--border));
+        border-bottom-width: 2px;
+        border-radius: 8px;
+        background: hsl(var(--muted) / 0.65);
+        color: hsl(var(--foreground));
+      }
+
+      /* Dashboard UI */
+      .grid {
+        display: grid;
+        gap: 14px;
+      }
+
+      .grid.cols-3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .grid.cols-2 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .card {
+        background: hsl(var(--card) / 0.72);
+        border: 1px solid hsl(var(--border));
+        border-radius: var(--radius);
+        box-shadow: var(--shadow-sm);
+        padding: 16px;
+        transition: transform 0.2s ease, border-color 0.2s ease;
+      }
+
+      .card:hover {
+        border-color: hsl(var(--primary) / 0.3);
+      }
+
+      .card-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .card h3 {
+        margin: 0;
+        font-size: 12px;
+        font-weight: 650;
+        letter-spacing: 0.2px;
+        color: hsl(var(--muted-foreground));
+      }
+
+      .kpi {
+        margin-top: 10px;
+        font-size: 26px;
+        font-weight: 720;
+        letter-spacing: -0.6px;
+      }
+
+      .kpi-sub {
+        margin-top: 6px;
+        font-size: 12px;
+        color: hsl(var(--muted-foreground));
+        line-height: 1.5;
+      }
+
+      .badge {
+        font-size: 12px;
+        padding: 3px 8px;
+        border-radius: 999px;
+        border: 1px solid hsl(var(--border));
+        background: hsl(var(--muted) / 0.55);
+        color: hsl(var(--foreground));
+        white-space: nowrap;
+      }
+
+      .badge.urgent {
+        background: hsl(0 84% 60% / 0.14);
+        border-color: hsl(0 84% 60% / 0.30);
+        color: hsl(0 84% 60%);
+      }
+
+      .badge.soon {
+        background: hsl(42 92% 55% / 0.16);
+        border-color: hsl(42 92% 55% / 0.35);
+        color: hsl(42 92% 45%);
+      }
+
+      .badge.done {
+        background: hsl(142 72% 45% / 0.14);
+        border-color: hsl(142 72% 45% / 0.30);
+        color: hsl(142 72% 35%);
+      }
+
+      .section-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 10px;
+      }
+
+      .section-head h2 {
+        margin: 0;
+        font-size: 14px;
+        letter-spacing: 0.2px;
+      }
+
+      .muted {
+        font-size: 12px;
+        color: hsl(var(--muted-foreground));
+      }
+
+      .list {
+        display: grid;
+        gap: 10px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .row {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 12px;
+        border-radius: calc(var(--radius) - 4px);
+        border: 1px solid hsl(var(--border));
+        background: hsl(var(--background) / 0.35);
+        transition: background 0.2s ease;
+      }
+
+      .row:hover {
+        background: hsl(var(--muted) / 0.4);
+      }
+
+      .row strong {
+        display: block;
+        font-size: 13px;
+        letter-spacing: 0.1px;
+        margin-bottom: 3px;
+      }
+
+      .row small {
+        display: block;
+        font-size: 12px;
+        color: hsl(var(--muted-foreground));
+        line-height: 1.4;
+      }
+
+      .row a {
+        text-decoration: underline;
+        text-decoration-color: hsl(var(--border));
+      }
+
+      .row a:hover {
+        text-decoration-color: hsl(var(--foreground) / 0.35);
+      }
+
+      /* Buttons & Forms */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 14px;
+        border-radius: calc(var(--radius) - 4px);
+        border: 1px solid hsl(var(--border));
+        background: hsl(var(--card));
+        color: hsl(var(--foreground));
+        font-size: 13px;
+        font-weight: 550;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        user-select: none;
+      }
+
+      .btn:hover {
+        background: hsl(var(--muted));
+        border-color: hsl(var(--border));
+      }
+
+      .btn:active {
+        transform: scale(0.98);
+      }
+
+      .btn.primary {
+        background: hsl(var(--primary));
+        color: hsl(var(--primary-foreground));
+        border-color: transparent;
+      }
+
+      .btn.primary:hover {
+        opacity: 0.9;
+        box-shadow: 0 4px 12px hsl(var(--primary) / 0.25);
+      }
+
+      .btn.danger {
+        color: hsl(0 84% 60%);
+      }
+
+      .btn.danger:hover {
+        background: hsl(0 84% 60% / 0.1);
+        border-color: hsl(0 84% 60% / 0.2);
+      }
+
+      .form-group {
+        display: grid;
+        gap: 6px;
+        margin-bottom: 16px;
+      }
+
+      .form-group label {
+        font-size: 12px;
+        font-weight: 600;
+        color: hsl(var(--muted-foreground));
+      }
+
+      .select {
+        padding: 10px 12px;
+        border-radius: calc(var(--radius) - 4px);
+        border: 1px solid hsl(var(--input));
+        background: hsl(var(--background) / 0.45);
+        color: hsl(var(--foreground));
+        outline: none;
+        width: 100%;
+        transition: all 0.2s ease;
+      }
+
+      .select:focus {
+        box-shadow: 0 0 0 3px hsl(var(--ring) / 0.25);
+        border-color: hsl(var(--ring) / 0.55);
+        background: hsl(var(--background));
+      }
+
+      /* Modal */
+      .modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: hsl(0 0% 0% / 0.4);
+        backdrop-filter: blur(4px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 100;
+        padding: 20px;
+        animation: fadeInOverlay 0.2s ease-out;
+      }
+
+      @keyframes fadeInOverlay {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+
+      .modal {
+        background: hsl(var(--card));
+        border: 1px solid hsl(var(--border));
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        width: 100%;
+        max-width: 480px;
+        padding: 24px;
+        animation: modalSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+
+      @keyframes modalSlideUp {
+        from { opacity: 0; transform: translateY(20px) scale(0.98); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+      }
+
+      .modal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 20px;
+      }
+
+      .modal-header h2 {
+        margin: 0;
+        font-size: 18px;
+      }
+
+      /* Tables & Boards */
+      .table-container {
+        overflow-x: auto;
+      }
+
+      .table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+
+      .table th {
+        text-align: left;
+        padding: 12px;
+        border-bottom: 1px solid hsl(var(--border));
+        color: hsl(var(--muted-foreground));
+        font-weight: 600;
+      }
+
+      .table td {
+        padding: 12px;
+        border-bottom: 1px solid hsl(var(--border));
+      }
+
+      .table tr:last-child td {
+        border-bottom: none;
+      }
+
+      .table tr:hover td {
+        background: hsl(var(--muted) / 0.2);
+      }
+
+      .board {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 20px;
+        align-items: start;
+      }
+
+      .board-col {
+        display: grid;
+        gap: 12px;
+        background: hsl(var(--muted) / 0.3);
+        padding: 12px;
+        border-radius: var(--radius);
+        min-height: 200px;
+      }
+
+      .board-col-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 4px 8px;
+        margin-bottom: 4px;
+      }
+
+      .board-col-head h3 {
+        margin: 0;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: hsl(var(--muted-foreground));
+      }
+
+      .task-card {
+        background: hsl(var(--card));
+        border: 1px solid hsl(var(--border));
+        border-radius: calc(var(--radius) - 4px);
+        padding: 12px;
+        box-shadow: var(--shadow-sm);
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+
+      .task-card:hover {
+        border-color: hsl(var(--primary) / 0.5);
+        transform: translateY(-2px);
+        box-shadow: var(--shadow);
+      }
+
+      .task-card h4 {
+        margin: 0 0 8px;
+        font-size: 14px;
+        font-weight: 600;
+      }
+
+      .task-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 11px;
+        color: hsl(var(--muted-foreground));
+      }
+
+      /* Team & Reports */
+      .avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 999px;
+        background: hsl(var(--primary) / 0.15);
+        color: hsl(var(--primary));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: 12px;
+        flex: none;
+      }
+
+      .progress-bar {
+        height: 8px;
+        background: hsl(var(--muted));
+        border-radius: 999px;
+        overflow: hidden;
+        margin-top: 8px;
+      }
+
+      .progress-fill {
+        height: 100%;
+        background: hsl(var(--primary));
+        transition: width 0.3s ease;
+      }
+
+      .stat-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 8px 0;
+      }
+
+      .stat-row:not(:last-child) {
+        border-bottom: 1px solid hsl(var(--border) / 0.5);
+      }
+
+      /* Empty State */
+      .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 40px 20px;
+        text-align: center;
+        color: hsl(var(--muted-foreground));
+      }
+
+      .empty-state-icon {
+        width: 48px;
+        height: 48px;
+        margin-bottom: 16px;
+        opacity: 0.2;
+        background: currentColor;
+        mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='currentColor'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4' /%3E%3C/svg%3E") no-repeat center;
+        -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='currentColor'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4' /%3E%3C/svg%3E") no-repeat center;
+      }
+
+      .empty-state h3 {
+        margin: 0 0 8px;
+        font-size: 16px;
+        color: hsl(var(--foreground));
+      }
+
+      .empty-state p {
+        margin: 0;
+        font-size: 14px;
+        max-width: 300px;
+      }
+
+      /* Toast */
+      .toast-container {
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        display: grid;
+        gap: 8px;
+        z-index: 200;
+      }
+
+      .toast {
+        background: hsl(var(--card));
+        color: hsl(var(--foreground));
+        border: 1px solid hsl(var(--border));
+        padding: 12px 16px;
+        border-radius: calc(var(--radius) - 4px);
+        box-shadow: var(--shadow);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 13px;
+        font-weight: 500;
+        min-width: 240px;
+        animation: toastIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+
+      @keyframes toastIn {
+        from { opacity: 0; transform: translateX(20px); }
+        to { opacity: 1; transform: translateX(0); }
+      }
+
+      .toast.success {
+        border-left: 4px solid hsl(142 72% 45%);
+      }
+
+      .toast.error {
+        border-left: 4px solid hsl(0 84% 60%);
+      }
+
+      @media (max-width: 900px) {
+        .app {
+          grid-template-columns: 1fr;
+        }
+
+        .sidebar {
+          display: none; /* Simple mobile hide for now */
+        }
+
+        .grid.cols-3 {
+          grid-template-columns: 1fr;
+        }
+
+        .grid.cols-2 {
+          grid-template-columns: 1fr;
+        }
+
+        .board {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <div id="root">
+      <div class="app" aria-label="Project management dashboard">
+        <aside class="sidebar">
+          <a class="brand" href="#/dashboard" aria-label="Go to dashboard">
+            <div class="brand-mark" aria-hidden="true"></div>
+            <div>
+              <h1>Project Dashboard</h1>
+              <small>Vanilla JS • Local-first</small>
+            </div>
+          </a>
+
+          <nav class="nav" aria-label="Primary">
+            <a href="#/dashboard" data-route="dashboard">
+              <span class="nav-dot" aria-hidden="true"></span>
+              <span>Overview</span>
+            </a>
+            <a href="#/projects" data-route="projects">
+              <span class="nav-dot" aria-hidden="true"></span>
+              <span>Projects</span>
+            </a>
+            <a href="#/tasks" data-route="tasks">
+              <span class="nav-dot" aria-hidden="true"></span>
+              <span>Tasks</span>
+            </a>
+            <a href="#/team" data-route="team">
+              <span class="nav-dot" aria-hidden="true"></span>
+              <span>Team</span>
+            </a>
+            <a href="#/reports" data-route="reports">
+              <span class="nav-dot" aria-hidden="true"></span>
+              <span>Reports</span>
+            </a>
+            <a href="#/settings" data-route="settings">
+              <span class="nav-dot" aria-hidden="true"></span>
+              <span>Settings</span>
+            </a>
+          </nav>
+        </aside>
+
+        <section class="content">
+          <header>
+            <div class="header-title">
+              <strong id="page-title">Overview</strong>
+              <span id="page-subtitle">Project management dashboard foundation</span>
+            </div>
+
+            <div class="header-actions">
+              <label class="sr-only" for="global-search">Search</label>
+              <input id="global-search" class="input" type="search" placeholder="Search projects and tasks..." autocomplete="off" />
+            </div>
+          </header>
+
+          <main id="app-main" tabindex="-1" aria-live="polite"></main>
+        </section>
+      </div>
+    </div>
+
+    <div id="toast-container" class="toast-container"></div>
+
+    <script type="module">
+      /**
+       * Lightweight hash router + vanilla view rendering.
+       *
+       * Route format: #/dashboard, #/projects, #/tasks, #/team, #/reports, #/settings
+       */
+
+      const STORAGE_KEY = 'pm-dashboard:v1';
+
+      const els = {
+        main: document.getElementById('app-main'),
+        title: document.getElementById('page-title'),
+        subtitle: document.getElementById('page-subtitle'),
+        navLinks: Array.from(document.querySelectorAll('.nav a[data-route]')),
+        search: document.getElementById('global-search'),
+        toastContainer: document.getElementById('toast-container'),
+      };
+
+      function safeJsonParse(raw, fallback) {
+        try {
+          return JSON.parse(raw);
+        } catch {
+          return fallback;
+        }
+      }
+
+      function toISODate(d) {
+        const dt = new Date(d);
+        const yyyy = dt.getFullYear();
+        const mm = String(dt.getMonth() + 1).padStart(2, '0');
+        const dd = String(dt.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+      }
+
+      function formatISODate(iso) {
+        if (!iso) return 'No date';
+        const [y, m, d] = String(iso).split('-').map(Number);
+        const dt = new Date(y, (m || 1) - 1, d || 1);
+        return dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      }
+
+      function startOfToday() {
+        const d = new Date();
+        d.setHours(0, 0, 0, 0);
+        return d;
+      }
+
+      function daysUntil(iso) {
+        if (!iso) return 999;
+        const [y, m, d] = String(iso).split('-').map(Number);
+        const dt = new Date(y, (m || 1) - 1, d || 1);
+        dt.setHours(0, 0, 0, 0);
+        const diff = dt.getTime() - startOfToday().getTime();
+        return Math.round(diff / (1000 * 60 * 60 * 24));
+      }
+
+      function makeId(prefix) {
+        return `${prefix}_${Math.random().toString(16).slice(2)}${Date.now().toString(16)}`;
+      }
+
+      function showToast(message, type = 'success') {
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.textContent = message;
+        els.toastContainer.appendChild(toast);
+        setTimeout(() => {
+          toast.style.opacity = '0';
+          toast.style.transform = 'translateX(20px)';
+          toast.style.transition = 'all 0.3s ease';
+          setTimeout(() => toast.remove(), 300);
+        }, 3000);
+      }
+
+      function defaultSeed() {
+        const today = startOfToday();
+        const inDays = (n) => {
+          const d = new Date(today);
+          d.setDate(d.getDate() + n);
+          return toISODate(d);
+        };
+
+        const projects = [
+          { id: 'p_website', name: 'Website Redesign', client: 'Northwind', status: 'active' },
+          { id: 'p_mobile', name: 'Mobile App Sprint', client: 'Fabrikam', status: 'active' },
+          { id: 'p_brand', name: 'Brand Refresh', client: 'Contoso', status: 'paused' },
+        ];
+
+        const team = [
+          { id: 'tm_1', name: 'Alex', role: 'Designer', avatar: 'A' },
+          { id: 'tm_2', name: 'Sam', role: 'Developer', avatar: 'S' },
+          { id: 'tm_3', name: 'Jordan', role: 'Product Manager', avatar: 'J' },
+          { id: 'tm_4', name: 'Taylor', role: 'QA Engineer', avatar: 'T' },
+          { id: 'tm_5', name: 'Riley', role: 'Developer', avatar: 'R' },
+        ];
+
+        const tasks = [
+          {
+            id: 't_01',
+            projectId: 'p_website',
+            title: 'Finalize homepage layout',
+            status: 'in_progress',
+            priority: 'high',
+            dueDate: inDays(1),
+            assignee: 'Alex',
+          },
+          {
+            id: 't_02',
+            projectId: 'p_mobile',
+            title: 'QA: onboarding flow',
+            status: 'todo',
+            priority: 'medium',
+            dueDate: inDays(3),
+            assignee: 'Sam',
+          },
+          {
+            id: 't_03',
+            projectId: 'p_website',
+            title: 'Stakeholder review (round 2)',
+            status: 'todo',
+            priority: 'high',
+            dueDate: inDays(6),
+            assignee: 'Jordan',
+          },
+          {
+            id: 't_04',
+            projectId: 'p_brand',
+            title: 'Compile logo exploration notes',
+            status: 'done',
+            priority: 'low',
+            dueDate: inDays(-2),
+            assignee: 'Taylor',
+          },
+          {
+            id: 't_05',
+            projectId: 'p_mobile',
+            title: 'Implement push notification settings',
+            status: 'in_progress',
+            priority: 'medium',
+            dueDate: inDays(10),
+            assignee: 'Riley',
+          },
+        ];
+
+        const activity = [
+          {
+            id: 'a_01',
+            at: new Date(today.getTime() - 1000 * 60 * 42).toISOString(),
+            type: 'task_updated',
+            message: 'Alex moved “Finalize homepage layout” to In progress.',
+          },
+          {
+            id: 'a_02',
+            at: new Date(today.getTime() - 1000 * 60 * 60 * 5).toISOString(),
+            type: 'comment',
+            message: 'Jordan left feedback on “Stakeholder review (round 2)”.',
+          },
+          {
+            id: 'a_03',
+            at: new Date(today.getTime() - 1000 * 60 * 60 * 22).toISOString(),
+            type: 'task_done',
+            message: 'Taylor completed “Compile logo exploration notes”.',
+          },
+        ];
+
+        return { projects, tasks, activity, team };
+      }
+
+      const data = {
+        load() {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          const parsed = safeJsonParse(raw, null);
+          if (!parsed || typeof parsed !== 'object') return defaultSeed();
+          return {
+            projects: Array.isArray(parsed.projects) ? parsed.projects : [],
+            tasks: Array.isArray(parsed.tasks) ? parsed.tasks : [],
+            activity: Array.isArray(parsed.activity) ? parsed.activity : [],
+            team: Array.isArray(parsed.team) ? parsed.team : [],
+          };
+        },
+        save(state) {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        },
+        ensureSeeded() {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) this.save(defaultSeed());
+        },
+        getState() {
+          return this.load();
+        },
+        addActivity(message, type = 'note') {
+          const state = this.load();
+          state.activity.unshift({ id: makeId('a'), at: new Date().toISOString(), type, message });
+          state.activity = state.activity.slice(0, 50);
+          this.save(state);
+        },
+        addProject(project) {
+          const state = this.load();
+          const newProject = { ...project, id: makeId('p') };
+          state.projects.push(newProject);
+          this.save(state);
+          this.addActivity(`Project “${newProject.name}” created.`, 'project_created');
+          showToast(`Project "${newProject.name}" created`);
+          return newProject;
+        },
+        updateProject(id, updates) {
+          const state = this.load();
+          const idx = state.projects.findIndex((p) => p.id === id);
+          if (idx === -1) return;
+          state.projects[idx] = { ...state.projects[idx], ...updates };
+          this.save(state);
+          this.addActivity(`Project “${state.projects[idx].name}” updated.`, 'project_updated');
+          showToast(`Project updated`);
+        },
+        deleteProject(id) {
+          const state = this.load();
+          const p = state.projects.find((p) => p.id === id);
+          state.projects = state.projects.filter((p) => p.id !== id);
+          state.tasks = state.tasks.filter((t) => t.projectId !== id);
+          this.save(state);
+          if (p) {
+            this.addActivity(`Project “${p.name}” deleted.`, 'project_deleted');
+            showToast(`Project "${p.name}" deleted`);
+          }
+        },
+        addTask(task) {
+          const state = this.load();
+          const newTask = { ...task, id: makeId('t') };
+          state.tasks.push(newTask);
+          this.save(state);
+          this.addActivity(`Task “${newTask.title}” added.`, 'task_created');
+          showToast(`Task "${newTask.title}" added`);
+          return newTask;
+        },
+        updateTask(id, updates) {
+          const state = this.load();
+          const idx = state.tasks.findIndex((t) => t.id === id);
+          if (idx === -1) return;
+          state.tasks[idx] = { ...state.tasks[idx], ...updates };
+          this.save(state);
+          this.addActivity(`Task “${state.tasks[idx].title}” updated.`, 'task_updated');
+          showToast(`Task updated`);
+        },
+        deleteTask(id) {
+          const state = this.load();
+          const t = state.tasks.find((t) => t.id === id);
+          state.tasks = state.tasks.filter((t) => t.id !== id);
+          this.save(state);
+          if (t) {
+            this.addActivity(`Task “${t.title}” deleted.`, 'task_deleted');
+            showToast(`Task deleted`);
+          }
+        },
+        addTeamMember(member) {
+          const state = this.load();
+          const newMember = { ...member, id: makeId('tm'), avatar: member.name.charAt(0).toUpperCase() };
+          state.team.push(newMember);
+          this.save(state);
+          this.addActivity(`Team member “${newMember.name}” added.`, 'team_updated');
+          showToast(`Team member "${newMember.name}" added`);
+          return newMember;
+        },
+        updateTeamMember(id, updates) {
+          const state = this.load();
+          const idx = state.team.findIndex((m) => m.id === id);
+          if (idx === -1) return;
+          state.team[idx] = { ...state.team[idx], ...updates, avatar: (updates.name || state.team[idx].name).charAt(0).toUpperCase() };
+          this.save(state);
+          this.addActivity(`Team member “${state.team[idx].name}” updated.`, 'team_updated');
+          showToast(`Team member updated`);
+        },
+        deleteTeamMember(id) {
+          const state = this.load();
+          const m = state.team.find((m) => m.id === id);
+          state.team = state.team.filter((m) => m.id !== id);
+          this.save(state);
+          if (m) {
+            this.addActivity(`Team member “${m.name}” removed.`, 'team_updated');
+            showToast(`Team member removed`);
+          }
+        },
+      };
+
+      window.AppData = data;
+
+      function escapeHtml(str) {
+        return String(str)
+          .replaceAll('&', '&amp;')
+          .replaceAll('<', '&lt;')
+          .replaceAll('>', '&gt;')
+          .replaceAll('"', '&quot;')
+          .replaceAll("'", '&#39;');
+      }
+
+      function badgeForDue(days) {
+        if (days < 0) return '<span class="badge urgent">Overdue</span>';
+        if (days === 0) return '<span class="badge urgent">Due today</span>';
+        if (days <= 2) return '<span class="badge urgent">Due soon</span>';
+        if (days <= 7) return '<span class="badge soon">This week</span>';
+        return '<span class="badge">Upcoming</span>';
+      }
+
+      function renderEmptyState(title, message, actionText, actionId) {
+        return `
+          <div class="empty-state">
+            <div class="empty-state-icon"></div>
+            <h3>${escapeHtml(title)}</h3>
+            <p>${escapeHtml(message)}</p>
+            ${actionText ? `<button class="btn primary" style="margin-top:20px" data-action="${actionId}">${actionText}</button>` : ''}
+          </div>
+        `;
+      }
+
+      function renderDashboard() {
+        const { projects, tasks, activity } = data.getState();
+        const activeProjects = projects.filter((p) => p.status === 'active');
+        const openTasks = tasks.filter((t) => t.status !== 'done');
+        const doneTasks = tasks.filter((t) => t.status === 'done');
+        const dueIn7 = openTasks.filter((t) => daysUntil(t.dueDate) <= 7);
+        const overdue = openTasks.filter((t) => daysUntil(t.dueDate) < 0);
+        const projectById = Object.fromEntries(projects.map((p) => [p.id, p]));
+        const deadlines = [...openTasks]
+          .filter((t) => t.dueDate)
+          .sort((a, b) => daysUntil(a.dueDate) - daysUntil(b.dueDate))
+          .slice(0, 6);
+        const recent = [...activity]
+          .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
+          .slice(0, 6);
+
+        const deadlinesHtml = deadlines.length
+          ? `
+              <ul class="list" aria-label="Upcoming deadlines">
+                ${deadlines
+                  .map((t) => {
+                    const p = projectById[t.projectId];
+                    const d = daysUntil(t.dueDate);
+                    const meta = [p?.name ? `Project: ${p.name}` : null, t.assignee ? `Owner: ${t.assignee}` : null]
+                      .filter(Boolean)
+                      .join(' • ');
+                    return `
+                      <li class="row">
+                        <div style="min-width:0">
+                          <strong>${escapeHtml(t.title)}</strong>
+                          <small>${escapeHtml(meta || 'No details')}</small>
+                        </div>
+                        <div style="text-align:right; flex:none">
+                          <div class="muted">${escapeHtml(formatISODate(t.dueDate))}</div>
+                          <div style="margin-top:6px">${badgeForDue(d)}</div>
+                        </div>
+                      </li>
+                    `;
+                  })
+                  .join('')}
+              </ul>
+            `
+          : `<p class="muted">No upcoming deadlines. Nice work.</p>`;
+
+        const activityHtml = recent.length
+          ? `
+              <ul class="list" aria-label="Recent activity">
+                ${recent
+                  .map((a) => {
+                    const when = new Date(a.at).toLocaleString(undefined, {
+                      month: 'short',
+                      day: 'numeric',
+                      hour: 'numeric',
+                      minute: '2-digit',
+                    });
+                    return `
+                      <li class="row">
+                        <div style="min-width:0">
+                          <strong>${escapeHtml(a.message)}</strong>
+                          <small>${escapeHtml(when)}</small>
+                        </div>
+                        <span class="badge">${escapeHtml(a.type)}</span>
+                      </li>
+                    `;
+                  })
+                  .join('')}
+              </ul>
+            `
+          : `<p class="muted">No recent activity yet.</p>`;
+
+        return `
+          <section class="grid" aria-label="Dashboard overview">
+            <div class="grid cols-3" role="region" aria-label="Summary">
+              <div class="card">
+                <div class="card-top">
+                  <h3>Active projects</h3>
+                  <span class="badge">${escapeHtml(String(activeProjects.length))} active</span>
+                </div>
+                <div class="kpi">${escapeHtml(String(projects.length))}</div>
+                <div class="kpi-sub">Total projects in your workspace.</div>
+              </div>
+              <div class="card">
+                <div class="card-top">
+                  <h3>Open tasks</h3>
+                  <span class="badge${overdue.length ? ' urgent' : ''}">${escapeHtml(String(overdue.length))} overdue</span>
+                </div>
+                <div class="kpi">${escapeHtml(String(openTasks.length))}</div>
+                <div class="kpi-sub">Tasks not marked done across all projects.</div>
+              </div>
+              <div class="card">
+                <div class="card-top">
+                  <h3>Due this week</h3>
+                  <span class="badge soon">Next 7 days</span>
+                </div>
+                <div class="kpi">${escapeHtml(String(dueIn7.length))}</div>
+                <div class="kpi-sub">Deadlines coming up soon (including overdue).</div>
+              </div>
+            </div>
+            <div class="grid cols-2">
+              <section class="panel" aria-label="Upcoming deadlines">
+                <div class="section-head">
+                  <h2>Upcoming deadlines</h2>
+                  <span class="muted">Sorted by due date</span>
+                </div>
+                ${deadlinesHtml}
+                <p style="margin-top:12px" class="muted">
+                  Tip: use <span class="kbd">Alt</span> + <span class="kbd">D</span> to jump to Overview.
+                </p>
+              </section>
+              <section class="panel" aria-label="Recent activity">
+                <div class="section-head">
+                  <h2>Recent activity</h2>
+                  <span class="muted">Latest updates</span>
+                </div>
+                ${activityHtml}
+                <div style="margin-top:12px" class="muted">
+                  Completed tasks: <span class="badge done">${escapeHtml(String(doneTasks.length))} done</span>
+                </div>
+              </section>
+            </div>
+          </section>
+        `;
+      }
+
+      function renderProjects() {
+        const { projects, tasks } = data.getState();
+        const taskCountByProject = tasks.reduce((acc, t) => {
+          acc[t.projectId] = (acc[t.projectId] || 0) + 1;
+          return acc;
+        }, {});
+
+        const projectsHtml = projects.length
+          ? `
+            <div class="table-container">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Project Name</th>
+                    <th>Client</th>
+                    <th>Tasks</th>
+                    <th>Status</th>
+                    <th style="text-align:right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${projects
+                    .map(
+                      (p) => `
+                    <tr>
+                      <td><strong>${escapeHtml(p.name)}</strong></td>
+                      <td>${escapeHtml(p.client)}</td>
+                      <td>${taskCountByProject[p.id] || 0} tasks</td>
+                      <td><span class="badge ${p.status === 'active' ? 'done' : ''}">${escapeHtml(p.status)}</span></td>
+                      <td style="text-align:right">
+                        <button class="btn" data-action="edit-project" data-id="${p.id}">Edit</button>
+                        <button class="btn danger" data-action="delete-project" data-id="${p.id}">Delete</button>
+                      </td>
+                    </tr>
+                  `,
+                    )
+                    .join('')}
+                </tbody>
+              </table>
+            </div>
+          `
+          : renderEmptyState('No projects found', 'Create your first project to start tracking tasks and progress.', '+ New Project', 'new-project');
+
+        return `
+          <section class="grid">
+            <div class="section-head">
+              <h2>All Projects</h2>
+              <button class="btn primary" data-action="new-project">+ New Project</button>
+            </div>
+            <div class="panel">
+              ${projectsHtml}
+            </div>
+          </section>
+        `;
+      }
+
+      function renderTasks() {
+        const { projects, tasks, team } = data.getState();
+        const statuses = [
+          { id: 'todo', label: 'To Do' },
+          { id: 'in_progress', label: 'In Progress' },
+          { id: 'done', label: 'Done' },
+        ];
+
+        if (tasks.length === 0) {
+          return `
+            <section class="grid">
+              <div class="section-head">
+                <h2>Task Board</h2>
+                <button class="btn primary" data-action="new-task">+ New Task</button>
+              </div>
+              <div class="panel">
+                ${renderEmptyState('No tasks found', 'Add tasks to your projects to keep track of your work.', '+ New Task', 'new-task')}
+              </div>
+            </section>
+          `;
+        }
+
+        const boardHtml = `
+          <div class="board">
+            ${statuses
+              .map((status) => {
+                const statusTasks = tasks.filter((t) => t.status === status.id);
+                return `
+                <div class="board-col">
+                  <div class="board-col-head">
+                    <h3>${status.label}</h3>
+                    <span class="muted">${statusTasks.length}</span>
+                  </div>
+                  ${statusTasks
+                    .map((t) => {
+                      const p = projects.find((proj) => proj.id === t.projectId);
+                      return `
+                      <div class="task-card" data-action="edit-task" data-id="${t.id}">
+                        <h4>${escapeHtml(t.title)}</h4>
+                        <div class="task-meta">
+                          <span class="badge ${t.priority === 'high' ? 'urgent' : t.priority === 'medium' ? 'soon' : ''}">${escapeHtml(t.priority)}</span>
+                          <span>${escapeHtml(p?.name || 'No project')}</span>
+                        </div>
+                        <div class="task-meta" style="margin-top:8px">
+                          <span class="muted">${formatISODate(t.dueDate)}</span>
+                          <span class="muted">${escapeHtml(t.assignee || 'Unassigned')}</span>
+                        </div>
+                      </div>
+                    `;
+                    })
+                    .join('')}
+                </div>
+              `;
+              })
+              .join('')}
+          </div>
+        `;
+
+        return `
+          <section class="grid">
+            <div class="section-head">
+              <h2>Task Board</h2>
+              <button class="btn primary" data-action="new-task">+ New Task</button>
+            </div>
+            ${boardHtml}
+          </section>
+        `;
+      }
+
+      function renderTeam() {
+        const { team, tasks } = data.getState();
+        const workload = tasks.reduce((acc, t) => {
+          if (t.status !== 'done' && t.assignee) {
+            acc[t.assignee] = (acc[t.assignee] || 0) + 1;
+          }
+          return acc;
+        }, {});
+
+        const teamHtml = team.length
+          ? `
+            <div class="table-container">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Member</th>
+                    <th>Role</th>
+                    <th>Active Tasks</th>
+                    <th style="text-align:right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${team
+                    .map(
+                      (m) => `
+                    <tr>
+                      <td>
+                        <div style="display:flex; align-items:center; gap:10px">
+                          <div class="avatar">${escapeHtml(m.avatar)}</div>
+                          <strong>${escapeHtml(m.name)}</strong>
+                        </div>
+                      </td>
+                      <td>${escapeHtml(m.role)}</td>
+                      <td>
+                        <div style="display:flex; align-items:center; gap:8px">
+                          <span class="badge ${workload[m.name] > 3 ? 'urgent' : workload[m.name] > 0 ? 'soon' : 'done'}">
+                            ${workload[m.name] || 0} tasks
+                          </span>
+                        </div>
+                      </td>
+                      <td style="text-align:right">
+                        <button class="btn" data-action="edit-member" data-id="${m.id}">Edit</button>
+                        <button class="btn danger" data-action="delete-member" data-id="${m.id}">Remove</button>
+                      </td>
+                    </tr>
+                  `,
+                    )
+                    .join('')}
+                </tbody>
+              </table>
+            </div>
+          `
+          : renderEmptyState('No team members', 'Add your team members to assign tasks and track workload.', '+ Add Member', 'new-member');
+
+        return `
+          <section class="grid">
+            <div class="section-head">
+              <h2>Team Members</h2>
+              <button class="btn primary" data-action="new-member">+ Add Member</button>
+            </div>
+            <div class="panel">
+              ${teamHtml}
+            </div>
+          </section>
+        `;
+      }
+
+      function renderReports() {
+        const { projects, tasks, team } = data.getState();
+        
+        if (projects.length === 0 && team.length === 0) {
+          return `
+            <div class="panel">
+              ${renderEmptyState('No data for reports', 'Create projects and add team members to see analytics.', 'Go to Projects', 'go-projects')}
+            </div>
+          `;
+        }
+
+        // Project Progress
+        const projectStats = projects.map(p => {
+          const pTasks = tasks.filter(t => t.projectId === p.id);
+          const done = pTasks.filter(t => t.status === 'done').length;
+          const total = pTasks.length;
+          const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+          return { ...p, done, total, pct };
+        });
+
+        // Team Workload
+        const teamStats = team.map(m => {
+          const mTasks = tasks.filter(t => t.assignee === m.name);
+          const done = mTasks.filter(t => t.status === 'done').length;
+          const open = mTasks.length - done;
+          return { ...m, open, done };
+        });
+
+        const projectReportsHtml = projectStats.length ? projectStats.map(p => `
+          <div class="stat-row">
+            <div style="flex:1">
+              <div style="display:flex; justify-content:space-between; margin-bottom:4px">
+                <strong>${escapeHtml(p.name)}</strong>
+                <span class="muted">${p.done}/${p.total} tasks (${p.pct}%)</span>
+              </div>
+              <div class="progress-bar">
+                <div class="progress-fill" style="width: ${p.pct}%"></div>
+              </div>
+            </div>
+          </div>
+        `).join('') : '<p class="muted">No projects to report on.</p>';
+
+        const teamWorkloadHtml = teamStats.length ? teamStats.map(m => `
+          <div class="stat-row">
+            <div style="display:flex; align-items:center; gap:10px; flex:1">
+              <div class="avatar">${escapeHtml(m.avatar)}</div>
+              <div style="flex:1">
+                <div style="display:flex; justify-content:space-between">
+                  <strong>${escapeHtml(m.name)}</strong>
+                  <span class="muted">${m.open} open / ${m.done} done</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        `).join('') : '<p class="muted">No team members to report on.</p>';
+
+        return `
+          <section class="grid cols-2">
+            <div class="panel">
+              <div class="section-head">
+                <h2>Project Progress</h2>
+                <span class="muted">Completion rates</span>
+              </div>
+              <div style="display:grid; gap:12px">
+                ${projectReportsHtml}
+              </div>
+            </div>
+            <div class="panel">
+              <div class="section-head">
+                <h2>Team Workload</h2>
+                <span class="muted">Task distribution</span>
+              </div>
+              <div style="display:grid; gap:12px">
+                ${teamWorkloadHtml}
+              </div>
+            </div>
+          </section>
+        `;
+      }
+
+      const routes = {
+        dashboard: {
+          title: 'Overview',
+          subtitle: 'Summary, deadlines, and recent activity',
+          render: renderDashboard,
+        },
+        projects: {
+          title: 'Projects',
+          subtitle: 'List, create, and track your projects',
+          render: renderProjects,
+        },
+        tasks: {
+          title: 'Tasks',
+          subtitle: 'Boards, tables, and due dates',
+          render: renderTasks,
+        },
+        team: {
+          title: 'Team',
+          subtitle: 'Manage team members and workload',
+          render: renderTeam,
+        },
+        reports: {
+          title: 'Reports',
+          subtitle: 'Project progress and team analytics',
+          render: renderReports,
+        },
+        settings: {
+          title: 'Settings',
+          subtitle: 'Preferences and data management',
+          render() {
+            return `
+              <section class="panel">
+                <h2>Settings</h2>
+                <p>Manage your workspace preferences and data.</p>
+                <div style="margin-top:20px; display:grid; gap:12px; max-width: 300px">
+                  <button class="btn" data-action="export-data">Export Data (JSON)</button>
+                  <button class="btn danger" data-action="reset-data">Reset All Data</button>
+                </div>
+              </section>
+            `;
+          },
+        },
+      };
+
+      function parseRoute() {
+        const raw = (location.hash || '#/dashboard').replace(/^#\/?/, '');
+        const [name, ...rest] = raw.split('/');
+        const path = name || 'dashboard';
+        return { path, params: rest };
+      }
+
+      function setActiveNav(path) {
+        for (const a of els.navLinks) {
+          const isActive = a.dataset.route === path;
+          if (isActive) a.setAttribute('aria-current', 'page');
+          else a.removeAttribute('aria-current');
+        }
+      }
+
+      function renderRoute() {
+        const { path } = parseRoute();
+        const route = routes[path];
+        setActiveNav(path);
+        
+        // Reset scroll
+        window.scrollTo(0, 0);
+
+        if (!route) {
+          els.title.textContent = 'Not found';
+          els.subtitle.textContent = `No route matches “${path}”`;
+          els.main.innerHTML = `
+            <section class="panel">
+              <h2>Page not found</h2>
+              <p>Try going back to <a href="#/dashboard" style="text-decoration:underline">Overview</a>.</p>
+            </section>
+          `;
+          return;
+        }
+        
+        els.title.textContent = route.title;
+        els.subtitle.textContent = route.subtitle;
+        
+        // Simple fade-in effect by re-triggering animation
+        els.main.style.animation = 'none';
+        els.main.offsetHeight; // trigger reflow
+        els.main.style.animation = null;
+        
+        els.main.innerHTML = route.render();
+        els.main.focus({ preventScroll: true });
+      }
+
+      // Modal System
+      function showModal(title, content, onSave) {
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.innerHTML = `
+          <div class="modal">
+            <div class="modal-header">
+              <h2>${title}</h2>
+              <button class="btn" data-modal-close aria-label="Close modal">&times;</button>
+            </div>
+            <form id="modal-form">
+              ${content}
+              <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:24px">
+                <button type="button" class="btn" data-modal-close>Cancel</button>
+                <button type="submit" class="btn primary">Save Changes</button>
+              </div>
+            </form>
+          </div>
+        `;
+
+        document.body.appendChild(overlay);
+
+        const close = () => {
+          overlay.style.opacity = '0';
+          overlay.querySelector('.modal').style.transform = 'translateY(20px) scale(0.98)';
+          overlay.style.transition = 'all 0.2s ease';
+          setTimeout(() => overlay.remove(), 200);
+        };
+        
+        overlay.querySelectorAll('[data-modal-close]').forEach((b) => b.addEventListener('click', close));
+        overlay.addEventListener('click', (e) => {
+          if (e.target === overlay) close();
+        });
+
+        const form = overlay.querySelector('#modal-form');
+        form.addEventListener('submit', (e) => {
+          e.preventDefault();
+          const formData = new FormData(form);
+          const values = Object.fromEntries(formData.entries());
+          onSave(values);
+          close();
+          renderRoute();
+        });
+        
+        // Focus first input
+        const firstInput = form.querySelector('input, select, textarea');
+        if (firstInput) firstInput.focus();
+      }
+
+      // Action Handlers
+      document.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-action]');
+        if (!btn) return;
+
+        const action = btn.dataset.action;
+        const id = btn.dataset.id;
+        const state = data.getState();
+
+        if (action === 'new-project') {
+          showModal(
+            'New Project',
+            `
+            <div class="form-group">
+              <label>Project Name</label>
+              <input class="input" name="name" required placeholder="e.g. Website Redesign" style="width:100%" />
+            </div>
+            <div class="form-group">
+              <label>Client</label>
+              <input class="input" name="client" required placeholder="e.g. Acme Corp" style="width:100%" />
+            </div>
+            <div class="form-group">
+              <label>Status</label>
+              <select class="select" name="status">
+                <option value="active">Active</option>
+                <option value="paused">Paused</option>
+                <option value="completed">Completed</option>
+              </select>
+            </div>
+          `,
+            (vals) => data.addProject(vals),
+          );
+        }
+
+        if (action === 'edit-project') {
+          const p = state.projects.find((p) => p.id === id);
+          if (!p) return;
+          showModal(
+            'Edit Project',
+            `
+            <div class="form-group">
+              <label>Project Name</label>
+              <input class="input" name="name" value="${escapeHtml(p.name)}" required style="width:100%" />
+            </div>
+            <div class="form-group">
+              <label>Client</label>
+              <input class="input" name="client" value="${escapeHtml(p.client)}" required style="width:100%" />
+            </div>
+            <div class="form-group">
+              <label>Status</label>
+              <select class="select" name="status">
+                <option value="active" ${p.status === 'active' ? 'selected' : ''}>Active</option>
+                <option value="paused" ${p.status === 'paused' ? 'selected' : ''}>Paused</option>
+                <option value="completed" ${p.status === 'completed' ? 'selected' : ''}>Completed</option>
+              </select>
+            </div>
+          `,
+            (vals) => data.updateProject(id, vals),
+          );
+        }
+
+        if (action === 'delete-project') {
+          if (confirm('Are you sure you want to delete this project and all its tasks?')) {
+            data.deleteProject(id);
+            renderRoute();
+          }
+        }
+
+        if (action === 'new-task') {
+          if (state.projects.length === 0) {
+            showToast('Create a project first!', 'error');
+            return;
+          }
+          showModal(
+            'New Task',
+            `
+            <div class="form-group">
+              <label>Task Title</label>
+              <input class="input" name="title" required placeholder="What needs to be done?" style="width:100%" />
+            </div>
+            <div class="form-group">
+              <label>Project</label>
+              <select class="select" name="projectId" required>
+                ${state.projects.map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('')}
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Status</label>
+              <select class="select" name="status">
+                <option value="todo">To Do</option>
+                <option value="in_progress">In Progress</option>
+                <option value="done">Done</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Priority</label>
+              <select class="select" name="priority">
+                <option value="low">Low</option>
+                <option value="medium" selected>Medium</option>
+                <option value="high">High</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Due Date</label>
+              <input class="input" type="date" name="dueDate" style="width:100%" />
+            </div>
+            <div class="form-group">
+              <label>Assignee</label>
+              <select class="select" name="assignee">
+                <option value="">Unassigned</option>
+                ${state.team.map((m) => `<option value="${escapeHtml(m.name)}">${escapeHtml(m.name)}</option>`).join('')}
+              </select>
+            </div>
+          `,
+            (vals) => data.addTask(vals),
+          );
+        }
+
+        if (action === 'edit-task') {
+          const t = state.tasks.find((t) => t.id === id);
+          if (!t) return;
+          showModal(
+            'Edit Task',
+            `
+            <div class="form-group">
+              <label>Task Title</label>
+              <input class="input" name="title" value="${escapeHtml(t.title)}" required style="width:100%" />
+            </div>
+            <div class="form-group">
+              <label>Project</label>
+              <select class="select" name="projectId" required>
+                ${state.projects
+                  .map((p) => `<option value="${p.id}" ${p.id === t.projectId ? 'selected' : ''}>${escapeHtml(p.name)}</option>`)
+                  .join('')}
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Status</label>
+              <select class="select" name="status">
+                <option value="todo" ${t.status === 'todo' ? 'selected' : ''}>To Do</option>
+                <option value="in_progress" ${t.status === 'in_progress' ? 'selected' : ''}>In Progress</option>
+                <option value="done" ${t.status === 'done' ? 'selected' : ''}>Done</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Priority</label>
+              <select class="select" name="priority">
+                <option value="low" ${t.priority === 'low' ? 'selected' : ''}>Low</option>
+                <option value="medium" ${t.priority === 'medium' ? 'selected' : ''}>Medium</option>
+                <option value="high" ${t.priority === 'high' ? 'selected' : ''}>High</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Due Date</label>
+              <input class="input" type="date" name="dueDate" value="${t.dueDate || ''}" style="width:100%" />
+            </div>
+            <div class="form-group">
+              <label>Assignee</label>
+              <select class="select" name="assignee">
+                <option value="">Unassigned</option>
+                ${state.team.map((m) => `<option value="${escapeHtml(m.name)}" ${m.name === t.assignee ? 'selected' : ''}>${escapeHtml(m.name)}</option>`).join('')}
+              </select>
+            </div>
+            <div style="margin-top:10px">
+               <button type="button" class="btn danger" data-action="delete-task" data-id="${t.id}">Delete Task</button>
+            </div>
+          `,
+            (vals) => data.updateTask(id, vals),
+          );
+        }
+
+        if (action === 'delete-task') {
+          if (confirm('Are you sure you want to delete this task?')) {
+            data.deleteTask(id);
+            // Close the modal if it was open (delete-task is inside edit-task modal)
+            const overlay = btn.closest('.modal-overlay');
+            if (overlay) {
+              overlay.style.opacity = '0';
+              setTimeout(() => overlay.remove(), 200);
+            }
+            renderRoute();
+          }
+        }
+
+        if (action === 'new-member') {
+          showModal(
+            'Add Team Member',
+            `
+            <div class="form-group">
+              <label>Name</label>
+              <input class="input" name="name" required placeholder="Full Name" style="width:100%" />
+            </div>
+            <div class="form-group">
+              <label>Role</label>
+              <input class="input" name="role" required placeholder="e.g. Frontend Developer" style="width:100%" />
+            </div>
+          `,
+            (vals) => data.addTeamMember(vals),
+          );
+        }
+
+        if (action === 'edit-member') {
+          const m = state.team.find((m) => m.id === id);
+          if (!m) return;
+          showModal(
+            'Edit Team Member',
+            `
+            <div class="form-group">
+              <label>Name</label>
+              <input class="input" name="name" value="${escapeHtml(m.name)}" required style="width:100%" />
+            </div>
+            <div class="form-group">
+              <label>Role</label>
+              <input class="input" name="role" value="${escapeHtml(m.role)}" required style="width:100%" />
+            </div>
+          `,
+            (vals) => data.updateTeamMember(id, vals),
+          );
+        }
+
+        if (action === 'delete-member') {
+          if (confirm('Are you sure you want to remove this team member?')) {
+            data.deleteTeamMember(id);
+            renderRoute();
+          }
+        }
+
+        if (action === 'reset-data') {
+          if (confirm('This will delete all your data and restore defaults. Continue?')) {
+            localStorage.removeItem(STORAGE_KEY);
+            data.ensureSeeded();
+            showToast('Data reset to defaults');
+            renderRoute();
+          }
+        }
+        
+        if (action === 'export-data') {
+          const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'pm-dashboard-data.json';
+          a.click();
+          URL.revokeObjectURL(url);
+          showToast('Data exported successfully');
+        }
+        
+        if (action === 'go-projects') {
+          location.hash = '#/projects';
+        }
+      });
+
+      els.search.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const q = els.search.value.trim();
+          if (!q) return;
+          showToast(`Search for "${q}" (coming soon)`, 'success');
+        }
+      });
+
+      window.addEventListener('keydown', (e) => {
+        if (e.altKey && !e.ctrlKey && !e.metaKey && (e.key === 'd' || e.key === 'D')) {
+          location.hash = '#/dashboard';
+        }
+      });
+
+      data.ensureSeeded();
+      window.addEventListener('hashchange', renderRoute);
+      if (!location.hash || location.hash === '#') {
+        location.hash = '#/dashboard';
+      } else {
+        renderRoute();
+      }
+    <\/script>
   </body>
 </html>

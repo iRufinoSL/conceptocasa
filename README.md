@@ -1,73 +1,64 @@
-# Welcome to your Lovable project
+# TaskPulse
 
-## Project info
+Project management dashboard
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Generated with GenMB
 
-## How can I edit this code?
+This project was generated using [GenMB](https://genmb.com) - AI-powered application builder.
 
-There are several ways of editing your application.
+### Original Prompt
 
-**Use Lovable**
+> 
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+## Getting Started
 
-Changes made via Lovable will be committed automatically to this repo.
+### Prerequisites
 
-**Use your preferred IDE**
+- Node.js 18+
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### Running Locally
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+1. Open `index.html` in your browser, or
+2. Use a local server:
+   ```bash
+   npx serve .
+   ```
 
-Follow these steps:
+## Framework
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+This project uses **Vanilla**.
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+## Progressive Web App (PWA)
 
-# Step 3: Install the necessary dependencies.
-npm i
+This app is PWA-enabled and can be installed on mobile devices!
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+### PWA Files Included
+
+- `manifest.json` - App manifest for installability
+- `service-worker.js` - Caching and offline support
+- `offline.html` - Offline fallback page
+- `install-prompt.js` - "Add to Home Screen" install banner
+
+### Installing on Mobile
+
+1. Open the deployed app in your mobile browser
+2. A custom install banner will appear after 2 seconds
+3. Tap "Install" to add the app to your home screen
+4. On iOS: Tap the share button and select "Add to Home Screen" (iOS shows instructions)
+
+### Testing PWA Locally
+
+PWA features require HTTPS to work. For local testing:
+
+```bash
+# Option 1: Use a local HTTPS server
+npx local-web-server --https
+
+# Option 2: Use Chrome's DevTools
+# Open DevTools > Application > Service Workers
+# Check "Bypass for network" to test offline mode
 ```
 
-**Edit a file directly in GitHub**
+## License
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+MIT

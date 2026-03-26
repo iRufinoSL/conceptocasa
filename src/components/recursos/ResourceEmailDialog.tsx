@@ -13,6 +13,7 @@ import { Mail, Send, X, Plus, Paperclip, FileText, Search, User } from 'lucide-r
 import { supabase } from '@/integrations/supabase/client';
 import { ContactForm } from '@/components/crm/ContactForm';
 import { normalizeSearchText } from '@/lib/search-utils';
+import { EmailTranslationSection } from '@/components/email/EmailTranslationSection';
 
 interface CrmContact {
   id: string;
@@ -52,6 +53,7 @@ export function ResourceEmailDialog({
   const [body, setBody] = useState('');
   const [pdfMode, setPdfMode] = useState<'inline' | 'attach'>('attach');
   const [extraAttachments, setExtraAttachments] = useState<File[]>([]);
+  const [translatedHtml, setTranslatedHtml] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Contact search state

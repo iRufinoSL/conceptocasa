@@ -200,12 +200,17 @@ export function ResourceEmailDialog({
       });
     }
 
-    const bodyHtml =
-      pdfMode === 'inline'
-        ? buildInlineHtml()
-        : body
-          ? `<div style="font-family:Arial,sans-serif"><p>${body.replace(/\n/g, '<br>')}</p></div>`
-          : `<p>Adjunto encontrará el listado de recursos: ${headerText || 'Listado de Recursos'}</p>`;
+    let bodyHtml: string;
+    if (translatedHtml) {
+      // Use the dual-column translated HTML
+      bodyHtml = `<div style="font-family:Arial,sans-serif;max-width:700px">${translatedHtml}</div>`;
+    } else if (pdfMode === 'inline') {
+      bodyHtml = buildInlineHtml();
+    } else if (body) {
+      bodyHtml = `<div style="font-family:Arial,sans-serif"><p>${body.replace(/\n/g, '<br>')}</p></div>`;
+    } else {
+      bodyHtml = `<p>Adjunto encontrará el listado de recursos: ${headerText || 'Listado de Recursos'}</p>`;
+    }
 
     // Pass contact_id from the first CRM contact recipient so the email appears in their communications
     const firstContactRecipient = recipients.find(r => r.type === 'contact' && r.contactId);

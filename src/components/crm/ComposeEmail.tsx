@@ -18,6 +18,7 @@ import {
   Send, Mail, User, Paperclip, X, Plus, 
   FileText, ChevronDown, Ticket as TicketIcon, File, Forward, Search, ArrowLeft, MailOpen
 } from 'lucide-react';
+import { EmailTranslationSection } from '@/components/email/EmailTranslationSection';
 import type { Tables } from '@/integrations/supabase/types';
 
 interface AttachmentFile {
@@ -90,6 +91,7 @@ export function ComposeEmail({ replyTo, onSent, onCancel }: ComposeEmailProps) {
   const [loadingForwardAttachments, setLoadingForwardAttachments] = useState(false);
   const [contactSearchOpen, setContactSearchOpen] = useState(false);
   const [selectedRecipients, setSelectedRecipients] = useState<Array<{ id: string; email: string; name: string }>>([]);
+  const [translatedHtml, setTranslatedHtml] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {

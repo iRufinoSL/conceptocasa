@@ -1186,8 +1186,8 @@ export function SectionAxisViewer({
     if (!scale || !gridLayout) return null;
     const { totalCols, totalRows, gridW, gridH, ox, oy, originCol, originRow, originX, originY, cellPxW, cellPxH } = gridLayout;
 
-    const gridLines: JSX.Element[] = [];
-    const axisRefs: JSX.Element[] = [];
+    const gridLines: React.JSX.Element[] = [];
+    const axisRefs: React.JSX.Element[] = [];
 
     for (let c = 0; c <= totalCols; c++) {
       const x = ox + c * cellPxW;
@@ -1301,7 +1301,7 @@ export function SectionAxisViewer({
     }
 
     // Dimension lines — separated for PDF layer control
-    const dimensions: JSX.Element[] = [];
+    const dimensions: React.JSX.Element[] = [];
     const dimOffsetH = cellPxW;
     const dimColor = 'hsl(0, 70%, 50%)';
     const dimFontSize = 9;
@@ -1380,7 +1380,7 @@ export function SectionAxisViewer({
 
   // SVG pattern definitions
   const patternDefs = useMemo(() => {
-    const defs: JSX.Element[] = [];
+    const defs: React.JSX.Element[] = [];
     usedPatternIds.forEach(pid => {
       const pat = getPatternById(pid);
       if (!pat) return;
@@ -1398,7 +1398,7 @@ export function SectionAxisViewer({
   const polygonElements = useMemo(() => {
     if (!gridLayout || !scale) return null;
     const { originX, originY, cellPxW, cellPxH } = gridLayout;
-    const elements: JSX.Element[] = [];
+    const elements: React.JSX.Element[] = [];
 
     // Sort polygons so the selected one renders LAST (on top) in vertex edit mode
     const sortedPolygons = vertexEditMode && selectedPolygonId
@@ -1740,7 +1740,7 @@ export function SectionAxisViewer({
   const openingElements = useMemo(() => {
     if (!gridLayout || !scale || Object.keys(openingsMap).length === 0) return null;
     const { originX, originY, cellPxW, cellPxH } = gridLayout;
-    const elements: JSX.Element[] = [];
+    const elements: React.JSX.Element[] = [];
     const OPENING_COLOR = 'hsl(30, 90%, 50%)';
     const DOOR_COLOR = 'hsl(200, 70%, 45%)';
 
@@ -2107,7 +2107,7 @@ export function SectionAxisViewer({
   const sectionObjectElements = useMemo(() => {
     if (!gridLayout || !scale || sectionObjects.length === 0) return null;
     const { originX, originY, cellPxW, cellPxH } = gridLayout;
-    const elements: JSX.Element[] = [];
+    const elements: React.JSX.Element[] = [];
 
     for (const obj of sectionObjects) {
       // Find the polygon this object belongs to
@@ -2235,7 +2235,7 @@ export function SectionAxisViewer({
   const drawingOverlay = useMemo(() => {
     if (!drawMode || !gridLayout || drawingVertices.length === 0) return null;
     const { ox, oy, cellPxW, cellPxH } = gridLayout;
-    const elements: JSX.Element[] = [];
+    const elements: React.JSX.Element[] = [];
 
     const pxVerts = drawingVertices.map(v => ({
       px: ox + v.col * cellPxW,
@@ -2310,7 +2310,7 @@ export function SectionAxisViewer({
   const nodeInteractionDots = useMemo(() => {
     if (!drawMode || !gridLayout) return null;
     const { totalCols, totalRows, ox, oy, cellPxW, cellPxH } = gridLayout;
-    const elements: JSX.Element[] = [];
+    const elements: React.JSX.Element[] = [];
     for (let c = 0; c <= totalCols * 2; c++) {
       for (let r = 0; r <= totalRows * 2; r++) {
         const col = c / 2;

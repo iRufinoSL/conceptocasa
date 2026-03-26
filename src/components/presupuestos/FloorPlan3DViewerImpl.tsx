@@ -80,7 +80,7 @@ function RoomWalls({
   const h = room.height || plan.defaultHeight;
 
   const wallElements = useMemo(() => {
-    const elements: JSX.Element[] = [];
+    const elements: React.JSX.Element[] = [];
 
     room.walls.forEach((wall) => {
       const wallKey = `${room.id}::${wall.wallIndex}`;

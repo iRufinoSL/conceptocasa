@@ -508,6 +508,12 @@ export function ComposeEmail({ replyTo, onSent, onCancel }: ComposeEmailProps) {
             />
           </div>
 
+          {/* Translation */}
+          <EmailTranslationSection
+            originalText={formData.body}
+            onTranslationReady={setTranslatedHtml}
+          />
+
           {/* Attachments */}
           <div className="space-y-3 border rounded-lg p-4 bg-muted/30">
             <div className="flex items-center justify-between">

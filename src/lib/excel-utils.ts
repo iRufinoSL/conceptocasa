@@ -127,7 +127,7 @@ export async function readExcelFile<T>(
 
     const worksheet = workbook.worksheets[0];
     if (!worksheet || worksheet.rowCount < 2) {
-      result.errors.push({ row: 0, message: 'El archivo no contiene datos suficientes' });
+      result.issues.push({ row: 0, message: 'El archivo no contiene datos suficientes' });
       return result;
     }
 
@@ -151,7 +151,7 @@ export async function readExcelFile<T>(
 
     // Check if we have at least the name column
     if (fieldToColumn['name'] === undefined) {
-      result.errors.push({ row: 0, message: 'No se encontró la columna "Nombre" en el archivo' });
+      result.issues.push({ row: 0, message: 'No se encontró la columna "Nombre" en el archivo' });
       return result;
     }
 
@@ -194,15 +194,15 @@ export async function readExcelFile<T>(
       if (validated.success) {
         result.data.push(validated.data);
       } else {
-        const errorMessages = validated.error.errors.map(e => e.message).join(', ');
-        result.errors.push({ row: rowIndex, message: errorMessages });
+        const errorMessages = validated.error.issues.map(e => e.message).join(', ');
+        result.issues.push({ row: rowIndex, message: errorMessages });
       }
     }
 
-    result.success = result.data.length > 0 || result.errors.length === 0;
+    result.success = result.data.length > 0 || result.issues.length === 0;
   } catch (error) {
     console.error('Error reading Excel file:', error);
-    result.errors.push({ row: 0, message: 'Error al leer el archivo Excel' });
+    result.issues.push({ row: 0, message: 'Error al leer el archivo Excel' });
   }
 
   return result;

@@ -43,7 +43,7 @@ export function ChangePasswordDialog({ open, onOpenChange }: ChangePasswordDialo
       passwordSchema.parse(newPassword);
     } catch (e) {
       if (e instanceof z.ZodError) {
-        newErrors.newPassword = e.errors[0].message;
+        newErrors.newPassword = e.issues[0].message;
       }
     }
     

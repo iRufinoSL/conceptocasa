@@ -71,7 +71,7 @@ export default function Auth() {
       return true;
     } catch (e) {
       if (e instanceof z.ZodError) {
-        setErrors(prev => ({ ...prev, email: e.errors[0].message }));
+        setErrors(prev => ({ ...prev, email: e.issues[0].message }));
       }
       return false;
     }
@@ -84,7 +84,7 @@ export default function Auth() {
       passwordSchema.parse(password);
     } catch (e) {
       if (e instanceof z.ZodError) {
-        newErrors.password = e.errors[0].message;
+        newErrors.password = e.issues[0].message;
       }
     }
     

@@ -6,7 +6,7 @@ import {
   Layers, MessageSquare, BarChart3
 } from 'lucide-react';
 
-const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
+const ICON_MAP: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
   Building2, FolderKanban, Calculator, Users, Calendar, FileText,
   Package, Wallet, UserCog, Settings, Brain, StickyNote, FileSpreadsheet,
   Layers, MessageSquare, BarChart3,

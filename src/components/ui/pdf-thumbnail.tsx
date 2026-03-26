@@ -60,7 +60,7 @@ export function PdfThumbnail({
           return;
         }
 
-        await page.render({ canvasContext: ctx, viewport }).promise;
+        await page.render({ canvasContext: ctx, viewport } as any).promise;
 
         if (!cancelled) {
           setState('ready');

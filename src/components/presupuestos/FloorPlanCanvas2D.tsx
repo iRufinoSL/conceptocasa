@@ -423,7 +423,7 @@ export function FloorPlanCanvas2D({
     <>
       {/* Grid */}
       {(() => {
-        const lines: JSX.Element[] = [];
+        const lines: React.JSX.Element[] = [];
         const gridW = plan.width * SCALE;
         const gridH = plan.length * SCALE;
         const step = GRID_SNAP * SCALE;
@@ -1036,7 +1036,7 @@ export function FloorPlanCanvas2D({
               const WALL_DIM_FONT = 10;
               const WALL_DIM_COLOR = '#1e293b';
               const WALL_DIM_BG = 'rgba(255,255,255,0.85)';
-              const wallDims: JSX.Element[] = [];
+              const wallDims: React.JSX.Element[] = [];
 
               // Top wall (wall 1) — width
               wallDims.push(
@@ -1083,7 +1083,7 @@ export function FloorPlanCanvas2D({
               if (!room) return null;
               const newX = room.posX + liveDragOffset.dx / SCALE;
               const newY = room.posY + liveDragOffset.dy / SCALE;
-              const guides: JSX.Element[] = [];
+              const guides: React.JSX.Element[] = [];
               for (const other of rooms) {
                 if (other.id === room.id) continue;
                 // Show alignment lines when edges match

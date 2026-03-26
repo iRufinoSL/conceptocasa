@@ -217,7 +217,7 @@ export default function Usuarios() {
       emailSchema.parse(newEmail);
     } catch (e) {
       if (e instanceof z.ZodError) {
-        errors.email = e.errors[0].message;
+        errors.email = e.issues[0].message;
       }
     }
     

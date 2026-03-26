@@ -238,7 +238,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
   const [returnTabAfterSave, setReturnTabAfterSave] = useState<string | null>(null);
 
   // Ref to hold fetchData so broadcast callback can access it
-  const fetchDataRef = useRef<() => Promise<void>>();
+  const fetchDataRef = useRef<() => Promise<void>>(undefined);
 
   // Instant broadcast for cross-client sync
   const handleBroadcast = useCallback((payload: any) => {

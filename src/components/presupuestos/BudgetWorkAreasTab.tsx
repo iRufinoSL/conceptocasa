@@ -114,7 +114,7 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
   });
 
   // Ref to hold fetchWorkAreas so broadcast callback can access it
-  const fetchWorkAreasRef = useRef<() => Promise<void>>();
+  const fetchWorkAreasRef = useRef<() => Promise<void>>(undefined);
 
   // Instant broadcast for cross-client sync
   const handleBroadcast = useCallback((payload: any) => {
